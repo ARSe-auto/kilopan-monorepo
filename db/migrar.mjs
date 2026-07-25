@@ -44,15 +44,39 @@ export async function conectar() {
 }
 
 export async function migrar(db) {
+  // Registro de lo ya aplicado: sin esto, `migrar` solo funciona sobre una BD vacía —
+  // que es exactamente lo que el guardrail «jamás migración destructiva» prohíbe hacer
+  // en un entorno con evidencia (fotos de POD). Encontrado al aplicar la 6ª migración
+  // sobre datos existentes.
+  await db.exec(`
+    create schema if not exists pan;
+    create table if not exists pan.migraciones_aplicadas (
+      archivo text primary key,
+      aplicada_at timestamptz not null default now()
+    );
+  `);
+
+  const yaAplicadas = new Set(
+    (await db.query(`select archivo from pan.migraciones_aplicadas`)).rows.map((r) => r.archivo)
+  );
+
   const archivos = readdirSync(MIGRACIONES_DIR)
     .filter((f) => f.endsWith(".sql"))
     .sort();
+
+  let nuevas = 0;
   for (const archivo of archivos) {
+    if (yaAplicadas.has(archivo)) {
+      console.log(`ya aplicada: ${archivo}`);
+      continue;
+    }
     const sql = readFileSync(join(MIGRACIONES_DIR, archivo), "utf8");
     console.log(`migrando: ${archivo}`);
     await db.exec(sql);
+    await db.query(`insert into pan.migraciones_aplicadas (archivo) values ($1)`, [archivo]);
+    nuevas++;
   }
-  console.log(`migrar: OK (${archivos.length} archivo(s))`);
+  console.log(`migrar: OK (${nuevas} nueva(s) de ${archivos.length})`);
 }
 
 async function main() {

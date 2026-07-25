@@ -69,8 +69,15 @@ para ese AC — no antes.
 - [x] (P0) 1 sesión activa concurrente por usuario; sesión nueva desplaza la anterior +
       fila de auditoría `sesion_desplazada` — trigger `trg_desplazar_sesiones`, probado
       [AC-ID-04]
-- [ ] (P0) Auto-bloqueo a PIN tras 10 min de inactividad [AC-ID-05]
-- [ ] (P1) F5 Cambio de operador ≤3 s, chip con nombre siempre visible [AC-ID-06]
+- [x] (P0) Auto-bloqueo a PIN tras 10 min de inactividad — validado EN EL SERVIDOR
+      (`pan.sesion_expirada` + `tocar_sesion`), no solo en la UI: un cliente adulterado
+      simplemente no llamaría al cierre. Probado, incl. que una sesión inexistente se
+      trata como expirada y nunca como válida [AC-ID-05]
+- [x] (P1) F5 Cambio de operador en equipo compartido — `pan.abrir_sesion()` hace el
+      relevo atómico y auditado (evento `operador_relevado`). **Bug real encontrado
+      probando el login**: el EXCLUDE impedía que el vendedor tomara la tablet que dejó
+      el maestro y devolvía 500. Falta el chip con el nombre siempre visible en cada
+      pantalla [AC-ID-06]
 - [x] (P0-SEC) Rate limit genérico en toda ruta de autenticación (no solo PIN):
       ventana deslizante en memoria por IP (20/min) en `identidad/limitador.ts` — nota
       honesta: en memoria de un solo proceso; multi-nodo necesitaría Redis, no aplica
@@ -130,8 +137,10 @@ para ese AC — no antes.
 - [x] (P1) **Bloqueo real**: «Salir a ruta» rebota si algún pedido de la carga no tiene
       DTE asociado (art. 55 DL 825) — trigger en BD, sin override; probado en ambos
       sentidos (sin guía rebota, con guía sale) [AC-DES-02]
-- [ ] (P1) F2 Armar pedido, F3 Cargar van (escáner + checklist equivalente) — el
-      esquema y las invariantes existen; falta TODA la UI [AC-DES-03]
+- [x] (P1) F2 Armar pedido: `/pedidos` con alta de cliente, pedido con precio de la
+      lista del cliente, registro de DTE y «Armar ruta y salir». El bloqueo del art. 55
+      se ve en pantalla (pedidos sin documento en rojo) y probado por HTTP: 409 sin
+      guía, 200 con guía. **F3 Cargar van con escáner sigue SIN construir** [AC-DES-03]
 
 ## Hito 5 — Registro DTE
 
@@ -148,11 +157,16 @@ para ese AC — no antes.
       que rebota (0,0) en la BD, flags `gps_degradado`/`gps_fuera_de_zona` que NUNCA
       bloquean, un solo POD vigente por pedido vía índice parcial) — todo probado
       [AC-POD-01]
-- [ ] (P1) Outbox IndexedDB (Dexie) con `client_uuid`, `POST /api/sync` idempotente —
-      la idempotencia por `client_uuid` ya está probada en BD (3 replays = 1 fila,
-      test centinela #1); falta el outbox del lado del cliente [AC-POD-02]
-- [ ] (P1) F4 Entregar ≤4 toques; permiso GPS denegado bloquea y lo dice, precisión
-      mala jamás bloquea — falta TODA la UI del repartidor [AC-POD-03]
+- [x] (P1) Outbox del cliente en IndexedDB (sin Dexie: ~80 líneas propias en vez de
+      una dependencia más que auditar) con reintento automático al volver `online` y
+      cada 30 s + `POST /api/sync` idempotente. Probado por HTTP: 3 replays del mismo
+      `client_uuid` ⇒ UNA entrega de 12 kg en el dashboard, y un GPS (0,0) sale como
+      rechazo explícito en vez de girar en la cola para siempre [AC-POD-02]
+- [x] (P1) F4 Entregar: `/ruta` con la parada activa destacada, obturador que captura
+      GPS+hash, receptor precargado y confirmación. Permiso de GPS denegado bloquea y lo
+      dice; precisión mala entra igual marcada «(impreciso, igual sirve)». El repartidor
+      ve km y kg, **jamás CLP** — verificado en pantalla. Falta la cámara real
+      (`getUserMedia`) y los modos rechazo/parcial [AC-POD-03]
 - [x] (P2) **Consolidación de guías en una factura + saldo por cliente** (decisión #2):
       `documento_tributario.consolidado_en_id` (self-FK, índice único — ninguna guía se
       factura dos veces), vista `pan.saldo_cliente` derivada de eventos (nunca tabla

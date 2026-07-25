@@ -45,6 +45,19 @@ export async function obtenerSesionActual(request: NextRequest): Promise<SesionA
   );
   const fila = r.rows[0];
   if (!fila) return null;
+
+  // AC-ID-05: auto-bloqueo a los 10 min de inactividad, validado EN EL SERVIDOR.
+  // Un cliente adulterado simplemente no llamaría al cierre por su cuenta, así que
+  // la UI no puede ser la única guardiana de esto.
+  const expirada = await db.query<{ expirada: boolean }>(`select pan.sesion_expirada($1, 10) as expirada`, [
+    sesionId,
+  ]);
+  if (expirada.rows[0]?.expirada) {
+    await db.query(`update pan.sesiones_operador set fin = now() where id = $1 and fin is null`, [sesionId]);
+    return null;
+  }
+  await db.query(`select pan.tocar_sesion($1)`, [sesionId]);
+
   return {
     sesionId: fila.sesion_id,
     usuarioId: fila.usuario_id,

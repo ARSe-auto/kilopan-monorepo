@@ -1,0 +1,209 @@
+"use client";
+import { useCallback, useEffect, useState } from "react";
+import { BotonPrimario } from "@kilopan/miga/componentes/index.tsx";
+import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
+import { formatearClp, formatearKg } from "@/comun/formato.ts";
+
+interface Pedido {
+  id: string;
+  correlativo_pedido: string | null;
+  estado: string;
+  fecha_entrega: string;
+  total_clp: number;
+  razon_social: string;
+  direccion: string | null;
+  dte_count: number;
+}
+interface Cliente { id: string; razon_social: string; canal: string }
+interface Producto { id: string; nombre: string }
+interface Repartidor { id: string; nombre: string }
+
+// F2 Armar pedido + armar ruta + registrar DTE (PROMPT_MAESTRO.md §5). El bloqueo del
+// art. 55 DL 825 se ve acá en pantalla: los pedidos sin DTE salen en rojo y «Salir a
+// ruta» rebota mientras quede uno.
+export default function PedidosPage() {
+  const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [repartidores, setRepartidores] = useState<Repartidor[]>([]);
+  const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
+
+  const [clienteId, setClienteId] = useState("");
+  const [productoId, setProductoId] = useState("");
+  const [kilos, setKilos] = useState("");
+
+  const [dtePedidoId, setDtePedidoId] = useState<string | null>(null);
+  const [dteTipo, setDteTipo] = useState("52");
+  const [dteFolio, setDteFolio] = useState("");
+  const [dteRut, setDteRut] = useState("76.192.083-9");
+  const [dteMonto, setDteMonto] = useState("");
+
+  const cargar = useCallback(async () => {
+    const [p, c, pr, u] = await Promise.all([
+      fetch("/api/pedidos").then((r) => r.json()),
+      fetch("/api/clientes").then((r) => r.json()),
+      fetch("/api/productos").then((r) => r.json()),
+      fetch("/api/usuarios?rol=repartidor").then((r) => r.json()),
+    ]);
+    setPedidos(p.pedidos ?? []);
+    setClientes((c.clientes ?? []).filter((x: Cliente) => x.canal === "reparto"));
+    setProductos(pr.productos ?? []);
+    setRepartidores(u.usuarios ?? []);
+  }, []);
+
+  useEffect(() => { void cargar(); }, [cargar]);
+
+  async function crearPedido() {
+    const gramos = Math.round(Number(kilos.replace(",", ".")) * 1000);
+    if (!clienteId || !productoId || !Number.isInteger(gramos) || gramos < 1) {
+      setMensaje({ tipo: "error", texto: "Elegí cliente, producto y kilos" });
+      return;
+    }
+    const r = await fetch("/api/pedidos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clienteId,
+        fechaEntrega: new Date().toISOString().slice(0, 10),
+        lineas: [{ productoId, gramosPedidos: gramos }],
+      }),
+    });
+    const cuerpo = await r.json();
+    if (!r.ok) { setMensaje({ tipo: "error", texto: cuerpo.error }); return; }
+    setMensaje({ tipo: "ok", texto: `Pedido N° ${cuerpo.correlativo} · ${formatearClp(cuerpo.totalClp)}` });
+    setKilos("");
+    void cargar();
+  }
+
+  async function registrarDte() {
+    if (!dtePedidoId) return;
+    const r = await fetch("/api/dte", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tipoDte: Number(dteTipo),
+        folioSii: Number(dteFolio),
+        rutEmisor: dteRut,
+        montoTotal: Number(dteMonto || "0"),
+        pedidoId: dtePedidoId,
+        origenCaptura: "manual",
+      }),
+    });
+    const cuerpo = await r.json();
+    if (!r.ok) { setMensaje({ tipo: "error", texto: cuerpo.error }); return; }
+    setMensaje({ tipo: "ok", texto: `Documento ${dteTipo} folio ${dteFolio} registrado` });
+    setDtePedidoId(null);
+    setDteFolio("");
+    setDteMonto("");
+    void cargar();
+  }
+
+  async function armarYSalir() {
+    const repartidor = repartidores[0];
+    if (!repartidor) { setMensaje({ tipo: "error", texto: "No hay repartidores dados de alta" }); return; }
+    const paraRuta = pedidos.filter((p) => p.estado === "confirmado");
+    if (paraRuta.length === 0) { setMensaje({ tipo: "error", texto: "No hay pedidos confirmados" }); return; }
+
+    const ruta = await fetch("/api/rutas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ repartidorId: repartidor.id, vehiculo: "ABCD-12", pedidoIds: paraRuta.map((p) => p.id) }),
+    });
+    const rutaCuerpo = await ruta.json();
+    if (!ruta.ok) { setMensaje({ tipo: "error", texto: rutaCuerpo.error }); return; }
+
+    const salir = await fetch("/api/rutas", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rutaId: rutaCuerpo.id, estado: "en_curso", kmInicio: 0 }),
+    });
+    const salirCuerpo = await salir.json();
+    if (!salir.ok) {
+      setMensaje({ tipo: "error", texto: salirCuerpo.error });
+      return;
+    }
+    setMensaje({ tipo: "ok", texto: `Ruta en curso con ${rutaCuerpo.paradas} parada(s)` });
+    void cargar();
+  }
+
+  return (
+    <main style={{ maxWidth: 720, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+      <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>Despacho</h1>
+
+      {mensaje ? (
+        <p role="status" style={{ color: mensaje.tipo === "ok" ? semantico.ok : semantico.error, fontSize: 14, margin: 0 }}>
+          {mensaje.texto}
+        </p>
+      ) : null}
+
+      <section style={{ background: superficie.tarjeta, border: `1px solid ${superficie.hairline}`, borderRadius: 14, padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Nuevo pedido</h2>
+        <select value={clienteId} onChange={(e) => setClienteId(e.target.value)} style={campo}>
+          <option value="">Cliente…</option>
+          {clientes.map((c) => <option key={c.id} value={c.id}>{c.razon_social}</option>)}
+        </select>
+        <select value={productoId} onChange={(e) => setProductoId(e.target.value)} style={campo}>
+          <option value="">Producto…</option>
+          {productos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+        </select>
+        <input value={kilos} onChange={(e) => setKilos(e.target.value)} placeholder="Kilos (ej: 12)" style={campo} inputMode="decimal" />
+        <BotonPrimario onClick={crearPedido}>Confirmar pedido</BotonPrimario>
+      </section>
+
+      <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Pedidos de hoy</h2>
+        {pedidos.length === 0 ? <p style={{ color: superficie.textoFaint, fontSize: 14 }}>Sin pedidos todavía.</p> : null}
+        {pedidos.map((p) => (
+          <div key={p.id} style={{ background: superficie.tarjeta, border: `1px solid ${p.dte_count === 0 ? semantico.error : superficie.hairline}`, borderRadius: 12, padding: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <span style={{ fontWeight: 700 }}>
+                N° {p.correlativo_pedido ?? "—"} · {p.razon_social}
+              </span>
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>{formatearClp(p.total_clp)}</span>
+            </div>
+            <p style={{ margin: "6px 0 0", fontSize: 13, color: p.dte_count === 0 ? semantico.error : semantico.ok }}>
+              {p.dte_count === 0
+                ? "⚠ Sin documento asociado — este pedido bloquea la salida a ruta (art. 55 DL 825)"
+                : `✓ ${p.dte_count} documento(s) registrado(s)`}
+            </p>
+            {p.dte_count === 0 ? (
+              <button type="button" onClick={() => setDtePedidoId(p.id)} style={{ marginTop: 8, minHeight: 44, padding: "0 14px", borderRadius: 10, border: `1px solid ${superficie.hairline}`, background: "#fff", fontWeight: 700, fontSize: 14 }}>
+                Asociar guía o factura
+              </button>
+            ) : null}
+          </div>
+        ))}
+      </section>
+
+      {dtePedidoId ? (
+        <section style={{ background: superficie.tarjeta, border: `2px solid ${acentos.kilopan}`, borderRadius: 14, padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Registrar documento del SII</h2>
+          <p style={{ margin: 0, fontSize: 13, color: superficie.textoDim }}>
+            KiloPan no emite documentos: registra el folio de uno que el SII ya emitió.
+          </p>
+          <select value={dteTipo} onChange={(e) => setDteTipo(e.target.value)} style={campo}>
+            <option value="52">Guía de despacho (52)</option>
+            <option value="33">Factura electrónica (33)</option>
+            <option value="39">Boleta electrónica (39)</option>
+            <option value="61">Nota de crédito (61)</option>
+          </select>
+          <input value={dteFolio} onChange={(e) => setDteFolio(e.target.value)} placeholder="Folio" style={campo} inputMode="numeric" />
+          <input value={dteRut} onChange={(e) => setDteRut(e.target.value)} placeholder="RUT emisor" style={campo} />
+          <input value={dteMonto} onChange={(e) => setDteMonto(e.target.value)} placeholder="Monto total" style={campo} inputMode="numeric" />
+          <BotonPrimario onClick={registrarDte}>Registrar documento</BotonPrimario>
+        </section>
+      ) : null}
+
+      <BotonPrimario onClick={armarYSalir}>Armar ruta y salir</BotonPrimario>
+    </main>
+  );
+}
+
+const campo: React.CSSProperties = {
+  minHeight: 44,
+  borderRadius: 12,
+  border: `1px solid ${superficie.hairline}`,
+  padding: "0 14px",
+  fontSize: 17,
+  background: "#fff",
+};

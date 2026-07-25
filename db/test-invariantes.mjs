@@ -806,6 +806,61 @@ test("AC-POD-02: replay del mismo client_uuid no duplica la entrega (test centin
 });
 
 // =============================================================================
+// AC-ID-06 / AC-ID-05 — cambio de operador y auto-bloqueo
+// =============================================================================
+
+test("AC-ID-06: el vendedor puede tomar la tablet que dejó abierta el maestro (relevo auditado)", async () => {
+  // Regresión de un bug real: el EXCLUDE impedía la segunda sesión y el login
+  // devolvía 500 — o sea, el cambio de operador en equipo compartido no funcionaba.
+  const db = await dbNueva();
+  const { usuarioId: maestro, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "maestro");
+  const { usuarioId: vendedor } = await crearUsuarioYDispositivo(db, "10.000.013-K", "vendedor");
+
+  const s1 = await db.query(`select pan.abrir_sesion($1,$2) as id`, [dispositivoId, maestro]);
+  assert.ok(s1.rows[0].id, "el maestro abre sesión");
+
+  const s2 = await db.query(`select pan.abrir_sesion($1,$2) as id`, [dispositivoId, vendedor]);
+  assert.ok(s2.rows[0].id, "el vendedor releva sin que rebote el EXCLUDE");
+
+  const abiertas = await db.query(
+    `select usuario_id from pan.sesiones_operador where dispositivo_id = $1 and fin is null`,
+    [dispositivoId]
+  );
+  assert.equal(abiertas.rows.length, 1, "solo UNA sesión abierta por equipo");
+  assert.equal(abiertas.rows[0].usuario_id, vendedor);
+
+  const evento = await db.query(`select payload from pan.eventos where tipo = 'operador_relevado'`);
+  assert.equal(evento.rows.length, 1, "el relevo queda auditado");
+  assert.equal(evento.rows[0].payload.usuario_saliente, maestro);
+  assert.equal(evento.rows[0].payload.usuario_entrante, vendedor);
+  await db.close();
+});
+
+test("AC-ID-05: una sesión inactiva más de 10 min se considera expirada", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  const s = await db.query(`select pan.abrir_sesion($1,$2) as id`, [dispositivoId, usuarioId]);
+  const sesionId = s.rows[0].id;
+
+  const recien = await db.query(`select pan.sesion_expirada($1, 10) as expirada`, [sesionId]);
+  assert.equal(recien.rows[0].expirada, false, "recién abierta no expira");
+
+  // Envejecer la sesión 11 minutos (el trigger de negocio no toca ultima_actividad).
+  await db.exec(`set role postgres`);
+  await db.query(`update pan.sesiones_operador set ultima_actividad = now() - interval '11 minutes' where id = $1`, [
+    sesionId,
+  ]);
+  await db.exec(`set role pan_app`);
+
+  const vieja = await db.query(`select pan.sesion_expirada($1, 10) as expirada`, [sesionId]);
+  assert.equal(vieja.rows[0].expirada, true, "11 min sin actividad ⇒ expirada");
+
+  const inexistente = await db.query(`select pan.sesion_expirada(gen_random_uuid(), 10) as expirada`);
+  assert.equal(inexistente.rows[0].expirada, true, "una sesión que no existe se trata como expirada, nunca como válida");
+  await db.close();
+});
+
+// =============================================================================
 // Hito 7 — TCK (la variable norte)
 // =============================================================================
 

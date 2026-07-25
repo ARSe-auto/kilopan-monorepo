@@ -67,12 +67,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "RUT o PIN incorrecto" }, { status: 401 });
   }
 
-  // AC-ID-04: el trigger desplaza cualquier sesión previa del mismo usuario en otro
-  // dispositivo, con su evento de auditoría — no hace falta lógica extra acá.
-  const sesion = await db.query<{ id: string }>(
-    `insert into pan.sesiones_operador (dispositivo_id, usuario_id) values ($1,$2) returning id`,
-    [dispositivoId, usuario.id]
-  );
+  // AC-ID-06: pan.abrir_sesion() hace el relevo atómico — cierra la sesión que
+  // hubiera abierta EN ESTE equipo (cambio de operador en tablet compartida, con
+  // evento de auditoría) y abre la nueva. AC-ID-04 lo complementa: el trigger de
+  // 0001 desplaza además las sesiones del mismo usuario en OTROS equipos.
+  const sesion = await db.query<{ id: string }>(`select pan.abrir_sesion($1,$2) as id`, [
+    dispositivoId,
+    usuario.id,
+  ]);
   const sesionId = sesion.rows[0]?.id;
   if (!sesionId) {
     return NextResponse.json({ error: "No se pudo crear la sesión" }, { status: 500 });
