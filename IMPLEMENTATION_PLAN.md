@@ -205,6 +205,19 @@ críticos + TCK del día seed calculable + panel mostrando 0 ACs abiertos P0/P1.
 
 ---
 
+## Motor autónomo (`packages/metodo/scripts/loop.sh` + `watchdog.sh`)
+
+`loop.sh` toma el primer AC abierto (P0 antes que P1 antes que P2), le pide a `claude
+-p` (con `--max-budget-usd`, `--permission-mode acceptEdits`, `--output-format json`)
+implementarlo y correr `check.sh --full`, y verifica el resultado por `git rev-list
+--count HEAD` antes/después — nunca confía en lo que el propio `claude` reporta sin
+chequear el commit real. `watchdog.sh` lo repite con: (a) verificación de `command -v
+claude`/`pnpm` en su PROPIO PATH antes de arrancar, (b) tope de iteraciones totales
+(`KILOPAN_MAX_ITERACIONES`, default 20) y (c) corte tras N iteraciones seguidas sin
+commit nuevo (`KILOPAN_MAX_SIN_AVANCE`, default 3) — nunca "corre indefinido hasta que
+alguien se dé cuenta". Escritos y probada su sintaxis; **todavía no se lanzaron en modo
+desatendido** — eso queda a decisión explícita de cada sesión (ver docs/LECCION_RALPH.md).
+
 ## Panel (qué debe poder leer `packages/metodo/panel/generar.mjs`)
 
 Nunca «proceso vivo» como señal de avance — ver `docs/LECCION_RALPH.md`. El panel se
