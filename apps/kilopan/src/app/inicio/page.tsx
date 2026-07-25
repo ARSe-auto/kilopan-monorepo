@@ -7,11 +7,18 @@ import { CerrarSesionBoton } from "./CerrarSesionBoton.tsx";
 const ENLACES_POR_ROL: Record<string, { href: string; etiqueta: string }[]> = {
   admin: [
     { href: "/dashboard", etiqueta: "Panel del dueño" },
+    { href: "/pedidos", etiqueta: "Despacho" },
+    { href: "/facturar", etiqueta: "Consolidar y facturar" },
     { href: "/pesar", etiqueta: "Pesaje" },
     { href: "/vender", etiqueta: "Venta mostrador" },
+    { href: "/caja", etiqueta: "Cierre de caja" },
+    { href: "/admin", etiqueta: "Ajustes" },
   ],
   maestro: [{ href: "/pesar", etiqueta: "Pesaje" }],
-  vendedor: [{ href: "/vender", etiqueta: "Venta mostrador" }],
+  vendedor: [
+    { href: "/vender", etiqueta: "Venta mostrador" },
+    { href: "/caja", etiqueta: "Cierre de caja" },
+  ],
   repartidor: [{ href: "/ruta", etiqueta: "Mi ruta" }],
 };
 

@@ -16,19 +16,22 @@ export async function POST(request: NextRequest) {
   const sesion = await exigirSesion(request);
   if (sesion instanceof NextResponse) return sesion;
 
-  let cuerpo: { medioPago?: string; lineas?: LineaEntrada[] };
+  let cuerpo: { medioPago?: string; lineas?: LineaEntrada[]; clienteId?: string };
   try {
     cuerpo = await request.json();
   } catch {
     return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
   }
-  const { medioPago, lineas } = cuerpo;
+  const { medioPago, lineas, clienteId } = cuerpo;
   if (!medioPago || !lineas?.length) {
     return NextResponse.json({ error: "Faltan campos" }, { status: 400 });
   }
-  if (medioPago === "fiado") {
+  // AC-PAG-02 (decisión #5): el fiado del mesón — el vecino de toda la vida al que se
+  // le anota — usa el MISMO cliente y el mismo saldo que el fiado mayorista. Cero
+  // segundo sistema de crédito. El CHECK de la BD ya exige el cliente; acá se explica.
+  if (medioPago === "fiado" && !clienteId) {
     return NextResponse.json(
-      { error: "Fiado se habilita cuando exista el módulo de clientes (hito de despacho)" },
+      { error: "Para fiar hay que elegir un cliente registrado" },
       { status: 400 }
     );
   }
@@ -61,8 +64,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const venta = await db.query<{ id: string }>(
-      `insert into pan.ventas (vendedor_id, dispositivo_id, medio_pago, total_clp) values ($1,$2,$3,$4) returning id`,
-      [sesion.usuarioId, sesion.dispositivoId, medioPago, totalClp]
+      `insert into pan.ventas (vendedor_id, dispositivo_id, medio_pago, total_clp, cliente_id)
+       values ($1,$2,$3,$4,$5) returning id`,
+      [sesion.usuarioId, sesion.dispositivoId, medioPago, totalClp, clienteId ?? null]
     );
     const ventaId = venta.rows[0]?.id;
     if (!ventaId) throw new Error("No se pudo crear la venta");

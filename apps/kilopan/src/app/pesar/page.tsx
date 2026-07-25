@@ -1,8 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
-import { CifraGrande, TecladoNumerico, BotonPrimario, SelectorUnToque } from "@kilopan/miga/componentes/index.tsx";
+import {
+  CifraGrande,
+  TecladoNumerico,
+  BotonPrimario,
+  SelectorUnToque,
+  ChipEstadoConexion,
+} from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico } from "@kilopan/miga/tokens.ts";
 import { formatearKg } from "@/comun/formato.ts";
+import { enviarOEncolar, iniciarReintentoAutomatico } from "@/pod/colaLocal.ts";
 
 interface Producto {
   id: string;
@@ -36,10 +43,15 @@ export default function PesarPage() {
   const [estado, setEstado] = useState<"listo" | "enviando" | "confirmar_outlier">("listo");
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
 
+  const [pendientes, setPendientes] = useState(0);
+
   useEffect(() => {
     fetch("/api/productos")
       .then((r) => r.json())
       .then((d) => setProductos(d.productos ?? []));
+    // AC-RED-01: el wifi de la panadería se cae justo a las 5 de la mañana. La cola
+    // reintenta sola; el pesaje no se detiene.
+    return iniciarReintentoAutomatico(setPendientes);
   }, []);
 
   const producto = productos.find((p) => p.id === productoId) ?? null;
@@ -76,15 +88,39 @@ export default function PesarPage() {
         return;
       }
       setMensaje({ tipo: "ok", texto: `Pesado: ${formatearKg(gramosNum)} · ${producto.nombre}` });
-      setGramos("");
-      setDestino("mostrador");
-      setMotivoMerma(null);
-      setEstado("listo");
-      // encadena con el mismo producto preseleccionado (spec F1) — solo se limpia el peso
+      limpiarParaElSiguiente();
     } catch {
-      setMensaje({ tipo: "error", texto: "Sin conexión con el servidor" });
-      setEstado("listo");
+      // AC-RED-01: sin red no se pierde el pesaje ni se detiene el maestro — se encola
+      // y la cola reintenta sola. El client_uuid garantiza que no se duplique.
+      const resultado = await enviarOEncolar("/api/pesajes", {
+        clientUuid,
+        productoId: producto.id,
+        gramos: gramosNum,
+        destino,
+        motivoMerma: destino === "merma" ? motivoMerma : undefined,
+        confirmarOutlier,
+      });
+      if (resultado === "encolado") {
+        setPendientes((n) => n + 1);
+        setMensaje({
+          tipo: "ok",
+          texto: `Pesado sin conexión: ${formatearKg(gramosNum)} · ${producto.nombre} — se sube solo`,
+        });
+        limpiarParaElSiguiente();
+      } else {
+        setMensaje({ tipo: "error", texto: "No se pudo registrar el pesaje" });
+        setEstado("listo");
+      }
     }
+  }
+
+  // Encadena con el mismo producto preseleccionado (spec F1): entre bandeja y bandeja
+  // el maestro no vuelve al inicio, solo se limpia el peso.
+  function limpiarParaElSiguiente() {
+    setGramos("");
+    setDestino("mostrador");
+    setMotivoMerma(null);
+    setEstado("listo");
   }
 
   if (!producto) {
@@ -128,15 +164,18 @@ export default function PesarPage() {
         minHeight: "100dvh",
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{producto.nombre}</h1>
-        <button
-          type="button"
-          onClick={() => setProductoId(null)}
-          style={{ fontSize: 14, fontWeight: 700, color: superficie.textoDim, background: "none", border: "none" }}
-        >
-          Cambiar
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {pendientes > 0 ? <ChipEstadoConexion pendientes={pendientes} /> : null}
+          <button
+            type="button"
+            onClick={() => setProductoId(null)}
+            style={{ fontSize: 14, fontWeight: 700, color: superficie.textoDim, background: "none", border: "none" }}
+          >
+            Cambiar
+          </button>
+        </div>
       </div>
 
       <div style={{ display: "flex", justifyContent: "center", padding: "8px 0" }}>

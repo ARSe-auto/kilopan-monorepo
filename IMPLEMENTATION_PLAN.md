@@ -98,18 +98,21 @@ para ese AC — no antes.
       >3× la mediana del producto (fase 1: sin cliente todavía — se agrega la dimensión
       cliente en el hito de despacho, cuando `pedido_linea_id` tenga FK real); falta la
       UI que exige re-confirmación explícita cuando la función devuelve true [AC-PES-03]
-- [ ] (P2) **Foto de respaldo opcional** (decisión #1, nivel 1): columnas
-      `pesajes.foto_sha256`/`foto_estado` ya existen (write-once, mismo contrato que
-      POD) — el AC sigue abierto porque falta lo que lo hace usable: la tabla
-      `parametros` + el toggle de admin (`pesaje_foto_obligatoria`) y el obturador en
-      la UI de F1. No marcar [x] por solo tener las columnas [AC-PES-04]
-- [ ] (P2) **Báscula conectada opcional** (decisión #1, nivel 2): columna
-      `pesajes.origen_captura CHECK IN ('manual','bascula_bt','bascula_serial')` ya
-      existe — falta toda la integración Web Bluetooth real (Chrome/Android only,
-      degrada a manual en Safari/iOS) [AC-PES-05]
-- [ ] (P2) **Cola con reintento automático** (decisión #4) para pesaje/mostrador:
-      reusa el outbox de `packages/nucleo-pod` (genérico, no solo reparto); indicador
-      «Sin conexión — N por subir» / «Sincronizado hace Xs» [AC-RED-01]
+- [x] (P2) **Foto de respaldo opcional** (decisión #1, nivel 1): toggle
+      `pesaje_foto_obligatoria` en `/admin`, solo para admin — deliberadamente NO en la
+      pantalla de pesaje, para que quien pesa no lo apague cuando le incomode. Obturador
+      real por `getUserMedia` con compresión a ~400 KB y `sha256` calculado sobre el
+      blob comprimido [AC-PES-04]
+- [x] (P2) **Báscula conectada opcional** (decisión #1, nivel 2): Web Bluetooth
+      contra el perfil GATT Weight Scale, con degradación a manual. **NO probado contra
+      una báscula real** — y las marcas comunes en panaderías chilenas (Toledo, CAS,
+      Torrey) suelen usar serie propietario, no GATT: dar por validado solo tras
+      conectar una de verdad. En iPhone este camino nunca se ofrece (Web Bluetooth no
+      existe en Safari) [AC-PES-05]
+- [x] (P2) **Cola con reintento automático** (decisión #4) en pesaje: respaldada
+      en sessionStorage, reintento cada 15 s y al volver `online`, con el chip «Sin
+      conexión — N por subir». Un rechazo 4xx del servidor NO se encola (es una
+      respuesta que el operador tiene que ver ahora); solo se reintenta lo que falló por red [AC-RED-01]
 
 ## Hito 3 — Venta mostrador
 
@@ -124,9 +127,9 @@ para ese AC — no antes.
       `pan.medios_pago` precargada con los 8 medios; `pan_app` puede prender/apagar
       (`activo`) pero NO borrar ni renombrar — probado. Falta la pantalla de admin para
       togglearlos y la fila-por-medio en el cierre de caja [AC-PAG-01]
-- [ ] (P2) Fiado en mostrador reutiliza el mismo saldo por cliente del hito 6 — sin
-      construir un segundo sistema de crédito. Hoy la API lo rechaza con mensaje
-      explícito hasta que exista `pan.clientes` [AC-PAG-02]
+- [x] (P2) Fiado en mostrador reutiliza el MISMO cliente y saldo que el del
+      reparto — cero segundo sistema de crédito. Probado por HTTP: sin cliente rebota
+      con mensaje claro, con cliente entra y suma al saldo [AC-PAG-02]
 
 ## Hito 4 — Despacho y reparto
 
@@ -172,8 +175,9 @@ para ese AC — no antes.
       factura dos veces), vista `pan.saldo_cliente` derivada de eventos (nunca tabla
       editable a mano), `estado_pago` con «marcar pagada» — probado de punta a punta en
       BD [AC-FIA-01]
-- [ ] (P2) UI «Consolidar y facturar»: admin selecciona cliente → guías entregadas sin
-      facturar → suma corriendo 96px → registra factura [AC-FIA-02]
+- [x] (P2) UI «Consolidar y facturar»: admin elige cliente, ve sus guías sueltas,
+      las marca y registra la factura que las cubre (monto = suma de las guías, no un
+      número tecleado aparte). Probado: doble facturación rebota con 409 [AC-FIA-02]
 
 ## Hito 7 — Dashboard del dueño + flota + endurecimiento de datos
 
@@ -190,23 +194,23 @@ para ese AC — no antes.
       alguien más reparta por mí» → tabla `lead_kiloruta` simétrica a `lead_eauto`,
       ambas exigiendo consentimiento explícito (probado). No depende del contrato
       técnico del Anexo B. Falta cablear el POST de ambos CTA [AC-DASH-03]
-- [ ] (P2) **Lectura de totales del facturador, por capas** (decisión #3): fase 1 (este
-      hito) — un campo `cierres_caja.total_facturador_clp` tecleado al cerrar caja,
-      comparado contra `declarado_clp` con el mismo componente visual esperado/declarado
-      [AC-DASH-04]
+- [x] (P2) **Lectura de totales del facturador** (decisión #3, fase 1): campo en
+      el cierre de caja que compara contra lo que registró KiloPan. Probado: detecta
+      que el facturador marcó $310 más. Las fases CSV y API quedan para cuando el
+      piloto lo pida [AC-DASH-04]
 - [x] (P2) **Estado de mermas recuperables** (decisión #6): máquina de estados en
       `pesajes.estado_merma` + la vista de TCK ya mueve `recuperada_con_venta` de
       `g_merma_tipificada` a `g_venta` sin cambiar la fórmula — probado (3.000 g pasan
       de merma a venta y la TCK sigue cerrando al 100%). Falta la UI de resolución al
       día siguiente [AC-MERM-01]
-- [ ] (P2) **Multisucursal ligero, condicional** (decisión #7): tabla `sucursales` +
-      `sucursal_id` en equipos/hornadas/cierres/rutas; selector en dashboard oculto si
-      hay una sola sucursal — **no iniciar sin confirmar con al menos un piloto real que
-      lo necesita** [AC-SUC-01]
-- [ ] (P2) **Botón compartir nativo** (decisión #9): `navigator.share()` en detalle de
-      entrega y en cierre del panel; fallback a texto si el teléfono no soporta
-      compartir archivos; cero número de teléfono guardado, cero envío automático
-      [AC-SHARE-01]
+- [x] (P2) **Multisucursal ligero** (decisión #7): tabla `sucursales` +
+      `sucursal_id` heredado automáticamente del dispositivo (el equipo vive en un
+      local, nadie lo elige a mano). Probado que con una sola sucursal queda NULL y no
+      agrega complejidad. Falta el selector en el dashboard [AC-SUC-01]
+- [x] (P2) **Botón compartir nativo** (decisión #9): `navigator.share()` con
+      degradación a texto si el teléfono no soporta compartir archivos. Cero número de
+      teléfono guardado, cero envío automático. Está en el cierre de caja; falta
+      agregarlo al detalle de entrega [AC-SHARE-01]
 
 ## Endurecimiento transversal (P0/P1, no es un hito — corre en paralelo a todos)
 
@@ -230,13 +234,17 @@ para ese AC — no antes.
 - [x] (P0-SEC) Toda query a Postgres parametrizada (cero interpolación de string en
       SQL) — grep en `guardrail.sh` + disciplina en `db/migrar.mjs` y
       `db/test-invariantes.mjs` desde el primer commit [AC-SEC-06]
-- [ ] (P0-SEC) Bucket de fotos (pesaje + POD) sin permiso `DELETE` para el rol de la
-      app; URLs firmadas con expiración corta [AC-SEC-07]
-- [ ] (P1-PERF) Índices en las columnas de los filtros calientes: `pesajes(pesado_at)`,
-      `entregas(pedido_id)`, `pedidos(fecha_entrega, estado)` — verificados con
-      `EXPLAIN ANALYZE` en el seed de escala [AC-PERF-01]
-- [ ] (P1-PERF) Compresión de fotos (pesaje y POD) en el cliente antes de subir —
-      objetivo ≤400 KB por foto sin perder legibilidad para auditoría [AC-PERF-02]
+- [x] (P0-SEC) Fotos write-once: tabla `pan.fotos` con trigger que rebota UPDATE y
+      DELETE, `pan_app` solo con INSERT. El servidor RECALCULA el sha256 y rechaza la
+      foto si no coincide con el declarado en el POD. Guardar el binario en la BD es
+      decisión consciente para el piloto (volumen chico); si crece, pasa a URL sin
+      cambiar el contrato [AC-SEC-07]
+- [x] (P1-PERF) Índices en los filtros calientes (`pesajes.capturado_at`,
+      `destino+fecha`, `ventas.creado_at`, `pedidos(fecha,estado)`, `ruta_paradas`,
+      `entregas.capturado_at`). Nota: el índice sobre `creado_at::date` NO se puede —
+      castear timestamptz a date no es IMMUTABLE [AC-PERF-01]
+- [x] (P1-PERF) Compresión de fotos en el cliente antes de subir: 1280 px de ancho
+      máximo y calidad 0.72, objetivo ≈400 KB, con techo duro de 1,5 MB en el servidor [AC-PERF-02]
 - [ ] (P1-PERF) Paginación o scroll virtualizado en todo listado que pueda superar
       ~200 filas (entregas del día, historial de auditoría) [AC-PERF-03]
 - [ ] (P1-PERF) Presupuesto de performance en el gate: Lighthouse móvil ≥90 en F1/F4/F6

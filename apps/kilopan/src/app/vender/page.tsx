@@ -15,6 +15,11 @@ interface MedioPago {
   clave: string;
   etiqueta: string;
 }
+interface ClienteFiado {
+  id: string;
+  razon_social: string;
+  saldo_pendiente_clp: number | null;
+}
 interface LineaCarrito {
   productoId: string;
   nombre: string;
@@ -32,6 +37,8 @@ export default function VenderPage() {
   const [medioPago, setMedioPago] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [clientes, setClientes] = useState<ClienteFiado[]>([]);
+  const [clienteFiado, setClienteFiado] = useState("");
 
   useEffect(() => {
     fetch("/api/productos")
@@ -40,6 +47,9 @@ export default function VenderPage() {
     fetch("/api/medios-pago")
       .then((r) => r.json())
       .then((d) => setMediosPago(d.mediosPago ?? []));
+    fetch("/api/clientes")
+      .then((r) => r.json())
+      .then((d) => setClientes(d.clientes ?? []));
   }, []);
 
   const producto = productos.find((p) => p.id === productoId) ?? null;
@@ -68,6 +78,7 @@ export default function VenderPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           medioPago,
+          clienteId: medioPago === "fiado" ? clienteFiado : undefined,
           lineas: carrito.map((l) => ({ productoId: l.productoId, gramos: l.gramos, precioClp: l.precioClp })),
         }),
       });
@@ -80,6 +91,7 @@ export default function VenderPage() {
       setMensaje({ tipo: "ok", texto: `Venta cobrada: ${formatearClp(cuerpo.totalClp)}` });
       setCarrito([]);
       setMedioPago(null);
+      setClienteFiado("");
       fetch("/api/productos")
         .then((r) => r.json())
         .then((d) => setProductos(d.productos ?? []));
@@ -172,6 +184,34 @@ export default function VenderPage() {
             />
           </div>
 
+          {/* AC-PAG-02: fiar en el mesón usa el MISMO cliente y el mismo saldo que el
+              fiado del reparto — no hay un segundo sistema de crédito. */}
+          {medioPago === "fiado" ? (
+            <div style={{ marginTop: 10 }}>
+              <p style={{ fontSize: 13, fontWeight: 600, color: superficie.textoDim, margin: "0 0 8px" }}>
+                ¿A quién se le anota?
+              </p>
+              <select
+                value={clienteFiado}
+                onChange={(e) => setClienteFiado(e.target.value)}
+                style={{ width: "100%", minHeight: 44, borderRadius: 12, border: `1px solid ${superficie.hairline}`, padding: "0 14px", fontSize: 17, background: "#fff" }}
+              >
+                <option value="">Elegí un cliente registrado…</option>
+                {clientes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.razon_social}
+                    {c.saldo_pendiente_clp ? ` — debe ${formatearClp(Number(c.saldo_pendiente_clp))}` : ""}
+                  </option>
+                ))}
+              </select>
+              {clientes.length === 0 ? (
+                <p style={{ fontSize: 13, color: semantico.alerta, marginTop: 6 }}>
+                  No hay clientes registrados todavía. Dalos de alta en Despacho.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
           {mensaje ? (
             <p role="status" style={{ color: mensaje.tipo === "ok" ? semantico.ok : semantico.error, fontSize: 14 }}>
               {mensaje.texto}
@@ -179,8 +219,11 @@ export default function VenderPage() {
           ) : null}
 
           <div style={{ marginTop: 16 }}>
-            <BotonPrimario disabled={!medioPago || enviando} onClick={cobrar}>
-              {enviando ? "Cobrando…" : `Cobrar ${formatearClp(totalCarrito)}`}
+            <BotonPrimario
+              disabled={!medioPago || enviando || (medioPago === "fiado" && !clienteFiado)}
+              onClick={cobrar}
+            >
+              {enviando ? "Cobrando…" : medioPago === "fiado" ? "Anotar en la cuenta" : `Cobrar ${formatearClp(totalCarrito)}`}
             </BotonPrimario>
           </div>
         </div>

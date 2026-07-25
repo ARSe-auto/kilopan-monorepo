@@ -672,6 +672,43 @@ test("AC-FIA-01 (decisión #2): consolidar guías en una factura, y saldo_client
   await db.close();
 });
 
+test("AC-FIA-01: consolidar NO duplica la deuda — la guía deja de contar cuando la cubre su factura", async () => {
+  // Regresión de un bug real: la vista sumaba la guía Y su factura, así que el saldo
+  // del cliente salía al DOBLE. Para el panadero que usa esto para saber cuánto le
+  // deben, eso es peor que no mostrar nada.
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const clienteId = await crearCliente(db);
+  const pedidoId = await crearPedido(db, clienteId, usuarioId, dispositivoId);
+
+  const guia = await registrarDte(db, pedidoId, usuarioId, dispositivoId, 3001, 52); // $10.000
+  const saldoConGuia = await db.query(`select saldo_pendiente_clp from pan.saldo_cliente where cliente_id = $1`, [
+    clienteId,
+  ]);
+  assert.equal(saldoConGuia.rows[0].saldo_pendiente_clp, 10000);
+
+  const factura = await registrarDte(db, pedidoId, usuarioId, dispositivoId, 9001, 33); // $10.000
+  await db.query(`update pan.documento_tributario set consolidado_en_id = $1 where id = $2`, [factura, guia]);
+
+  const saldoConFactura = await db.query(
+    `select saldo_pendiente_clp from pan.saldo_cliente where cliente_id = $1`,
+    [clienteId]
+  );
+  assert.equal(
+    saldoConFactura.rows[0].saldo_pendiente_clp,
+    10000,
+    "sigue debiendo 10.000, NO 20.000: la factura reemplaza a la guía, no se suma"
+  );
+
+  await db.query(`update pan.documento_tributario set estado_pago = 'pagada' where id = $1`, [factura]);
+  const saldoPagado = await db.query(`select saldo_pendiente_clp from pan.saldo_cliente where cliente_id = $1`, [
+    clienteId,
+  ]);
+  assert.equal(saldoPagado.rows[0].saldo_pendiente_clp, 0, "al pagar la factura, el saldo queda en cero");
+  await db.close();
+});
+
 test("AC-DTE-02: pan_app NO puede reescribir un folio ni un RUT ya registrado", async () => {
   const db = await dbNueva();
   const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
@@ -857,6 +894,93 @@ test("AC-ID-05: una sesión inactiva más de 10 min se considera expirada", asyn
 
   const inexistente = await db.query(`select pan.sesion_expirada(gen_random_uuid(), 10) as expirada`);
   assert.equal(inexistente.rows[0].expirada, true, "una sesión que no existe se trata como expirada, nunca como válida");
+  await db.close();
+});
+
+// =============================================================================
+// AC-SEC-07 / AC-SUC-01 — fotos write-once y multisucursal
+// =============================================================================
+
+test("AC-SEC-07: una foto subida no se puede modificar ni borrar (es evidencia)", async () => {
+  const db = await dbNueva();
+  const { usuarioId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  const sha = "b".repeat(64);
+  await db.query(
+    `insert into pan.fotos (sha256, contenido, bytes, subida_por) values ($1, '\\x00'::bytea, 1, $2)`,
+    [sha, usuarioId]
+  );
+  await assert.rejects(
+    () => db.query(`update pan.fotos set bytes = 2 where sha256 = $1`, [sha]),
+    /permission|denied|evidencia/i
+  );
+  await assert.rejects(
+    () => db.query(`delete from pan.fotos where sha256 = $1`, [sha]),
+    /permission|denied|evidencia/i
+  );
+  await db.close();
+});
+
+test("AC-SEC-07: la misma foto subida dos veces es UNA fila (reintento de red seguro)", async () => {
+  const db = await dbNueva();
+  const { usuarioId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  const sha = "c".repeat(64);
+  const subir = () =>
+    db.query(
+      `insert into pan.fotos (sha256, contenido, bytes, subida_por) values ($1,'\\x00'::bytea,1,$2)
+       on conflict (sha256) do nothing`,
+      [sha, usuarioId]
+    );
+  await subir();
+  await subir();
+  const n = await db.query(`select count(*)::int as n from pan.fotos where sha256 = $1`, [sha]);
+  assert.equal(n.rows[0].n, 1);
+  await db.close();
+});
+
+test("AC-SUC-01: un pesaje hereda la sucursal del dispositivo donde se hizo", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const productoId = await crearProducto(db);
+
+  const suc = await db.query(`insert into pan.sucursales (nombre) values ('Local Ñuñoa') returning id`);
+  await db.query(`update pan.dispositivos set sucursal_id = $1 where id = $2`, [suc.rows[0].id, dispositivoId]);
+
+  const p = await db.query(
+    `insert into pan.pesajes (client_uuid, producto_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+     values (gen_random_uuid(), $1, 1000, 'mostrador', $2, $3, now()) returning sucursal_id`,
+    [productoId, usuarioId, dispositivoId]
+  );
+  assert.equal(p.rows[0].sucursal_id, suc.rows[0].id, "nadie tuvo que elegir la sucursal a mano");
+  await db.close();
+});
+
+test("AC-SUC-01: con una sola sucursal (o ninguna) nada se rompe — sucursal_id queda NULL", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const productoId = await crearProducto(db);
+  const p = await db.query(
+    `insert into pan.pesajes (client_uuid, producto_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+     values (gen_random_uuid(), $1, 1000, 'mostrador', $2, $3, now()) returning sucursal_id`,
+    [productoId, usuarioId, dispositivoId]
+  );
+  assert.equal(p.rows[0].sucursal_id, null, "el 95% de las panaderías no paga complejidad extra");
+  await db.close();
+});
+
+test("AC-PAG-02: fiar en el mesón usa el mismo cliente que el fiado del reparto", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const clienteId = await crearCliente(db);
+
+  const venta = await db.query(
+    `insert into pan.ventas (vendedor_id, dispositivo_id, medio_pago, total_clp, cliente_id)
+     values ($1,$2,'fiado',5000,$3) returning cliente_id`,
+    [usuarioId, dispositivoId, clienteId]
+  );
+  assert.equal(venta.rows[0].cliente_id, clienteId, "la venta fiada queda enlazada al cliente registrado");
   await db.close();
 });
 
