@@ -81,8 +81,11 @@ para ese AC — no antes.
 - [x] (P1) `productos`, `precios` (2 listas, vigencia histórica), `hornadas`, `pesajes`
       con los CHECK de destino/motivo del prompt maestro §4 — probado en
       `db/test-invariantes.mjs` [AC-PES-01]
-- [ ] (P1) F1 Pesar ≤4 toques: cifra 96/700, teclado numérico propio, destino en un
-      toque — pantalla real todavía no existe, solo el esquema que la sostiene
+- [x] (P1) F1 Pesar ≤4 toques: cifra 96/700, teclado numérico propio, destino en un
+      toque — probado en vivo end-to-end (clic real → API → BD → mensaje verde
+      «Pesado: 2,500 kg · Frica»); Reparto visible pero deshabilitado hasta el hito de
+      despacho; hornada_id NULL (fase 1, sin UI de hornadas todavía); orden de
+      productos alfabético, no por frecuencia (falta trackear frecuencia real)
       [AC-PES-02]
 - [x] (P1-SEC) Test centinela «báscula mal tipeada»: `pan.es_outlier_pesaje()` detecta
       >3× la mediana del producto (fase 1: sin cliente todavía — se agrega la dimensión

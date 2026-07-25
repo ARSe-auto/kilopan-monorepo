@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { superficie } from "@kilopan/miga/tokens.ts";
 
 export const metadata: Metadata = {
   title: "KiloPan",
@@ -11,8 +12,19 @@ const pilaTipografica =
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es-CL">
-      <body style={{ margin: 0, fontFamily: pilaTipografica }}>{children}</body>
+    // "Solo modo claro en el MVP": fijado acá, no dejado a que el navegador/SO decida.
+    <html lang="es-CL" style={{ colorScheme: "light" }}>
+      <body
+        style={{
+          margin: 0,
+          fontFamily: pilaTipografica,
+          background: superficie.fondo,
+          color: superficie.texto,
+          minHeight: "100dvh",
+        }}
+      >
+        {children}
+      </body>
     </html>
   );
 }

@@ -341,6 +341,37 @@ test("AC-PES-03: es_outlier_pesaje ignora el pesaje sin historia suficiente (evi
   await db.close();
 });
 
+test("pesajes: INSERT...ON CONFLICT DO NOTHING RETURNING funciona bajo pan_app (no requiere UPDATE(client_uuid))", async () => {
+  // Regresión: un upsert con DO UPDATE SET client_uuid=... rompía porque pan_app solo
+  // tiene UPDATE en (estado_merma, venta_recuperada_id) — a propósito, ver 0002.
+  // La API real usa DO NOTHING + SELECT aparte; este test prueba exactamente eso bajo
+  // el rol real, no bajo el dueño de la migración.
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const clientUuid = "22222222-2222-4222-8222-222222222222";
+
+  const primero = await db.query(
+    `insert into pan.pesajes (client_uuid, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+     values ($1, 1000, 'mostrador', $2, $3, now())
+     on conflict (client_uuid) do nothing returning id`,
+    [clientUuid, usuarioId, dispositivoId]
+  );
+  assert.equal(primero.rows.length, 1, "el insert original debe devolver la fila");
+
+  const reintento = await db.query(
+    `insert into pan.pesajes (client_uuid, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+     values ($1, 1000, 'mostrador', $2, $3, now())
+     on conflict (client_uuid) do nothing returning id`,
+    [clientUuid, usuarioId, dispositivoId]
+  );
+  assert.equal(reintento.rows.length, 0, "el reintento con el mismo client_uuid no inserta de nuevo");
+
+  const buscado = await db.query(`select id from pan.pesajes where client_uuid = $1`, [clientUuid]);
+  assert.equal(buscado.rows.length, 1, "pero sigue siendo consultable por SELECT para recuperar el id");
+  await db.close();
+});
+
 test("AC-PES-03: es_outlier_pesaje detecta 25.000 g donde iban 2.500 (test centinela #4 del prompt maestro)", async () => {
   const db = await dbNueva();
   const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");

@@ -14,6 +14,20 @@ export const semantico = {
   error: "#B91C1C",
 } as const;
 
+// "Solo modo claro en el MVP" (PROMPT_MAESTRO.md §5) — literal, no una omisión: estos
+// valores se aplican explícitos en el layout raíz (+ color-scheme: light) para que la
+// app no herede el modo oscuro del navegador/SO. Un fondo/texto sin fijar en una PWA
+// que corre en tablets con distintos temas del sistema es exactamente el tipo de bug
+// invisible en el código y roto en la pantalla real (encontrado así, no por lectura).
+export const superficie = {
+  fondo: "#F5F3EF",
+  tarjeta: "#FFFFFF",
+  texto: "#1B1712",
+  textoDim: "#5B564C",
+  textoFaint: "#8A8377",
+  hairline: "rgba(27,23,18,.14)",
+} as const;
+
 // Escala tipográfica. "pesoBascula" es la cifra más grande de toda la app — la que
 // se lee desde medio metro con las manos ocupadas.
 export const tipografia = {

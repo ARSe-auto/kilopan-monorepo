@@ -53,3 +53,14 @@ export async function obtenerSesionActual(request: NextRequest): Promise<SesionA
     rol: fila.rol,
   };
 }
+
+/** Azúcar para rutas API: sesión o 401, en una línea. Uso:
+ *  const sesion = await exigirSesion(request); if (sesion instanceof NextResponse) return sesion; */
+export async function exigirSesion(request: NextRequest) {
+  const sesion = await obtenerSesionActual(request);
+  if (!sesion) {
+    const { NextResponse } = await import("next/server");
+    return NextResponse.json({ error: "Sin sesión" }, { status: 401 });
+  }
+  return sesion;
+}
