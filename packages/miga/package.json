@@ -4,5 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "main": "./src/tokens.ts",
-  "types": "./src/tokens.ts"
+  "types": "./src/tokens.ts",
+  "exports": {
+    ".": "./src/tokens.ts",
+    "./componentes": "./src/componentes/index.tsx"
+  },
+  "peerDependencies": {
+    "react": "^19.1.0"
+  }
 }

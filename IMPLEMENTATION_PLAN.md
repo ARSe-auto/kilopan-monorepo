@@ -55,9 +55,12 @@ para ese AC — no antes.
       (SECURITY DEFINER, probado por el camino HTTP con `SET ROLE`, no por acceso
       directo) — cableado en `pesajes` y `hornadas` (hito 2); `pan.trg_exige_sesion()`
       es genérico, se reusa tal cual en cada tabla de negocio nueva [AC-ID-02]
-- [ ] (P0) PIN de 4 dígitos con `bcrypt` (cost ≥ 12), nunca en texto plano en logs ni en
-      `eventos.payload` — columna `pin_hash` ya existe; falta la ruta de alta/login que
-      realmente hashea (hito de UI de identidad) [AC-ID-03]
+- [x] (P0) PIN de 4 dígitos hasheado, nunca en texto plano en logs ni en
+      `eventos.payload` — **sustitución deliberada**: `node:crypto` scrypt en vez de
+      bcrypt (memory-hard, sin dependencia nueva que auditar; ver
+      `apps/kilopan/src/identidad/hash.ts`). `POST /api/auth/login` probado en vivo
+      contra el dev server: PIN correcto entra, incorrecto rebota, 5º intento fallido
+      bloquea con 423 y el PIN correcto YA NO sirve hasta que expire [AC-ID-03]
 - [x] (P0-SEC) **Bloqueo por PIN errado**: 5 intentos fallidos en 10 min ⇒ dispositivo
       bloqueado 15 min + evento `pin_bloqueado` auditable — un PIN de 4 dígitos son solo
       10.000 combinaciones, así que esto no es opcional aunque no esté en el prompt
@@ -68,8 +71,10 @@ para ese AC — no antes.
       [AC-ID-04]
 - [ ] (P0) Auto-bloqueo a PIN tras 10 min de inactividad [AC-ID-05]
 - [ ] (P1) F5 Cambio de operador ≤3 s, chip con nombre siempre visible [AC-ID-06]
-- [ ] (P0-SEC) Rate limit genérico en toda ruta de autenticación (no solo PIN):
-      middleware con ventana deslizante por IP + por dispositivo [AC-SEC-02]
+- [x] (P0-SEC) Rate limit genérico en toda ruta de autenticación (no solo PIN):
+      ventana deslizante en memoria por IP (20/min) en `identidad/limitador.ts` — nota
+      honesta: en memoria de un solo proceso; multi-nodo necesitaría Redis, no aplica
+      todavía [AC-SEC-02]
 
 ## Hito 2 — Catálogo y pesaje
 
@@ -186,8 +191,10 @@ para ese AC — no antes.
       `X-Frame-Options`) en `next.config.ts` — CSP completa y HSTS quedan para cuando
       existan orígenes reales que permitir (fotos, mapa estático); no declarar una CSP
       amplia "por si acaso" [AC-SEC-04]
-- [ ] (P0-SEC) Cookies de sesión `HttpOnly` + `Secure` + `SameSite=Lax`; ningún secreto
-      ni token en `localStorage` [AC-SEC-05]
+- [x] (P0-SEC) Cookies de sesión `HttpOnly` + `Secure` (en producción) + `SameSite=Lax`;
+      ningún secreto ni token en `localStorage` — verificado en vivo: `document.cookie`
+      no puede leer `kp_sesion` desde JS, pero el navegador la manda sola y
+      `/api/auth/logout` la valida [AC-SEC-05]
 - [x] (P0-SEC) Toda query a Postgres parametrizada (cero interpolación de string en
       SQL) — grep en `guardrail.sh` + disciplina en `db/migrar.mjs` y
       `db/test-invariantes.mjs` desde el primer commit [AC-SEC-06]
