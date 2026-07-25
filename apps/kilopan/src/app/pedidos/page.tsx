@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { BotonPrimario } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
 import { formatearClp } from "@/comun/formato.ts";
+import { kgTextoAGramos, pesoValido } from "@/comun/peso.ts";
 
 interface Pedido {
   id: string;
@@ -54,8 +55,18 @@ export default function PedidosPage() {
   useEffect(() => { void cargar(); }, [cargar]);
 
   async function crearPedido() {
-    const gramos = Math.round(Number(kilos.replace(",", ".")) * 1000);
-    if (!clienteId || !productoId || !Number.isInteger(gramos) || gramos < 1) {
+    // Antes acá vivía `Math.round(Number(kilos)*1000)`, una segunda conversión de
+    // kilos a gramos distinta de la del pesaje. Math.round tapaba el error del
+    // flotante por casualidad, pero dos implementaciones de la misma regla terminan
+    // divergiendo. Ahora las dos pantallas usan comun/peso.ts, que está probado.
+    let gramos = 0;
+    try {
+      gramos = kgTextoAGramos(kilos);
+    } catch {
+      setMensaje({ tipo: "error", texto: "Ese peso no es válido" });
+      return;
+    }
+    if (!clienteId || !productoId || !pesoValido(gramos)) {
       setMensaje({ tipo: "error", texto: "Elige cliente, producto y kilos" });
       return;
     }

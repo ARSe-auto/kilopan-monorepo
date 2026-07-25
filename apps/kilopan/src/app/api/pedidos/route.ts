@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
 import { exigirSesion } from "@/identidad/sesion.ts";
+import { roundClp } from "@/comun/round_clp.ts";
 
 interface LineaEntrada {
   productoId: string;
@@ -76,7 +77,11 @@ export async function POST(request: NextRequest) {
       if (!precioKg) {
         return NextResponse.json({ error: "Producto sin precio en la lista del cliente" }, { status: 400 });
       }
-      const precioLinea = Math.round((precioKg * linea.gramosPedidos) / 1000);
+      // roundClp y no Math.round: es la MISMA cuenta que /api/ventas, y ahí el
+      // redondeo es bancario (al par en el .5 exacto). Dos reglas distintas para el
+      // mismo cálculo hacen que un pedido facturado no cuadre con la venta equivalente
+      // por un peso, y esas diferencias aparecen al conciliar sin que nadie sepa de dónde.
+      const precioLinea = roundClp((precioKg * linea.gramosPedidos) / 1000);
       total += precioLinea;
       await db.query(
         `insert into pan.pedido_lineas (pedido_id, producto_id, gramos_pedidos, precio_clp) values ($1,$2,$3,$4)`,

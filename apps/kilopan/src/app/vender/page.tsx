@@ -4,6 +4,8 @@ import { CifraGrande, TecladoNumerico, BotonPrimario, SelectorUnToque } from "@k
 import { superficie, semantico } from "@kilopan/miga/tokens.ts";
 import { formatearClp, formatearKg } from "@/comun/formato.ts";
 import { enviarOEncolar } from "@/pod/outbox.ts";
+import { kgTextoAGramos, pesoValido } from "@/comun/peso.ts";
+import { roundClp } from "@/comun/round_clp.ts";
 
 interface Producto {
   id: string;
@@ -33,7 +35,7 @@ export default function VenderPage() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [mediosPago, setMediosPago] = useState<MedioPago[]>([]);
   const [productoId, setProductoId] = useState<string | null>(null);
-  const [gramos, setGramos] = useState("");
+  const [kilos, setKilos] = useState("");
   const [carrito, setCarrito] = useState<LineaCarrito[]>([]);
   const [medioPago, setMedioPago] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
@@ -54,19 +56,30 @@ export default function VenderPage() {
   }, []);
 
   const producto = productos.find((p) => p.id === productoId) ?? null;
-  const gramosNum = Number(gramos || "0");
+  // Se pesa y se cobra en KILOS; a la BD viajan gramos enteros (ver comun/peso.ts).
+  let gramosNum = 0;
+  try {
+    gramosNum = kgTextoAGramos(kilos);
+  } catch {
+    gramosNum = 0;
+  }
+  // roundClp y no Math.round: el redondeo del dinero es bancario y está probado
+  // aparte. Este número es solo lo que se le MUESTRA al cliente — el que se cobra lo
+  // recalcula el servidor contra pan.precios.
   const precioLinea =
-    producto?.precio_mostrador_clp != null ? Math.round((producto.precio_mostrador_clp * gramosNum) / 1000) : 0;
+    producto?.precio_mostrador_clp != null
+      ? roundClp((producto.precio_mostrador_clp * gramosNum) / 1000)
+      : 0;
   const totalCarrito = carrito.reduce((s, l) => s + l.precioClp, 0);
 
   function agregarAlCarrito() {
-    if (!producto || gramosNum < 1) return;
+    if (!producto || !pesoValido(gramosNum)) return;
     setCarrito((c) => [
       ...c,
       { productoId: producto.id, nombre: producto.nombre, gramos: gramosNum, precioClp: precioLinea },
     ]);
     setProductoId(null);
-    setGramos("");
+    setKilos("");
   }
 
   async function cobrar() {
@@ -125,11 +138,14 @@ export default function VenderPage() {
           Disponible: {formatearKg(producto.stock_disponible_g)}
         </p>
         <div style={{ display: "flex", justifyContent: "center", padding: "8px 0" }}>
-          <CifraGrande valor={gramos || "0"} unidad="g" />
+          <CifraGrande valor={kilos || "0"} unidad="kg" />
         </div>
         <p style={{ textAlign: "center", margin: 0, fontSize: 17, fontWeight: 700 }}>{formatearClp(precioLinea)}</p>
-        <TecladoNumerico valor={gramos} onCambiar={setGramos} />
-        <BotonPrimario disabled={gramosNum < 1 || gramosNum > producto.stock_disponible_g} onClick={agregarAlCarrito}>
+        <TecladoNumerico valor={kilos} onCambiar={setKilos} permitirDecimal />
+        <BotonPrimario
+          disabled={!pesoValido(gramosNum) || gramosNum > producto.stock_disponible_g}
+          onClick={agregarAlCarrito}
+        >
           Agregar
         </BotonPrimario>
         {gramosNum > producto.stock_disponible_g ? (

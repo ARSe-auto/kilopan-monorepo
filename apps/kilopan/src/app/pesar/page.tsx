@@ -9,6 +9,7 @@ import {
 } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico } from "@kilopan/miga/tokens.ts";
 import { formatearKg } from "@/comun/formato.ts";
+import { kgTextoAGramos, pesoValido } from "@/comun/peso.ts";
 import { enviarOEncolar, encolarFoto, iniciarSyncAutomatico } from "@/pod/outbox.ts";
 import { abrirCamara, capturar, cerrarCamara, subirFoto } from "@/comun/camara.ts";
 
@@ -62,7 +63,9 @@ function guardarCatalogoCache(productos: Producto[]) {
 export default function PesarPage() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [productoId, setProductoId] = useState<string | null>(null);
-  const [gramos, setGramos] = useState("");
+  // El maestro teclea KILOS ("1,5"); a la BD viajan gramos enteros. La conversión vive
+  // en comun/peso.ts y es por texto, nunca `Number(kilos)*1000`.
+  const [kilos, setKilos] = useState("");
   const [destino, setDestino] = useState<Destino>("mostrador");
   const [motivoMerma, setMotivoMerma] = useState<string | null>(null);
   const [estado, setEstado] = useState<"listo" | "foto" | "enviando" | "confirmar_outlier">("listo");
@@ -134,9 +137,17 @@ export default function PesarPage() {
   }, []);
 
   const producto = productos.find((p) => p.id === productoId) ?? null;
-  const gramosNum = Number(gramos || "0");
+  let gramosNum = 0;
+  try {
+    gramosNum = kgTextoAGramos(kilos);
+  } catch {
+    gramosNum = 0; // el teclado propio no puede producirlo, pero no revienta la pantalla
+  }
   const puedeConfirmar =
-    !!producto && gramosNum > 0 && estado !== "enviando" && (destino !== "merma" || !!motivoMerma);
+    !!producto &&
+    pesoValido(gramosNum) &&
+    estado !== "enviando" &&
+    (destino !== "merma" || !!motivoMerma);
 
   // El sha256 de la foto de ESTE pesaje. Se guarda aparte del estado de render porque
   // el camino del outlier vuelve a llamar a `enviar()` y la foto ya tomada tiene que
@@ -225,7 +236,7 @@ export default function PesarPage() {
   // Encadena con el mismo producto preseleccionado (spec F1): entre bandeja y bandeja
   // el maestro no vuelve al inicio, solo se limpia el peso.
   function limpiarParaElSiguiente() {
-    setGramos("");
+    setKilos("");
     setDestino("mostrador");
     setMotivoMerma(null);
     setEstado("listo");
@@ -333,10 +344,10 @@ export default function PesarPage() {
       </div>
 
       <div style={{ display: "flex", justifyContent: "center", padding: "8px 0" }}>
-        <CifraGrande valor={gramos || "0"} unidad="g" />
+        <CifraGrande valor={kilos || "0"} unidad="kg" />
       </div>
 
-      <TecladoNumerico valor={gramos} onCambiar={setGramos} />
+      <TecladoNumerico valor={kilos} onCambiar={setKilos} permitirDecimal />
 
       <div>
         <p style={{ fontSize: 13, fontWeight: 600, color: superficie.textoDim, margin: "0 0 8px" }}>Destino</p>
@@ -359,7 +370,7 @@ export default function PesarPage() {
       {estado === "confirmar_outlier" ? (
         <div style={{ padding: 14, borderRadius: 12, background: "#FEF3E2", border: `1px solid ${semantico.alerta}` }}>
           <p style={{ margin: "0 0 10px", fontSize: 14, fontWeight: 600 }}>
-            Ese peso es muy distinto a lo habitual para {producto.nombre}. ¿Confirmás {formatearKg(gramosNum)}?
+            Ese peso es muy distinto a lo habitual para {producto.nombre}. ¿Confirmas {formatearKg(gramosNum)}?
           </p>
           <div style={{ display: "flex", gap: 8 }}>
             <BotonPrimario variante="neutro" onClick={() => setEstado("listo")}>
