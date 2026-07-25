@@ -51,11 +51,10 @@ para ese AC — no antes.
       `pan.dispositivos`, `pan.sesiones_operador` con `EXCLUDE USING gist` (requiere
       `btree_gist`), `pan.valida_rut()` (módulo 11), `pan.round_clp()` — probado contra
       pglite en `db/test-invariantes.mjs` [AC-ID-01]
-- [ ] (P0) Trigger: ningún INSERT/UPDATE de negocio pasa sin sesión de operador viva
+- [x] (P0) Trigger: ningún INSERT/UPDATE de negocio pasa sin sesión de operador viva
       (SECURITY DEFINER, probado por el camino HTTP con `SET ROLE`, no por acceso
-      directo) — `pan.exige_sesion_viva()` ya existe; falta CABLEARLA en las tablas de
-      negocio del hito 2+ y testearla (todavía no hay tabla de negocio a la que
-      aplicarla) [AC-ID-02]
+      directo) — cableado en `pesajes` y `hornadas` (hito 2); `pan.trg_exige_sesion()`
+      es genérico, se reusa tal cual en cada tabla de negocio nueva [AC-ID-02]
 - [ ] (P0) PIN de 4 dígitos con `bcrypt` (cost ≥ 12), nunca en texto plano en logs ni en
       `eventos.payload` — columna `pin_hash` ya existe; falta la ruta de alta/login que
       realmente hashea (hito de UI de identidad) [AC-ID-03]
@@ -74,19 +73,25 @@ para ese AC — no antes.
 
 ## Hito 2 — Catálogo y pesaje
 
-- [ ] (P1) `productos`, `precios` (2 listas, vigencia histórica), `hornadas`, `pesajes`
-      con los CHECK de destino/motivo del prompt maestro §4 [AC-PES-01]
+- [x] (P1) `productos`, `precios` (2 listas, vigencia histórica), `hornadas`, `pesajes`
+      con los CHECK de destino/motivo del prompt maestro §4 — probado en
+      `db/test-invariantes.mjs` [AC-PES-01]
 - [ ] (P1) F1 Pesar ≤4 toques: cifra 96/700, teclado numérico propio, destino en un
-      toque [AC-PES-02]
-- [ ] (P1-SEC) Test centinela «báscula mal tipeada»: outlier >3× mediana del
-      cliente/producto exige re-confirmación explícita; cancelar no persiste nada
-      [AC-PES-03]
-- [ ] (P2) **Foto de respaldo opcional** (decisión #1, nivel 1): `parametros.pesaje_foto_obligatoria`
-      editable solo por `admin`; encendido agrega obturador antes de confirmar,
-      `pesajes.foto_sha256` write-once igual que POD [AC-PES-04]
-- [ ] (P2) **Báscula conectada opcional** (decisión #1, nivel 2): `pesajes.origen_captura
-      CHECK IN ('manual','bascula_bt','bascula_serial')`; Web Bluetooth solo en
-      Chrome/Android — degradar a manual sin romper el flujo en Safari/iOS [AC-PES-05]
+      toque — pantalla real todavía no existe, solo el esquema que la sostiene
+      [AC-PES-02]
+- [x] (P1-SEC) Test centinela «báscula mal tipeada»: `pan.es_outlier_pesaje()` detecta
+      >3× la mediana del producto (fase 1: sin cliente todavía — se agrega la dimensión
+      cliente en el hito de despacho, cuando `pedido_linea_id` tenga FK real); falta la
+      UI que exige re-confirmación explícita cuando la función devuelve true [AC-PES-03]
+- [ ] (P2) **Foto de respaldo opcional** (decisión #1, nivel 1): columnas
+      `pesajes.foto_sha256`/`foto_estado` ya existen (write-once, mismo contrato que
+      POD) — el AC sigue abierto porque falta lo que lo hace usable: la tabla
+      `parametros` + el toggle de admin (`pesaje_foto_obligatoria`) y el obturador en
+      la UI de F1. No marcar [x] por solo tener las columnas [AC-PES-04]
+- [ ] (P2) **Báscula conectada opcional** (decisión #1, nivel 2): columna
+      `pesajes.origen_captura CHECK IN ('manual','bascula_bt','bascula_serial')` ya
+      existe — falta toda la integración Web Bluetooth real (Chrome/Android only,
+      degrada a manual en Safari/iOS) [AC-PES-05]
 - [ ] (P2) **Cola con reintento automático** (decisión #4) para pesaje/mostrador:
       reusa el outbox de `packages/nucleo-pod` (genérico, no solo reparto); indicador
       «Sin conexión — N por subir» / «Sincronizado hace Xs» [AC-RED-01]
@@ -151,10 +156,12 @@ para ese AC — no antes.
       hito) — un campo `cierres_caja.total_facturador_clp` tecleado al cerrar caja,
       comparado contra `declarado_clp` con el mismo componente visual esperado/declarado
       [AC-DASH-04]
-- [ ] (P2) **Estado de mermas recuperables** (decisión #6): `mermas.estado CHECK IN
-      ('pendiente','confirmada_perdida','recuperada_con_venta')`, resolución al día
-      siguiente; recuperada mueve gramos de `g_merma_tipificada` a `g_venta` en la vista
-      de TCK sin tocar la fórmula [AC-MERM-01]
+- [ ] (P2) **Estado de mermas recuperables** (decisión #6): la máquina de estados ya
+      existe en `pesajes.estado_merma` (hito 2, probada — incl. que `pan_app` solo puede
+      tocar `estado_merma`/`venta_recuperada_id` por grant de columna, nunca `gramos`).
+      Sigue abierto: la UI de resolución al día siguiente, y que la vista de TCK (este
+      hito) sume `recuperada_con_venta` a `g_venta` en vez de a `g_merma_tipificada`
+      [AC-MERM-01]
 - [ ] (P2) **Multisucursal ligero, condicional** (decisión #7): tabla `sucursales` +
       `sucursal_id` en equipos/hornadas/cierres/rutas; selector en dashboard oculto si
       hay una sola sucursal — **no iniciar sin confirmar con al menos un piloto real que

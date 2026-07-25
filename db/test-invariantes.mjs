@@ -27,6 +27,29 @@ async function dbNueva() {
   return db;
 }
 
+async function crearSesion(db, usuarioId, dispositivoId) {
+  await db.query(`insert into pan.sesiones_operador (dispositivo_id, usuario_id) values ($1,$2)`, [
+    dispositivoId,
+    usuarioId,
+  ]);
+}
+
+async function crearProducto(db, nombre = "Marraqueta") {
+  const p = await db.query(
+    `insert into pan.productos (nombre, tipo_venta) values ($1,'kilo') returning id`,
+    [nombre]
+  );
+  return p.rows[0].id;
+}
+
+async function crearHornada(db, productoId, usuarioId, dispositivoId, masaGramos = 25000) {
+  const h = await db.query(
+    `insert into pan.hornadas (producto_id, masa_gramos, usuario_id, dispositivo_id) values ($1,$2,$3,$4) returning id`,
+    [productoId, masaGramos, usuarioId, dispositivoId]
+  );
+  return h.rows[0].id;
+}
+
 async function crearUsuarioYDispositivo(db, rut, rol = "maestro") {
   const u = await db.query(
     `insert into pan.usuarios (nombre, rut, rol, pin_hash) values ($1,$2,$3,'x') returning id`,
@@ -161,6 +184,183 @@ test("AC-SEC-01: un usuario/dispositivo distinto NO se ve afectado por el bloque
   }
   const otro = await db.query(`select pan.registrar_intento_pin($1,$2,true) as permitido`, [d2, u2]);
   assert.equal(otro.rows[0].permitido, true, "el bloqueo es por (dispositivo, usuario), no global");
+  await db.close();
+});
+
+// =============================================================================
+// Hito 2 — catálogo y pesaje
+// =============================================================================
+
+test("pesajes: destino='reparto' exige pedido_linea_id; destino='mostrador' lo prohíbe", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const productoId = await crearProducto(db);
+  const hornadaId = await crearHornada(db, productoId, usuarioId, dispositivoId);
+
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into pan.pesajes (client_uuid, hornada_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+         values (gen_random_uuid(), $1, 1000, 'reparto', $2, $3, now())`,
+        [hornadaId, usuarioId, dispositivoId]
+      ),
+    /constraint|check/i,
+    "reparto sin pedido_linea_id debe rebotar"
+  );
+
+  const ok = await db.query(
+    `insert into pan.pesajes (client_uuid, hornada_id, pedido_linea_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+     values (gen_random_uuid(), $1, gen_random_uuid(), 1000, 'reparto', $2, $3, now()) returning id`,
+    [hornadaId, usuarioId, dispositivoId]
+  );
+  assert.equal(ok.rows.length, 1);
+  await db.close();
+});
+
+test("pesajes: destino='merma' exige motivo_merma Y estado_merma (AC-MERM-01)", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const productoId = await crearProducto(db);
+  const hornadaId = await crearHornada(db, productoId, usuarioId, dispositivoId);
+
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into pan.pesajes (client_uuid, hornada_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+         values (gen_random_uuid(), $1, 500, 'merma', $2, $3, now())`,
+        [hornadaId, usuarioId, dispositivoId]
+      ),
+    /constraint|check/i,
+    "merma sin motivo NI estado debe rebotar"
+  );
+
+  const ok = await db.query(
+    `insert into pan.pesajes
+       (client_uuid, hornada_id, gramos, destino, motivo_merma, estado_merma, usuario_id, dispositivo_id, capturado_at)
+     values (gen_random_uuid(), $1, 500, 'merma', 'sobrante_dia', 'pendiente', $2, $3, now()) returning id`,
+    [hornadaId, usuarioId, dispositivoId]
+  );
+  assert.equal(ok.rows.length, 1);
+  await db.close();
+});
+
+test("AC-MERM-01: sobrante_dia se resuelve a recuperada_con_venta o confirmada_perdida, no a cualquier cosa", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const productoId = await crearProducto(db);
+  const hornadaId = await crearHornada(db, productoId, usuarioId, dispositivoId);
+
+  const pesaje = await db.query(
+    `insert into pan.pesajes
+       (client_uuid, hornada_id, gramos, destino, motivo_merma, estado_merma, usuario_id, dispositivo_id, capturado_at)
+     values (gen_random_uuid(), $1, 500, 'merma', 'sobrante_dia', 'pendiente', $2, $3, now()) returning id`,
+    [hornadaId, usuarioId, dispositivoId]
+  );
+  const pesajeId = pesaje.rows[0].id;
+
+  // pan_app SOLO puede tocar estado_merma/venta_recuperada_id (grant column-level) —
+  // intentar cambiar gramos por la misma vía debe rebotar.
+  await assert.rejects(
+    () => db.query(`update pan.pesajes set gramos = 999 where id = $1`, [pesajeId]),
+    /permission|denied/i,
+    "pan_app no debería poder tocar gramos de un pesaje ya creado"
+  );
+
+  const resuelto = await db.query(
+    `update pan.pesajes set estado_merma = 'confirmada_perdida' where id = $1 returning estado_merma`,
+    [pesajeId]
+  );
+  assert.equal(resuelto.rows[0].estado_merma, "confirmada_perdida");
+  await db.close();
+});
+
+test("AC-ID-02: un pesaje sin sesión de operador viva rebota (trigger real, no solo la función suelta)", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  // OJO: sin crearSesion() — a propósito. hornada_id va NULL (válido, "fase 1" del
+  // prompt maestro) precisamente para que este test aísle el trigger de pesajes y no
+  // se tropiece con el mismo trigger ya cableado en hornadas.
+
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into pan.pesajes (client_uuid, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+         values (gen_random_uuid(), 1000, 'mostrador', $1, $2, now())`,
+        [usuarioId, dispositivoId]
+      ),
+    /sin sesión/i
+  );
+  await db.close();
+});
+
+test("AC-ID-02: una hornada sin sesión de operador viva también rebota", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  const productoId = await crearProducto(db);
+  // OJO: sin crearSesion() — a propósito.
+  await assert.rejects(() => crearHornada(db, productoId, usuarioId, dispositivoId), /sin sesión/i);
+  await db.close();
+});
+
+test("pesajes: client_uuid duplicado rebota (idempotencia)", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const productoId = await crearProducto(db);
+  const hornadaId = await crearHornada(db, productoId, usuarioId, dispositivoId);
+  const clientUuid = "11111111-1111-4111-8111-111111111111";
+
+  await db.query(
+    `insert into pan.pesajes (client_uuid, hornada_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+     values ($1, $2, 1000, 'mostrador', $3, $4, now())`,
+    [clientUuid, hornadaId, usuarioId, dispositivoId]
+  );
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into pan.pesajes (client_uuid, hornada_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+         values ($1, $2, 1000, 'mostrador', $3, $4, now())`,
+        [clientUuid, hornadaId, usuarioId, dispositivoId]
+      ),
+    /unique|duplicate/i
+  );
+  await db.close();
+});
+
+test("AC-PES-03: es_outlier_pesaje ignora el pesaje sin historia suficiente (evita falso positivo día 1)", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const productoId = await crearProducto(db);
+
+  const r = await db.query(`select pan.es_outlier_pesaje($1, 99000) as outlier`, [productoId]);
+  assert.equal(r.rows[0].outlier, false, "sin >=3 pesajes previos, nunca debe marcar outlier");
+  await db.close();
+});
+
+test("AC-PES-03: es_outlier_pesaje detecta 25.000 g donde iban 2.500 (test centinela #4 del prompt maestro)", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const productoId = await crearProducto(db);
+  const hornadaId = await crearHornada(db, productoId, usuarioId, dispositivoId);
+
+  for (const gramos of [2500, 2400, 2600, 2500]) {
+    await db.query(
+      `insert into pan.pesajes (client_uuid, hornada_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+       values (gen_random_uuid(), $1, $2, 'mostrador', $3, $4, now())`,
+      [hornadaId, gramos, usuarioId, dispositivoId]
+    );
+  }
+
+  const normal = await db.query(`select pan.es_outlier_pesaje($1, 2550) as outlier`, [productoId]);
+  assert.equal(normal.rows[0].outlier, false, "2.550 g está en línea con la mediana ~2.500");
+
+  const outlier = await db.query(`select pan.es_outlier_pesaje($1, 25000) as outlier`, [productoId]);
+  assert.equal(outlier.rows[0].outlier, true, "25.000 g es >3x la mediana ~2.500 — debe marcar outlier");
   await db.close();
 });
 
