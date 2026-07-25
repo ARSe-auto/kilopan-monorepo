@@ -102,7 +102,12 @@ para ese AC — no antes.
       `pesaje_foto_obligatoria` en `/admin`, solo para admin — deliberadamente NO en la
       pantalla de pesaje, para que quien pesa no lo apague cuando le incomode. Obturador
       real por `getUserMedia` con compresión a ~400 KB y `sha256` calculado sobre el
-      blob comprimido [AC-PES-04]
+      blob comprimido. **Estuvo marcado [x] falsamente hasta el 25-jul-2026**: las
+      columnas y el toggle existían, pero `/api/pesajes` no aceptaba el hash y `/pesar`
+      nunca abría la cámara — el control del dueño estaba apagado en los hechos.
+      Cerrado de verdad ahora: la exigencia se valida en el SERVIDOR (validarla solo en
+      la UI sería teatro), `pan_app` puede marcar `foto_estado` pero no reapuntar
+      `foto_sha256`, y hay 2 tests de invariante que lo prueban [AC-PES-04]
 - [x] (P2) **Báscula conectada opcional** (decisión #1, nivel 2): Web Bluetooth
       contra el perfil GATT Weight Scale, con degradación a manual. **NO probado contra
       una báscula real** — y las marcas comunes en panaderías chilenas (Toledo, CAS,
@@ -165,11 +170,20 @@ para ese AC — no antes.
       cada 30 s + `POST /api/sync` idempotente. Probado por HTTP: 3 replays del mismo
       `client_uuid` ⇒ UNA entrega de 12 kg en el dashboard, y un GPS (0,0) sale como
       rechazo explícito en vez de girar en la cola para siempre [AC-POD-02]
-- [x] (P1) F4 Entregar: `/ruta` con la parada activa destacada, obturador que captura
-      GPS+hash, receptor precargado y confirmación. Permiso de GPS denegado bloquea y lo
-      dice; precisión mala entra igual marcada «(impreciso, igual sirve)». El repartidor
-      ve km y kg, **jamás CLP** — verificado en pantalla. Falta la cámara real
-      (`getUserMedia`) y los modos rechazo/parcial [AC-POD-03]
+- [x] (P1) F4 Entregar: `/ruta` con la parada activa destacada, obturador real,
+      receptor precargado y confirmación. Permiso de GPS denegado bloquea y lo dice;
+      precisión mala entra igual marcada «(impreciso, igual sirve)». El repartidor
+      ve km y kg, **jamás CLP** — verificado en pantalla.
+      **La foto era falsa hasta el 25-jul-2026**: `capturarFoto()` hacía el sha256 de
+      un texto (`${parada}-${Date.now()}`), no de una imagen, y nunca llamaba a
+      `/api/fotos` — o sea, la evidencia de entrega, que es el mecanismo de confianza
+      central del producto, no existía. `comun/camara.ts` estaba escrito y correcto,
+      solo desconectado. Ahora: `getUserMedia` in-app (nunca `<input type=file>`, que
+      permitiría adjuntar una foto vieja de la galería), JPEG ~400 KB, sha256 sobre el
+      blob comprimido, subida a `/api/fotos` y —si no hay señal— el binario queda en la
+      cola de fotos del outbox y se reintenta solo. **Compila y pasa lint, pero el
+      flujo NO está ejercitado de punta a punta todavía**: sembrar una parada de prueba
+      exige sesión viva de operador. Faltan los modos rechazo/parcial [AC-POD-03]
 - [x] (P2) **Consolidación de guías en una factura + saldo por cliente** (decisión #2):
       `documento_tributario.consolidado_en_id` (self-FK, índice único — ninguna guía se
       factura dos veces), vista `pan.saldo_cliente` derivada de eventos (nunca tabla

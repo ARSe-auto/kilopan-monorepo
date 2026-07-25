@@ -7,7 +7,7 @@
 // dueño a la vez. Para operar de verdad —y más si es por datos móviles— hace falta
 // Postgres hospedado. El SQL de las migraciones es el mismo; cambia el transporte.
 import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 
 export interface ClienteDb {
   query: <Fila extends Record<string, unknown> = Record<string, unknown>>(
@@ -17,13 +17,43 @@ export interface ClienteDb {
   exec: (sql: string) => Promise<unknown>;
 }
 
+// `next dev`/`next start` corren con cwd = apps/kilopan/, pero el server standalone
+// (railway.json: "node apps/kilopan/.next/standalone/apps/kilopan/server.js") corre con
+// cwd = la raíz del monorepo. Un ../../ fijo desde process.cwd() daba con la carpeta
+// correcta en un caso y con basura en el otro — silenciosamente: pglite no tiraba "no
+// existe la carpeta", tiraba el genérico "PGlite failed to initialize properly", y
+// leerEnvLocal() simplemente no encontraba el .env.local y la app arrancaba en pglite
+// por defecto sin decir por qué. Subir buscando una marca real de la raíz (db/migraciones,
+// que solo existe ahí) funciona sea cual sea el cwd desde el que se arrancó node.
+function hallarRaizRepo(desde: string): string {
+  let dir = desde;
+  for (let i = 0; i < 8; i++) {
+    if (existsSync(join(dir, "db", "migraciones"))) return dir;
+    const arriba = dirname(dir);
+    if (arriba === dir) break;
+    dir = arriba;
+  }
+  throw new Error(
+    `no se encontró la raíz del monorepo (buscando db/migraciones/) subiendo desde ${desde}`
+  );
+}
+
 function leerEnvLocal(): Record<string, string> {
-  const path = join(process.cwd(), ".env.local");
+  let raiz: string;
+  try {
+    raiz = hallarRaizRepo(process.cwd());
+  } catch {
+    return {}; // sin .env.local no es fatal: en producción las variables vienen del entorno real
+  }
+  const path = join(raiz, ".env.local");
   const env: Record<string, string> = {};
   if (existsSync(path)) {
-    for (const linea of readFileSync(path, "utf8").split("\n")) {
+    for (const cruda of readFileSync(path, "utf8").split("\n")) {
+      // Mismo parser que db/migrar.mjs: quita \r (archivo guardado en Windows) y las
+      // comillas envolventes (URL copiada con comillas desde el dashboard del proveedor).
+      const linea = cruda.replace(/\r$/, "");
       const m = linea.match(/^([A-Z_]+)=(.*)$/);
-      if (m) env[m[1] as string] = m[2] as string;
+      if (m) env[m[1] as string] = (m[2] as string).trim().replace(/^(["'])(.*)\1$/, "$2");
     }
   }
   return env;
@@ -147,7 +177,7 @@ async function crearPglite(): Promise<ClienteDb> {
   const { PGlite } = await import("@electric-sql/pglite");
   const { pgcrypto } = await import("@electric-sql/pglite/contrib/pgcrypto");
   const { btree_gist } = await import("@electric-sql/pglite/contrib/btree_gist");
-  const dataDir = join(process.cwd(), "..", "..", "db", "data", "pglite");
+  const dataDir = join(hallarRaizRepo(process.cwd()), "db", "data", "pglite");
   const db = new PGlite(dataDir, { extensions: { pgcrypto, btree_gist } });
   await db.exec("set role pan_app");
   return db as unknown as ClienteDb;

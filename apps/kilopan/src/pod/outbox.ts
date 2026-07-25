@@ -11,7 +11,11 @@
 
 const DB_NOMBRE = "kilopan_outbox";
 const TIENDA = "pendientes";
-const VERSION = 2; // v2: outbox genérico (antes solo entregas)
+const TIENDA_FOTOS = "fotos_pendientes";
+// v3: agrega fotos_pendientes — el sha256 del POD viajaba en la entrega, pero el JPEG
+// (multipart, /api/fotos) se subía "al tiro nomás" sin cola: si esa subida fallaba por
+// mala señal, la foto se perdía para siempre aunque la entrega quedara confirmada.
+const VERSION = 3;
 
 export type TipoMutacion = "entrega" | "pesaje" | "venta";
 
@@ -25,6 +29,13 @@ export interface ItemOutbox {
   ultimoError?: string;
 }
 
+export interface ItemFotoOutbox {
+  sha256: string;
+  blob: Blob;
+  intentos: number;
+  creadoAt: number;
+}
+
 function abrir(): Promise<IDBDatabase> {
   return new Promise((resolver, rechazar) => {
     const req = indexedDB.open(DB_NOMBRE, VERSION);
@@ -32,6 +43,9 @@ function abrir(): Promise<IDBDatabase> {
       const db = req.result;
       if (!db.objectStoreNames.contains(TIENDA)) {
         db.createObjectStore(TIENDA, { keyPath: "clientUuid" });
+      }
+      if (!db.objectStoreNames.contains(TIENDA_FOTOS)) {
+        db.createObjectStore(TIENDA_FOTOS, { keyPath: "sha256" });
       }
     };
     req.onsuccess = () => resolver(req.result);
@@ -50,6 +64,64 @@ async function conTienda<T>(modo: IDBTransactionMode, fn: (t: IDBObjectStore) =>
   });
 }
 
+async function conTiendaFotos<T>(modo: IDBTransactionMode, fn: (t: IDBObjectStore) => IDBRequest): Promise<T> {
+  const db = await abrir();
+  return new Promise<T>((resolver, rechazar) => {
+    const tx = db.transaction(TIENDA_FOTOS, modo);
+    const req = fn(tx.objectStore(TIENDA_FOTOS));
+    req.onsuccess = () => resolver(req.result as T);
+    req.onerror = () => rechazar(req.error);
+    tx.oncomplete = () => db.close();
+  });
+}
+
+/** Encola el JPEG de un POD que no se pudo subir al tiro (sin señal / 5xx). El sha256
+ *  ya viaja en la entrega (outbox principal); esto es solo el binario, para que
+ *  `/api/fotos` lo reciba apenas vuelva la señal y la entrega deje de estar
+ *  'pendiente_subida'. */
+export async function encolarFoto(sha256: string, blob: Blob): Promise<void> {
+  await conTiendaFotos("readwrite", (t) =>
+    t.put({ sha256, blob, intentos: 0, creadoAt: Date.now() } satisfies ItemFotoOutbox)
+  );
+}
+
+export async function contarFotosPendientes(): Promise<number> {
+  return conTiendaFotos<number>("readonly", (t) => t.count());
+}
+
+async function listarFotosPendientes(): Promise<ItemFotoOutbox[]> {
+  return conTiendaFotos<ItemFotoOutbox[]>("readonly", (t) => t.getAll());
+}
+
+async function quitarFotoPendiente(sha256: string): Promise<void> {
+  await conTiendaFotos("readwrite", (t) => t.delete(sha256));
+}
+
+async function marcarFotoFallo(item: ItemFotoOutbox): Promise<void> {
+  await conTiendaFotos("readwrite", (t) => t.put({ ...item, intentos: item.intentos + 1 }));
+}
+
+/** Reintenta subir las fotos que quedaron pendientes. Nunca lanza — se llama desde el
+ *  mismo ciclo de sync automático que ya reintenta pesajes/ventas/entregas. */
+async function reintentarFotosPendientes(): Promise<void> {
+  const pendientes = await listarFotosPendientes();
+  for (const item of pendientes) {
+    try {
+      const form = new FormData();
+      form.append("foto", item.blob, `${item.sha256}.jpg`);
+      form.append("sha256", item.sha256);
+      const r = await fetch("/api/fotos", { method: "POST", body: form });
+      if (r.ok) {
+        await quitarFotoPendiente(item.sha256);
+      } else {
+        await marcarFotoFallo(item);
+      }
+    } catch {
+      await marcarFotoFallo(item);
+    }
+  }
+}
+
 export async function encolar(item: {
   clientUuid: string;
   tipo: TipoMutacion;
@@ -65,8 +137,14 @@ export async function listarPendientes(): Promise<ItemOutbox[]> {
   return conTienda<ItemOutbox[]>("readonly", (t) => t.getAll());
 }
 
+/** Total de la cola: mutaciones + fotos de POD sin subir. Un repartidor con 3 fotos
+ *  atascadas y 0 entregas pendientes igual tiene trabajo sin terminar. */
 export async function contarPendientes(): Promise<number> {
-  return conTienda<number>("readonly", (t) => t.count());
+  const [mutaciones, fotos] = await Promise.all([
+    conTienda<number>("readonly", (t) => t.count()),
+    contarFotosPendientes(),
+  ]);
+  return mutaciones + fotos;
 }
 
 async function quitar(clientUuid: string): Promise<void> {
@@ -116,6 +194,9 @@ export async function enviarOEncolar(
 /** Descarga la cola completa. Nunca lanza. */
 export async function sincronizar(): Promise<ResultadoSync> {
   const pendientes = await listarPendientes();
+  // Las fotos van aparte (multipart, no json) pero comparten el mismo ciclo de
+  // reintento: no tiene sentido despertar la radio del teléfono dos veces.
+  await reintentarFotosPendientes().catch(() => undefined);
   if (pendientes.length === 0) return { enviadas: 0, rechazadas: [], sinConexion: false };
 
   let enviadas = 0;

@@ -1117,3 +1117,71 @@ test("AC-DES-01: gramos_pesados de una línea lo mantiene la BD sumando pesajes,
   await db.close();
 });
 
+
+// =============================================================================
+// AC-PES-04 — foto de respaldo por pesaje (decisión #1, nivel 1)
+//
+// Estos tests nacen tarde, y vale la pena decir por qué: las columnas y el toggle
+// existían desde los hitos 2 y 7, el plan daba el AC por cerrado, y sin embargo NADA
+// escribía esas columnas — ni la API aceptaba el hash ni la pantalla abría la cámara.
+// Un test como este habría hecho ruido meses antes.
+// =============================================================================
+
+async function pesajeConFoto(db, sha) {
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const productoId = await crearProducto(db);
+  const r = await db.query(
+    `insert into pan.pesajes
+       (client_uuid, producto_id, gramos, destino, foto_sha256, foto_estado,
+        usuario_id, dispositivo_id, capturado_at)
+     values (gen_random_uuid(), $1, 1000, 'mostrador', $2, 'pendiente_subida', $3, $4, now())
+     returning id`,
+    [productoId, sha, usuarioId, dispositivoId]
+  );
+  return { pesajeId: r.rows[0].id, usuarioId, dispositivoId, productoId };
+}
+
+test("AC-PES-04: la app puede confirmar que la foto del pesaje llegó, pero NO reapuntarla", async () => {
+  const db = await dbNueva();
+  const sha = "d".repeat(64);
+  const { pesajeId } = await pesajeConFoto(db, sha);
+
+  // Lo permitido: marcar 'subida' cuando /api/fotos recibe el binario y el hash cuadra.
+  await db.query(`update pan.pesajes set foto_estado = 'subida' where id = $1`, [pesajeId]);
+  const ok = await db.query(`select foto_estado from pan.pesajes where id = $1`, [pesajeId]);
+  assert.equal(ok.rows[0].foto_estado, "subida");
+
+  // Lo prohibido: cambiar el hash. Si la app pudiera reapuntarlo, la foto dejaría de
+  // probar nada — bastaría con subir cualquier imagen y apuntar el pesaje ahí.
+  await assert.rejects(
+    () => db.query(`update pan.pesajes set foto_sha256 = $1 where id = $2`, ["e".repeat(64), pesajeId]),
+    /permission|denied/i,
+    "pan_app no tiene UPDATE sobre foto_sha256"
+  );
+  await db.close();
+});
+
+test("AC-PES-04: no existe evidencia fantasma — hash y estado van juntos o no van", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const productoId = await crearProducto(db);
+
+  const insertar = (sha, estado) =>
+    db.query(
+      `insert into pan.pesajes
+         (client_uuid, producto_id, gramos, destino, foto_sha256, foto_estado,
+          usuario_id, dispositivo_id, capturado_at)
+       values (gen_random_uuid(), $1, 1000, 'mostrador', $2, $3, $4, $5, now())`,
+      [productoId, sha, estado, usuarioId, dispositivoId]
+    );
+
+  // Un pesaje marcado 'subida' sin hash mostraría respaldo donde no hay imagen.
+  await assert.rejects(() => insertar(null, "subida"), /constraint|check/i);
+  // Y un hash sin estado deja la foto en el limbo: nunca se reintenta la subida.
+  await assert.rejects(() => insertar("f".repeat(64), null), /constraint|check/i);
+  // Sin foto (el caso normal, con el toggle apagado) sigue siendo válido.
+  await insertar(null, null);
+  await db.close();
+});

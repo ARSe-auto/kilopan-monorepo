@@ -16,13 +16,14 @@ export async function POST(request: NextRequest) {
     gramos?: number;
     destino?: "mostrador" | "merma";
     motivoMerma?: string;
+    fotoSha256?: string;
   };
   try {
     cuerpo = await request.json();
   } catch {
     return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
   }
-  const { clientUuid, productoId, gramos, destino, motivoMerma } = cuerpo;
+  const { clientUuid, productoId, gramos, destino, motivoMerma, fotoSha256 } = cuerpo;
 
   if (!clientUuid || !productoId || !destino) {
     return NextResponse.json({ error: "Faltan campos" }, { status: 400 });
@@ -42,6 +43,21 @@ export async function POST(request: NextRequest) {
 
   const db = await obtenerDb();
 
+  // AC-PES-04 (decisión #1): si el admin exigió foto por pesaje, el que manda es el
+  // SERVIDOR, no la pantalla. Validarlo solo en la UI sería teatro: cualquiera que
+  // hable con la API directamente se lo saltaría, y esta bandera existe justamente
+  // como control del dueño sobre la operación.
+  const parametro = await db.query<{ valor: number }>(
+    `select valor from pan.parametros where clave = 'pesaje_foto_obligatoria'`
+  );
+  const exigeFoto = (parametro.rows[0]?.valor ?? 0) === 1;
+  if (exigeFoto && !/^[0-9a-f]{64}$/.test(fotoSha256 ?? "")) {
+    return NextResponse.json(
+      { error: "Esta panadería exige foto por cada pesaje" },
+      { status: 400 }
+    );
+  }
+
   // AC-PES-03: test centinela "báscula mal tipeada" — outlier >3x mediana exige que
   // el cliente vuelva a mandar el pesaje con confirmarOutlier=true (ver UI).
   const outlier = await db.query<{ outlier: boolean }>(`select pan.es_outlier_pesaje($1,$2) as outlier`, [
@@ -59,8 +75,9 @@ export async function POST(request: NextRequest) {
   try {
     const r = await db.query<{ id: string }>(
       `insert into pan.pesajes
-         (client_uuid, producto_id, gramos, destino, motivo_merma, estado_merma, usuario_id, dispositivo_id, capturado_at)
-       values ($1,$2,$3,$4,$5,$6,$7,$8, now())
+         (client_uuid, producto_id, gramos, destino, motivo_merma, estado_merma,
+          foto_sha256, foto_estado, usuario_id, dispositivo_id, capturado_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now())
        on conflict (client_uuid) do nothing
        returning id`,
       [
@@ -70,6 +87,10 @@ export async function POST(request: NextRequest) {
         destino,
         destino === "merma" ? motivoMerma : null,
         destino === "merma" ? "pendiente" : null,
+        fotoSha256 ?? null,
+        // Mismo contrato que el POD: el hash viaja con el pesaje y el JPEG se sube
+        // aparte; /api/fotos marca 'subida' cuando el binario llega y el hash cuadra.
+        fotoSha256 ? "pendiente_subida" : null,
         sesion.usuarioId,
         sesion.dispositivoId,
       ]

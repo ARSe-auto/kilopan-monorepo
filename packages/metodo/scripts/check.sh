@@ -42,6 +42,11 @@ if [ -f pnpm-lock.yaml ] || [ -f package.json ]; then
       run_step "typecheck (workspace)" pnpm -r --if-present run typecheck
       run_step "unit (workspace)" pnpm -r --if-present run test
       run_step "build (workspace)" pnpm -r --if-present run build
+      # El standalone de Next.js sirve 200 en TODA ruta aunque le falten los estáticos
+      # (es SSR puro sin ellos) — un healthcheck normal no lo detecta. Sin esto, la app
+      # "pasa el gate" y queda completamente muda al tocar cualquier botón en producción.
+      run_step "build standalone incluye .next/static y public/ (si no, la app no hidrata)" \
+        bash -c 'test -d apps/kilopan/.next/standalone/apps/kilopan/.next/static && test -f apps/kilopan/.next/standalone/apps/kilopan/public/sw.js'
       run_step "audit (AC-SEC-03)" pnpm audit --audit-level=high
     else
       skip_step "lint/typecheck/unit/build/audit" "node_modules no existe — correr 'pnpm install' primero"

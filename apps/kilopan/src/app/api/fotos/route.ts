@@ -47,6 +47,15 @@ export async function POST(request: NextRequest) {
     [sha256]
   );
 
+  // Lo mismo para el pesaje (AC-PES-04). El endpoint es uno solo a propósito: la foto
+  // es evidencia y se guarda igual venga de donde venga; lo único que cambia es qué
+  // fila queda marcada como respaldada.
+  await db.query(
+    `update pan.pesajes set foto_estado = 'subida'
+      where foto_sha256 = $1 and foto_estado = 'pendiente_subida'`,
+    [sha256]
+  );
+
   return NextResponse.json({ sha256, bytes: buffer.length });
 }
 

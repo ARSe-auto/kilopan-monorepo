@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CifraGrande,
   TecladoNumerico,
@@ -9,7 +9,8 @@ import {
 } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico } from "@kilopan/miga/tokens.ts";
 import { formatearKg } from "@/comun/formato.ts";
-import { enviarOEncolar, iniciarSyncAutomatico } from "@/pod/outbox.ts";
+import { enviarOEncolar, encolarFoto, iniciarSyncAutomatico } from "@/pod/outbox.ts";
+import { abrirCamara, capturar, cerrarCamara, subirFoto } from "@/comun/camara.ts";
 
 interface Producto {
   id: string;
@@ -64,10 +65,44 @@ export default function PesarPage() {
   const [gramos, setGramos] = useState("");
   const [destino, setDestino] = useState<Destino>("mostrador");
   const [motivoMerma, setMotivoMerma] = useState<string | null>(null);
-  const [estado, setEstado] = useState<"listo" | "enviando" | "confirmar_outlier">("listo");
+  const [estado, setEstado] = useState<"listo" | "foto" | "enviando" | "confirmar_outlier">("listo");
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
 
   const [pendientes, setPendientes] = useState(0);
+
+  // AC-PES-04: lo prende el admin en /admin y no se puede apagar desde acá — ese es
+  // el punto de la decisión #1. Se cachea junto al catálogo porque sin señal la
+  // pantalla igual tiene que saber si esta panadería exige foto.
+  const [exigeFoto, setExigeFoto] = useState(
+    () => typeof window !== "undefined" && window.localStorage.getItem("kp_exige_foto") === "1"
+  );
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [errorCamara, setErrorCamara] = useState<string | null>(null);
+  const [capturando, setCapturando] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    fetch("/api/parametros")
+      .then((r) => r.json())
+      .then((d) => {
+        const p = (d.parametros ?? []).find(
+          (x: { clave: string }) => x.clave === "pesaje_foto_obligatoria"
+        );
+        if (p) {
+          const activo = p.valor === 1;
+          setExigeFoto(activo);
+          window.localStorage.setItem("kp_exige_foto", activo ? "1" : "0");
+        }
+      })
+      .catch(() => undefined); // sin red: vale lo último conocido
+  }, []);
+
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.srcObject = stream;
+  }, [stream]);
+
+  // Apagar la cámara si el maestro sale de la pantalla con el obturador abierto.
+  useEffect(() => () => cerrarCamara(stream), [stream]);
 
   useEffect(() => {
     // Catálogo con caché local: sobre datos móviles con mala señal, esperar el fetch
@@ -103,7 +138,50 @@ export default function PesarPage() {
   const puedeConfirmar =
     !!producto && gramosNum > 0 && estado !== "enviando" && (destino !== "merma" || !!motivoMerma);
 
-  async function confirmar(confirmarOutlier = false) {
+  // El sha256 de la foto de ESTE pesaje. Se guarda aparte del estado de render porque
+  // el camino del outlier vuelve a llamar a `enviar()` y la foto ya tomada tiene que
+  // sobrevivir a esa segunda vuelta — sacarla de nuevo sería pedirle al maestro que
+  // fotografíe dos veces la misma bandeja.
+  const fotoShaRef = useRef<string | null>(null);
+
+  // «Confirmar» con foto obligatoria abre el obturador en vez de enviar: es UN toque
+  // más, no una pantalla más.
+  function alConfirmar() {
+    if (!producto) return;
+    if (exigeFoto && !fotoShaRef.current) {
+      setMensaje(null);
+      setErrorCamara(null);
+      setEstado("foto");
+      abrirCamara()
+        .then(setStream)
+        .catch(() =>
+          setErrorCamara("Sin acceso a la cámara. Actívala: esta panadería exige foto por pesaje.")
+        );
+      return;
+    }
+    void enviar(false);
+  }
+
+  async function tomarFoto() {
+    if (!videoRef.current || !stream) return;
+    setCapturando(true);
+    try {
+      const captura = await capturar(videoRef.current);
+      cerrarCamara(stream);
+      setStream(null);
+      // Se intenta subir al tiro; si no hay señal el JPEG queda en la cola de fotos y
+      // se reintenta solo. El pesaje NO se frena por eso: el hash ya viaja con él.
+      const subida = await subirFoto(captura);
+      if (!subida) await encolarFoto(captura.sha256, captura.blob);
+      fotoShaRef.current = captura.sha256;
+      await enviar(false);
+    } catch {
+      setErrorCamara("No se pudo tomar la foto. Intenta de nuevo.");
+      setCapturando(false);
+    }
+  }
+
+  async function enviar(confirmarOutlier = false) {
     if (!producto) return;
     setEstado("enviando");
     setMensaje(null);
@@ -117,6 +195,7 @@ export default function PesarPage() {
       gramos: gramosNum,
       destino,
       motivoMerma: destino === "merma" ? motivoMerma : undefined,
+      fotoSha256: fotoShaRef.current ?? undefined,
       confirmarOutlier,
     });
 
@@ -150,6 +229,10 @@ export default function PesarPage() {
     setDestino("mostrador");
     setMotivoMerma(null);
     setEstado("listo");
+    // La foto es de LA bandeja que se acaba de pesar: la siguiente exige la suya.
+    fotoShaRef.current = null;
+    setCapturando(false);
+    setErrorCamara(null);
   }
 
   if (!producto) {
@@ -177,6 +260,48 @@ export default function PesarPage() {
           ))}
         </div>
         {productos.length === 0 ? <p style={{ color: superficie.textoFaint }}>Cargando catálogo…</p> : null}
+      </main>
+    );
+  }
+
+  // Obturador: mismo contrato que el POD — la cámara se abre in-app por getUserMedia,
+  // nunca un <input type=file>, porque eso dejaría adjuntar una foto vieja de la
+  // galería como si fuera de esta bandeja (PROMPT_MAESTRO.md §7).
+  if (estado === "foto") {
+    return (
+      <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16, minHeight: "100dvh" }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{producto.nombre}</h1>
+        <p style={{ margin: 0, color: superficie.textoDim, fontSize: 15 }}>
+          Foto de respaldo · {formatearKg(gramosNum)}
+        </p>
+
+        <div style={{ position: "relative", aspectRatio: "3 / 4", borderRadius: 14, overflow: "hidden", background: "#000", border: `1px solid ${superficie.hairline}` }}>
+          {stream ? (
+            <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#fff", fontSize: 14, padding: 16, textAlign: "center" }}>
+              {errorCamara ?? "Abriendo la cámara…"}
+            </div>
+          )}
+        </div>
+
+        {errorCamara ? <p style={{ color: semantico.error, fontSize: 14, margin: 0 }} role="alert">{errorCamara}</p> : null}
+
+        <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+          <BotonPrimario disabled={!stream || capturando} onClick={tomarFoto}>
+            {capturando ? "Procesando…" : "Tomar foto y pesar"}
+          </BotonPrimario>
+          <BotonPrimario
+            variante="neutro"
+            onClick={() => {
+              cerrarCamara(stream);
+              setStream(null);
+              setEstado("listo");
+            }}
+          >
+            Cancelar
+          </BotonPrimario>
+        </div>
       </main>
     );
   }
@@ -240,7 +365,7 @@ export default function PesarPage() {
             <BotonPrimario variante="neutro" onClick={() => setEstado("listo")}>
               Cancelar
             </BotonPrimario>
-            <BotonPrimario onClick={() => confirmar(true)}>Confirmar</BotonPrimario>
+            <BotonPrimario onClick={() => void enviar(true)}>Confirmar</BotonPrimario>
           </div>
         </div>
       ) : null}
@@ -253,8 +378,8 @@ export default function PesarPage() {
 
       {estado !== "confirmar_outlier" ? (
         <div style={{ marginTop: "auto" }}>
-          <BotonPrimario disabled={!puedeConfirmar || destino === "reparto"} onClick={() => confirmar(false)}>
-            {estado === "enviando" ? "Pesando…" : "Confirmar"}
+          <BotonPrimario disabled={!puedeConfirmar || destino === "reparto"} onClick={alConfirmar}>
+            {estado === "enviando" ? "Pesando…" : exigeFoto ? "Confirmar con foto" : "Confirmar"}
           </BotonPrimario>
         </div>
       ) : null}

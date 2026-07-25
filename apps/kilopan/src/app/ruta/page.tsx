@@ -1,9 +1,10 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BotonPrimario, ChipEstadoConexion, CifraGrande } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
 import { formatearKg } from "@/comun/formato.ts";
-import { encolar, iniciarSyncAutomatico, contarPendientes } from "@/pod/outbox.ts";
+import { encolar, encolarFoto, iniciarSyncAutomatico, contarPendientes } from "@/pod/outbox.ts";
+import { abrirCamara, capturar, cerrarCamara, subirFoto } from "@/comun/camara.ts";
 
 interface Parada {
   parada_id: string;
@@ -30,6 +31,10 @@ export default function RutaPage() {
   const [fotoSha, setFotoSha] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [entregadasLocal, setEntregadasLocal] = useState<Set<string>>(new Set());
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [errorCamara, setErrorCamara] = useState<string | null>(null);
+  const [capturando, setCapturando] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const cargarRuta = useCallback(async () => {
     try {
@@ -42,6 +47,13 @@ export default function RutaPage() {
     }
   }, []);
 
+  // Si el repartidor sale de la pantalla con la cámara abierta (back del navegador, se
+  // bloquea el teléfono a medio POD), apagar el stream igual — dejarlo prendido gasta
+  // batería y es la luz roja de la cámara encendida sin razón.
+  useEffect(() => {
+    return () => cerrarCamara(stream);
+  }, [stream]);
+
   useEffect(() => {
     void cargarRuta();
     const detener = iniciarSyncAutomatico(setPendientes);
@@ -51,32 +63,66 @@ export default function RutaPage() {
 
   const parada = paradas.find((p) => p.parada_id === activa) ?? null;
 
-  // El obturador: en la app real es getUserMedia. Acá se captura el hash de la imagen,
-  // que es lo que viaja en la cola — la foto se sube aparte (multipart) y el servidor
-  // marca 'subida' al verificar el sha256.
-  async function capturarFoto() {
+  // «Entregar»: pide GPS y abre la cámara del equipo (getUserMedia in-app — nunca un
+  // <input type=file>, porque eso dejaría adjuntar una foto vieja como si fuera de
+  // ahora). El obturador de verdad va en el paso "foto".
+  function iniciarEntrega(paradaId: string) {
     setMensaje(null);
-    // GPS: permiso DENEGADO bloquea y lo dice; precisión mala JAMÁS bloquea.
+    setErrorCamara(null);
+    setActiva(paradaId);
+    setPaso("foto");
+
     if (!navigator.geolocation) {
       setErrorGps("Este equipo no tiene GPS. No se puede confirmar la entrega.");
-      return;
+    } else {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude, precision: Math.round(pos.coords.accuracy) });
+          setErrorGps(null);
+        },
+        () => setErrorGps("Sin permiso de ubicación. Actívalo para poder confirmar la entrega."),
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
     }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude, precision: Math.round(pos.coords.accuracy) });
-        setErrorGps(null);
-      },
-      () => {
-        setErrorGps("Sin permiso de ubicación. Actívalo para poder confirmar la entrega.");
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
-    // sha256 de un buffer que en producción es el JPEG del obturador
-    const semilla = new TextEncoder().encode(`${activa}-${Date.now()}`);
-    const hash = await crypto.subtle.digest("SHA-256", semilla);
-    setFotoSha([...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join(""));
-    setReceptor(parada?.contacto_nombre ?? "");
-    setPaso("receptor");
+
+    abrirCamara()
+      .then(setStream)
+      .catch(() => setErrorCamara("Sin acceso a la cámara. Actívala para poder confirmar la entrega."));
+  }
+
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.srcObject = stream;
+  }, [stream]);
+
+  function cancelarEntrega() {
+    cerrarCamara(stream);
+    setStream(null);
+    setPaso("lista");
+    setActiva(null);
+    setErrorCamara(null);
+  }
+
+  // El obturador real: toma el cuadro actual, lo comprime a JPEG (~400 KB) y calcula
+  // el sha256 sobre el blob ya comprimido — es el mismo que el servidor recalcula al
+  // recibir la imagen. Se intenta subir al tiro; si falla (sin señal / 5xx) la foto NO
+  // se pierde: queda en la cola de fotos del outbox y se reintenta sola.
+  async function tomarFoto() {
+    if (!videoRef.current || !stream) return;
+    setCapturando(true);
+    try {
+      const captura = await capturar(videoRef.current);
+      cerrarCamara(stream);
+      setStream(null);
+      const subida = await subirFoto(captura);
+      if (!subida) await encolarFoto(captura.sha256, captura.blob);
+      setFotoSha(captura.sha256);
+      setReceptor(parada?.contacto_nombre ?? "");
+      setPaso("receptor");
+    } catch {
+      setErrorCamara("No se pudo tomar la foto. Intenta de nuevo.");
+    } finally {
+      setCapturando(false);
+    }
   }
 
   async function confirmar() {
@@ -114,6 +160,50 @@ export default function RutaPage() {
     setActiva(null);
     setFotoSha(null);
     setGps(null);
+  }
+
+  if (paso === "foto" && parada) {
+    return (
+      <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16, minHeight: "100dvh" }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{parada.razon_social}</h1>
+        <p style={{ margin: 0, color: superficie.textoDim, fontSize: 15 }}>Foto de la entrega como comprobante</p>
+
+        <div
+          style={{
+            position: "relative",
+            aspectRatio: "3 / 4",
+            borderRadius: 14,
+            overflow: "hidden",
+            background: "#000",
+            border: `1px solid ${superficie.hairline}`,
+          }}
+        >
+          {stream ? (
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#fff", fontSize: 14, padding: 16, textAlign: "center" }}>
+              {errorCamara ?? "Abriendo la cámara…"}
+            </div>
+          )}
+        </div>
+
+        {errorGps ? <p style={{ color: semantico.error, fontSize: 14, margin: 0 }} role="alert">{errorGps}</p> : null}
+        {errorCamara ? <p style={{ color: semantico.error, fontSize: 14, margin: 0 }} role="alert">{errorCamara}</p> : null}
+
+        <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+          <BotonPrimario disabled={!stream || capturando} onClick={tomarFoto}>
+            {capturando ? "Procesando…" : "Tomar foto"}
+          </BotonPrimario>
+          <BotonPrimario variante="neutro" onClick={cancelarEntrega}>Cancelar</BotonPrimario>
+        </div>
+      </main>
+    );
   }
 
   if (paso === "receptor" && parada) {
@@ -201,14 +291,7 @@ export default function RutaPage() {
             </div>
             <p style={{ margin: 0, fontSize: 14, color: superficie.textoDim }}>{p.direccion}</p>
             {esActiva ? (
-              <BotonPrimario
-                onClick={() => {
-                  setActiva(p.parada_id);
-                  void capturarFoto();
-                }}
-              >
-                Entregar
-              </BotonPrimario>
+              <BotonPrimario onClick={() => iniciarEntrega(p.parada_id)}>Entregar</BotonPrimario>
             ) : null}
           </div>
         );
