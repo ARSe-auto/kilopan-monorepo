@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { CifraGrande, TecladoNumerico, BotonPrimario, SelectorUnToque } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico } from "@kilopan/miga/tokens.ts";
 import { formatearClp, formatearKg } from "@/comun/formato.ts";
+import { enviarOEncolar } from "@/pod/outbox.ts";
 
 interface Producto {
   id: string;
@@ -72,23 +73,32 @@ export default function VenderPage() {
     if (!medioPago || carrito.length === 0) return;
     setEnviando(true);
     setMensaje(null);
+    // Igual que el pesaje: se intenta enviar y, si no hay señal, se encola en
+    // IndexedDB. Antes esto era un `fetch` crudo — una venta hecha sin señal
+    // simplemente se perdía y la caja no cuadraba al cierre. Sobre datos móviles eso
+    // deja de ser el caso raro de la madrugada.
     try {
-      const r = await fetch("/api/ventas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          medioPago,
-          clienteId: medioPago === "fiado" ? clienteFiado : undefined,
-          lineas: carrito.map((l) => ({ productoId: l.productoId, gramos: l.gramos, precioClp: l.precioClp })),
-        }),
+      const resultado = await enviarOEncolar("venta", "/api/ventas", {
+        clientUuid: crypto.randomUUID(),
+        medioPago,
+        clienteId: medioPago === "fiado" ? clienteFiado : undefined,
+        lineas: carrito.map((l) => ({ productoId: l.productoId, gramos: l.gramos, precioClp: l.precioClp })),
       });
-      const cuerpo = await r.json();
-      if (!r.ok) {
-        setMensaje({ tipo: "error", texto: cuerpo.error ?? "No se pudo cobrar" });
+      if (resultado.estado === "rechazado") {
+        setMensaje({ tipo: "error", texto: resultado.error });
         setEnviando(false);
         return;
       }
-      setMensaje({ tipo: "ok", texto: `Venta cobrada: ${formatearClp(cuerpo.totalClp)}` });
+      const cuerpo = (resultado.estado === "enviado" ? resultado.cuerpo : null) as
+        | { totalClp?: number }
+        | null;
+      setMensaje({
+        tipo: "ok",
+        texto:
+          resultado.estado === "encolado"
+            ? `Cobrado sin señal: ${formatearClp(totalCarrito)} — se sube solo`
+            : `Venta cobrada: ${formatearClp(cuerpo?.totalClp ?? totalCarrito)}`,
+      });
       setCarrito([]);
       setMedioPago(null);
       setClienteFiado("");

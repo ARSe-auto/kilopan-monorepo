@@ -432,7 +432,7 @@ test("AC-VEN-02: stock_disponible baja con la venta y nunca queda negativo por u
   assert.equal(conPesaje.rows[0].stock, 5000);
 
   const venta = await db.query(
-    `insert into pan.ventas (vendedor_id, dispositivo_id, medio_pago, total_clp) values ($1,$2,'efectivo',2000) returning id`,
+    `insert into pan.ventas (client_uuid, vendedor_id, dispositivo_id, medio_pago, total_clp) values (gen_random_uuid(),$1,$2,'efectivo',2000) returning id`,
     [usuarioId, dispositivoId]
   );
   await db.query(
@@ -452,7 +452,7 @@ test("ventas: medio_pago='fiado' exige cliente_id; el resto no lo exige", async 
   await assert.rejects(
     () =>
       db.query(
-        `insert into pan.ventas (vendedor_id, dispositivo_id, medio_pago, total_clp) values ($1,$2,'fiado',1000)`,
+        `insert into pan.ventas (client_uuid, vendedor_id, dispositivo_id, medio_pago, total_clp) values (gen_random_uuid(),$1,$2,'fiado',1000)`,
         [usuarioId, dispositivoId]
       ),
     /constraint|check/i,
@@ -460,7 +460,7 @@ test("ventas: medio_pago='fiado' exige cliente_id; el resto no lo exige", async 
   );
 
   const ok = await db.query(
-    `insert into pan.ventas (vendedor_id, dispositivo_id, medio_pago, total_clp) values ($1,$2,'efectivo',1000) returning id`,
+    `insert into pan.ventas (client_uuid, vendedor_id, dispositivo_id, medio_pago, total_clp) values (gen_random_uuid(),$1,$2,'efectivo',1000) returning id`,
     [usuarioId, dispositivoId]
   );
   assert.equal(ok.rows.length, 1, "efectivo sin cliente_id es válido");
@@ -473,7 +473,7 @@ test("venta_lineas: exige gramos O unidades, nunca ambos ni ninguno", async () =
   await crearSesion(db, usuarioId, dispositivoId);
   const productoId = await crearProducto(db);
   const venta = await db.query(
-    `insert into pan.ventas (vendedor_id, dispositivo_id, medio_pago, total_clp) values ($1,$2,'efectivo',1000) returning id`,
+    `insert into pan.ventas (client_uuid, vendedor_id, dispositivo_id, medio_pago, total_clp) values (gen_random_uuid(),$1,$2,'efectivo',1000) returning id`,
     [usuarioId, dispositivoId]
   );
   const ventaId = venta.rows[0].id;
@@ -976,8 +976,8 @@ test("AC-PAG-02: fiar en el mesón usa el mismo cliente que el fiado del reparto
   const clienteId = await crearCliente(db);
 
   const venta = await db.query(
-    `insert into pan.ventas (vendedor_id, dispositivo_id, medio_pago, total_clp, cliente_id)
-     values ($1,$2,'fiado',5000,$3) returning cliente_id`,
+    `insert into pan.ventas (client_uuid, vendedor_id, dispositivo_id, medio_pago, total_clp, cliente_id)
+     values (gen_random_uuid(),$1,$2,'fiado',5000,$3) returning cliente_id`,
     [usuarioId, dispositivoId, clienteId]
   );
   assert.equal(venta.rows[0].cliente_id, clienteId, "la venta fiada queda enlazada al cliente registrado");
@@ -1012,7 +1012,7 @@ test("AC-DASH-01: TCK = 100% cuando todo lo pesado queda conciliado (vendido + m
 
   // Se venden los 8.000 pesados a mostrador.
   const venta = await db.query(
-    `insert into pan.ventas (vendedor_id, dispositivo_id, medio_pago, total_clp) values ($1,$2,'efectivo',17520) returning id`,
+    `insert into pan.ventas (client_uuid, vendedor_id, dispositivo_id, medio_pago, total_clp) values (gen_random_uuid(),$1,$2,'efectivo',17520) returning id`,
     [usuarioId, dispositivoId]
   );
   await db.query(
@@ -1183,5 +1183,75 @@ test("AC-PES-04: no existe evidencia fantasma — hash y estado van juntos o no 
   await assert.rejects(() => insertar("f".repeat(64), null), /constraint|check/i);
   // Sin foto (el caso normal, con el toggle apagado) sigue siendo válido.
   await insertar(null, null);
+  await db.close();
+});
+
+// =============================================================================
+// AC-VEN / AC-SEC — la venta, endurecida al conectar el primer Postgres hospedado
+//
+// Las cuatro fallas de abajo convivieron sin ruido mientras todo corría en pglite,
+// en una máquina, con el supuesto de que "el mesón siempre tiene el wifi de la
+// panadería". Con datos móviles y una BD remota, cada una tiene consecuencia en plata.
+// =============================================================================
+
+test("AC-VEN: la venta exige client_uuid — sin él, un reintento de la cola cobra dos veces", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "vendedor");
+  await crearSesion(db, usuarioId, dispositivoId);
+
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into pan.ventas (vendedor_id, dispositivo_id, medio_pago, total_clp)
+         values ($1,$2,'efectivo',1000)`,
+        [usuarioId, dispositivoId]
+      ),
+    /null value|not-null|violates/i,
+    "una venta sin clave de idempotencia no debe poder entrar"
+  );
+
+  // Y el mismo uuid dos veces es UNA venta, no dos cobros.
+  const uuid = "11111111-1111-4111-8111-111111111111";
+  const insertar = () =>
+    db.query(
+      `insert into pan.ventas (client_uuid, vendedor_id, dispositivo_id, medio_pago, total_clp)
+       values ($1,$2,$3,'efectivo',1000)`,
+      [uuid, usuarioId, dispositivoId]
+    );
+  await insertar();
+  await assert.rejects(insertar, /unique|duplicate/i, "el segundo intento lo frena el unique");
+
+  const n = await db.query(`select count(*)::int as n from pan.ventas where client_uuid = $1`, [uuid]);
+  assert.equal(n.rows[0].n, 1, "una sola venta cobrada");
+  await db.close();
+});
+
+test("AC-VEN: el precio de venta sale de la lista del servidor, no de lo que mande el cliente", async () => {
+  const db = await dbNueva();
+  const productoId = await crearProducto(db);
+  await db.query(
+    `insert into pan.precios (producto_id, lista, precio_clp) values ($1,'mostrador',2190), ($1,'mayorista',1800)`,
+    [productoId]
+  );
+
+  const mostrador = await db.query(`select pan.precio_vigente($1,'mostrador') as p`, [productoId]);
+  assert.equal(mostrador.rows[0].p, 2190);
+  const mayorista = await db.query(`select pan.precio_vigente($1,'mayorista') as p`, [productoId]);
+  assert.equal(mayorista.rows[0].p, 1800, "el cliente mayorista paga su lista, no la del mesón");
+
+  // Si mañana cambia el precio, manda el más reciente que ya esté vigente.
+  await db.query(
+    `insert into pan.precios (producto_id, lista, precio_clp, vigente_desde)
+     values ($1,'mostrador',2500, current_date - 1)`,
+    [productoId]
+  );
+  const hoy = await db.query(`select pan.precio_vigente($1,'mostrador') as p`, [productoId]);
+  assert.equal(hoy.rows[0].p, 2190, "entre dos vigentes gana el de fecha más nueva");
+
+  // Un producto sin precio no devuelve 0 ni revienta: devuelve NULL, y la API lo
+  // convierte en un rechazo explícito en vez de registrar una venta gratis.
+  const sinPrecio = await crearProducto(db, "Pan sin precio");
+  const nulo = await db.query(`select pan.precio_vigente($1,'mostrador') as p`, [sinPrecio]);
+  assert.equal(nulo.rows[0].p, null);
   await db.close();
 });

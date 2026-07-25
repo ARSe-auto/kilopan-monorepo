@@ -4,6 +4,11 @@ dist/
 build/
 .env.local
 .env*.local
+# db/conectar-railway.mjs deja .env.local.respaldo al reescribir la config, y ese
+# archivo SÍ lleva la cadena de conexión real. El patrón .env*.local no lo cubre
+# (no termina en .local) — se coló al stage una vez y por suerte todavía tenía el
+# placeholder de localhost adentro.
+.env.local.*
 *.log
 .DS_Store
 db/data/
