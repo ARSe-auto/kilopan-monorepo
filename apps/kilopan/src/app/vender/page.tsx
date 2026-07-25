@@ -196,7 +196,7 @@ export default function VenderPage() {
                 onChange={(e) => setClienteFiado(e.target.value)}
                 style={{ width: "100%", minHeight: 44, borderRadius: 12, border: `1px solid ${superficie.hairline}`, padding: "0 14px", fontSize: 17, background: "#fff" }}
               >
-                <option value="">Elegí un cliente registrado…</option>
+                <option value="">Elige un cliente registrado…</option>
                 {clientes.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.razon_social}
@@ -206,7 +206,7 @@ export default function VenderPage() {
               </select>
               {clientes.length === 0 ? (
                 <p style={{ fontSize: 13, color: semantico.alerta, marginTop: 6 }}>
-                  No hay clientes registrados todavía. Dalos de alta en Despacho.
+                  No hay clientes registrados todavía. Agrégalos en Despacho.
                 </p>
               ) : null}
             </div>

@@ -43,7 +43,7 @@ export default function AdminPage() {
               <p style={{ margin: 0, fontWeight: 700, fontSize: 16 }}>Pedir foto en cada pesaje</p>
               <p style={{ margin: "4px 0 0", fontSize: 13, color: superficie.textoDim }}>
                 Deja respaldo de cada bandeja pesada. Suma un toque al flujo del maestro,
-                así que empezá apagado y prendelo solo si lo necesitás.
+                así que parte apagado y actívalo solo si lo necesitas.
               </p>
             </div>
             <button

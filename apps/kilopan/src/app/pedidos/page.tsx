@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { BotonPrimario } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
-import { formatearClp, formatearKg } from "@/comun/formato.ts";
+import { formatearClp } from "@/comun/formato.ts";
 
 interface Pedido {
   id: string;
@@ -56,7 +56,7 @@ export default function PedidosPage() {
   async function crearPedido() {
     const gramos = Math.round(Number(kilos.replace(",", ".")) * 1000);
     if (!clienteId || !productoId || !Number.isInteger(gramos) || gramos < 1) {
-      setMensaje({ tipo: "error", texto: "Elegí cliente, producto y kilos" });
+      setMensaje({ tipo: "error", texto: "Elige cliente, producto y kilos" });
       return;
     }
     const r = await fetch("/api/pedidos", {

@@ -56,7 +56,7 @@ export default function CajaPage() {
     <main style={{ maxWidth: 520, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
       <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>Cierre de caja</h1>
       <p style={{ margin: 0, fontSize: 14, color: superficie.textoDim }}>
-        Contá lo que hay en cada medio y anotalo. La app te muestra la diferencia.
+        Cuenta lo que hay en cada medio y anótalo. La app te muestra la diferencia.
       </p>
 
       {medios.map((m) => {

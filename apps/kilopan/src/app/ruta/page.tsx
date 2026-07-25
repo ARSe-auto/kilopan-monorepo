@@ -67,7 +67,7 @@ export default function RutaPage() {
         setErrorGps(null);
       },
       () => {
-        setErrorGps("Sin permiso de ubicación. Activalo para poder confirmar la entrega.");
+        setErrorGps("Sin permiso de ubicación. Actívalo para poder confirmar la entrega.");
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
@@ -82,7 +82,7 @@ export default function RutaPage() {
   async function confirmar() {
     if (!parada || !fotoSha) return;
     if (!gps) {
-      setErrorGps("Esperando la ubicación… si no aparece, revisá el permiso de GPS.");
+      setErrorGps("Esperando la ubicación… si no aparece, revisa el permiso de GPS.");
       return;
     }
     await encolar({
@@ -164,7 +164,7 @@ export default function RutaPage() {
         <div style={{ padding: 24, textAlign: "center", color: superficie.textoDim }}>
           <CifraGrande valor={String(paradas.length - pendientesDeRuta.length)} />
           <p style={{ fontSize: 15 }}>
-            {paradas.length === 0 ? "No tenés paradas hoy." : "Todas las paradas entregadas."}
+            {paradas.length === 0 ? "No tienes paradas hoy." : "Todas las paradas entregadas."}
           </p>
         </div>
       ) : null}

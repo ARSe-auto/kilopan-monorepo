@@ -92,7 +92,7 @@ export async function PATCH(request: NextRequest) {
     const mensaje = err instanceof Error ? err.message : String(err);
     if (/sin DTE asociado/i.test(mensaje)) {
       return NextResponse.json(
-        { error: "No podés salir: hay pedidos sin guía o factura asociada (art. 55 DL 825)" },
+        { error: "No puedes salir: hay pedidos sin guía o factura asociada (art. 55 DL 825)" },
         { status: 409 }
       );
     }

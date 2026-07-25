@@ -66,7 +66,7 @@ export default function IngresarPage() {
     >
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>KiloPan</h1>
-        <p style={{ color: "#5B564C", fontSize: 15 }}>Ingresá tu RUT y tu PIN.</p>
+        <p style={{ color: "#5B564C", fontSize: 15 }}>Ingresa tu RUT y tu PIN.</p>
       </div>
 
       <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>

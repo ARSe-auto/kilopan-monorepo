@@ -71,7 +71,7 @@ export default function FacturarPage() {
       <div>
         <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>Consolidar y facturar</h1>
         <p style={{ margin: "4px 0 0", fontSize: 14, color: superficie.textoDim }}>
-          Cada despacho ya salió con su guía. Acá las agrupás en una factura para cobrar.
+          Cada despacho ya salió con su guía. Aquí las agrupas en una factura para cobrar.
         </p>
       </div>
 
@@ -80,7 +80,7 @@ export default function FacturarPage() {
         onChange={(e) => setClienteId(e.target.value)}
         style={{ minHeight: 44, borderRadius: 12, border: `1px solid ${superficie.hairline}`, padding: "0 14px", fontSize: 17, background: "#fff" }}
       >
-        <option value="">Elegí un cliente…</option>
+        <option value="">Elige un cliente…</option>
         {clientes.map((c) => (
           <option key={c.id} value={c.id}>
             {c.razon_social}

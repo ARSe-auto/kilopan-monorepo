@@ -9,7 +9,7 @@ import { validaRut } from "@/comun/valida_rut.ts";
 export async function POST(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for") ?? "desconocida";
   if (!permitirIntento(ip)) {
-    return NextResponse.json({ error: "Demasiados intentos. Esperá un minuto." }, { status: 429 });
+    return NextResponse.json({ error: "Demasiados intentos. Espera un minuto." }, { status: 429 });
   }
 
   let cuerpo: { rut?: string; pin?: string; dispositivoId?: string; dispositivoSecreto?: string };
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
   );
   if (!permitido.rows[0]?.permitido) {
     return NextResponse.json(
-      { error: "Bloqueado por intentos fallidos. Esperá 15 minutos." },
+      { error: "Bloqueado por intentos fallidos. Espera 15 minutos." },
       { status: 423 }
     );
   }

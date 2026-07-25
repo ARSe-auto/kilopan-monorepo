@@ -29,7 +29,7 @@ export async function conectarBascula(
   alLeer: (lectura: LecturaBascula) => void
 ): Promise<() => void> {
   if (!soportaBascula()) {
-    throw new Error("Este equipo no soporta báscula por Bluetooth. Ingresá el peso a mano.");
+    throw new Error("Este equipo no soporta báscula por Bluetooth. Ingresa el peso a mano.");
   }
 
   const bluetooth = (navigator as Navigator & { bluetooth: BluetoothConfig }).bluetooth;

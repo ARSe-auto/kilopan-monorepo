@@ -44,7 +44,7 @@ export default function VincularPage() {
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Vincular este equipo</h1>
         <p style={{ color: "#5B564C", fontSize: 15 }}>
-          Se hace una vez por tablet o teléfono. Necesitás el RUT y el PIN de un administrador.
+          Se hace una vez por tablet o teléfono. Necesitas el RUT y el PIN de un administrador.
         </p>
       </div>
 
