@@ -1,0 +1,19 @@
+# El build corre adentro de la imagen: subir estos solo alarga la subida y arriesga
+# pisar el resultado del build con artefactos del Mac.
+node_modules
+**/node_modules
+.next
+**/.next
+dist
+build
+.git
+.env.local
+.env*.local
+.env.local.*
+db/data
+packages/metodo/panel/index.html
+packages/metodo/panel/estado.json
+.ralph
+*.tsbuildinfo
+*.log
+.DS_Store

@@ -6,6 +6,8 @@
   "engines": {
     "node": ">=20"
   },
+  "//packageManager": "Fijar la versión no es cosmético: pnpm 9 lee `overrides` desde package.json y pnpm 10+ desde pnpm-workspace.yaml. Sin este pin, Railway eligió pnpm 9 por su cuenta, no encontró los overrides donde los busca, los vio en el lockfile y abortó el `--frozen-lockfile`. El build fallaba solo en el servidor y pasaba local.",
+  "packageManager": "pnpm@11.17.0",
   "scripts": {
     "guardrail": "bash packages/metodo/scripts/guardrail.sh",
     "check": "bash packages/metodo/scripts/check.sh",
