@@ -65,6 +65,14 @@ if [ "$FULL" -eq 1 ]; then
   else
     skip_step "invariantes de BD" "migraciones aún no existen"
   fi
+
+  # AC-PERF-04: las pantallas de la madrugada no pueden colgarse en 4G malo.
+  if [ -f apps/kilopan/.next/app-build-manifest.json ]; then
+    run_step "presupuesto de performance (gzip del flujo dorado)" \
+      node packages/metodo/scripts/presupuesto-perf.mjs
+  else
+    skip_step "presupuesto de performance" "no hay build todavía"
+  fi
 else
   skip_step "e2e / axe / invariantes de BD / lighthouse" "correr con --full"
 fi

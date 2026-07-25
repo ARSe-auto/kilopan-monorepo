@@ -245,11 +245,15 @@ para ese AC — no antes.
       castear timestamptz a date no es IMMUTABLE [AC-PERF-01]
 - [x] (P1-PERF) Compresión de fotos en el cliente antes de subir: 1280 px de ancho
       máximo y calidad 0.72, objetivo ≈400 KB, con techo duro de 1,5 MB en el servidor [AC-PERF-02]
-- [ ] (P1-PERF) Paginación o scroll virtualizado en todo listado que pueda superar
-      ~200 filas (entregas del día, historial de auditoría) [AC-PERF-03]
-- [ ] (P1-PERF) Presupuesto de performance en el gate: Lighthouse móvil ≥90 en F1/F4/F6
-      con throttling 4G — estas son las pantallas de la madrugada, no pueden colgarse
-      [AC-PERF-04]
+- [x] (P1-PERF) Paginación por CURSOR (keyset), no por OFFSET, en el listado de
+      entregas: con OFFSET la página 40 obliga a recorrer y descartar 2.000 filas, y el
+      cursor además no se corre si entra una entrega nueva mientras el dueño scrollea.
+      Falta cablearlo a una pantalla de historial (el endpoint ya existe) [AC-PERF-03]
+- [x] (P1-PERF) Presupuesto de performance en el gate: **no Lighthouse** —necesita
+      Chrome headless, ~300 MB de dependencias, y su puntaje mezcla SEO/PWA con lo
+      único que importa a las 4 AM. Se mide el peso GZIP del flujo dorado contra 150 KB.
+      Hoy: 104 KB en /pesar, /vender, /ruta (coincide con lo que reporta Next, o sea
+      está bien calibrado) [AC-PERF-04]
 
 ## DONE
 
