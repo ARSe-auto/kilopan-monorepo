@@ -9,7 +9,7 @@ import {
 } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico } from "@kilopan/miga/tokens.ts";
 import { formatearKg } from "@/comun/formato.ts";
-import { enviarOEncolar, iniciarReintentoAutomatico } from "@/pod/colaLocal.ts";
+import { enviarOEncolar, iniciarSyncAutomatico } from "@/pod/outbox.ts";
 
 interface Producto {
   id: string;
@@ -31,6 +31,30 @@ const MOTIVOS = [
   { valor: "otro", etiqueta: "Otro" },
 ] as const;
 
+// Caché del catálogo en localStorage: sobre 5G con mala señal el fetch puede tardar
+// segundos o fallar, y una grilla de productos vacía deja al maestro sin poder pesar.
+// Es dato público de la panadería (nombres de pan), así que no hay problema de
+// privacidad en dejarlo en el equipo.
+const CLAVE_CATALOGO = "kp_catalogo";
+
+function leerCatalogoCache(): Producto[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const crudo = window.localStorage.getItem(CLAVE_CATALOGO);
+    return crudo ? (JSON.parse(crudo) as Producto[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function guardarCatalogoCache(productos: Producto[]) {
+  try {
+    window.localStorage.setItem(CLAVE_CATALOGO, JSON.stringify(productos));
+  } catch {
+    // cuota llena o modo privado: seguir sin caché es aceptable
+  }
+}
+
 // F1 Pesar (PROMPT_MAESTRO.md §5): grilla de productos -> cifra 96px + teclado propio
 // -> destino en un toque -> confirmar. Encadena con el último producto para el
 // siguiente pesaje (manos ocupadas, cero volver al inicio entre bandejas).
@@ -46,12 +70,32 @@ export default function PesarPage() {
   const [pendientes, setPendientes] = useState(0);
 
   useEffect(() => {
+    // Catálogo con caché local: sobre datos móviles con mala señal, esperar el fetch
+    // deja la pantalla en blanco. Se muestra lo último conocido de inmediato y se
+    // refresca por detrás cuando haya red.
+    const cacheado = leerCatalogoCache();
+    if (cacheado) setProductos(cacheado);
     fetch("/api/productos")
       .then((r) => r.json())
-      .then((d) => setProductos(d.productos ?? []));
-    // AC-RED-01: el wifi de la panadería se cae justo a las 5 de la mañana. La cola
-    // reintenta sola; el pesaje no se detiene.
-    return iniciarReintentoAutomatico(setPendientes);
+      .then((d) => {
+        if (d.productos) {
+          setProductos(d.productos);
+          guardarCatalogoCache(d.productos);
+        }
+      })
+      .catch(() => undefined); // sin red: se sigue con el caché
+
+    // AC-RED-01: la señal se corta justo a las 5 de la mañana. La cola reintenta sola;
+    // el pesaje no se detiene.
+    return iniciarSyncAutomatico((n, rechazadas) => {
+      setPendientes(n);
+      if (rechazadas?.length) {
+        setMensaje({
+          tipo: "error",
+          texto: `${rechazadas.length} pesaje(s) rebotaron al subir: ${rechazadas[0]?.motivo ?? ""}`,
+        });
+      }
+    });
   }, []);
 
   const producto = productos.find((p) => p.id === productoId) ?? null;
@@ -63,55 +107,40 @@ export default function PesarPage() {
     if (!producto) return;
     setEstado("enviando");
     setMensaje(null);
-    const clientUuid = crypto.randomUUID();
-    try {
-      const r = await fetch("/api/pesajes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clientUuid,
-          productoId: producto.id,
-          gramos: gramosNum,
-          destino,
-          motivoMerma: destino === "merma" ? motivoMerma : undefined,
-          confirmarOutlier,
-        }),
-      });
-      const cuerpo = await r.json();
-      if (r.status === 409 && cuerpo.error === "outlier") {
+
+    // Offline-first de verdad: `enviarOEncolar` intenta enviar y, si no hay red,
+    // encola en IndexedDB (que sobrevive al cierre del navegador). El maestro nunca
+    // ve un error por señal; ve que quedó registrado y que se subirá solo.
+    const resultado = await enviarOEncolar("pesaje", "/api/pesajes", {
+      clientUuid: crypto.randomUUID(),
+      productoId: producto.id,
+      gramos: gramosNum,
+      destino,
+      motivoMerma: destino === "merma" ? motivoMerma : undefined,
+      confirmarOutlier,
+    });
+
+    if (resultado.estado === "rechazado") {
+      // El outlier es el único rechazo que no es un error: es la app pidiendo
+      // confirmación de que 25.000 g no fue un dedo de más (test centinela #4).
+      if (resultado.error === "outlier") {
         setEstado("confirmar_outlier");
         return;
       }
-      if (!r.ok) {
-        setMensaje({ tipo: "error", texto: cuerpo.error ?? "No se pudo pesar" });
-        setEstado("listo");
-        return;
-      }
-      setMensaje({ tipo: "ok", texto: `Pesado: ${formatearKg(gramosNum)} · ${producto.nombre}` });
-      limpiarParaElSiguiente();
-    } catch {
-      // AC-RED-01: sin red no se pierde el pesaje ni se detiene el maestro — se encola
-      // y la cola reintenta sola. El client_uuid garantiza que no se duplique.
-      const resultado = await enviarOEncolar("/api/pesajes", {
-        clientUuid,
-        productoId: producto.id,
-        gramos: gramosNum,
-        destino,
-        motivoMerma: destino === "merma" ? motivoMerma : undefined,
-        confirmarOutlier,
-      });
-      if (resultado === "encolado") {
-        setPendientes((n) => n + 1);
-        setMensaje({
-          tipo: "ok",
-          texto: `Pesado sin conexión: ${formatearKg(gramosNum)} · ${producto.nombre} — se sube solo`,
-        });
-        limpiarParaElSiguiente();
-      } else {
-        setMensaje({ tipo: "error", texto: "No se pudo registrar el pesaje" });
-        setEstado("listo");
-      }
+      setMensaje({ tipo: "error", texto: resultado.error });
+      setEstado("listo");
+      return;
     }
+
+    setMensaje({
+      tipo: "ok",
+      texto:
+        resultado.estado === "encolado"
+          ? `Pesado sin señal: ${formatearKg(gramosNum)} · ${producto.nombre} — se sube solo`
+          : `Pesado: ${formatearKg(gramosNum)} · ${producto.nombre}`,
+    });
+    if (resultado.estado === "encolado") setPendientes((n) => n + 1);
+    limpiarParaElSiguiente();
   }
 
   // Encadena con el mismo producto preseleccionado (spec F1): entre bandeja y bandeja

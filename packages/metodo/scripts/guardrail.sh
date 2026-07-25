@@ -4,15 +4,27 @@ set -euo pipefail
 cd "$(dirname "$0")/../../.."  # raíz del monorepo
 FAIL=0
 
-echo "== guardrail: DATABASE_URL solo localhost =="
+echo "== guardrail: base de datos =="
+# El guardrail original exigía localhost a secas. Con Postgres hospedado eso ya no
+# sirve, pero la razón por la que existía SÍ sigue viva: que nadie apunte el entorno
+# de desarrollo a la BD de una panadería real por accidente. Ahora la regla es:
+# una URL remota se permite SOLO si está declarada a propósito y va cifrada.
 if [ -f .env.local ]; then
   DB_URL="$(grep -E '^DATABASE_URL=' .env.local | head -1 | cut -d= -f2- || true)"
   if [ -n "$DB_URL" ] && ! echo "$DB_URL" | grep -qE '(localhost|127\.0\.0\.1)'; then
-    echo "ABORT: DATABASE_URL no apunta a localhost: $DB_URL"
-    FAIL=1
+    if ! grep -qE '^KILOPAN_DB_REMOTA_INTENCIONAL=(1|true)$' .env.local; then
+      echo "ABORT: DATABASE_URL es remota pero falta KILOPAN_DB_REMOTA_INTENCIONAL=1"
+      echo "       (existe para que apuntar a la BD de una panadería real sea un acto deliberado)"
+      FAIL=1
+    fi
+    if ! echo "$DB_URL" | grep -qE 'sslmode=(require|verify-full)'; then
+      echo "ABORT: una DATABASE_URL remota debe llevar sslmode=require o verify-full"
+      echo "       (por ahí viajan RUTs, PINs hasheados y evidencia de entregas)"
+      FAIL=1
+    fi
   fi
 else
-  echo "  (.env.local no existe todavía — ok en hito 0, copiar desde .env.local.example)"
+  echo "  (.env.local no existe todavía — copiar desde .env.local.example)"
 fi
 
 echo "== guardrail: secretos solo en .env.local (gitignored) =="

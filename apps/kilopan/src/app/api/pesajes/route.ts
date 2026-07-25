@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
   const cuerpoConConfirmacion = cuerpo as { confirmarOutlier?: boolean };
   if (outlier.rows[0]?.outlier && !cuerpoConConfirmacion.confirmarOutlier) {
     return NextResponse.json(
-      { error: "outlier", mensaje: "Ese peso es muy distinto a lo habitual. ¿Confirmás?" },
+      { error: "outlier", mensaje: "Ese peso es muy distinto a lo habitual. ¿Lo confirmas?" },
       { status: 409 }
     );
   }

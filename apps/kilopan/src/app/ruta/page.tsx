@@ -85,11 +85,18 @@ export default function RutaPage() {
       setErrorGps("Esperando la ubicación… si no aparece, revisa el permiso de GPS.");
       return;
     }
+    // UN SOLO client_uuid para la clave del outbox y para el payload. Antes se
+    // generaban dos por separado: el servidor aceptaba la entrega y devolvía el uuid
+    // del payload, la cola intentaba borrar por ESE uuid, no encontraba el ítem
+    // (guardado bajo el otro) y lo reenviaba para siempre. Con datos móviles eso es
+    // una cola que nunca se vacía y consume datos sin parar.
+    const clientUuid = crypto.randomUUID();
     await encolar({
-      clientUuid: crypto.randomUUID(),
+      clientUuid,
       tipo: "entrega",
+      ruta: "/api/sync",
       payload: {
-        clientUuid: crypto.randomUUID(),
+        clientUuid,
         pedidoId: parada.pedido_id,
         receptorNombre: receptor || "No identificado",
         fotoSha256: fotoSha,

@@ -32,13 +32,28 @@ export async function conectar() {
     return { db, modo, cerrar: () => db.close() };
   }
   if (modo === "postgres") {
-    if (!env.DATABASE_URL || !/localhost|127\.0\.0\.1/.test(env.DATABASE_URL)) {
-      throw new Error("guardrail: DATABASE_URL debe apuntar a localhost en modo postgres");
+    const url = env.DATABASE_URL;
+    if (!url) throw new Error("DB_MODE=postgres requiere DATABASE_URL");
+    const esLocal = /localhost|127\.0\.0\.1/.test(url);
+    if (!esLocal && env.KILOPAN_DB_REMOTA_INTENCIONAL !== "1") {
+      throw new Error(
+        "guardrail: migrar contra una BD remota exige KILOPAN_DB_REMOTA_INTENCIONAL=1 " +
+          "— aplicar migraciones sobre la panadería equivocada no tiene deshacer"
+      );
     }
     const { default: pg } = await import("pg");
-    const client = new pg.Client({ connectionString: env.DATABASE_URL });
+    // Las migraciones corren como DUEÑO del esquema, no como pan_app: crean tablas,
+    // triggers y grants. Es el único lugar del sistema donde eso es correcto.
+    const client = new pg.Client({
+      connectionString: url,
+      ssl: esLocal ? undefined : { rejectUnauthorized: true },
+    });
     await client.connect();
-    return { db: client, modo, cerrar: () => client.end() };
+    return {
+      db: { exec: (sql) => client.query(sql), query: (sql, p) => client.query(sql, p) },
+      modo,
+      cerrar: () => client.end(),
+    };
   }
   throw new Error(`DB_MODE desconocido: ${modo}`);
 }
