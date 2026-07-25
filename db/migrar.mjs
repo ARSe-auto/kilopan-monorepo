@@ -12,9 +12,15 @@ function leerEnvLocal() {
   const path = join(ROOT, "..", ".env.local");
   const env = {};
   if (existsSync(path)) {
-    for (const linea of readFileSync(path, "utf8").split("\n")) {
+    for (const cruda of readFileSync(path, "utf8").split("\n")) {
+      // El \r se quita de la LÍNEA antes de matchear (un archivo guardado en Windows
+      // dejaba el retorno de carro dentro del valor), y las comillas envolventes
+      // también: el flujo real es copiar la URL del dashboard del proveedor y pegarla,
+      // a veces entrecomillada. Sin esto, el error que sale es un ENOTFOUND sobre un
+      // host que empieza con comilla — que no apunta para nada al problema real.
+      const linea = cruda.replace(/\r$/, "");
       const m = linea.match(/^([A-Z_]+)=(.*)$/);
-      if (m) env[m[1]] = m[2];
+      if (m) env[m[1]] = m[2].trim().replace(/^(["'])(.*)\1$/, "$2");
     }
   }
   return env;
@@ -32,8 +38,21 @@ export async function conectar() {
     return { db, modo, cerrar: () => db.close() };
   }
   if (modo === "postgres") {
-    const url = env.DATABASE_URL;
+    // Override explícito para migraciones. Existe porque los proveedores que ofrecen
+    // un pooler (PgBouncer en modo transacción) reapuntan DATABASE_URL al pooler sin
+    // avisar, y ahí las migraciones fallan: DDL, funciones y `set` de sesión no
+    // sobreviven al modo transacción. UNA sola variable y falla fuerte — nada de
+    // elegir sola entre cuatro cadenas en silencio.
+    const url = env.KILOPAN_MIGRACIONES_URL || env.DATABASE_URL;
     if (!url) throw new Error("DB_MODE=postgres requiere DATABASE_URL");
+
+    if (/[?&]sslmode=/.test(url)) {
+      throw new Error(
+        "La URL no debe llevar ?sslmode=: en node-postgres pisa la configuración TLS " +
+          "del código (trata 'require' como 'verify-full'). Ver docs/OPERACION_5G_Y_POSTGRES.md"
+      );
+    }
+
     const esLocal = /localhost|127\.0\.0\.1/.test(url);
     if (!esLocal && env.KILOPAN_DB_REMOTA_INTENCIONAL !== "1") {
       throw new Error(
@@ -41,12 +60,22 @@ export async function conectar() {
           "— aplicar migraciones sobre la panadería equivocada no tiene deshacer"
       );
     }
+
+    // Misma política TLS que la app, en un solo criterio (ver db.ts politicaTls).
+    let ssl;
+    if (esLocal) ssl = undefined;
+    else if (/\.railway\.internal/.test(url)) ssl = false;
+    else if (env.KILOPAN_TLS_SIN_VERIFICAR === "1") ssl = { rejectUnauthorized: false };
+    else ssl = { rejectUnauthorized: true };
+
     const { default: pg } = await import("pg");
-    // Las migraciones corren como DUEÑO del esquema, no como pan_app: crean tablas,
-    // triggers y grants. Es el único lugar del sistema donde eso es correcto.
+    // Las migraciones corren como DUEÑO del esquema, NO como pan_app: crean tablas,
+    // triggers, roles y grants. Es el único lugar del sistema donde eso es correcto,
+    // y por eso acá no va el `options: -c role=pan_app` que sí lleva la app.
     const client = new pg.Client({
       connectionString: url,
-      ssl: esLocal ? undefined : { rejectUnauthorized: true },
+      ssl,
+      connectionTimeoutMillis: 15_000, // sin esto, un host mal escrito cuelga sin decir nada
     });
     await client.connect();
     return {
@@ -87,8 +116,20 @@ export async function migrar(db) {
     }
     const sql = readFileSync(join(MIGRACIONES_DIR, archivo), "utf8");
     console.log(`migrando: ${archivo}`);
-    await db.exec(sql);
-    await db.query(`insert into pan.migraciones_aplicadas (archivo) values ($1)`, [archivo]);
+    // Aplicar y REGISTRAR en una sola transacción. Son dos viajes de red: contra una
+    // BD remota (decenas o cientos de ms de ida y vuelta) un corte entre ambos dejaba
+    // la migración aplicada pero sin registrar — y la próxima corrida la reaplicaría
+    // sobre un esquema que ya la tiene, fallando con "already exists". Es lo mismo que
+    // hacen Flyway y golang-migrate, y por la misma razón.
+    await db.exec("begin");
+    try {
+      await db.exec(sql);
+      await db.query(`insert into pan.migraciones_aplicadas (archivo) values ($1)`, [archivo]);
+      await db.exec("commit");
+    } catch (err) {
+      await db.exec("rollback").catch(() => undefined);
+      throw err;
+    }
     nuevas++;
   }
   console.log(`migrar: OK (${nuevas} nueva(s) de ${archivos.length})`);

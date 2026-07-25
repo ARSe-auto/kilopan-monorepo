@@ -1,6 +1,14 @@
+import { join } from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Salida standalone: empaqueta solo lo que el servidor necesita en runtime, en vez
+  // de arrastrar todo node_modules. En un monorepo pnpm eso importa el doble, porque
+  // los symlinks de .pnpm no sobreviven a un copy ingenuo al contenedor.
+  output: "standalone",
+  // El servidor corre desde la raíz del monorepo, no desde apps/kilopan: sin esto
+  // Next traza mal las dependencias y el standalone queda incompleto.
+  outputFileTracingRoot: join(import.meta.dirname, "..", ".."),
   // pglite resuelve sus bundles de extensión (pgcrypto, btree_gist) vía import.meta.url
   // relativo a su propio paquete; si webpack lo empaqueta, reescribe esas rutas a
   // /_next/static/media/... y pglite intenta leerlas del filesystem del servidor donde

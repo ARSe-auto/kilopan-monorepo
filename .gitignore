@@ -10,3 +10,4 @@ db/data/
 packages/metodo/panel/index.html
 packages/metodo/panel/estado.json
 .ralph/
+*.tsbuildinfo

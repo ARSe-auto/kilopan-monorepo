@@ -7,19 +7,29 @@ FAIL=0
 echo "== guardrail: base de datos =="
 # El guardrail original exigía localhost a secas. Con Postgres hospedado eso ya no
 # sirve, pero la razón por la que existía SÍ sigue viva: que nadie apunte el entorno
-# de desarrollo a la BD de una panadería real por accidente. Ahora la regla es:
-# una URL remota se permite SOLO si está declarada a propósito y va cifrada.
+# de desarrollo a la BD de una panadería real por accidente.
 if [ -f .env.local ]; then
-  DB_URL="$(grep -E '^DATABASE_URL=' .env.local | head -1 | cut -d= -f2- || true)"
+  # ÚLTIMA definición, no la primera: tanto db.ts como migrar.mjs parsean con
+  # `env[clave]=valor`, así que gana la última. Con `head -1` este guardrail leía la
+  # línea de ejemplo (localhost) y daba por local un .env.local que en realidad
+  # apuntaba a una URL remota pegada más abajo — el patrón exacto de copiar la cadena
+  # del dashboard al final del archivo.
+  DB_URL="$(grep -E '^DATABASE_URL=' .env.local | tail -1 | cut -d= -f2- | tr -d '\r' || true)"
   if [ -n "$DB_URL" ] && ! echo "$DB_URL" | grep -qE '(localhost|127\.0\.0\.1)'; then
     if ! grep -qE '^KILOPAN_DB_REMOTA_INTENCIONAL=(1|true)$' .env.local; then
       echo "ABORT: DATABASE_URL es remota pero falta KILOPAN_DB_REMOTA_INTENCIONAL=1"
       echo "       (existe para que apuntar a la BD de una panadería real sea un acto deliberado)"
       FAIL=1
     fi
-    if ! echo "$DB_URL" | grep -qE 'sslmode=(require|verify-full)'; then
-      echo "ABORT: una DATABASE_URL remota debe llevar sslmode=require o verify-full"
-      echo "       (por ahí viajan RUTs, PINs hasheados y evidencia de entregas)"
+    # OJO: acá NO se exige sslmode= en la URL, y es a propósito. node-postgres no usa
+    # la semántica de libpq: trata `require` como alias de `verify-full` y, si la URL
+    # trae sslmode, DESCARTA en silencio el objeto ssl del código. Exigirlo —como hacía
+    # la versión anterior de este guardrail— forzaba una configuración que no funciona
+    # contra proveedores con certificado autofirmado. La política TLS la decide
+    # `politicaTls()` en apps/kilopan/src/comun/db.ts, en un solo lugar.
+    if echo "$DB_URL" | grep -qE '[?&]sslmode='; then
+      echo "ABORT: DATABASE_URL no debe llevar ?sslmode= — en node-postgres pisa la"
+      echo "       configuración TLS del código. Ver docs/OPERACION_5G_Y_POSTGRES.md"
       FAIL=1
     fi
   fi

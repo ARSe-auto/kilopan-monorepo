@@ -16,6 +16,7 @@
     "db:seed": "node db/sembrar.mjs"
   },
   "dependencies": {
-    "@electric-sql/pglite": "^0.5.4"
+    "@electric-sql/pglite": "^0.5.4",
+    "pg": "^8.22.0"
   }
 }
