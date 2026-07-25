@@ -1,0 +1,8 @@
+{
+  "name": "@kilopan/miga",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./src/tokens.ts",
+  "types": "./src/tokens.ts"
+}

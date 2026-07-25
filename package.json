@@ -1,0 +1,21 @@
+{
+  "name": "kilopan-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "guardrail": "bash packages/metodo/scripts/guardrail.sh",
+    "check": "bash packages/metodo/scripts/check.sh",
+    "check:full": "bash packages/metodo/scripts/check.sh --full",
+    "gate:specs": "node packages/metodo/scripts/gate_specs.mjs",
+    "panel": "node packages/metodo/panel/generar.mjs",
+    "db:migrate": "node db/migrar.mjs",
+    "db:seed": "node db/sembrar.mjs"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.4"
+  }
+}

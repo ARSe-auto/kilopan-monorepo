@@ -1,0 +1,12 @@
+node_modules/
+.next/
+dist/
+build/
+.env.local
+.env*.local
+*.log
+.DS_Store
+db/data/
+packages/metodo/panel/index.html
+packages/metodo/panel/estado.json
+.ralph/

@@ -1,0 +1,16 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+allowBuilds:
+  # Ambos son dependencias nativas legítimas y conocidas, requeridas transitivamente
+  # por Next.js (sharp, optimización de imágenes) y por eslint-config-next
+  # (unrs-resolver, resolución de imports) — no scripts de terceros desconocidos.
+  sharp: true
+  unrs-resolver: true
+overrides:
+  # AC-SEC-03: versiones mínimas parcheadas, forzadas sobre toda la resolución —
+  # sharp/postcss llegan transitivos vía next, brace-expansion vía eslint. No son
+  # dependencias directas del proyecto, así que no basta con "actualizar el paquete".
+  sharp: ">=0.35.0"
+  postcss: ">=8.5.18"
+  brace-expansion: ">=5.0.8"
