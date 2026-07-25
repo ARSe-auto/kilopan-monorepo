@@ -106,14 +106,20 @@ para ese AC — no antes.
 
 ## Hito 3 — Venta mostrador
 
-- [ ] (P1) `ventas`, `venta_lineas`, `cierres_caja` (esperado vs declarado) [AC-VEN-01]
-- [ ] (P1) F6 Venta ≤3 toques contra stock pesado [AC-VEN-02]
-- [ ] (P2) **Catálogo de medios de pago editable por admin** (decisión #5): tabla
-      `pan.medios_pago` precargada (efectivo, débito, crédito, transferencia,
-      Mercado Pago, Mach, fiado, otro); cierre de caja pasa de un par a una fila por
-      medio activo [AC-PAG-01]
+- [x] (P1) `ventas`, `venta_lineas`, `cierres_caja` (esperado vs declarado) — tablas +
+      invariantes probadas (fiado exige cliente, línea es gramos XOR unidades). La
+      pantalla de cierre de caja todavía no existe, solo su tabla [AC-VEN-01]
+- [x] (P1) F6 Venta contra stock pesado — probado en vivo: pesados 5,000 kg → vendidos
+      0,500 kg a $1.095 → quedan 4,500 kg, con `pan.stock_disponible()` derivando todo
+      de eventos (pesajes − venta_lineas), nunca de un contador guardado. Productos sin
+      stock quedan deshabilitados en pantalla [AC-VEN-02]
+- [x] (P2) **Catálogo de medios de pago editable por admin** (decisión #5): tabla
+      `pan.medios_pago` precargada con los 8 medios; `pan_app` puede prender/apagar
+      (`activo`) pero NO borrar ni renombrar — probado. Falta la pantalla de admin para
+      togglearlos y la fila-por-medio en el cierre de caja [AC-PAG-01]
 - [ ] (P2) Fiado en mostrador reutiliza el mismo saldo por cliente del hito 6 — sin
-      construir un segundo sistema de crédito [AC-PAG-02]
+      construir un segundo sistema de crédito. Hoy la API lo rechaza con mensaje
+      explícito hasta que exista `pan.clientes` [AC-PAG-02]
 
 ## Hito 4 — Despacho y reparto
 

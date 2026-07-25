@@ -201,18 +201,18 @@ test("pesajes: destino='reparto' exige pedido_linea_id; destino='mostrador' lo p
   await assert.rejects(
     () =>
       db.query(
-        `insert into pan.pesajes (client_uuid, hornada_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
-         values (gen_random_uuid(), $1, 1000, 'reparto', $2, $3, now())`,
-        [hornadaId, usuarioId, dispositivoId]
+        `insert into pan.pesajes (client_uuid, producto_id, hornada_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+         values (gen_random_uuid(), $1, $2, 1000, 'reparto', $3, $4, now())`,
+        [productoId, hornadaId, usuarioId, dispositivoId]
       ),
     /constraint|check/i,
     "reparto sin pedido_linea_id debe rebotar"
   );
 
   const ok = await db.query(
-    `insert into pan.pesajes (client_uuid, hornada_id, pedido_linea_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
-     values (gen_random_uuid(), $1, gen_random_uuid(), 1000, 'reparto', $2, $3, now()) returning id`,
-    [hornadaId, usuarioId, dispositivoId]
+    `insert into pan.pesajes (client_uuid, producto_id, hornada_id, pedido_linea_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+     values (gen_random_uuid(), $1, $2, gen_random_uuid(), 1000, 'reparto', $3, $4, now()) returning id`,
+    [productoId, hornadaId, usuarioId, dispositivoId]
   );
   assert.equal(ok.rows.length, 1);
   await db.close();
@@ -228,9 +228,9 @@ test("pesajes: destino='merma' exige motivo_merma Y estado_merma (AC-MERM-01)", 
   await assert.rejects(
     () =>
       db.query(
-        `insert into pan.pesajes (client_uuid, hornada_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
-         values (gen_random_uuid(), $1, 500, 'merma', $2, $3, now())`,
-        [hornadaId, usuarioId, dispositivoId]
+        `insert into pan.pesajes (client_uuid, producto_id, hornada_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+         values (gen_random_uuid(), $1, $2, 500, 'merma', $3, $4, now())`,
+        [productoId, hornadaId, usuarioId, dispositivoId]
       ),
     /constraint|check/i,
     "merma sin motivo NI estado debe rebotar"
@@ -238,9 +238,9 @@ test("pesajes: destino='merma' exige motivo_merma Y estado_merma (AC-MERM-01)", 
 
   const ok = await db.query(
     `insert into pan.pesajes
-       (client_uuid, hornada_id, gramos, destino, motivo_merma, estado_merma, usuario_id, dispositivo_id, capturado_at)
-     values (gen_random_uuid(), $1, 500, 'merma', 'sobrante_dia', 'pendiente', $2, $3, now()) returning id`,
-    [hornadaId, usuarioId, dispositivoId]
+       (client_uuid, producto_id, hornada_id, gramos, destino, motivo_merma, estado_merma, usuario_id, dispositivo_id, capturado_at)
+     values (gen_random_uuid(), $1, $2, 500, 'merma', 'sobrante_dia', 'pendiente', $3, $4, now()) returning id`,
+    [productoId, hornadaId, usuarioId, dispositivoId]
   );
   assert.equal(ok.rows.length, 1);
   await db.close();
@@ -255,9 +255,9 @@ test("AC-MERM-01: sobrante_dia se resuelve a recuperada_con_venta o confirmada_p
 
   const pesaje = await db.query(
     `insert into pan.pesajes
-       (client_uuid, hornada_id, gramos, destino, motivo_merma, estado_merma, usuario_id, dispositivo_id, capturado_at)
-     values (gen_random_uuid(), $1, 500, 'merma', 'sobrante_dia', 'pendiente', $2, $3, now()) returning id`,
-    [hornadaId, usuarioId, dispositivoId]
+       (client_uuid, producto_id, hornada_id, gramos, destino, motivo_merma, estado_merma, usuario_id, dispositivo_id, capturado_at)
+     values (gen_random_uuid(), $1, $2, 500, 'merma', 'sobrante_dia', 'pendiente', $3, $4, now()) returning id`,
+    [productoId, hornadaId, usuarioId, dispositivoId]
   );
   const pesajeId = pesaje.rows[0].id;
 
@@ -280,6 +280,7 @@ test("AC-MERM-01: sobrante_dia se resuelve a recuperada_con_venta o confirmada_p
 test("AC-ID-02: un pesaje sin sesión de operador viva rebota (trigger real, no solo la función suelta)", async () => {
   const db = await dbNueva();
   const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  const productoId = await crearProducto(db);
   // OJO: sin crearSesion() — a propósito. hornada_id va NULL (válido, "fase 1" del
   // prompt maestro) precisamente para que este test aísle el trigger de pesajes y no
   // se tropiece con el mismo trigger ya cableado en hornadas.
@@ -287,9 +288,9 @@ test("AC-ID-02: un pesaje sin sesión de operador viva rebota (trigger real, no 
   await assert.rejects(
     () =>
       db.query(
-        `insert into pan.pesajes (client_uuid, gramos, destino, usuario_id, dispositivo_id, capturado_at)
-         values (gen_random_uuid(), 1000, 'mostrador', $1, $2, now())`,
-        [usuarioId, dispositivoId]
+        `insert into pan.pesajes (client_uuid, producto_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+         values (gen_random_uuid(), $1, 1000, 'mostrador', $2, $3, now())`,
+        [productoId, usuarioId, dispositivoId]
       ),
     /sin sesión/i
   );
@@ -314,16 +315,16 @@ test("pesajes: client_uuid duplicado rebota (idempotencia)", async () => {
   const clientUuid = "11111111-1111-4111-8111-111111111111";
 
   await db.query(
-    `insert into pan.pesajes (client_uuid, hornada_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
-     values ($1, $2, 1000, 'mostrador', $3, $4, now())`,
-    [clientUuid, hornadaId, usuarioId, dispositivoId]
+    `insert into pan.pesajes (client_uuid, producto_id, hornada_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+     values ($1, $2, $3, 1000, 'mostrador', $4, $5, now())`,
+    [clientUuid, productoId, hornadaId, usuarioId, dispositivoId]
   );
   await assert.rejects(
     () =>
       db.query(
-        `insert into pan.pesajes (client_uuid, hornada_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
-         values ($1, $2, 1000, 'mostrador', $3, $4, now())`,
-        [clientUuid, hornadaId, usuarioId, dispositivoId]
+        `insert into pan.pesajes (client_uuid, producto_id, hornada_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+         values ($1, $2, $3, 1000, 'mostrador', $4, $5, now())`,
+        [clientUuid, productoId, hornadaId, usuarioId, dispositivoId]
       ),
     /unique|duplicate/i
   );
@@ -349,21 +350,22 @@ test("pesajes: INSERT...ON CONFLICT DO NOTHING RETURNING funciona bajo pan_app (
   const db = await dbNueva();
   const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
   await crearSesion(db, usuarioId, dispositivoId);
+  const productoId = await crearProducto(db);
   const clientUuid = "22222222-2222-4222-8222-222222222222";
 
   const primero = await db.query(
-    `insert into pan.pesajes (client_uuid, gramos, destino, usuario_id, dispositivo_id, capturado_at)
-     values ($1, 1000, 'mostrador', $2, $3, now())
+    `insert into pan.pesajes (client_uuid, producto_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+     values ($1, $2, 1000, 'mostrador', $3, $4, now())
      on conflict (client_uuid) do nothing returning id`,
-    [clientUuid, usuarioId, dispositivoId]
+    [clientUuid, productoId, usuarioId, dispositivoId]
   );
   assert.equal(primero.rows.length, 1, "el insert original debe devolver la fila");
 
   const reintento = await db.query(
-    `insert into pan.pesajes (client_uuid, gramos, destino, usuario_id, dispositivo_id, capturado_at)
-     values ($1, 1000, 'mostrador', $2, $3, now())
+    `insert into pan.pesajes (client_uuid, producto_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+     values ($1, $2, 1000, 'mostrador', $3, $4, now())
      on conflict (client_uuid) do nothing returning id`,
-    [clientUuid, usuarioId, dispositivoId]
+    [clientUuid, productoId, usuarioId, dispositivoId]
   );
   assert.equal(reintento.rows.length, 0, "el reintento con el mismo client_uuid no inserta de nuevo");
 
@@ -381,9 +383,9 @@ test("AC-PES-03: es_outlier_pesaje detecta 25.000 g donde iban 2.500 (test centi
 
   for (const gramos of [2500, 2400, 2600, 2500]) {
     await db.query(
-      `insert into pan.pesajes (client_uuid, hornada_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
-       values (gen_random_uuid(), $1, $2, 'mostrador', $3, $4, now())`,
-      [hornadaId, gramos, usuarioId, dispositivoId]
+      `insert into pan.pesajes (client_uuid, producto_id, hornada_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+       values (gen_random_uuid(), $1, $2, $3, 'mostrador', $4, $5, now())`,
+      [productoId, hornadaId, gramos, usuarioId, dispositivoId]
     );
   }
 
@@ -392,6 +394,111 @@ test("AC-PES-03: es_outlier_pesaje detecta 25.000 g donde iban 2.500 (test centi
 
   const outlier = await db.query(`select pan.es_outlier_pesaje($1, 25000) as outlier`, [productoId]);
   assert.equal(outlier.rows[0].outlier, true, "25.000 g es >3x la mediana ~2.500 — debe marcar outlier");
+  await db.close();
+});
+
+// =============================================================================
+// Hito 3 — venta mostrador
+// =============================================================================
+
+async function pesarMostrador(db, productoId, gramos, usuarioId, dispositivoId) {
+  await db.query(
+    `insert into pan.pesajes (client_uuid, producto_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+     values (gen_random_uuid(), $1, $2, 'mostrador', $3, $4, now())`,
+    [productoId, gramos, usuarioId, dispositivoId]
+  );
+}
+
+test("AC-VEN-02: stock_disponible baja con la venta y nunca queda negativo por una venta que lo excede", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const productoId = await crearProducto(db);
+
+  const antes = await db.query(`select pan.stock_disponible($1) as stock`, [productoId]);
+  assert.equal(antes.rows[0].stock, 0, "sin pesajes, stock es 0, no null ni error");
+
+  await pesarMostrador(db, productoId, 5000, usuarioId, dispositivoId);
+  const conPesaje = await db.query(`select pan.stock_disponible($1) as stock`, [productoId]);
+  assert.equal(conPesaje.rows[0].stock, 5000);
+
+  const venta = await db.query(
+    `insert into pan.ventas (vendedor_id, dispositivo_id, medio_pago, total_clp) values ($1,$2,'efectivo',2000) returning id`,
+    [usuarioId, dispositivoId]
+  );
+  await db.query(
+    `insert into pan.venta_lineas (venta_id, producto_id, gramos, precio_clp) values ($1,$2,2000,2000)`,
+    [venta.rows[0].id, productoId]
+  );
+  const conVenta = await db.query(`select pan.stock_disponible($1) as stock`, [productoId]);
+  assert.equal(conVenta.rows[0].stock, 3000, "5000 pesados - 2000 vendidos = 3000 disponibles");
+  await db.close();
+});
+
+test("ventas: medio_pago='fiado' exige cliente_id; el resto no lo exige", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  await crearSesion(db, usuarioId, dispositivoId);
+
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into pan.ventas (vendedor_id, dispositivo_id, medio_pago, total_clp) values ($1,$2,'fiado',1000)`,
+        [usuarioId, dispositivoId]
+      ),
+    /constraint|check/i,
+    "fiado sin cliente_id debe rebotar"
+  );
+
+  const ok = await db.query(
+    `insert into pan.ventas (vendedor_id, dispositivo_id, medio_pago, total_clp) values ($1,$2,'efectivo',1000) returning id`,
+    [usuarioId, dispositivoId]
+  );
+  assert.equal(ok.rows.length, 1, "efectivo sin cliente_id es válido");
+  await db.close();
+});
+
+test("venta_lineas: exige gramos O unidades, nunca ambos ni ninguno", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const productoId = await crearProducto(db);
+  const venta = await db.query(
+    `insert into pan.ventas (vendedor_id, dispositivo_id, medio_pago, total_clp) values ($1,$2,'efectivo',1000) returning id`,
+    [usuarioId, dispositivoId]
+  );
+  const ventaId = venta.rows[0].id;
+
+  await assert.rejects(
+    () =>
+      db.query(`insert into pan.venta_lineas (venta_id, producto_id, precio_clp) values ($1,$2,1000)`, [
+        ventaId,
+        productoId,
+      ]),
+    /constraint|check/i,
+    "ni gramos ni unidades debe rebotar"
+  );
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into pan.venta_lineas (venta_id, producto_id, gramos, unidades, precio_clp) values ($1,$2,500,2,1000)`,
+        [ventaId, productoId]
+      ),
+    /constraint|check/i,
+    "gramos Y unidades a la vez debe rebotar"
+  );
+  await db.close();
+});
+
+test("medios_pago: pan_app puede desactivar uno (activo) pero no borrarlo ni cambiar su etiqueta", async () => {
+  const db = await dbNueva();
+  const r = await db.query(`update pan.medios_pago set activo = false where clave = 'otro' returning activo`);
+  assert.equal(r.rows[0].activo, false);
+  await assert.rejects(
+    () => db.query(`update pan.medios_pago set etiqueta = 'x' where clave = 'otro'`),
+    /permission|denied/i
+  );
+  await assert.rejects(() => db.query(`delete from pan.medios_pago where clave = 'otro'`), /permission|denied/i);
   await db.close();
 });
 

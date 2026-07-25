@@ -22,15 +22,20 @@ export function SelectorUnToque<T extends string>({
             aria-checked={activo}
             onClick={() => onCambiar(o.valor)}
             style={{
-              flex: "1 1 0",
+              // "1 1 auto" + padding, no "1 1 0": con base 0 las etiquetas largas
+              // ("Transferencia", "Fiado (cliente registrado)") se recortaban en el
+              // mismo ancho que "Mach". Ahora cada pill crece con su texto y envuelve.
+              flex: "1 1 auto",
               minHeight: 44,
               minWidth: 88,
+              padding: "8px 14px",
               borderRadius: 12,
               border: activo ? "2px solid #C2410C" : "1px solid rgba(27,23,18,.14)",
               background: activo ? "#C2410C" : "#FFFFFF",
               color: activo ? "#FFFFFF" : "#1B1712",
               fontSize: 15,
               fontWeight: 700,
+              lineHeight: 1.2,
             }}
           >
             {activo ? "✓ " : ""}

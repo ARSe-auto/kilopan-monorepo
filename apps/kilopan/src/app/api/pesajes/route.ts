@@ -59,12 +59,13 @@ export async function POST(request: NextRequest) {
   try {
     const r = await db.query<{ id: string }>(
       `insert into pan.pesajes
-         (client_uuid, gramos, destino, motivo_merma, estado_merma, usuario_id, dispositivo_id, capturado_at)
-       values ($1,$2,$3,$4,$5,$6,$7, now())
+         (client_uuid, producto_id, gramos, destino, motivo_merma, estado_merma, usuario_id, dispositivo_id, capturado_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8, now())
        on conflict (client_uuid) do nothing
        returning id`,
       [
         clientUuid,
+        productoId,
         gramos,
         destino,
         destino === "merma" ? motivoMerma : null,
