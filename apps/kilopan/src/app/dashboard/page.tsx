@@ -1,0 +1,168 @@
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { obtenerDb } from "@/comun/db.ts";
+import { NOMBRE_COOKIE } from "@/identidad/sesion.ts";
+import { superficie, acentos, semantico } from "@kilopan/miga/tokens.ts";
+import { formatearKg, formatearClp } from "@/comun/formato.ts";
+
+// Los agregados llegan como string desde Postgres (bigint/numeric no entran en un
+// number de JS sin pérdida) — se convierten con Number() al formatear.
+type Conciliacion = Record<string, unknown> & {
+  fecha: string;
+  g_pesados: string;
+  g_venta: string;
+  g_pod_ok: string;
+  g_merma_tipificada: string;
+  g_merma_recuperada: string;
+  tck: string | null;
+};
+
+// AC-DASH-01: el panel del dueño. Todo sale de pan.conciliacion_diaria — una vista
+// sobre eventos, nunca un snapshot. Server Component: la sesión se valida acá y las
+// cifras nunca viajan al cliente sin pasar por el chequeo de rol.
+export default async function DashboardPage() {
+  const cookieStore = await cookies();
+  const sesionId = cookieStore.get(NOMBRE_COOKIE)?.value;
+  if (!sesionId) redirect("/ingresar");
+
+  const db = await obtenerDb();
+  const sesion = await db.query<{ nombre: string; rol: string }>(
+    `select u.nombre, u.rol from pan.sesiones_operador s
+       join pan.usuarios u on u.id = s.usuario_id
+      where s.id = $1 and s.fin is null and u.activo`,
+    [sesionId]
+  );
+  const usuario = sesion.rows[0];
+  if (!usuario) redirect("/ingresar");
+  // Regla de rol testeada: el CLP y el $/km viven solo acá, jamás en el teléfono
+  // del repartidor (PROMPT_MAESTRO.md §5).
+  if (usuario.rol !== "admin") {
+    return (
+      <main style={{ maxWidth: 640, margin: "0 auto", padding: 24 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700 }}>Panel del dueño</h1>
+        <p style={{ color: superficie.textoDim }}>Esta pantalla es solo para administradores.</p>
+      </main>
+    );
+  }
+
+  const conciliacion = await db.query<Conciliacion>(
+    `select fecha, g_pesados, g_venta, g_pod_ok, g_merma_tipificada, g_merma_recuperada, tck
+       from pan.conciliacion_diaria where fecha = current_date`
+  );
+  const hoy = conciliacion.rows[0];
+
+  const rutasCerradas = await db.query<{ n: string }>(
+    `select count(*)::text as n from pan.rutas where estado = 'cerrada'`
+  );
+  const minimoFlota = await db.query<{ valor: number }>(
+    `select valor from pan.parametros where clave = 'rutas_minimas_tarjeta_flota'`
+  );
+  const mostrarFlota =
+    Number(rutasCerradas.rows[0]?.n ?? 0) >= (minimoFlota.rows[0]?.valor ?? 20);
+
+  const tckPct = hoy?.tck != null ? Math.round(Number(hoy.tck) * 100) : null;
+  const colorTck = tckPct == null ? superficie.textoFaint : tckPct >= 95 ? semantico.ok : semantico.alerta;
+
+  return (
+    <main style={{ maxWidth: 900, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 24 }}>
+      <div>
+        <p style={{ fontSize: 13, color: superficie.textoFaint, margin: 0 }}>Panel del dueño · hoy</p>
+        <h1 style={{ fontSize: 28, fontWeight: 800, margin: 0 }}>{usuario.nombre}</h1>
+      </div>
+
+      <section
+        style={{
+          background: superficie.tarjeta,
+          border: `1px solid ${superficie.hairline}`,
+          borderRadius: 16,
+          padding: 24,
+        }}
+      >
+        <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: superficie.textoFaint, margin: 0 }}>
+          TCK — Tasa de Conciliación de Kilos
+        </p>
+        <p style={{ fontSize: 72, fontWeight: 700, lineHeight: 1.05, fontVariantNumeric: "tabular-nums", color: colorTck, margin: "8px 0 0" }}>
+          {tckPct == null ? "—" : `${tckPct}%`}
+        </p>
+        <p style={{ fontSize: 14, color: superficie.textoDim, margin: "4px 0 0" }}>
+          {tckPct == null
+            ? "Todavía no se pesó nada hoy."
+            : tckPct >= 95
+              ? "Meta cumplida: casi ningún kilo quedó sin explicación."
+              : "Bajo la meta de 95% — hay kilos pesados sin destino todavía."}
+        </p>
+      </section>
+
+      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
+        {[
+          { etiqueta: "Pesados", valor: hoy?.g_pesados, color: acentos.kilopan },
+          { etiqueta: "Vendidos", valor: hoy?.g_venta, color: semantico.ok },
+          { etiqueta: "Entregados con prueba", valor: hoy?.g_pod_ok, color: semantico.ok },
+          { etiqueta: "Merma perdida", valor: hoy?.g_merma_tipificada, color: semantico.error },
+          { etiqueta: "Merma recuperada", valor: hoy?.g_merma_recuperada, color: semantico.alerta },
+        ].map((c) => (
+          <div
+            key={c.etiqueta}
+            style={{
+              background: superficie.tarjeta,
+              border: `1px solid ${superficie.hairline}`,
+              borderRadius: 14,
+              padding: 16,
+            }}
+          >
+            <p style={{ fontSize: 12, color: superficie.textoFaint, margin: 0 }}>{c.etiqueta}</p>
+            <p style={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: c.color, margin: "6px 0 0" }}>
+              {formatearKg(Number(c.valor ?? 0))}
+            </p>
+          </div>
+        ))}
+      </section>
+
+      {mostrarFlota ? (
+        <TarjetaFlota />
+      ) : (
+        <p style={{ fontSize: 13, color: superficie.textoFaint }}>
+          La tarjeta «Tu flota» aparece cuando tengas al menos {minimoFlota.rows[0]?.valor ?? 20} rutas cerradas —
+          con tus kilómetros reales, no con estimaciones.
+        </p>
+      )}
+    </main>
+  );
+}
+
+// AC-DASH-02 + AC-DASH-03: el caso de la van eléctrica se construye con los datos del
+// propio panadero, y al lado va el CTA hermano de KiloRuta (que otro reparta por él).
+// Los dos son simétricos a propósito: se mide qué prefiere de verdad el cliente.
+async function TarjetaFlota() {
+  const db = await obtenerDb();
+  const m = await db.query<{ km_totales: number; costo_combustion_clp: number; costo_ev_clp: number }>(
+    `select coalesce(sum(km_totales),0)::int as km_totales,
+            coalesce(sum(costo_combustion_clp),0)::int as costo_combustion_clp,
+            coalesce(sum(costo_ev_clp),0)::int as costo_ev_clp
+       from pan.metricas_flota`
+  );
+  const flota = m.rows[0];
+  if (!flota) return null;
+  const ahorro = flota.costo_combustion_clp - flota.costo_ev_clp;
+
+  return (
+    <section style={{ background: superficie.tarjeta, border: `1px solid ${superficie.hairline}`, borderRadius: 16, padding: 24 }}>
+      <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>Tu flota</h2>
+      <p style={{ fontSize: 14, color: superficie.textoDim, margin: "0 0 16px" }}>
+        {flota.km_totales} km reales de reparto. Repartir eso en bencina te cuesta{" "}
+        {formatearClp(flota.costo_combustion_clp)}; en eléctrico, {formatearClp(flota.costo_ev_clp)}.
+      </p>
+      <p style={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: "tabular-nums", margin: "0 0 16px" }}>
+        Diferencia: {formatearClp(ahorro)}
+      </p>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <span style={{ padding: "12px 16px", borderRadius: 12, background: acentos.kilopan, color: "#fff", fontWeight: 700, fontSize: 14 }}>
+          Quiero que e-auto me contacte
+        </span>
+        <span style={{ padding: "12px 16px", borderRadius: 12, background: acentos.kiloruta, color: "#fff", fontWeight: 700, fontSize: 14 }}>
+          Prefiero que alguien más reparta por mí
+        </span>
+      </div>
+    </section>
+  );
+}

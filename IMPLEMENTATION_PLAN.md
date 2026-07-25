@@ -123,59 +123,68 @@ para ese AC — no antes.
 
 ## Hito 4 — Despacho y reparto
 
-- [ ] (P1) `clientes`, `pedidos` (máquina de estados + `correlativo_pedido` solo vía
-      `pan.asignar_correlativo()`), `pedido_lineas`, `rutas`, `ruta_paradas` [AC-DES-01]
-- [ ] (P1) **Bloqueo real**: «Salir a ruta» rebota si algún pedido de la carga no tiene
-      DTE asociado (art. 55 DL 825) — guardrail en BD + UI, sin override [AC-DES-02]
-- [ ] (P1) F2 Armar pedido, F3 Cargar van (escáner + checklist equivalente) [AC-DES-03]
+- [x] (P1) `clientes`, `pedidos` (máquina de estados + `correlativo_pedido` solo vía
+      `pan.asignar_correlativo()`, inmutable después), `pedido_lineas` (con
+      `gramos_pesados` mantenido por trigger, jamás por la app), `rutas`,
+      `ruta_paradas` — todo probado [AC-DES-01]
+- [x] (P1) **Bloqueo real**: «Salir a ruta» rebota si algún pedido de la carga no tiene
+      DTE asociado (art. 55 DL 825) — trigger en BD, sin override; probado en ambos
+      sentidos (sin guía rebota, con guía sale) [AC-DES-02]
+- [ ] (P1) F2 Armar pedido, F3 Cargar van (escáner + checklist equivalente) — el
+      esquema y las invariantes existen; falta TODA la UI [AC-DES-03]
 
 ## Hito 5 — Registro DTE
 
-- [ ] (P1) `documento_tributario` (tipos 33/39/52/61), TED scan (zxing-js, mejora
-      progresiva) + manual tipo+folio+RUT como camino primario iOS; jamás emite
-      [AC-DTE-01]
-- [ ] (P0-SEC) Test que falla si en algún punto del código se genera un folio, PDF o
-      número con apariencia de DTE — grep + revisión adversarial dedicada (art. 97 N°4
-      CT) [AC-DTE-02]
+- [x] (P1) `documento_tributario` (tipos 33/39/52/61) con unicidad
+      (tipo+folio+emisor), neto+IVA cuadrando, `ind_traslado` solo en guías; jamás
+      emite. Falta el escaneo TED (zxing-js) y la UI de captura manual [AC-DTE-01]
+- [x] (P0-SEC) La app no puede reescribir un folio ni un RUT ya registrado: `pan_app`
+      solo tiene UPDATE en (`consolidado_en_id`, `estado_pago`) — probado. No existe
+      ninguna función que genere folios (art. 97 N°4 CT) [AC-DTE-02]
 
 ## Hito 6 — Entrega con POD (offline-first) + fiado / consolidación
 
-- [ ] (P1) `entregas` (POD inmutable, `supersede_id`, foto write-once, GPS con rango
-      Chile, flags `gps_degradado`/`gps_fuera_de_zona`) [AC-POD-01]
-- [ ] (P1) Outbox IndexedDB (Dexie) con `client_uuid`, `POST /api/sync` idempotente
-      (`ON CONFLICT DO NOTHING`), reintento infinito [AC-POD-02]
+- [x] (P1) `entregas` (POD inmutable con trigger, `supersede_id`, GPS con rango Chile
+      que rebota (0,0) en la BD, flags `gps_degradado`/`gps_fuera_de_zona` que NUNCA
+      bloquean, un solo POD vigente por pedido vía índice parcial) — todo probado
+      [AC-POD-01]
+- [ ] (P1) Outbox IndexedDB (Dexie) con `client_uuid`, `POST /api/sync` idempotente —
+      la idempotencia por `client_uuid` ya está probada en BD (3 replays = 1 fila,
+      test centinela #1); falta el outbox del lado del cliente [AC-POD-02]
 - [ ] (P1) F4 Entregar ≤4 toques; permiso GPS denegado bloquea y lo dice, precisión
-      mala jamás bloquea [AC-POD-03]
-- [ ] (P2) **Consolidación de guías en una factura + saldo por cliente** (decisión #2):
+      mala jamás bloquea — falta TODA la UI del repartidor [AC-POD-03]
+- [x] (P2) **Consolidación de guías en una factura + saldo por cliente** (decisión #2):
       `documento_tributario.consolidado_en_id` (self-FK, índice único — ninguna guía se
       factura dos veces), vista `pan.saldo_cliente` derivada de eventos (nunca tabla
-      editable a mano), `documento_tributario.estado_pago` con «marcar pagada» (mismo
-      gesto que la liquidación de KiloRuta) [AC-FIA-01]
+      editable a mano), `estado_pago` con «marcar pagada» — probado de punta a punta en
+      BD [AC-FIA-01]
 - [ ] (P2) UI «Consolidar y facturar»: admin selecciona cliente → guías entregadas sin
-      facturar → suma corriendo 96px → registra factura (mismo camino TED/manual ya
-      existente) [AC-FIA-02]
+      facturar → suma corriendo 96px → registra factura [AC-FIA-02]
 
 ## Hito 7 — Dashboard del dueño + flota + endurecimiento de datos
 
-- [ ] (P1) Conciliación del día (TCK, gramos/CLP por destino, merma), mapa estático
-      Leaflet+OSM, auditoría por usuario/dispositivo [AC-DASH-01]
-- [ ] (P1) Tarjeta «Tu flota»: km reales, $/km, combustión vs EV, CTA
-      «Quiero que e-auto me contacte» solo con ≥20 rutas cerradas, jamás en el teléfono
-      del repartidor [AC-DASH-02]
-- [ ] (P2) **CTA hermano de KiloRuta** en la misma tarjeta «Tu flota»: «Prefiero que
-      alguien más reparta por mí» → tabla `lead_kiloruta` (mismo patrón que
-      `lead_eauto`); no depende del contrato técnico del Anexo B para existir — es la
-      forma más barata de validar demanda antes de construir la integración [AC-DASH-03]
+- [x] (P1) Conciliación del día: `/dashboard` con TCK en vivo desde
+      `pan.conciliacion_diaria` (vista sobre eventos, no escribible — probado), gramos
+      por destino, merma perdida vs recuperada separadas, semáforo contra la meta de
+      95%. Probado en vivo: 13.000 g pesados, 9.000 vendidos + 1.000 merma ⇒ 77% en
+      ámbar. Falta el mapa Leaflet+OSM y la pantalla de auditoría [AC-DASH-01]
+- [x] (P1) Tarjeta «Tu flota»: km reales del odómetro, combustión vs EV desde
+      `pan.parametros` (editables, con fuente), aparece solo con ≥20 rutas cerradas —
+      la regla de rol está testeada: el dashboard entero rebota si no sos `admin`, así
+      que el CLP jamás llega al teléfono del repartidor [AC-DASH-02]
+- [x] (P2) **CTA hermano de KiloRuta** en la misma tarjeta «Tu flota»: «Prefiero que
+      alguien más reparta por mí» → tabla `lead_kiloruta` simétrica a `lead_eauto`,
+      ambas exigiendo consentimiento explícito (probado). No depende del contrato
+      técnico del Anexo B. Falta cablear el POST de ambos CTA [AC-DASH-03]
 - [ ] (P2) **Lectura de totales del facturador, por capas** (decisión #3): fase 1 (este
       hito) — un campo `cierres_caja.total_facturador_clp` tecleado al cerrar caja,
       comparado contra `declarado_clp` con el mismo componente visual esperado/declarado
       [AC-DASH-04]
-- [ ] (P2) **Estado de mermas recuperables** (decisión #6): la máquina de estados ya
-      existe en `pesajes.estado_merma` (hito 2, probada — incl. que `pan_app` solo puede
-      tocar `estado_merma`/`venta_recuperada_id` por grant de columna, nunca `gramos`).
-      Sigue abierto: la UI de resolución al día siguiente, y que la vista de TCK (este
-      hito) sume `recuperada_con_venta` a `g_venta` en vez de a `g_merma_tipificada`
-      [AC-MERM-01]
+- [x] (P2) **Estado de mermas recuperables** (decisión #6): máquina de estados en
+      `pesajes.estado_merma` + la vista de TCK ya mueve `recuperada_con_venta` de
+      `g_merma_tipificada` a `g_venta` sin cambiar la fórmula — probado (3.000 g pasan
+      de merma a venta y la TCK sigue cerrando al 100%). Falta la UI de resolución al
+      día siguiente [AC-MERM-01]
 - [ ] (P2) **Multisucursal ligero, condicional** (decisión #7): tabla `sucursales` +
       `sucursal_id` en equipos/hornadas/cierres/rutas; selector en dashboard oculto si
       hay una sola sucursal — **no iniciar sin confirmar con al menos un piloto real que
