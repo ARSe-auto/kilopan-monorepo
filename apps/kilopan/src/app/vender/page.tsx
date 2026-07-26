@@ -52,11 +52,22 @@ export default function VenderPage() {
   const [clienteFiado, setClienteFiado] = useState("");
   const [pendientes, setPendientes] = useState(0);
   const enLinea = useEnLinea();
+  // Sin esto, "no hay productos" (catálogo vacío, estado real) y "no pude consultar"
+  // (sin red, 401, 500) se veían exactamente igual: la grilla vacía. Con las manos
+  // ocupadas y la pantalla en blanco, no hay forma de saber si hay que reintentar o si
+  // de verdad no hay nada que vender.
+  const [cargandoProductos, setCargandoProductos] = useState(true);
+  const [errorProductos, setErrorProductos] = useState(false);
 
   useEffect(() => {
     fetch("/api/productos")
-      .then((r) => r.json())
-      .then((d) => setProductos(d.productos ?? []));
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
+      })
+      .then((d) => setProductos(d.productos ?? []))
+      .catch(() => setErrorProductos(true))
+      .finally(() => setCargandoProductos(false));
     fetch("/api/medios-pago")
       .then((r) => r.json())
       .then((d) => setMediosPago(d.mediosPago ?? []));
@@ -207,6 +218,16 @@ export default function VenderPage() {
           <VolverInicio />
         </div>
       </div>
+
+      {cargandoProductos ? (
+        <p style={{ color: superficie.textoDim, fontSize: 14 }}>Cargando catálogo…</p>
+      ) : errorProductos ? (
+        <p style={{ color: semantico.error, fontSize: 14 }} role="alert">
+          No se pudo cargar el catálogo. Revisa la conexión e inténtalo de nuevo.
+        </p>
+      ) : productos.length === 0 ? (
+        <p style={{ color: superficie.textoDim, fontSize: 14 }}>No hay productos configurados.</p>
+      ) : null}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         {productos.map((p) => (

@@ -74,6 +74,7 @@ function guardarCatalogoCache(productos: Producto[]) {
 // siguiente pesaje (manos ocupadas, cero volver al inicio entre bandejas).
 export default function PesarPage() {
   const [productos, setProductos] = useState<Producto[]>([]);
+  const [errorCatalogo, setErrorCatalogo] = useState(false);
   const [productoId, setProductoId] = useState<string | null>(null);
   // El maestro teclea KILOS ("1,5"); a la BD viajan gramos enteros. La conversión vive
   // en comun/peso.ts y es por texto, nunca `Number(kilos)*1000`.
@@ -174,14 +175,20 @@ export default function PesarPage() {
     const cacheado = leerCatalogoCache();
     if (cacheado) setProductos(cacheado);
     fetch("/api/productos")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
+      })
       .then((d) => {
         if (d.productos) {
           setProductos(d.productos);
           guardarCatalogoCache(d.productos);
         }
       })
-      .catch(() => undefined); // sin red: se sigue con el caché
+      // Con caché, seguir con lo último conocido es lo correcto y no hace falta avisar.
+      // Sin caché (equipo recién vinculado, primera vez sin señal), la grilla se queda
+      // vacía para siempre y "Cargando catálogo…" mentía — nunca terminaba de cargar.
+      .catch(() => { if (!cacheado) setErrorCatalogo(true); });
 
     // AC-RED-01: la señal se corta justo a las 5 de la mañana. La cola reintenta sola;
     // el pesaje no se detiene.
@@ -354,7 +361,11 @@ export default function PesarPage() {
             </button>
           ))}
         </div>
-        {productos.length === 0 ? <p style={{ color: superficie.textoFaint }}>Cargando catálogo…</p> : null}
+        {productos.length === 0 ? (
+          <p style={{ color: errorCatalogo ? semantico.error : superficie.textoFaint }} role={errorCatalogo ? "alert" : undefined}>
+            {errorCatalogo ? "No se pudo cargar el catálogo. Revisa la conexión e inténtalo de nuevo." : "Cargando catálogo…"}
+          </p>
+        ) : null}
       </main>
     );
   }
