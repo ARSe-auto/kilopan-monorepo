@@ -5,22 +5,26 @@ import { obtenerSesionActual } from "@/identidad/sesion.ts";
 import { superficie } from "@kilopan/miga/tokens.ts";
 import { CerrarSesionBoton } from "./CerrarSesionBoton.tsx";
 
-const ENLACES_POR_ROL: Record<string, { href: string; etiqueta: string }[]> = {
+// Cada opción lleva una línea que dice QUÉ SE HACE ahí, en lenguaje de panadería.
+// Antes el menú eran siete palabras sueltas: "Despacho" y "Consolidar y facturar" no
+// le dicen nada a alguien que recién parte, y la única forma de saberlo era entrar a
+// cada una a ver qué pasaba (auditoría de experiencia).
+const ENLACES_POR_ROL: Record<string, { href: string; etiqueta: string; detalle: string }[]> = {
   admin: [
-    { href: "/dashboard", etiqueta: "Panel del dueño" },
-    { href: "/pedidos", etiqueta: "Despacho" },
-    { href: "/facturar", etiqueta: "Consolidar y facturar" },
-    { href: "/pesar", etiqueta: "Pesaje" },
-    { href: "/vender", etiqueta: "Venta mostrador" },
-    { href: "/caja", etiqueta: "Cierre de caja" },
-    { href: "/admin", etiqueta: "Ajustes" },
+    { href: "/dashboard", etiqueta: "Panel del dueño", detalle: "Cómo va el día: kilos, ventas y pérdidas" },
+    { href: "/pedidos", etiqueta: "Despacho", detalle: "Pedidos de clientes y armar la ruta del furgón" },
+    { href: "/facturar", etiqueta: "Consolidar y facturar", detalle: "Juntar las guías de un cliente para cobrarle" },
+    { href: "/pesar", etiqueta: "Pesaje", detalle: "Anotar las bandejas que salen del horno" },
+    { href: "/vender", etiqueta: "Venta mostrador", detalle: "Cobrar en el mesón" },
+    { href: "/caja", etiqueta: "Cierre de caja", detalle: "Contar la plata al final del turno" },
+    { href: "/admin", etiqueta: "Ajustes", detalle: "Personal, productos, precios y medios de pago" },
   ],
-  maestro: [{ href: "/pesar", etiqueta: "Pesaje" }],
+  maestro: [{ href: "/pesar", etiqueta: "Pesaje", detalle: "Anotar las bandejas que salen del horno" }],
   vendedor: [
-    { href: "/vender", etiqueta: "Venta mostrador" },
-    { href: "/caja", etiqueta: "Cierre de caja" },
+    { href: "/vender", etiqueta: "Venta mostrador", detalle: "Cobrar en el mesón" },
+    { href: "/caja", etiqueta: "Cierre de caja", detalle: "Contar la plata al final del turno" },
   ],
-  repartidor: [{ href: "/ruta", etiqueta: "Mi ruta" }],
+  repartidor: [{ href: "/ruta", etiqueta: "Mi ruta", detalle: "Tus entregas de hoy, con foto y ubicación" }],
 };
 
 export default async function InicioPage() {
@@ -53,17 +57,17 @@ export default async function InicioPage() {
             style={{
               display: "block",
               minHeight: 56,
-              lineHeight: "56px",
-              paddingLeft: 18,
+              padding: "10px 18px",
               borderRadius: 12,
               border: "1px solid rgba(27,23,18,.14)",
-              fontSize: 17,
-              fontWeight: 700,
               color: "#1B1712",
               textDecoration: "none",
             }}
           >
-            {e.etiqueta}
+            <span style={{ display: "block", fontSize: 17, fontWeight: 700 }}>{e.etiqueta}</span>
+            <span style={{ display: "block", fontSize: 13, color: superficie.textoDim, marginTop: 2 }}>
+              {e.detalle}
+            </span>
           </Link>
         ))}
       </nav>

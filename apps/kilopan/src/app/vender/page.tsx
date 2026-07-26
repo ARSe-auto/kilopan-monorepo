@@ -265,12 +265,23 @@ export default function VenderPage() {
       {carrito.length > 0 ? (
         <div style={{ borderTop: `1px solid ${superficie.hairline}`, paddingTop: 12 }}>
           <p style={{ fontSize: 13, fontWeight: 700, color: superficie.textoDim, margin: "0 0 8px" }}>Carrito</p>
+          {/* Antes cada línea era texto plano, sin forma de sacarla: si el panadero se
+              equivocaba de peso o el cliente cambiaba de idea, las únicas salidas eran
+              cobrar mal o empezar el carro de cero con la cola esperando. */}
           {carrito.map((l, i) => (
-            <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 15, padding: "4px 0" }}>
-              <span>
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 15, padding: "4px 0", gap: 8 }}>
+              <span style={{ flex: 1 }}>
                 {l.nombre} · {formatearKg(l.gramos)}
               </span>
               <span style={{ fontVariantNumeric: "tabular-nums" }}>{formatearClp(l.precioClp)}</span>
+              <button
+                type="button"
+                aria-label={`Quitar ${l.nombre} del carrito`}
+                onClick={() => setCarrito((c) => c.filter((_, j) => j !== i))}
+                style={{ minHeight: 44, minWidth: 44, border: "none", background: "none", color: semantico.error, fontSize: 20, fontWeight: 700, lineHeight: 1 }}
+              >
+                ×
+              </button>
             </div>
           ))}
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 17, fontWeight: 700, paddingTop: 8 }}>

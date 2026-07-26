@@ -5,6 +5,7 @@ import { obtenerSesionActual } from "@/identidad/sesion.ts";
 import { superficie, acentos, semantico } from "@kilopan/miga/tokens.ts";
 import { formatearKg, formatearClp } from "@/comun/formato.ts";
 import { VolverInicio } from "../VolverInicio.tsx";
+import { CtaFlota } from "./CtaFlota.tsx";
 
 // Los agregados llegan como string desde Postgres (bigint/numeric no entran en un
 // number de JS sin pérdida) — se convierten con Number() al formatear.
@@ -79,8 +80,14 @@ export default async function DashboardPage() {
           padding: 24,
         }}
       >
-        <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: superficie.textoFaint, margin: 0 }}>
-          TCK — Tasa de Conciliación de Kilos
+        {/* La cifra más grande del panel era la sigla "TCK", que no le dice nada al
+            dueño de una panadería. Ahora manda la pregunta en su idioma y la sigla
+            queda como subtítulo, para quien ya la conoce (auditoría de experiencia). */}
+        <p style={{ fontSize: 15, fontWeight: 700, color: superficie.texto, margin: 0 }}>
+          ¿Cuánto del pan que horneaste está explicado?
+        </p>
+        <p style={{ fontSize: 12, letterSpacing: ".06em", textTransform: "uppercase", color: superficie.textoFaint, margin: "2px 0 0" }}>
+          TCK · tasa de conciliación de kilos
         </p>
         <p style={{ fontSize: 72, fontWeight: 700, lineHeight: 1.05, fontVariantNumeric: "tabular-nums", color: colorTck, margin: "8px 0 0" }}>
           {tckPct == null ? "—" : `${tckPct}%`}
@@ -89,8 +96,8 @@ export default async function DashboardPage() {
           {tckPct == null
             ? "Todavía no se pesó nada hoy."
             : tckPct >= 95
-              ? "Meta cumplida: casi ningún kilo quedó sin explicación."
-              : "Bajo la meta de 95% — hay kilos pesados sin destino todavía."}
+              ? "Meta cumplida: casi todo el pan que salió del horno está vendido, entregado o anotado como merma."
+              : "Bajo la meta de 95%: hay pan que salió del horno y no aparece vendido, entregado ni como merma."}
         </p>
       </section>
 
@@ -145,6 +152,12 @@ async function TarjetaFlota() {
   const flota = m.rows[0];
   if (!flota) return null;
   const ahorro = flota.costo_combustion_clp - flota.costo_ev_clp;
+  const p = await db.query<{ n: number }>(
+    `select count(*)::int as n from pan.ruta_paradas rp
+       join pan.rutas r on r.id = rp.ruta_id
+      where r.fecha >= current_date - interval '30 days'`
+  );
+  const paradasMes = p.rows[0]?.n ?? 0;
 
   return (
     <section style={{ background: superficie.tarjeta, border: `1px solid ${superficie.hairline}`, borderRadius: 16, padding: 24 }}>
@@ -156,25 +169,15 @@ async function TarjetaFlota() {
       <p style={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: "tabular-nums", margin: "0 0 16px" }}>
         Diferencia: {formatearClp(ahorro)}
       </p>
-      {/* Hallazgo menor de la auditoría: estos CTA eran <span> con pinta de botón
-          (mismo padding/color/radio) pero sin foco de teclado ni semántica de control
-          — un lector de pantalla los pasaba por alto igual que un párrafo cualquiera.
-          Siguen sin backend detrás (no existe todavía un POST que capture el lead) —
-          eso es una función nueva, no lo que este hallazgo pedía corregir. */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <button
-          type="button"
-          style={{ minHeight: 44, padding: "12px 16px", borderRadius: 12, border: "none", background: acentos.kilopan, color: "#fff", fontWeight: 700, fontSize: 14 }}
-        >
-          Quiero que e-auto me contacte
-        </button>
-        <button
-          type="button"
-          style={{ minHeight: 44, padding: "12px 16px", borderRadius: 12, border: "none", background: acentos.kiloruta, color: "#fff", fontWeight: 700, fontSize: 14 }}
-        >
-          Prefiero que alguien más reparta por mí
-        </button>
-      </div>
+      {/* Estos CTA eran <span> con pinta de botón y, peor, no hacían NADA al tocarlos
+          — aunque las tablas de leads y sus grants existen desde 0005 y solo faltaba
+          el endpoint. Ahora piden contacto con consentimiento explícito y lo
+          registran de verdad (ver api/leads y CtaFlota). */}
+      <CtaFlota
+        kmMes={flota.km_totales}
+        ahorroEstimadoClp={ahorro}
+        paradasMes={paradasMes}
+      />
     </section>
   );
 }
