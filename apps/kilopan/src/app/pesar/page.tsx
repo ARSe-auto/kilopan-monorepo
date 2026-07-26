@@ -11,6 +11,7 @@ import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
 import { formatearKg } from "@/comun/formato.ts";
 import { kgTextoAGramos, pesoValido } from "@/comun/peso.ts";
 import { useEnLinea } from "@/comun/useEnLinea.ts";
+import { VolverInicio } from "../VolverInicio.tsx";
 import { enviarOEncolar, encolarFoto, iniciarSyncAutomatico } from "@/pod/outbox.ts";
 import { abrirCamara, capturar, cerrarCamara, subirFoto } from "@/comun/camara.ts";
 
@@ -329,7 +330,10 @@ export default function PesarPage() {
   if (!producto) {
     return (
       <main style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700 }}>Pesar</h1>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700 }}>Pesar</h1>
+          <VolverInicio />
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
           {productos.map((p) => (
             <button

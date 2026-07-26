@@ -13,6 +13,7 @@ import { enviarOEncolar, iniciarSyncAutomatico } from "@/pod/outbox.ts";
 import { kgTextoAGramos, pesoValido } from "@/comun/peso.ts";
 import { roundClp } from "@/comun/round_clp.ts";
 import { useEnLinea } from "@/comun/useEnLinea.ts";
+import { VolverInicio } from "../VolverInicio.tsx";
 
 interface Producto {
   id: string;
@@ -199,9 +200,12 @@ export default function VenderPage() {
 
   return (
     <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Vender</h1>
-        {pendientes > 0 || !enLinea ? <ChipEstadoConexion pendientes={pendientes} online={enLinea} /> : null}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {pendientes > 0 || !enLinea ? <ChipEstadoConexion pendientes={pendientes} online={enLinea} /> : null}
+          <VolverInicio />
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>

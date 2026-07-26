@@ -4,6 +4,7 @@ import { BotonPrimario } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico } from "@kilopan/miga/tokens.ts";
 import { formatearClp, parsearClp } from "@/comun/formato.ts";
 import { compartir, sePuedeCompartir } from "@/comun/compartir.ts";
+import { VolverInicio } from "../VolverInicio.tsx";
 
 interface MedioCaja { medio_pago: string; etiqueta: string; esperado_clp: string }
 interface FilaResultado { medioPago: string; esperado: number; declarado: number; diferencia: number }
@@ -16,29 +17,51 @@ export default function CajaPage() {
   const [totalFacturador, setTotalFacturador] = useState("");
   const [resultado, setResultado] = useState<{ filas: FilaResultado[]; difFacturador: number | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // "cargando"/"errorCarga" separados de "medios vacío": sin esto, un fetch que
+  // fallaba (sin red, 401, 500) se leía igual que "esta panadería no tiene medios de
+  // pago activos" — el vendedor veía la pantalla en blanco sin saber si es un estado
+  // real o si la app simplemente no pudo consultar.
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState(false);
+  const [enviando, setEnviando] = useState(false);
 
   useEffect(() => {
-    fetch("/api/cierre-caja").then((r) => r.json()).then((d) => setMedios(d.medios ?? []));
+    fetch("/api/cierre-caja")
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
+      })
+      .then((d) => setMedios(d.medios ?? []))
+      .catch(() => setErrorCarga(true))
+      .finally(() => setCargando(false));
   }, []);
 
   const totalEsperado = medios.reduce((s, m) => s + Number(m.esperado_clp), 0);
 
   async function cerrar() {
+    if (enviando) return; // doble toque con las manos ocupadas no debe mandar el cierre dos veces
+    setEnviando(true);
     setError(null);
-    const r = await fetch("/api/cierre-caja", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        declarados: medios.map((m) => ({
-          medioPago: m.medio_pago,
-          declaradoClp: parsearClp(declarados[m.medio_pago] || "0"),
-        })),
-        totalFacturadorClp: totalFacturador ? parsearClp(totalFacturador) : null,
-      }),
-    });
-    const cuerpo = await r.json();
-    if (!r.ok) { setError(cuerpo.error); return; }
-    setResultado({ filas: cuerpo.resultado, difFacturador: cuerpo.diferenciaFacturador });
+    try {
+      const r = await fetch("/api/cierre-caja", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          declarados: medios.map((m) => ({
+            medioPago: m.medio_pago,
+            declaradoClp: parsearClp(declarados[m.medio_pago] || "0"),
+          })),
+          totalFacturadorClp: totalFacturador ? parsearClp(totalFacturador) : null,
+        }),
+      });
+      const cuerpo = await r.json();
+      if (!r.ok) { setError(cuerpo.error); return; }
+      setResultado({ filas: cuerpo.resultado, difFacturador: cuerpo.diferenciaFacturador });
+    } catch {
+      setError("Sin conexión con el servidor");
+    } finally {
+      setEnviando(false);
+    }
   }
 
   async function compartirResumen() {
@@ -54,10 +77,23 @@ export default function CajaPage() {
 
   return (
     <main style={{ maxWidth: 520, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>Cierre de caja</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>Cierre de caja</h1>
+        <VolverInicio />
+      </div>
       <p style={{ margin: 0, fontSize: 14, color: superficie.textoDim }}>
         Cuenta lo que hay en cada medio y anótalo. La app te muestra la diferencia.
       </p>
+
+      {cargando ? (
+        <p style={{ color: superficie.textoDim, fontSize: 14 }}>Cargando…</p>
+      ) : errorCarga ? (
+        <p style={{ color: semantico.error, fontSize: 14 }} role="alert">
+          No se pudo consultar lo esperado de hoy. Revisa la conexión e inténtalo de nuevo.
+        </p>
+      ) : medios.length === 0 ? (
+        <p style={{ color: superficie.textoDim, fontSize: 14 }}>No hay medios de pago activos.</p>
+      ) : null}
 
       {medios.map((m) => {
         const esperado = Number(m.esperado_clp);
@@ -122,8 +158,10 @@ export default function CajaPage() {
             </button>
           ) : null}
         </div>
-      ) : (
-        <BotonPrimario onClick={cerrar}>Cerrar caja</BotonPrimario>
+      ) : cargando || errorCarga || medios.length === 0 ? null : (
+        <BotonPrimario onClick={cerrar} disabled={enviando}>
+          {enviando ? "Cerrando…" : "Cerrar caja"}
+        </BotonPrimario>
       )}
     </main>
   );

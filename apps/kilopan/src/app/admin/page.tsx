@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { superficie, semantico } from "@kilopan/miga/tokens.ts";
+import { VolverInicio } from "../VolverInicio.tsx";
 
 interface Parametro { clave: string; valor: number; descripcion: string }
 
@@ -34,7 +35,10 @@ export default function AdminPage() {
 
   return (
     <main style={{ maxWidth: 620, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>Ajustes</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>Ajustes</h1>
+        <VolverInicio />
+      </div>
 
       {foto ? (
         <section style={{ background: superficie.tarjeta, border: `1px solid ${superficie.hairline}`, borderRadius: 14, padding: 16 }}>

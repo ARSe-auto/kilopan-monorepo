@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { BotonPrimario, CifraGrande } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico } from "@kilopan/miga/tokens.ts";
 import { formatearClp, formatearFecha, parsearClp } from "@/comun/formato.ts";
+import { VolverInicio } from "../VolverInicio.tsx";
 
 interface Cliente { id: string; razon_social: string; saldo_pendiente_clp: number | null }
 interface Guia {
@@ -71,11 +72,14 @@ export default function FacturarPage() {
 
   return (
     <main style={{ maxWidth: 620, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
-      <div>
-        <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>Consolidar y facturar</h1>
-        <p style={{ margin: "4px 0 0", fontSize: 14, color: superficie.textoDim }}>
-          Cada despacho ya salió con su guía. Aquí las agrupas en una factura para cobrar.
-        </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>Consolidar y facturar</h1>
+          <p style={{ margin: "4px 0 0", fontSize: 14, color: superficie.textoDim }}>
+            Cada despacho ya salió con su guía. Aquí las agrupas en una factura para cobrar.
+          </p>
+        </div>
+        <VolverInicio />
       </div>
 
       <select
