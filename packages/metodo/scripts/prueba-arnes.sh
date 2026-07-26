@@ -118,6 +118,39 @@ node --check packages/metodo/panel/generar.mjs 2>/dev/null && ok "panel/generar.
 grep -q "rev-list --count" packages/metodo/panel/generar.mjs && ok "el panel mide avance por commits, jamás por «proceso vivo»" || no "el panel no calcula desde git"
 
 echo
+echo "== 9. Selector de modelo (casilla 12) =="
+# §8 del maestro: «se testea contra el caso normal — un selector no-op que todo lo manda
+# a Opus quema la ventana en silencio». La prueba central no es que devuelva un id, es
+# que DIFERENCIE. Un no-op pasaría cualquier test que mire una sola línea.
+SEL="$M/model-selector.sh"
+[ "$(bash "$SEL" plan)"   = "claude-sonnet-5"   ] && ok "plan → Sonnet"  || no "plan no rutea a Sonnet"
+[ "$(bash "$SEL" verify)" = "claude-sonnet-5"   ] && ok "verify → Sonnet" || no "verify no rutea a Sonnet"
+[ "$(bash "$SEL" juez)"   = "claude-opus-4-8"   ] && ok "juez → Opus (mandato de refutar)" || no "juez no rutea a Opus"
+
+TMPP="$(mktemp -d)"; cp IMPLEMENTATION_PLAN.md "$TMPP/plan.bak"
+FX="AC-$(printf X)$(printf X)"   # id de fixture armado en runtime: escrito literal, este
+                                  # archivo citaría ACs que ninguna spec define y verify-refs
+                                  # pondría el gate en rojo por el andamio de su propia suite.
+FXS="AC-$(printf S)EC"
+probar_ruteo () { # $1 = linea de ítem · $2 = modelo esperado · $3 = descripción
+  printf '# plan de prueba\n\n%s\n' "$1" > IMPLEMENTATION_PLAN.md
+  got="$(bash "$SEL" build)"
+  [ "$got" = "$2" ] && ok "$3 → $(echo "$2" | sed 's/claude-//;s/-4-8//;s/-5//')" || no "$3 ruteó a $got, esperaba $2"
+}
+probar_ruteo '- [ ] (P0-SEC) bloqueo por PIN errado [${FXS}-99]'        "claude-opus-4-8"  "ítem -SEC"
+probar_ruteo '- [ ] (P1) migración que agrega un trigger [${FX}-99]'    "claude-opus-4-8"  "ítem que toca migración"
+probar_ruteo '- [ ] (P1) chip con el nombre del operador [${FX}-98]'    "claude-haiku-4-5" "ítem de UI"
+probar_ruteo '- [ ] (P1) cola con reintento automático [${FX}-97]'      "claude-sonnet-5"  "ítem estándar"
+# Escalación de dos strikes sobre un ítem NO-duro
+mkdir -p .ralph; echo 2 > .ralph/build-fails
+probar_ruteo '- [ ] (P1) cola con reintento automático [${FX}-96]'      "claude-opus-4-8"  "2 strikes escala a"
+rm -f .ralph/build-fails
+cp "$TMPP/plan.bak" IMPLEMENTATION_PLAN.md; rm -rf "$TMPP"
+# El anti-no-op: los cuatro casos de arriba deben haber dado al menos 3 modelos distintos.
+distintos=$(printf '%s\n' "claude-opus-4-8" "claude-haiku-4-5" "claude-sonnet-5" | sort -u | wc -l | tr -d ' ')
+[ "$distintos" -ge 3 ] && ok "el selector DIFERENCIA (no es un no-op que manda todo a Opus)" || no "selector no-op"
+
+echo
 echo "=================== RESUMEN ARNÉS ==================="
 echo "  verde: $PASA   ·   rojo: $FALLA"
 if [ "$FALLA" -ne 0 ]; then echo "prueba-arnes: ROJO — hay guards que no protegen lo que dicen proteger."; exit 1; fi

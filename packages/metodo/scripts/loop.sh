@@ -23,7 +23,16 @@ fi
 [ -f "$PLAN" ] || { echo "loop: falta $PLAN"; exit 2; }
 LOG_DIR="packages/metodo/panel"
 MAX_BUDGET_USD="${KILOPAN_MAX_BUDGET_USD:-3}"
-MODELO="${KILOPAN_MODELO:-sonnet}"
+
+# UN SOLO BUILDER POR WORKTREE (casilla 15). Se toma ANTES de mirar el plan: dos loops
+# que leen el mismo plan eligen el mismo AC y se pisan los commits. El 26-jul-2026 dos
+# sesiones construyeron KiloPan a la vez durante horas — este lock es la respuesta.
+# Exit 7 = ya hay otro builder vivo; el watchdog lo trata como «esperar», no como rojo.
+if ! bash packages/metodo/scripts/lock.sh tomar "builder-$APP" $$; then
+  echo "loop: ya hay otro builder vivo en este worktree — no arranco (exit 7)"
+  exit 7
+fi
+trap 'bash packages/metodo/scripts/lock.sh soltar "builder-'"$APP"'" '"$$"' >/dev/null 2>&1' EXIT INT TERM
 
 # EL CONTRATO PRIMERO. Sin specs válidas no se construye — este abort es exactamente lo
 # que faltaba hasta el 26-jul-2026 y lo que dejó al motor produciendo tandas A-F de
@@ -84,7 +93,7 @@ claude -p "$PROMPT" \
   --output-format json \
   --max-budget-usd "$MAX_BUDGET_USD" \
   --permission-mode acceptEdits \
-  --model "$MODELO" \
+  --model "$(bash packages/metodo/scripts/model-selector.sh build "$APP")" \
   --fallback-model sonnet \
   > "$LOG_DIR/ultimo-resultado.json" 2>>"$LOG_DIR/ultimo-loop.log"
 

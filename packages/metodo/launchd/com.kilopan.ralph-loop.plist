@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  com.kilopan.ralph-loop — el motor sobrevive a la sesión, la terminal y el reinicio
+  (casilla 14 del prevuelo). Sin esto, cerrar el portátil mata la construcción.
+
+  NO SE CARGA SOLO. Ver packages/metodo/launchd/README.md: arrancar este motor consume
+  la ventana OAuth, que es compartida — y §8 del maestro fija UN solo motor a la vez.
+
+  Instalar:  cp packages/metodo/launchd/*.plist ~/Library/LaunchAgents/
+             launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.kilopan.ralph-loop.plist
+  Detener:   launchctl bootout gui/$(id -u)/com.kilopan.ralph-loop
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.kilopan.ralph-loop</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>REEMPLAZAR_RAIZ/packages/metodo/scripts/watchdog.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>REEMPLAZAR_RAIZ</string>
+
+  <!-- El PATH de launchd NO es el de la terminal. watchdog.sh aborta si `claude` o
+       `pnpm` no resuelven — así se perdieron ~15 h en eauto-crm-next. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>REEMPLAZAR_HOME/.local/lib/nodejs/current/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>CLAUDE_CODE_OAUTH_TOKEN_FILE</key>
+    <string>REEMPLAZAR_HOME/.claude-oauth-token</string>
+  </dict>
+
+  <!-- KeepAlive solo ante fallo: si el watchdog termina limpio (DONE, o tope de
+       iteraciones alcanzado) NO se relanza. «Nunca desatendido indefinidamente». -->
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>ThrottleInterval</key>
+  <integer>120</integer>
+
+  <key>StandardOutPath</key>
+  <string>REEMPLAZAR_RAIZ/packages/metodo/panel/launchd-loop.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>REEMPLAZAR_RAIZ/packages/metodo/panel/launchd-loop.err.log</string>
+
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>LowPriorityIO</key>
+  <true/>
+</dict>
+</plist>

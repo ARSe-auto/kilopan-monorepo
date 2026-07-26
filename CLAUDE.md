@@ -25,6 +25,25 @@ pnpm check:full     # agrega e2e móvil offline + perf + invariantes de BD
 construye nada. Una spec sin `Fuente:` que resuelva en el maestro, o con menos de 3 ACs,
 pone el gate en rojo.
 
+## Continuidad ante el límite de 5 horas (casilla 18 del prevuelo)
+
+**~5 minutos antes de que la sesión muera por el límite, detener el trabajo en un punto
+seguro y traspasarlo a una sesión nueva.** Cuantas veces haga falta. Jamás confiar en
+«acordarse»: al arrancar trabajo largo, armar un despertador real (Bash en background que
+expira a ~4h35m) que gatille el traspaso.
+
+Al gatillarse: (a) terminar o abortar limpio lo en curso; (b) commitear TODO;
+(c) actualizar `docs/BITACORA.md`; (d) escribir `docs/HANDOFF.md` con estado exacto,
+procesos y puertos vivos, próximos pasos ordenados y el prompt de arranque; (e) crear el
+chip de continuación y avisar.
+
+Una sesión nueva que encuentra `docs/HANDOFF.md` lo retoma **de inmediato sin
+re-preguntar**, re-arma su propio despertador y archiva el HANDOFF absorbido en
+`docs/handoffs/AAAA-MM-DD-HHMM.md`.
+
+**Vía sin límite cuando exista:** si el motor headless está disponible, preferir dejarlo
+corriendo bajo launchd —sobrevive a las sesiones— y usar la sesión solo para supervisar.
+
 ## Regla de sesión
 
 **Una sesión, un proyecto.** Lo de e-auto se hace en la sesión de e-auto; lo de KiloPan
