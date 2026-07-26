@@ -105,60 +105,76 @@ export async function POST(request: NextRequest) {
     const clave = normalizarUuid(linea.productoId);
     gramosPorProducto.set(clave, (gramosPorProducto.get(clave) ?? 0) + linea.gramos);
   }
-  for (const [productoIdAcumulado, gramosAcumulados] of gramosPorProducto) {
-    const stockAcumulado = await db.query<{ stock: number }>(`select pan.stock_disponible($1) as stock`, [
-      productoIdAcumulado,
-    ]);
-    if ((stockAcumulado.rows[0]?.stock ?? 0) < gramosAcumulados) {
-      return NextResponse.json(
-        { error: `Stock insuficiente (disponible: ${stockAcumulado.rows[0]?.stock ?? 0} g)` },
-        { status: 409 }
-      );
-    }
-  }
-
   const calculadas: { productoId: string; gramos: number; precioClp: number }[] = [];
-  for (const linea of lineas) {
-    const precio = await db.query<{ precio: number | null }>(
-      `select pan.precio_vigente($1,$2) as precio`,
-      [linea.productoId, lista]
-    );
-    const precioKilo = precio.rows[0]?.precio;
-    if (!precioKilo) {
-      return NextResponse.json(
-        { error: "Ese producto no tiene precio en la lista vigente" },
-        { status: 409 }
-      );
-    }
-    const precioLinea = roundClp((precioKilo * linea.gramos) / 1000);
-    if (precioLinea < 1) {
-      return NextResponse.json({ error: "El monto de la línea queda en cero" }, { status: 400 });
-    }
-
-    // Divergencia: la lista cambió entre que se armó el carro y se cobró. Se avisa en
-    // vez de cobrar callado un número distinto al que vio el cliente parado al frente.
-    if (linea.precioClp != null && linea.precioClp !== precioLinea) {
-      return NextResponse.json(
-        {
-          error:
-            "El precio cambió desde que armaste la venta. Revisa el total y vuelve a cobrar.",
-        },
-        { status: 409 }
-      );
-    }
-
-    calculadas.push({ productoId: linea.productoId, gramos: linea.gramos, precioClp: precioLinea });
-  }
-
-  const totalClp = calculadas.reduce((suma, l) => suma + l.precioClp, 0);
+  let totalClp = 0;
 
   try {
-    // UNA sola sentencia: la cabecera y las líneas entran juntas o no entra ninguna.
-    // Antes eran N+1 queries sueltas y, contra una BD remota, un corte entre medio
-    // dejaba una venta con total y sin líneas — plata en la caja sin respaldo de qué
-    // se vendió. Un `begin` suelto no sirve acá: el pool puede mandar cada query por
-    // una conexión distinta.
-    const r = await db.query<{ id: string }>(
+    // El camino crítico completo —lock, chequeo de stock, precios e insert— va DENTRO de
+    // una transacción. Antes el `select pan.stock_disponible()` y el INSERT eran
+    // queries sueltas: entre medio corrían N consultas de precio, y en ese hueco dos
+    // ventas concurrentes del mismo producto leían el mismo stock y ambas pasaban.
+    // El red-team lo reprodujo ensanchando la ventana con un carro de 20 líneas.
+    // `pg_advisory_xact_lock` por producto serializa solo a quienes compiten por el
+    // MISMO pan (las ventas de productos distintos siguen en paralelo), y se toma en
+    // orden alfabético para que dos carros con productos cruzados no se abracen.
+    const resultado = await db.transaccion(async (tx) => {
+      for (const clave of [...gramosPorProducto.keys()].sort()) {
+        await tx.query(`select pg_advisory_xact_lock(hashtext($1))`, [clave]);
+      }
+
+      for (const [productoIdAcumulado, gramosAcumulados] of gramosPorProducto) {
+        const stockAcumulado = await tx.query<{ stock: number }>(`select pan.stock_disponible($1) as stock`, [
+          productoIdAcumulado,
+        ]);
+        const disponible = stockAcumulado.rows[0]?.stock ?? 0;
+        if (disponible < gramosAcumulados) {
+          throw Object.assign(new Error("stock_insuficiente"), {
+            publico: `Stock insuficiente (disponible: ${disponible} g)`,
+            estado: 409,
+          });
+        }
+      }
+
+      calculadas.length = 0;
+      for (const linea of lineas) {
+        const precio = await tx.query<{ precio: number | null }>(
+          `select pan.precio_vigente($1,$2) as precio`,
+          [linea.productoId, lista]
+        );
+        const precioKilo = precio.rows[0]?.precio;
+        if (!precioKilo) {
+          throw Object.assign(new Error("sin_precio"), {
+            publico: "Ese producto no tiene precio en la lista vigente",
+            estado: 409,
+          });
+        }
+        const precioLinea = roundClp((precioKilo * linea.gramos) / 1000);
+        if (precioLinea < 1) {
+          throw Object.assign(new Error("monto_cero"), {
+            publico: "El monto de la línea queda en cero",
+            estado: 400,
+          });
+        }
+
+        // Divergencia: la lista cambió entre que se armó el carro y se cobró. Se avisa
+        // en vez de cobrar callado un número distinto al que vio el cliente al frente.
+        if (linea.precioClp != null && linea.precioClp !== precioLinea) {
+          throw Object.assign(new Error("precio_cambio"), {
+            publico: "El precio cambió desde que armaste la venta. Revisa el total y vuelve a cobrar.",
+            estado: 409,
+          });
+        }
+
+        calculadas.push({ productoId: linea.productoId, gramos: linea.gramos, precioClp: precioLinea });
+      }
+
+      totalClp = calculadas.reduce((suma, l) => suma + l.precioClp, 0);
+
+      // UNA sola sentencia: la cabecera y las líneas entran juntas o no entra ninguna.
+      // Antes eran N+1 queries sueltas y, contra una BD remota, un corte entre medio
+      // dejaba una venta con total y sin líneas — plata en la caja sin respaldo de qué
+      // se vendió.
+      return tx.query<{ id: string }>(
       `with nueva as (
          insert into pan.ventas
            (client_uuid, vendedor_id, dispositivo_id, medio_pago, total_clp, cliente_id)
@@ -183,12 +199,20 @@ export async function POST(request: NextRequest) {
         calculadas.map((l) => l.gramos),
         calculadas.map((l) => l.precioClp),
       ]
-    );
-    const ventaId = r.rows[0]?.id;
+      );
+    });
+
+    const ventaId = resultado.rows[0]?.id;
     if (!ventaId) throw new Error("No se pudo crear la venta");
     return NextResponse.json({ id: ventaId, totalClp });
   } catch (err) {
     const mensaje = err instanceof Error ? err.message : String(err);
+    // Rechazos de negocio que viajaron como excepción para poder abortar la
+    // transacción (stock, precio, monto): salen con su propio código y mensaje.
+    const publico = err instanceof Error ? (err as Error & { publico?: string; estado?: number }) : null;
+    if (publico?.publico) {
+      return NextResponse.json({ error: publico.publico }, { status: publico.estado ?? 409 });
+    }
     if (/sin sesión/i.test(mensaje)) {
       return NextResponse.json({ error: "Sesión vencida" }, { status: 401 });
     }

@@ -37,6 +37,25 @@ export function aEnteroEstricto(valor: unknown): number | null {
   return null;
 }
 
+/** `capturado_at` lo pone el RELOJ DEL TELÉFONO — tiene que venir del cliente, porque
+ *  una entrega o un pesaje hechos sin señal se registran cuando vuelve la red y la
+ *  hora del servidor mentiría. Pero sin acotarlo, el repartidor podía mover entregas a
+ *  cualquier día con solo cambiar la hora del equipo, y esa fecha alimenta la
+ *  conciliación diaria (red-team). Se acepta una ventana generosa hacia atrás —la cola
+ *  offline puede tardar días en drenar— y muy poca hacia adelante (solo desfase de
+ *  reloj). */
+const DIAS_ATRAS_MAX = 7;
+const MINUTOS_ADELANTE_MAX = 60;
+
+export function fechaCapturaValida(valor: unknown, ahora: number = Date.now()): boolean {
+  if (typeof valor !== "string") return false;
+  const t = Date.parse(valor);
+  if (Number.isNaN(t)) return false;
+  if (t > ahora + MINUTOS_ADELANTE_MAX * 60_000) return false;
+  if (t < ahora - DIAS_ATRAS_MAX * 24 * 60 * 60_000) return false;
+  return true;
+}
+
 /** Entero estricto acotado a [min, max]. `max` por defecto es el techo de int4 para
  *  que el rango lo ataje la app y no el INSERT. */
 export function aEnteroEnRango(valor: unknown, min: number, max: number = MAX_INT4): number | null {

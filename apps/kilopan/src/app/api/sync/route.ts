@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
 import { exigirRol } from "@/identidad/sesion.ts";
+import { fechaCapturaValida } from "@/comun/validacion.ts";
 
 interface EntregaEntrada {
   clientUuid: string;
@@ -59,6 +60,12 @@ export async function POST(request: NextRequest) {
       // EXITOSA no se registra sin él. La FALLIDA sí — ahí no se afirma haber dejado
       // nada, y exigirlo dejaba al repartidor sin poder registrar ni el intento
       // cuando el GPS no fija dentro de un galpón (ver migración 0015).
+      // El reloj del teléfono fecha la entrega en la conciliación diaria: sin acotar,
+      // el repartidor movía entregas a cualquier día cambiando la hora del equipo.
+      if (!fechaCapturaValida(e.capturadoAt)) {
+        rechazadas.push({ clientUuid: e.clientUuid, motivo: "La fecha del equipo está muy desfasada" });
+        continue;
+      }
       const tieneGps = typeof e.lat === "number" && typeof e.lng === "number";
       if (!esFallida && !tieneGps) {
         rechazadas.push({ clientUuid: e.clientUuid, motivo: "falta la ubicación de la entrega" });

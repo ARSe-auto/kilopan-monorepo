@@ -19,15 +19,27 @@ export async function GET(request: NextRequest) {
   const db = await obtenerDb();
   try {
     const r = await db.query<Record<string, unknown>>(
+      // `es_parcial`: se entregó MENOS de lo que el pedido pedía. Entra a la cola de
+      // revisión igual que un GPS degradado — antes una parcial ínfima (1 g de 10.000)
+      // cerraba el pedido como 'entregado' y no aparecía en ninguna parte: el cliente
+      // se quedaba sin su pan y nadie lo conciliaba (red-team).
       `select e.id, e.receptor_nombre, e.gramos_entregados, e.foto_sha256, e.foto_estado,
               e.gps_degradado, e.gps_fuera_de_zona, e.recibido_at, e.capturado_at,
-              c.razon_social, p.correlativo_pedido
+              c.razon_social, p.correlativo_pedido,
+              coalesce(e.gramos_entregados < ped.gramos_pedidos, false) as es_parcial,
+              ped.gramos_pedidos
          from pan.entregas e
          join pan.pedidos p on p.id = e.pedido_id
          join pan.clientes c on c.id = p.cliente_id
+         left join lateral (
+           select coalesce(sum(pl.gramos_pedidos), 0)::int as gramos_pedidos
+             from pan.pedido_lineas pl where pl.pedido_id = e.pedido_id
+         ) ped on true
         where e.cerrada and e.supersede_id is null
           and ($1::timestamptz is null or e.recibido_at < $1)
-          and ($2 = false or e.gps_degradado or e.gps_fuera_de_zona or e.foto_estado = 'pendiente_subida')
+          and ($2 = false or e.gps_degradado or e.gps_fuera_de_zona
+               or e.foto_estado = 'pendiente_subida'
+               or e.gramos_entregados < ped.gramos_pedidos)
         order by e.recibido_at desc
         limit ${POR_PAGINA + 1}`,
       [cursor, soloPorRevisar]

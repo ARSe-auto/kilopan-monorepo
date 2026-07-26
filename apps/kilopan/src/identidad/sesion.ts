@@ -55,10 +55,16 @@ export async function obtenerSesionActual(origen: { cookies: LectorCookies }): P
     nombre: string;
     rol: SesionActual["rol"];
   }>(
+    // `s.inicio > now() - interval '12 hours'`: TOPE DURO de servidor. Antes el
+    // "límite de 12 h" vivía solo en el Max-Age de la cookie, o sea del lado del
+    // cliente — quien conservara el valor de la cookie tenía una sesión que solo
+    // moría por inactividad, y bastaba tocarla cada 10 min para estirarla sin fin
+    // (red-team). Ahora la antigüedad la corta el servidor.
     `select s.id as sesion_id, s.usuario_id, s.dispositivo_id, u.nombre, u.rol
        from pan.sesiones_operador s
        join pan.usuarios u on u.id = s.usuario_id
-      where s.id = $1 and s.fin is null and u.activo`,
+      where s.id = $1 and s.fin is null and u.activo
+        and s.inicio > now() - interval '12 hours'`,
     [sesionId]
   );
   const fila = r.rows[0];
