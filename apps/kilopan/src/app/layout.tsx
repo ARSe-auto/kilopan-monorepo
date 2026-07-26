@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { superficie } from "@kilopan/miga/tokens.ts";
 import { RegistrarSW } from "./RegistrarSW.tsx";
+import { InterceptarSesionVencida } from "./InterceptarSesionVencida.tsx";
 
 export const metadata: Metadata = {
   title: "KiloPan",
@@ -50,6 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       >
         {children}
         <RegistrarSW />
+        <InterceptarSesionVencida />
       </body>
     </html>
   );
