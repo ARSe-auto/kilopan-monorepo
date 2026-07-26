@@ -24,3 +24,6 @@ apps/kilopan/blob-report/
 apps/kilopan/e2e/datos-semilla.json
 apps/kilopan/test-results/
 apps/kilopan/playwright-report/
+
+# locks del arnes (efimeros, por worktree)
+.metodo-locks/

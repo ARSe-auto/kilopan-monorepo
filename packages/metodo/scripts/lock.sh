@@ -23,6 +23,12 @@ cd "$(dirname "$0")/../../.."
 
 ACCION="${1:-estado}"
 NOMBRE="${2:-builder}"
+# PID a registrar = el del PROCESO QUE SOSTIENE el lock, no el de este script.
+# Bug encontrado por prueba-arnes.sh el 26-jul-2026: registrar `$$` grababa el pid de
+# lock.sh, que muere al terminar. El segundo builder leía un pid muerto, lo daba por
+# huérfano y lo robaba — el lock nunca bloqueaba a nadie y se veía perfecto.
+# Por defecto $PPID (quien invoca: loop.sh), o el pid explícito del 3er argumento.
+DUENIO_PID="${3:-$PPID}"
 DIR_LOCK=".metodo-locks/${NOMBRE}.lock"
 ARCH_PID="${DIR_LOCK}/pid"
 
@@ -36,8 +42,8 @@ case "$ACCION" in
   tomar)
     # 1) intento limpio: mkdir gana o falla, atómicamente
     if mkdir "$DIR_LOCK" 2>/dev/null; then
-      echo $$ > "$ARCH_PID"
-      echo "lock[$NOMBRE]: TOMADO por pid $$"
+      echo "$DUENIO_PID" > "$ARCH_PID"
+      echo "lock[$NOMBRE]: TOMADO por pid $DUENIO_PID"
       exit 0
     fi
 
@@ -54,8 +60,8 @@ case "$ACCION" in
     if mv "$DIR_LOCK" "$tumba" 2>/dev/null; then
       rm -rf "$tumba"
       if mkdir "$DIR_LOCK" 2>/dev/null; then
-        echo $$ > "$ARCH_PID"
-        echo "lock[$NOMBRE]: ROBADO a huérfano pid ${duenio:-?} — TOMADO por pid $$"
+        echo "$DUENIO_PID" > "$ARCH_PID"
+        echo "lock[$NOMBRE]: ROBADO a huérfano pid ${duenio:-?} — TOMADO por pid $DUENIO_PID"
         exit 0
       fi
     fi
@@ -66,8 +72,8 @@ case "$ACCION" in
 
   soltar)
     duenio="$(leer_pid)"
-    if [ -d "$DIR_LOCK" ] && [ -n "$duenio" ] && [ "$duenio" != "$$" ] && vivo "$duenio"; then
-      echo "lock[$NOMBRE]: NO suelto — es de pid $duenio, no mío ($$)" >&2
+    if [ -d "$DIR_LOCK" ] && [ -n "$duenio" ] && [ "$duenio" != "$DUENIO_PID" ] && vivo "$duenio"; then
+      echo "lock[$NOMBRE]: NO suelto — es de pid $duenio, no mío ($DUENIO_PID)" >&2
       exit 1
     fi
     rm -rf "$DIR_LOCK"

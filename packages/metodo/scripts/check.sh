@@ -41,7 +41,31 @@ skip_step () {
   SKIPPED+=("$1 ($2)")
 }
 
+# Casilla 5 del prevuelo: infra caída NO es árbol rojo. Un gate que devuelve el mismo
+# código para «el código está mal» y «falta node_modules» entrena al watchdog a revertir
+# commits sanos. Exit 3 = infra: esperar y reintentar, JAMÁS resetear el árbol.
+#
+# Y no se declara SALTADO: un gate que reporta VERDE sin haber compilado nada miente
+# peor que uno rojo. Sin toolchain no hay veredicto.
+infra_abort () {
+  echo "INFRA: $1" | tee -a "$LOG_FILE"
+  echo "check.sh: INFRA NO DISPONIBLE (exit 3) — no es árbol rojo, no revertir nada."
+  echo "infra" > "$LOG_DIR/ultimo-check.estado"
+  exit 3
+}
+
+# Toolchain ANTES que nada: sin esto no hay veredicto posible, y decirlo como SALTADO
+# dejaría salir un VERDE que no compiló una línea.
+[ -f package.json ]              || infra_abort "no hay package.json en la raíz — ¿cwd equivocado?"
+command -v pnpm >/dev/null 2>&1  || infra_abort "pnpm no está en el PATH de este shell"
+[ -d node_modules ]              || infra_abort "falta node_modules — correr 'pnpm install'"
+
 bash packages/metodo/scripts/guardrail.sh || FAILED+=("guardrail")
+
+# El arnés también es software: si sus guards no protegen lo que dicen, todo lo que
+# venga después es teatro. Corre temprano y barato (casilla 11).
+run_step "prueba-arnes: cada guardrail probado contra el caso que protege" \
+  bash packages/metodo/scripts/prueba-arnes.sh
 
 # El contrato se verifica ANTES que el código: una spec rota invalida todo lo que venga
 # después. Estos dos pasos son lo que faltaba hasta el 26-jul-2026 — gate_specs existía
@@ -56,28 +80,16 @@ else
     node packages/metodo/scripts/verify-refs.mjs "--app=$APP"
 fi
 
-if [ -f pnpm-lock.yaml ] || [ -f package.json ]; then
-  if command -v pnpm >/dev/null 2>&1; then
-    if [ -d node_modules ]; then
-      run_step "lint (workspace)" pnpm -r --if-present run lint
-      run_step "typecheck (workspace)" pnpm -r --if-present run typecheck
-      run_step "unit (workspace)" pnpm -r --if-present run test
-      run_step "build (workspace)" pnpm -r --if-present run build
-      # El standalone de Next.js sirve 200 en TODA ruta aunque le falten los estáticos
-      # (es SSR puro sin ellos) — un healthcheck normal no lo detecta. Sin esto, la app
-      # "pasa el gate" y queda completamente muda al tocar cualquier botón en producción.
-      run_step "build standalone incluye .next/static y public/ (si no, la app no hidrata)" \
-        bash -c "test -d apps/$APP/.next/standalone/apps/$APP/.next/static && test -f apps/$APP/.next/standalone/apps/$APP/public/sw.js"
-      run_step "audit (AC-SEC-03)" pnpm audit --audit-level=high
-    else
-      skip_step "lint/typecheck/unit/build/audit" "node_modules no existe — correr 'pnpm install' primero"
-    fi
-  else
-    skip_step "lint/typecheck/unit/build" "pnpm no está en PATH de este shell"
-  fi
-else
-  skip_step "lint/typecheck/unit/build" "package.json raíz no encontrado"
-fi
+run_step "lint (workspace)" pnpm -r --if-present run lint
+run_step "typecheck (workspace)" pnpm -r --if-present run typecheck
+run_step "unit (workspace)" pnpm -r --if-present run test
+run_step "build (workspace)" pnpm -r --if-present run build
+# El standalone de Next.js sirve 200 en TODA ruta aunque le falten los estáticos
+# (es SSR puro sin ellos) — un healthcheck normal no lo detecta. Sin esto, la app
+# "pasa el gate" y queda completamente muda al tocar cualquier botón en producción.
+run_step "build standalone incluye .next/static y public/ (si no, la app no hidrata)" \
+  bash -c "test -d apps/$APP/.next/standalone/apps/$APP/.next/static && test -f apps/$APP/.next/standalone/apps/$APP/public/sw.js"
+run_step "audit (AC-SEC-03)" pnpm audit --audit-level=high
 
 if [ "$FULL" -eq 1 ]; then
   # AC-PERF-04: las pantallas de la madrugada no pueden colgarse en 4G malo.
@@ -121,3 +133,14 @@ if [ "${#FAILED[@]}" -gt 0 ]; then
 fi
 echo "check.sh: VERDE (con ${#SKIPPED[@]} pasos saltados — no confundir con 'todo probado')"
 echo "verde" > "$LOG_DIR/ultimo-check.estado"
+
+# Casilla 20 del prevuelo: el DONE lo declara un MARCADOR EN DISCO, no el juicio de un
+# agente. Solo el gate COMPLETO estampa el verde — un --fast en verde no acredita nada,
+# porque se saltó e2e e invariantes. El watchdog compara este tag contra HEAD para saber
+# si hubo progreso real desde el último verde de verdad.
+if [ "$FULL" -eq 1 ] && [ "${#SKIPPED[@]}" -eq 0 ]; then
+  TAG="verde-$(date +%Y%m%d-%H%M%S)"
+  git tag -f "$TAG" >/dev/null 2>&1 && printf '%s\n' "$TAG" > "$LOG_DIR/last-green.tag"
+  printf '%s\n' "$(git rev-parse HEAD 2>/dev/null)" > "$LOG_DIR/last-green.sha"
+  echo "  marcador de verde: $TAG ($(git rev-parse --short HEAD 2>/dev/null))"
+fi
