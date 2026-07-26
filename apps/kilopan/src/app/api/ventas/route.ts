@@ -82,12 +82,31 @@ export async function POST(request: NextRequest) {
   // la consola abierta, cualquiera con sesión vendía 5 kg a $1 y la caja cuadraba
   // igual, porque el total también venía del cliente. El `precioClp` que llega ahora
   // solo sirve para detectar que la pantalla mostró otra cosa.
-  const calculadas: { productoId: string; gramos: number; precioClp: number }[] = [];
+  // Acumular por producto ANTES de validar contra el stock: antes cada línea se
+  // comparaba contra el stock COMPLETO por separado, así que dos líneas del mismo
+  // producto (agregar 5 kg, después otros 5 kg) pasaban la validación una por una
+  // aunque juntas superaran lo disponible — se vendía pan que no estaba en el mesón.
+  const gramosPorProducto = new Map<string, number>();
   for (const linea of lineas) {
     if (!linea.productoId || !Number.isInteger(linea.gramos) || linea.gramos < 1) {
       return NextResponse.json({ error: "Línea de venta inválida" }, { status: 400 });
     }
+    gramosPorProducto.set(linea.productoId, (gramosPorProducto.get(linea.productoId) ?? 0) + linea.gramos);
+  }
+  for (const [productoIdAcumulado, gramosAcumulados] of gramosPorProducto) {
+    const stockAcumulado = await db.query<{ stock: number }>(`select pan.stock_disponible($1) as stock`, [
+      productoIdAcumulado,
+    ]);
+    if ((stockAcumulado.rows[0]?.stock ?? 0) < gramosAcumulados) {
+      return NextResponse.json(
+        { error: `Stock insuficiente (disponible: ${stockAcumulado.rows[0]?.stock ?? 0} g)` },
+        { status: 409 }
+      );
+    }
+  }
 
+  const calculadas: { productoId: string; gramos: number; precioClp: number }[] = [];
+  for (const linea of lineas) {
     const precio = await db.query<{ precio: number | null }>(
       `select pan.precio_vigente($1,$2) as precio`,
       [linea.productoId, lista]
@@ -116,15 +135,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const stock = await db.query<{ stock: number }>(`select pan.stock_disponible($1) as stock`, [
-      linea.productoId,
-    ]);
-    if ((stock.rows[0]?.stock ?? 0) < linea.gramos) {
-      return NextResponse.json(
-        { error: `Stock insuficiente (disponible: ${stock.rows[0]?.stock ?? 0} g)` },
-        { status: 409 }
-      );
-    }
     calculadas.push({ productoId: linea.productoId, gramos: linea.gramos, precioClp: precioLinea });
   }
 

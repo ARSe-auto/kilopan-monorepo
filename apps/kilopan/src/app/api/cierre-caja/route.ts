@@ -43,49 +43,70 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Nada que cerrar" }, { status: 400 });
   }
 
-  const db = await obtenerDb();
-  const resultado: { medioPago: string; esperado: number; declarado: number; diferencia: number }[] = [];
-
   for (const d of declarados) {
     if (!Number.isInteger(d.declaradoClp) || d.declaradoClp < 0) {
       return NextResponse.json({ error: "Monto declarado inválido" }, { status: 400 });
     }
-    const esperado = await db.query<{ esperado: string }>(
-      `select coalesce(sum(total_clp), 0)::text as esperado from pan.ventas
-        where medio_pago = $1 and creado_at::date = current_date and vendedor_id = $2`,
-      [d.medioPago, sesion.usuarioId]
-    );
-    const esperadoClp = Number(esperado.rows[0]?.esperado ?? 0);
-
-    await db.query(
-      `insert into pan.cierres_caja
-         (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp, total_facturador_clp)
-       values ($1,$2,$3,$4,$5,$6)`,
-      [
-        sesion.dispositivoId,
-        sesion.usuarioId,
-        d.medioPago,
-        esperadoClp,
-        d.declaradoClp,
-        // AC-DASH-04 (decisión #3, fase 1): el total que marcó el facturador se teclea
-        // UNA vez y se compara. La fase 2 lo reemplaza por subir el CSV del día; la
-        // fase 3 (API) solo si el piloto de Indupan lo pide.
-        cuerpo.totalFacturadorClp ?? null,
-      ]
-    );
-    resultado.push({
-      medioPago: d.medioPago,
-      esperado: esperadoClp,
-      declarado: d.declaradoClp,
-      diferencia: d.declaradoClp - esperadoClp,
-    });
   }
 
-  const totalEsperado = resultado.reduce((s, r) => s + r.esperado, 0);
-  return NextResponse.json({
-    resultado,
-    totalEsperado,
-    diferenciaFacturador:
-      cuerpo.totalFacturadorClp != null ? cuerpo.totalFacturadorClp - totalEsperado : null,
-  });
+  const db = await obtenerDb();
+
+  try {
+    // Todos los medios de pago entran juntos o ninguno: sin la transacción, un corte de
+    // red a mitad de la lista dejaba el cierre a medias — 3 medios cerrados y el resto
+    // pendiente, sin forma de saber si el cierre "pasó" o no.
+    const resultado = await db.transaccion(async (tx) => {
+      const filas: { medioPago: string; esperado: number; declarado: number; diferencia: number }[] = [];
+      for (const d of declarados) {
+        const esperado = await tx.query<{ esperado: string }>(
+          `select coalesce(sum(total_clp), 0)::text as esperado from pan.ventas
+            where medio_pago = $1 and creado_at::date = current_date and vendedor_id = $2`,
+          [d.medioPago, sesion.usuarioId]
+        );
+        const esperadoClp = Number(esperado.rows[0]?.esperado ?? 0);
+
+        await tx.query(
+          `insert into pan.cierres_caja
+             (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp, total_facturador_clp)
+           values ($1,$2,$3,$4,$5,$6)`,
+          [
+            sesion.dispositivoId,
+            sesion.usuarioId,
+            d.medioPago,
+            esperadoClp,
+            d.declaradoClp,
+            // AC-DASH-04 (decisión #3, fase 1): el total que marcó el facturador se teclea
+            // UNA vez y se compara. La fase 2 lo reemplaza por subir el CSV del día; la
+            // fase 3 (API) solo si el piloto de Indupan lo pide.
+            cuerpo.totalFacturadorClp ?? null,
+          ]
+        );
+        filas.push({
+          medioPago: d.medioPago,
+          esperado: esperadoClp,
+          declarado: d.declaradoClp,
+          diferencia: d.declaradoClp - esperadoClp,
+        });
+      }
+      return filas;
+    });
+
+    const totalEsperado = resultado.reduce((s, r) => s + r.esperado, 0);
+    return NextResponse.json({
+      resultado,
+      totalEsperado,
+      diferenciaFacturador:
+        cuerpo.totalFacturadorClp != null ? cuerpo.totalFacturadorClp - totalEsperado : null,
+    });
+  } catch (err) {
+    const mensaje = err instanceof Error ? err.message : String(err);
+    if (/cierres_caja_un_cierre_por_dia/i.test(mensaje)) {
+      return NextResponse.json(
+        { error: "Ya cerraste caja hoy para uno de estos medios de pago" },
+        { status: 409 }
+      );
+    }
+    console.error("POST /api/cierre-caja:", mensaje);
+    return NextResponse.json({ error: "No se pudo cerrar la caja" }, { status: 500 });
+  }
 }

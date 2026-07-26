@@ -44,22 +44,39 @@ export async function POST(request: NextRequest) {
   }
 
   const db = await obtenerDb();
-  const ruta = await db.query<{ id: string }>(
-    `insert into pan.rutas (repartidor_id, vehiculo) values ($1,$2) returning id`,
-    [repartidorId, vehiculo ?? null]
-  );
-  const rutaId = ruta.rows[0]?.id;
-  if (!rutaId) return NextResponse.json({ error: "No se pudo crear la ruta" }, { status: 500 });
+  try {
+    // La ruta y sus paradas entran juntas o ninguna: antes un corte a mitad del `for`
+    // dejaba una ruta sin todas sus paradas, invisible para "Mi ruta" del repartidor.
+    const rutaId = await db.transaccion(async (tx) => {
+      const ruta = await tx.query<{ id: string }>(
+        `insert into pan.rutas (repartidor_id, vehiculo) values ($1,$2) returning id`,
+        [repartidorId, vehiculo ?? null]
+      );
+      const id = ruta.rows[0]?.id;
+      if (!id) throw new Error("No se pudo crear la ruta");
 
-  // Orden a mano: el índice del array ES el orden de la ruta (sin VRP, por diseño).
-  for (const [i, pedidoId] of pedidoIds.entries()) {
-    await db.query(`insert into pan.ruta_paradas (ruta_id, pedido_id, orden) values ($1,$2,$3)`, [
-      rutaId,
-      pedidoId,
-      i + 1,
-    ]);
+      // Orden a mano: el índice del array ES el orden de la ruta (sin VRP, por diseño).
+      for (const [i, pedidoId] of pedidoIds.entries()) {
+        await tx.query(`insert into pan.ruta_paradas (ruta_id, pedido_id, orden) values ($1,$2,$3)`, [
+          id,
+          pedidoId,
+          i + 1,
+        ]);
+      }
+      return id;
+    });
+    return NextResponse.json({ id: rutaId, paradas: pedidoIds.length });
+  } catch (err) {
+    const mensaje = err instanceof Error ? err.message : String(err);
+    if (/rutas_una_activa_por_repartidor_dia/i.test(mensaje)) {
+      return NextResponse.json(
+        { error: "Ese repartidor ya tiene una ruta abierta hoy — ciérrala antes de armar otra" },
+        { status: 409 }
+      );
+    }
+    console.error("POST /api/rutas:", mensaje);
+    return NextResponse.json({ error: "No se pudo armar la ruta" }, { status: 500 });
   }
-  return NextResponse.json({ id: rutaId, paradas: pedidoIds.length });
 }
 
 // AC-DES-02: «Salir a ruta». El trigger de la BD es el que manda — si falta un DTE,

@@ -15,6 +15,12 @@ export interface ClienteDb {
     params?: unknown[]
   ) => Promise<{ rows: Fila[] }>;
   exec: (sql: string) => Promise<unknown>;
+  /** Tanda 4 de la auditoría: varias escrituras que tenían que entrar juntas o ninguna
+   *  (cierre de caja, armar ruta, consolidar factura) se hacían con `query()` sueltos
+   *  — cada llamada puede caer en una conexión DISTINTA del pool, así que un `begin`
+   *  suelto no protegía nada. `transaccion` toma UN cliente dedicado para todo el
+   *  callback y hace rollback si algo lanza. */
+  transaccion: <T>(fn: (tx: ClienteDb) => Promise<T>) => Promise<T>;
 }
 
 // `next dev`/`next start` corren con cwd = apps/kilopan/, pero el server standalone
@@ -188,6 +194,29 @@ async function crearPool(url: string): Promise<ClienteDb> {
   return {
     query: (sql, params) => pool.query(sql, params as unknown[]) as never,
     exec: (sql) => pool.query(sql),
+    transaccion: async (fn) => {
+      // Un cliente DEDICADO, no el pool: dentro del callback, cada `query()` tiene que
+      // pegarle a la MISMA conexión donde corrió el `begin`, o el rollback no cubre nada.
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        const tx: ClienteDb = {
+          query: (sql, params) => client.query(sql, params as unknown[]) as never,
+          exec: (sql) => client.query(sql),
+          transaccion: () => {
+            throw new Error("transaccion(): no se puede anidar una transacción dentro de otra");
+          },
+        };
+        const resultado = await fn(tx);
+        await client.query("commit");
+        return resultado;
+      } catch (err) {
+        await client.query("rollback").catch(() => undefined);
+        throw err;
+      } finally {
+        client.release();
+      }
+    },
   };
 }
 
@@ -207,7 +236,18 @@ async function crearPglite(): Promise<ClienteDb> {
   // desarrollo local queda en la zona horaria del sistema (o UTC) y el comportamiento
   // no coincide con producción — el bug de las 20:00 no se hubiera visto en local.
   await db.exec("set timezone = 'America/Santiago'");
-  return db as unknown as ClienteDb;
+  const cliente = db as unknown as ClienteDb;
+  cliente.transaccion = (fn) =>
+    db.transaction((tx) =>
+      fn({
+        query: (sql, params) => tx.query(sql, params) as never,
+        exec: (sql) => tx.exec(sql),
+        transaccion: () => {
+          throw new Error("transaccion(): no se puede anidar una transacción dentro de otra");
+        },
+      })
+    );
+  return cliente;
 }
 
 export function obtenerDb(): Promise<ClienteDb> {

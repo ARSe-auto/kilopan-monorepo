@@ -50,43 +50,59 @@ export async function POST(request: NextRequest) {
 
   const db = await obtenerDb();
 
-  // El monto de la factura es la SUMA de las guías que cubre — no un número tecleado
-  // aparte que podría no cuadrar con la evidencia.
-  const suma = await db.query<{ total: string; n: string; pedido_id: string }>(
-    `select coalesce(sum(monto_total),0)::text as total, count(*)::text as n,
-            min(pedido_id::text) as pedido_id
-       from pan.documento_tributario
-      where id = any($1::uuid[]) and consolidado_en_id is null and tipo_dte = 52`,
-    [guiaIds]
-  );
-  const fila = suma.rows[0];
-  if (!fila || Number(fila.n) !== guiaIds.length) {
-    return NextResponse.json(
-      { error: "Alguna guía ya está facturada o no existe" },
-      { status: 409 }
-    );
-  }
-
   try {
-    const factura = await db.query<{ id: string }>(
-      `insert into pan.documento_tributario
-         (tipo_dte, folio_sii, rut_emisor, fecha_emision, monto_total, origen_captura,
-          pedido_id, usuario_id, dispositivo_id)
-       values (33, $1, $2, current_date, $3, 'manual', $4, $5, $6) returning id`,
-      [folioSii, rutEmisor, Number(fila.total), fila.pedido_id, sesion.usuarioId, sesion.dispositivoId]
-    );
-    const facturaId = factura.rows[0]?.id;
-    if (!facturaId) throw new Error("No se pudo registrar la factura");
+    // Todo en UNA transacción, con `for update` sobre las guías: antes eran dos
+    // queries sueltas (leer el total, después consolidar) sin nada que impidiera que
+    // dos clics — o dos admins — consolidaran la MISMA guía dos veces entre una y
+    // otra. El `for update` bloquea esas filas hasta el commit; si una segunda
+    // transacción llega a pedir las mismas guías, espera y las encuentra ya tomadas.
+    const resultado = await db.transaccion(async (tx) => {
+      const guias = await tx.query<{ id: string; monto_total: number; pedido_id: string }>(
+        `select id, monto_total, pedido_id
+           from pan.documento_tributario
+          where id = any($1::uuid[]) and consolidado_en_id is null and tipo_dte = 52
+          for update`,
+        [guiaIds]
+      );
+      if (guias.rows.length !== guiaIds.length) {
+        throw new Error("guias_no_disponibles");
+      }
+      // El monto de la factura es la SUMA de las guías que cubre — no un número
+      // tecleado aparte que podría no cuadrar con la evidencia.
+      const total = guias.rows.reduce((s, g) => s + Number(g.monto_total), 0);
+      const pedidoId = guias.rows[0]!.pedido_id;
 
-    await db.query(
-      `update pan.documento_tributario set consolidado_en_id = $1
-        where id = any($2::uuid[]) and consolidado_en_id is null`,
-      [facturaId, guiaIds]
-    );
+      const factura = await tx.query<{ id: string }>(
+        `insert into pan.documento_tributario
+           (tipo_dte, folio_sii, rut_emisor, fecha_emision, monto_total, origen_captura,
+            pedido_id, usuario_id, dispositivo_id)
+         values (33, $1, $2, current_date, $3, 'manual', $4, $5, $6) returning id`,
+        [folioSii, rutEmisor, total, pedidoId, sesion.usuarioId, sesion.dispositivoId]
+      );
+      const facturaId = factura.rows[0]?.id;
+      if (!facturaId) throw new Error("No se pudo registrar la factura");
 
-    return NextResponse.json({ facturaId, guiasConsolidadas: guiaIds.length, montoTotal: Number(fila.total) });
+      await tx.query(`update pan.documento_tributario set consolidado_en_id = $1 where id = any($2::uuid[])`, [
+        facturaId,
+        guiaIds,
+      ]);
+
+      return { facturaId, total };
+    });
+
+    return NextResponse.json({
+      facturaId: resultado.facturaId,
+      guiasConsolidadas: guiaIds.length,
+      montoTotal: resultado.total,
+    });
   } catch (err) {
     const mensaje = err instanceof Error ? err.message : String(err);
+    if (mensaje === "guias_no_disponibles") {
+      return NextResponse.json(
+        { error: "Alguna guía ya está facturada o no existe" },
+        { status: 409 }
+      );
+    }
     if (/unique|duplicate/i.test(mensaje)) {
       return NextResponse.json({ error: "Ese folio de factura ya está registrado" }, { status: 409 });
     }

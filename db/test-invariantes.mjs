@@ -1410,3 +1410,47 @@ test("Tanda 3: con TimeZone=America/Santiago fijado (igual que comun/db.ts), un 
   assert.ok(hoy.rows[0].hoy, "current_date responde con TimeZone=America/Santiago fijado");
   await db.close();
 });
+
+// =============================================================================
+// Tanda 4 de la auditoría — atomicidad e idempotencia.
+// =============================================================================
+
+test("Tanda 4: cerrar caja dos veces el mismo día, medio y vendedor rebota (antes duplicaba el cierre)", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "vendedor");
+  await crearSesion(db, usuarioId, dispositivoId);
+
+  await db.query(
+    `insert into pan.cierres_caja (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp)
+     values ($1,$2,'efectivo',10000,10000)`,
+    [dispositivoId, usuarioId]
+  );
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into pan.cierres_caja (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp)
+         values ($1,$2,'efectivo',5000,5000)`,
+        [dispositivoId, usuarioId]
+      ),
+    /cierres_caja_un_cierre_por_dia|unique|duplicate/i,
+    "un segundo cierre para el mismo (fecha, medio_pago, vendedor) no debe entrar — antes sumaba un cierre fantasma"
+  );
+  await db.close();
+});
+
+test("Tanda 4: un repartidor no puede tener dos rutas abiertas el mismo día (antes cada clic creaba otra)", async () => {
+  const db = await dbNueva();
+  const { usuarioId: repartidorId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "repartidor");
+
+  await db.query(`insert into pan.rutas (repartidor_id) values ($1)`, [repartidorId]);
+  await assert.rejects(
+    () => db.query(`insert into pan.rutas (repartidor_id) values ($1)`, [repartidorId]),
+    /rutas_una_activa_por_repartidor_dia|unique|duplicate/i,
+    "una segunda ruta no cerrada para el mismo repartidor y día no debe entrar"
+  );
+
+  // Cerrar la primera SÍ deja armar una ruta nueva: es "una activa a la vez", no "una para siempre".
+  await db.query(`update pan.rutas set estado = 'cerrada' where repartidor_id = $1`, [repartidorId]);
+  await db.query(`insert into pan.rutas (repartidor_id) values ($1)`, [repartidorId]);
+  await db.close();
+});
