@@ -7,7 +7,7 @@ import {
   SelectorUnToque,
   ChipEstadoConexion,
 } from "@kilopan/miga/componentes/index.tsx";
-import { superficie, semantico } from "@kilopan/miga/tokens.ts";
+import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
 import { formatearKg } from "@/comun/formato.ts";
 import { kgTextoAGramos, pesoValido } from "@/comun/peso.ts";
 import { enviarOEncolar, encolarFoto, iniciarSyncAutomatico } from "@/pod/outbox.ts";
@@ -17,6 +17,16 @@ interface Producto {
   id: string;
   nombre: string;
   tipo_venta: string;
+}
+
+interface LineaPedido {
+  linea_id: string;
+  pedido_id: string;
+  correlativo_pedido: number | null;
+  razon_social: string;
+  gramos_pedidos: string;
+  gramos_pesados: string;
+  gramos_faltantes: string;
 }
 
 const DESTINOS = [
@@ -68,6 +78,15 @@ export default function PesarPage() {
   const [kilos, setKilos] = useState("");
   const [destino, setDestino] = useState<Destino>("mostrador");
   const [motivoMerma, setMotivoMerma] = useState<string | null>(null);
+  // Destino reparto: a qué línea de pedido se imputa este pesaje. La BD lo exige
+  // (constraint pesajes_reparto_requiere_pedido) — un kilo despachado sin decir a qué
+  // pedido va no se puede conciliar contra nada.
+  const [lineasPedido, setLineasPedido] = useState<LineaPedido[]>([]);
+  const [pedidoLineaId, setPedidoLineaId] = useState<string | null>(null);
+  const [cargandoLineas, setCargandoLineas] = useState(false);
+  // Se incrementa tras cada pesaje de reparto para releer cuánto falta: si el maestro
+  // no ve bajar el faltante, no tiene cómo saber cuándo parar de cargar bandejas.
+  const [refrescoLineas, setRefrescoLineas] = useState(0);
   const [estado, setEstado] = useState<"listo" | "foto" | "enviando" | "confirmar_outlier">("listo");
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
 
@@ -103,6 +122,44 @@ export default function PesarPage() {
   useEffect(() => {
     if (videoRef.current) videoRef.current.srcObject = stream;
   }, [stream]);
+
+  // Los pedidos que esperan ESTE producto. Se piden solo al elegir «Reparto»: en el
+  // 90% de los pesajes el destino es mostrador y no hay por qué gastar datos móviles
+  // trayendo despachos que nadie va a mirar.
+  useEffect(() => {
+    if (destino !== "reparto" || !productoId) {
+      setLineasPedido([]);
+      setPedidoLineaId(null);
+      return;
+    }
+    let vigente = true;
+    setCargandoLineas(true);
+    fetch(`/api/pedidos/pendientes?productoId=${encodeURIComponent(productoId)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!vigente) return;
+        const lineas: LineaPedido[] = d.lineas ?? [];
+        setLineasPedido(lineas);
+        setPedidoLineaId((actual) => {
+          // Si el pedido elegido sigue en la lista, se conserva: este efecto también
+          // corre al refrescar el faltante tras cada bandeja, y deseleccionar ahí
+          // obligaría a reelegir el mismo pedido en cada vuelta.
+          if (actual && lineas.some((l) => l.linea_id === actual)) return actual;
+          // Un solo pedido esperando: se elige solo. Es el caso corriente en una
+          // panadería chica y ahorra un toque con las manos ocupadas.
+          return lineas.length === 1 ? (lineas[0] as LineaPedido).linea_id : null;
+        });
+      })
+      .catch(() => {
+        if (vigente) setLineasPedido([]);
+      })
+      .finally(() => {
+        if (vigente) setCargandoLineas(false);
+      });
+    return () => {
+      vigente = false; // cambiar de producto rápido no debe pisar el resultado nuevo con el viejo
+    };
+  }, [destino, productoId, refrescoLineas]);
 
   // Apagar la cámara si el maestro sale de la pantalla con el obturador abierto.
   useEffect(() => () => cerrarCamara(stream), [stream]);
@@ -147,7 +204,8 @@ export default function PesarPage() {
     !!producto &&
     pesoValido(gramosNum) &&
     estado !== "enviando" &&
-    (destino !== "merma" || !!motivoMerma);
+    (destino !== "merma" || !!motivoMerma) &&
+    (destino !== "reparto" || !!pedidoLineaId);
 
   // El sha256 de la foto de ESTE pesaje. Se guarda aparte del estado de render porque
   // el camino del outlier vuelve a llamar a `enviar()` y la foto ya tomada tiene que
@@ -206,6 +264,7 @@ export default function PesarPage() {
       gramos: gramosNum,
       destino,
       motivoMerma: destino === "merma" ? motivoMerma : undefined,
+      pedidoLineaId: destino === "reparto" ? pedidoLineaId : undefined,
       fotoSha256: fotoShaRef.current ?? undefined,
       confirmarOutlier,
     });
@@ -230,6 +289,12 @@ export default function PesarPage() {
           : `Pesado: ${formatearKg(gramosNum)} · ${producto.nombre}`,
     });
     if (resultado.estado === "encolado") setPendientes((n) => n + 1);
+    // Releer cuánto le falta al pedido. Solo si de verdad llegó al servidor: si quedó
+    // encolado, el trigger que suma gramos_pesados todavía no corrió y refrescar
+    // mostraría el mismo faltante de antes, como si la bandeja no contara.
+    if (destino === "reparto" && resultado.estado === "enviado") {
+      setRefrescoLineas((n) => n + 1);
+    }
     limpiarParaElSiguiente();
   }
 
@@ -237,9 +302,13 @@ export default function PesarPage() {
   // el maestro no vuelve al inicio, solo se limpia el peso.
   function limpiarParaElSiguiente() {
     setKilos("");
-    setDestino("mostrador");
     setMotivoMerma(null);
     setEstado("listo");
+    // Armar un despacho son varias bandejas seguidas al MISMO pedido, así que el
+    // destino y el pedido se mantienen. Merma es lo contrario —una excepción, no una
+    // tanda— y volver solo a mostrador evita que la siguiente bandeja buena se anote
+    // como pérdida por inercia.
+    if (destino === "merma") setDestino("mostrador");
     // La foto es de LA bandeja que se acaba de pesar: la siguiente exige la suya.
     fotoShaRef.current = null;
     setCapturando(false);
@@ -362,9 +431,62 @@ export default function PesarPage() {
       ) : null}
 
       {destino === "reparto" ? (
-        <p style={{ fontSize: 13, color: semantico.alerta }}>
-          Reparto se habilita cuando esté armado el módulo de despacho — por ahora usá Mostrador o Merma.
-        </p>
+        <div>
+          <p style={{ fontSize: 13, fontWeight: 600, color: superficie.textoDim, margin: "0 0 8px" }}>
+            ¿A qué pedido va?
+          </p>
+          {cargandoLineas ? (
+            <p style={{ fontSize: 14, color: superficie.textoFaint, margin: 0 }}>Buscando pedidos…</p>
+          ) : lineasPedido.length === 0 ? (
+            <p style={{ fontSize: 14, color: semantico.alerta, margin: 0 }}>
+              Ningún pedido de hoy está esperando {producto.nombre}. Ármalo primero en Pedidos.
+            </p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {lineasPedido.map((l) => {
+                const elegida = l.linea_id === pedidoLineaId;
+                const faltante = Number(l.gramos_faltantes);
+                return (
+                  <button
+                    key={l.linea_id}
+                    type="button"
+                    onClick={() => setPedidoLineaId(l.linea_id)}
+                    style={{
+                      minHeight: 56,
+                      textAlign: "left",
+                      padding: "10px 14px",
+                      borderRadius: 12,
+                      border: elegida
+                        ? `2px solid ${acentos.kilopan}`
+                        : `1px solid ${superficie.hairline}`,
+                      background: elegida ? "#FEF3E2" : superficie.tarjeta,
+                      color: superficie.texto,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
+                    <span style={{ fontSize: 15, fontWeight: 700 }}>
+                      {l.correlativo_pedido ? `N° ${l.correlativo_pedido} · ` : ""}
+                      {l.razon_social}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 13,
+                        fontVariantNumeric: "tabular-nums",
+                        color: faltante > 0 ? superficie.textoDim : semantico.ok,
+                        textAlign: "right",
+                      }}
+                    >
+                      {faltante > 0 ? `faltan ${formatearKg(faltante)}` : "completo"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       ) : null}
 
       {estado === "confirmar_outlier" ? (

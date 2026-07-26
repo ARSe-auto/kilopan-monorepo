@@ -1255,3 +1255,124 @@ test("AC-VEN: el precio de venta sale de la lista del servidor, no de lo que man
   assert.equal(nulo.rows[0].p, null);
   await db.close();
 });
+
+// =============================================================================
+// AC-PES-06 — pesaje con destino reparto, imputado a una línea de pedido
+//
+// El destino 'reparto' existía en la tabla desde el hito 2, y el botón existía en la
+// pantalla, pero /api/pesajes lo rechazaba con "se habilita cuando exista el módulo de
+// despacho" — un guard escrito antes del hito 4 que nadie quitó cuando despacho se
+// construyó. El botón estaba ahí, se podía tocar, y siempre fallaba. Lo reportó el
+// dueño usando la app, no ningún test: de ahí estos.
+// =============================================================================
+
+test("AC-PES-06: un pesaje a reparto sin línea de pedido no entra, y con línea sí", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const productoId = await crearProducto(db);
+
+  // Sin pedido_linea_id: lo frena el CHECK, no la aplicación.
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into pan.pesajes (client_uuid, producto_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+         values (gen_random_uuid(), $1, 5000, 'reparto', $2, $3, now())`,
+        [productoId, usuarioId, dispositivoId]
+      ),
+    /constraint|check/i,
+    "un kilo despachado sin decir a qué pedido va no se puede conciliar contra nada"
+  );
+
+  const clienteId = (
+    await db.query(
+      `insert into pan.clientes (rut, razon_social, canal) values ('11.111.111-1','Almacén Prueba','reparto') returning id`
+    )
+  ).rows[0].id;
+  // Nace en borrador y se confirma por la función: el CHECK
+  // pedidos_confirmado_tiene_correlativo impide insertarlo 'confirmado' a mano, porque
+  // el correlativo lo asigna SOLO pan.asignar_correlativo().
+  const pedidoId = (
+    await db.query(
+      `insert into pan.pedidos (cliente_id, fecha_entrega, estado, usuario_id, dispositivo_id)
+       values ($1, current_date, 'borrador', $2, $3) returning id`,
+      [clienteId, usuarioId, dispositivoId]
+    )
+  ).rows[0].id;
+  await db.query(`select pan.asignar_correlativo($1)`, [pedidoId]);
+  const lineaId = (
+    await db.query(
+      `insert into pan.pedido_lineas (pedido_id, producto_id, gramos_pedidos, precio_clp)
+       values ($1,$2,10000,20000) returning id`,
+      [pedidoId, productoId]
+    )
+  ).rows[0].id;
+
+  await db.query(
+    `insert into pan.pesajes (client_uuid, producto_id, pedido_linea_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+     values (gen_random_uuid(), $1, $2, 6000, 'reparto', $3, $4, now())`,
+    [productoId, lineaId, usuarioId, dispositivoId]
+  );
+
+  // El faltante que ve el maestro sale del trigger, no de un contador de la app.
+  const linea = await db.query(
+    `select gramos_pedidos, gramos_pesados, greatest(gramos_pedidos - gramos_pesados, 0) as faltan
+       from pan.pedido_lineas where id = $1`,
+    [lineaId]
+  );
+  assert.equal(Number(linea.rows[0].gramos_pesados), 6000);
+  assert.equal(Number(linea.rows[0].faltan), 4000, "10 kg pedidos − 6 kg pesados = 4 kg por cargar");
+  await db.close();
+});
+
+test("AC-PES-06: el stock de mostrador NO se lleva lo que se pesó para reparto", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const productoId = await crearProducto(db);
+
+  const clienteId = (
+    await db.query(
+      `insert into pan.clientes (rut, razon_social, canal) values ('11.111.111-1','Almacén Prueba','reparto') returning id`
+    )
+  ).rows[0].id;
+  // Nace en borrador y se confirma por la función: el CHECK
+  // pedidos_confirmado_tiene_correlativo impide insertarlo 'confirmado' a mano, porque
+  // el correlativo lo asigna SOLO pan.asignar_correlativo().
+  const pedidoId = (
+    await db.query(
+      `insert into pan.pedidos (cliente_id, fecha_entrega, estado, usuario_id, dispositivo_id)
+       values ($1, current_date, 'borrador', $2, $3) returning id`,
+      [clienteId, usuarioId, dispositivoId]
+    )
+  ).rows[0].id;
+  await db.query(`select pan.asignar_correlativo($1)`, [pedidoId]);
+  const lineaId = (
+    await db.query(
+      `insert into pan.pedido_lineas (pedido_id, producto_id, gramos_pedidos, precio_clp)
+       values ($1,$2,10000,20000) returning id`,
+      [pedidoId, productoId]
+    )
+  ).rows[0].id;
+
+  await db.query(
+    `insert into pan.pesajes (client_uuid, producto_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+     values (gen_random_uuid(), $1, 3000, 'mostrador', $2, $3, now())`,
+    [productoId, usuarioId, dispositivoId]
+  );
+  await db.query(
+    `insert into pan.pesajes (client_uuid, producto_id, pedido_linea_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+     values (gen_random_uuid(), $1, $2, 7000, 'reparto', $3, $4, now())`,
+    [productoId, lineaId, usuarioId, dispositivoId]
+  );
+
+  // Si el pan de un despacho contara como stock del mesón, el vendedor podría venderlo
+  // dos veces: una en el mostrador y otra arriba de la van.
+  const stock = await db.query(`select pan.stock_disponible($1) as stock`, [productoId]);
+  assert.equal(
+    Number(stock.rows[0].stock),
+    3000,
+    "solo los 3 kg de mostrador; los 7 kg de reparto están comprometidos con un pedido"
+  );
+  await db.close();
+});

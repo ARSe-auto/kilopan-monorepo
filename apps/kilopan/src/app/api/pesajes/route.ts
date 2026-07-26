@@ -14,16 +14,17 @@ export async function POST(request: NextRequest) {
     clientUuid?: string;
     productoId?: string;
     gramos?: number;
-    destino?: "mostrador" | "merma";
+    destino?: "mostrador" | "merma" | "reparto";
     motivoMerma?: string;
     fotoSha256?: string;
+    pedidoLineaId?: string;
   };
   try {
     cuerpo = await request.json();
   } catch {
     return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
   }
-  const { clientUuid, productoId, gramos, destino, motivoMerma, fotoSha256 } = cuerpo;
+  const { clientUuid, productoId, gramos, destino, motivoMerma, fotoSha256, pedidoLineaId } = cuerpo;
 
   if (!clientUuid || !productoId || !destino) {
     return NextResponse.json({ error: "Faltan campos" }, { status: 400 });
@@ -31,9 +32,21 @@ export async function POST(request: NextRequest) {
   if (!Number.isInteger(gramos) || (gramos as number) < 1 || (gramos as number) > 100_000) {
     return NextResponse.json({ error: "Gramos debe ser un entero entre 1 y 100.000" }, { status: 400 });
   }
-  if (destino !== "mostrador" && destino !== "merma") {
+  if (destino !== "mostrador" && destino !== "merma" && destino !== "reparto") {
+    return NextResponse.json({ error: "Destino inválido" }, { status: 400 });
+  }
+  // pan.pesajes exige la línea de pedido cuando el destino es reparto
+  // (constraint pesajes_reparto_requiere_pedido): un kilo despachado sin decir a qué
+  // pedido va no se puede conciliar contra nada.
+  if (destino === "reparto" && !pedidoLineaId) {
     return NextResponse.json(
-      { error: "Reparto se habilita cuando exista el módulo de despacho" },
+      { error: "Elige a qué pedido va este pesaje" },
+      { status: 400 }
+    );
+  }
+  if (destino !== "reparto" && pedidoLineaId) {
+    return NextResponse.json(
+      { error: "Solo un pesaje con destino reparto va asociado a un pedido" },
       { status: 400 }
     );
   }
@@ -42,6 +55,37 @@ export async function POST(request: NextRequest) {
   }
 
   const db = await obtenerDb();
+
+  // La línea de pedido tiene que existir, ser DE ESTE producto y pertenecer a un
+  // pedido que todavía admita pan. Sin la comprobación del producto, un error de
+  // tipeo mandaría 20 kg de marraqueta a la línea de hallulla del mismo pedido: la
+  // FK lo aceptaría feliz y el despacho saldría mal armado sin que nada avisara.
+  if (destino === "reparto") {
+    const linea = await db.query<{ estado: string; producto_id: string; razon_social: string }>(
+      `select p.estado, pl.producto_id, c.razon_social
+         from pan.pedido_lineas pl
+         join pan.pedidos p on p.id = pl.pedido_id
+         join pan.clientes c on c.id = p.cliente_id
+        where pl.id = $1`,
+      [pedidoLineaId]
+    );
+    const fila = linea.rows[0];
+    if (!fila) {
+      return NextResponse.json({ error: "Ese pedido ya no existe" }, { status: 404 });
+    }
+    if (fila.producto_id !== productoId) {
+      return NextResponse.json(
+        { error: "Ese pedido no está esperando este producto" },
+        { status: 409 }
+      );
+    }
+    if (fila.estado !== "confirmado" && fila.estado !== "pesado") {
+      return NextResponse.json(
+        { error: `El pedido de ${fila.razon_social} ya está ${fila.estado}: no admite más pan` },
+        { status: 409 }
+      );
+    }
+  }
 
   // AC-PES-04 (decisión #1): si el admin exigió foto por pesaje, el que manda es el
   // SERVIDOR, no la pantalla. Validarlo solo en la UI sería teatro: cualquiera que
@@ -76,8 +120,8 @@ export async function POST(request: NextRequest) {
     const r = await db.query<{ id: string }>(
       `insert into pan.pesajes
          (client_uuid, producto_id, gramos, destino, motivo_merma, estado_merma,
-          foto_sha256, foto_estado, usuario_id, dispositivo_id, capturado_at)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now())
+          pedido_linea_id, foto_sha256, foto_estado, usuario_id, dispositivo_id, capturado_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now())
        on conflict (client_uuid) do nothing
        returning id`,
       [
@@ -87,6 +131,7 @@ export async function POST(request: NextRequest) {
         destino,
         destino === "merma" ? motivoMerma : null,
         destino === "merma" ? "pendiente" : null,
+        destino === "reparto" ? pedidoLineaId : null,
         fotoSha256 ?? null,
         // Mismo contrato que el POD: el hash viaja con el pesaje y el JPEG se sube
         // aparte; /api/fotos marca 'subida' cuando el binario llega y el hash cuadra.
