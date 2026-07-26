@@ -136,13 +136,22 @@ export default function VenderPage() {
       const cuerpo = (resultado.estado === "enviado" ? resultado.cuerpo : null) as
         | { totalClp?: number }
         | null;
-      setMensaje({
-        tipo: "ok",
-        texto:
-          resultado.estado === "encolado"
-            ? `Cobrado sin señal: ${formatearClp(totalCarrito)} — se sube solo`
-            : `Venta cobrada: ${formatearClp(cuerpo?.totalClp ?? totalCarrito)}`,
-      });
+      setMensaje(
+        resultado.estado === "encolado" && resultado.motivo === "error_servidor"
+          ? {
+              // Antes esto se anunciaba igual que "sin señal", con el mismo verde de
+              // éxito — un 500 con buena señal es un problema real, no falta de cobertura.
+              tipo: "error",
+              texto: `Cobrado: ${formatearClp(totalCarrito)} — hubo un problema al guardarlo, se reintenta solo`,
+            }
+          : {
+              tipo: "ok",
+              texto:
+                resultado.estado === "encolado"
+                  ? `Cobrado sin señal: ${formatearClp(totalCarrito)} — se sube solo`
+                  : `Venta cobrada: ${formatearClp(cuerpo?.totalClp ?? totalCarrito)}`,
+            }
+      );
       setCarrito([]);
       setMedioPago(null);
       setClienteFiado("");
@@ -161,7 +170,7 @@ export default function VenderPage() {
       <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{producto.nombre}</h1>
-          <button type="button" onClick={() => setProductoId(null)} style={{ fontSize: 14, fontWeight: 700, color: superficie.textoDim, background: "none", border: "none" }}>
+          <button type="button" onClick={() => setProductoId(null)} style={{ minHeight: 44, minWidth: 44, padding: "0 12px", fontSize: 14, fontWeight: 700, color: superficie.textoDim, background: "none", border: "none" }}>
             Cambiar
           </button>
         </div>

@@ -3,6 +3,11 @@ import { obtenerDb } from "@/comun/db.ts";
 import { exigirSesion } from "@/identidad/sesion.ts";
 
 const MAX_BYTES = 1_500_000; // techo duro; el cliente comprime a ~400 KB (AC-PERF-02)
+// Hallazgo menor de la auditoría: el mime que se guardaba era el que DECLARABA quien
+// sube el archivo (`archivo.type`), sin whitelist — y se reemitía tal cual en el GET.
+// Un cliente hablando directo con la API podía declarar "text/html" y este mismo
+// origen lo serviría como HTML.
+const MIME_PERMITIDOS = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 // AC-SEC-07: subida de evidencia. El servidor RECALCULA el sha256 — nunca confía en
 // el que manda el cliente: si no cuadra con el declarado en el POD, la foto no entra.
@@ -18,6 +23,7 @@ export async function POST(request: NextRequest) {
   if (archivo.size > MAX_BYTES) {
     return NextResponse.json({ error: "La foto es demasiado pesada" }, { status: 413 });
   }
+  const mime = MIME_PERMITIDOS.has(archivo.type) ? archivo.type : "image/jpeg";
 
   const buffer = Buffer.from(await archivo.arrayBuffer());
   const hash = await crypto.subtle.digest("SHA-256", buffer);
@@ -36,7 +42,7 @@ export async function POST(request: NextRequest) {
   await db.query(
     `insert into pan.fotos (sha256, contenido, mime, bytes, subida_por)
      values ($1,$2,$3,$4,$5) on conflict (sha256) do nothing`,
-    [sha256, buffer, archivo.type || "image/jpeg", buffer.length, sesion.usuarioId]
+    [sha256, buffer, mime, buffer.length, sesion.usuarioId]
   );
 
   // Confirmar la evidencia en la entrega: es el ÚNICO UPDATE que el trigger de POD
@@ -76,6 +82,14 @@ export async function GET(request: NextRequest) {
   if (!foto) return NextResponse.json({ error: "No encontrada" }, { status: 404 });
 
   return new NextResponse(Buffer.from(foto.contenido), {
-    headers: { "Content-Type": foto.mime, "Cache-Control": "private, max-age=3600" },
+    headers: {
+      "Content-Type": foto.mime,
+      "Cache-Control": "private, max-age=3600",
+      // Defensa en profundidad: next.config.ts ya aplica esto por defecto a
+      // "/:path*", pero se declara acá también porque esta respuesta reemite un
+      // Content-Type que en algún momento vino de lo que declaró quien subió el
+      // archivo — sin nosniff, un navegador podría intentar adivinar el tipo.
+      "X-Content-Type-Options": "nosniff",
+    },
   });
 }

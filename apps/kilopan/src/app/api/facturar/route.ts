@@ -44,8 +44,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
   }
   const { guiaIds, folioSii, rutEmisor } = cuerpo;
-  if (!guiaIds?.length || !Number.isInteger(folioSii) || !rutEmisor) {
+  if (!guiaIds?.length || !rutEmisor) {
     return NextResponse.json({ error: "Faltan campos" }, { status: 400 });
+  }
+  // Antes esto caía en "Faltan campos" cuando el folio no era un entero (por ejemplo
+  // "123.456" con el punto de miles chileno) — mismo mensaje que si de verdad faltara,
+  // sin decir qué corregir. También faltaba el mismo piso que ya tiene /api/dte.
+  if (folioSii == null || !Number.isInteger(folioSii) || folioSii < 1) {
+    return NextResponse.json({ error: "Folio inválido" }, { status: 400 });
   }
 
   const db = await obtenerDb();

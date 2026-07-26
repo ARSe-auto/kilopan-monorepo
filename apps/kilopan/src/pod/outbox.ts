@@ -174,7 +174,14 @@ export async function enviarOEncolar(
   tipo: TipoMutacion,
   ruta: string,
   payload: { clientUuid: string } & Record<string, unknown>
-): Promise<{ estado: "enviado"; cuerpo: unknown } | { estado: "encolado" } | { estado: "rechazado"; error: string }> {
+): Promise<
+  | { estado: "enviado"; cuerpo: unknown }
+  // "sin_red": no se pudo ni intentar (catch de fetch) — de verdad no hay señal.
+  // "error_servidor": SÍ hubo señal, el servidor respondió 5xx — un problema real que
+  // "se sube solo" con buena señal disfraza de "sin señal", con el mismo verde de éxito.
+  | { estado: "encolado"; motivo: "sin_red" | "error_servidor" }
+  | { estado: "rechazado"; error: string }
+> {
   try {
     const r = await fetch(ruta, {
       method: "POST",
@@ -188,13 +195,13 @@ export async function enviarOEncolar(
     // encolarla sería mentirle diciendo que quedó registrada.
     if (r.status >= 500) {
       await encolar({ clientUuid: payload.clientUuid, tipo, ruta, payload });
-      return { estado: "encolado" };
+      return { estado: "encolado", motivo: "error_servidor" };
     }
     const cuerpo = await r.json().catch(() => ({}));
     return { estado: "rechazado", error: (cuerpo as { error?: string }).error ?? `Error ${r.status}` };
   } catch {
     await encolar({ clientUuid: payload.clientUuid, tipo, ruta, payload });
-    return { estado: "encolado" };
+    return { estado: "encolado", motivo: "sin_red" };
   }
 }
 

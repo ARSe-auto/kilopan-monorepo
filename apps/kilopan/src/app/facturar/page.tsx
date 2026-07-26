@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { BotonPrimario, CifraGrande } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico } from "@kilopan/miga/tokens.ts";
-import { formatearClp, formatearFecha } from "@/comun/formato.ts";
+import { formatearClp, formatearFecha, parsearClp } from "@/comun/formato.ts";
 
 interface Cliente { id: string; razon_social: string; saldo_pendiente_clp: number | null }
 interface Guia {
@@ -51,7 +51,10 @@ export default function FacturarPage() {
     const r = await fetch("/api/facturar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ guiaIds: [...elegidas], folioSii: Number(folio), rutEmisor }),
+      // parsearClp() y no Number(): un folio grande tecleado con el punto de miles
+      // chileno ("123.456") daba Number.isInteger(123.456) = false y el servidor
+      // respondía "Faltan campos" como si el folio nunca hubiera llegado.
+      body: JSON.stringify({ guiaIds: [...elegidas], folioSii: parsearClp(folio), rutEmisor }),
     });
     const cuerpo = await r.json();
     if (!r.ok) { setMensaje({ tipo: "error", texto: cuerpo.error }); return; }
@@ -114,8 +117,11 @@ export default function FacturarPage() {
           ))}
 
           {/* Antes esto usaba total.toLocaleString("es-CL") + unidad="CLP" — un formato
-              CLP distinto al de formatearClp() de acá abajo, en la misma pantalla. */}
-          <div style={{ display: "flex", justifyContent: "center", padding: "8px 0" }}>
+              CLP distinto al de formatearClp() de acá abajo, en la misma pantalla.
+              Con varias guías seleccionadas el total (96 px, CifraGrande) se salía del
+              viewport sin que hubiera scroll para alcanzarlo — overflow-x lo deja
+              alcanzable en vez de cortado. */}
+          <div style={{ display: "flex", justifyContent: "center", padding: "8px 0", maxWidth: "100%", overflowX: "auto" }}>
             <CifraGrande valor={formatearClp(total)} />
           </div>
 

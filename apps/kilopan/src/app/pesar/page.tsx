@@ -281,13 +281,22 @@ export default function PesarPage() {
       return;
     }
 
-    setMensaje({
-      tipo: "ok",
-      texto:
-        resultado.estado === "encolado"
-          ? `Pesado sin señal: ${formatearKg(gramosNum)} · ${producto.nombre} — se sube solo`
-          : `Pesado: ${formatearKg(gramosNum)} · ${producto.nombre}`,
-    });
+    setMensaje(
+      resultado.estado === "encolado" && resultado.motivo === "error_servidor"
+        ? {
+            // Antes esto se anunciaba igual que "sin señal", con el mismo verde de
+            // éxito — un 500 con buena señal es un problema real, no falta de cobertura.
+            tipo: "error",
+            texto: `Pesado: ${formatearKg(gramosNum)} · ${producto.nombre} — hubo un problema al guardarlo, se reintenta solo`,
+          }
+        : {
+            tipo: "ok",
+            texto:
+              resultado.estado === "encolado"
+                ? `Pesado sin señal: ${formatearKg(gramosNum)} · ${producto.nombre} — se sube solo`
+                : `Pesado: ${formatearKg(gramosNum)} · ${producto.nombre}`,
+          }
+    );
     if (resultado.estado === "encolado") setPendientes((n) => n + 1);
     // Releer cuánto le falta al pedido. Solo si de verdad llegó al servidor: si quedó
     // encolado, el trigger que suma gramos_pesados todavía no corrió y refrescar
@@ -405,7 +414,7 @@ export default function PesarPage() {
           <button
             type="button"
             onClick={() => setProductoId(null)}
-            style={{ fontSize: 14, fontWeight: 700, color: superficie.textoDim, background: "none", border: "none" }}
+            style={{ minHeight: 44, minWidth: 44, padding: "0 12px", fontSize: 14, fontWeight: 700, color: superficie.textoDim, background: "none", border: "none" }}
           >
             Cambiar
           </button>
@@ -416,7 +425,25 @@ export default function PesarPage() {
         <CifraGrande valor={kilos || "0"} unidad="kg" />
       </div>
 
-      <TecladoNumerico valor={kilos} onCambiar={setKilos} permitirDecimal />
+      <TecladoNumerico
+        valor={kilos}
+        onCambiar={(v) => {
+          // El mensaje de éxito del pesaje anterior se quedaba en pantalla mientras
+          // se tecleaba el peso de la SIGUIENTE bandeja — se podía confundir con la
+          // confirmación de la que está en curso, todavía sin enviar.
+          if (mensaje) setMensaje(null);
+          setKilos(v);
+        }}
+        permitirDecimal
+      />
+      {/* Antes el botón Confirmar solo quedaba deshabilitado sin decir por qué —
+          quien pesa no tenía forma de saber si el peso estaba fuera de rango o si
+          faltaba otra cosa (destino, foto, línea de pedido). */}
+      {kilos && !pesoValido(gramosNum) ? (
+        <p style={{ fontSize: 13, color: semantico.alerta, margin: 0 }}>
+          El peso tiene que ser mayor a 0 y hasta 100 kg.
+        </p>
+      ) : null}
 
       <div>
         <p style={{ fontSize: 13, fontWeight: 600, color: superficie.textoDim, margin: "0 0 8px" }}>Destino</p>

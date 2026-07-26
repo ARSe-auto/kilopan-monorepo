@@ -30,29 +30,36 @@ export function TecladoNumerico({
       aria-label="Teclado numérico"
       style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}
     >
-      {TECLAS.map((tecla) => (
-        <button
-          key={tecla}
-          type="button"
-          onClick={() => tocar(tecla)}
-          disabled={tecla === "," && !permitirDecimal}
-          aria-label={tecla === "⌫" ? "Borrar" : tecla === "," ? "Coma decimal" : tecla}
-          style={{
-            minHeight: 64,
-            minWidth: 64,
-            fontSize: 24,
-            fontWeight: 600,
-            fontVariantNumeric: "tabular-nums",
-            borderRadius: 12,
-            border: "1px solid rgba(27,23,18,.14)",
-            background: "#FFFFFF",
-            color: "#1B1712",
-            opacity: tecla === "," && !permitirDecimal ? 0.35 : 1,
-          }}
-        >
-          {tecla}
-        </button>
-      ))}
+      {TECLAS.map((tecla) => {
+        // Hallazgo menor de la auditoría: en /ingresar y /vincular (PIN de 4 dígitos,
+        // sin decimales) esta tecla se mostraba apagada y sin poder tocarse — un botón
+        // muerto ocupando espacio, con contraste bajo el mínimo. Si no aplica, no se
+        // pinta: se deja el hueco vacío para no correr "0" y "⌫" de lugar.
+        if (tecla === "," && !permitirDecimal) {
+          return <div key={tecla} aria-hidden="true" style={{ minHeight: 64, minWidth: 64 }} />;
+        }
+        return (
+          <button
+            key={tecla}
+            type="button"
+            onClick={() => tocar(tecla)}
+            aria-label={tecla === "⌫" ? "Borrar" : tecla}
+            style={{
+              minHeight: 64,
+              minWidth: 64,
+              fontSize: 24,
+              fontWeight: 600,
+              fontVariantNumeric: "tabular-nums",
+              borderRadius: 12,
+              border: "1px solid rgba(27,23,18,.14)",
+              background: "#FFFFFF",
+              color: "#1B1712",
+            }}
+          >
+            {tecla}
+          </button>
+        );
+      })}
     </div>
   );
 }

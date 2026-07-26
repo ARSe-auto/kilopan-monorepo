@@ -149,13 +149,24 @@ async function TarjetaFlota() {
       <p style={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: "tabular-nums", margin: "0 0 16px" }}>
         Diferencia: {formatearClp(ahorro)}
       </p>
+      {/* Hallazgo menor de la auditoría: estos CTA eran <span> con pinta de botón
+          (mismo padding/color/radio) pero sin foco de teclado ni semántica de control
+          — un lector de pantalla los pasaba por alto igual que un párrafo cualquiera.
+          Siguen sin backend detrás (no existe todavía un POST que capture el lead) —
+          eso es una función nueva, no lo que este hallazgo pedía corregir. */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <span style={{ padding: "12px 16px", borderRadius: 12, background: acentos.kilopan, color: "#fff", fontWeight: 700, fontSize: 14 }}>
+        <button
+          type="button"
+          style={{ minHeight: 44, padding: "12px 16px", borderRadius: 12, border: "none", background: acentos.kilopan, color: "#fff", fontWeight: 700, fontSize: 14 }}
+        >
           Quiero que e-auto me contacte
-        </span>
-        <span style={{ padding: "12px 16px", borderRadius: 12, background: acentos.kiloruta, color: "#fff", fontWeight: 700, fontSize: 14 }}>
+        </button>
+        <button
+          type="button"
+          style={{ minHeight: 44, padding: "12px 16px", borderRadius: 12, border: "none", background: acentos.kiloruta, color: "#fff", fontWeight: 700, fontSize: 14 }}
+        >
           Prefiero que alguien más reparta por mí
-        </span>
+        </button>
       </div>
     </section>
   );
