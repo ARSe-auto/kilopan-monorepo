@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
 import { exigirRol } from "@/identidad/sesion.ts";
+import { esUuid } from "@/comun/validacion.ts";
 import { roundClp } from "@/comun/round_clp.ts";
 
 interface LineaEntrada {
@@ -39,6 +40,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
   }
   const { clienteId, fechaEntrega, lineas } = cuerpo;
+  if (clienteId != null && !esUuid(clienteId)) {
+    return NextResponse.json({ error: "Cliente inválido" }, { status: 400 });
+  }
   if (!clienteId || !fechaEntrega || !lineas?.length) {
     return NextResponse.json({ error: "Faltan campos" }, { status: 400 });
   }
@@ -62,7 +66,7 @@ export async function POST(request: NextRequest) {
     const resultado = await db.transaccion(async (tx) => {
       // Validar TODAS las líneas antes de escribir nada.
       for (const linea of lineas) {
-        if (!linea.productoId || !Number.isInteger(linea.gramosPedidos) || linea.gramosPedidos < 1) {
+        if (!esUuid(linea.productoId) || !Number.isInteger(linea.gramosPedidos) || linea.gramosPedidos < 1) {
           throw Object.assign(new Error("linea_invalida"), { publico: "Línea de pedido inválida" });
         }
       }

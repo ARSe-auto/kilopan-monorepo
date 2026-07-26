@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
 import { exigirSesion, exigirRol } from "@/identidad/sesion.ts";
+import { esUuid } from "@/comun/validacion.ts";
 
 export async function GET(request: NextRequest) {
   const sesion = await exigirSesion(request);
@@ -41,6 +42,10 @@ export async function POST(request: NextRequest) {
   const { repartidorId, vehiculo, pedidoIds } = cuerpo;
   if (!repartidorId || !pedidoIds?.length) {
     return NextResponse.json({ error: "Faltan campos" }, { status: 400 });
+  }
+  // Sin esto un id mal formado moría en el cast a uuid del `= any($1::uuid[])`.
+  if (!esUuid(repartidorId) || !pedidoIds.every((id) => esUuid(id))) {
+    return NextResponse.json({ error: "Repartidor o pedido inválido" }, { status: 400 });
   }
 
   const db = await obtenerDb();

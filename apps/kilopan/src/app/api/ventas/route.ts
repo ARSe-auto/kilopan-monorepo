@@ -40,6 +40,9 @@ export async function POST(request: NextRequest) {
   // AC-PAG-02 (decisión #5): el fiado del mesón — el vecino de toda la vida al que se
   // le anota — usa el MISMO cliente y el mismo saldo que el fiado mayorista. Cero
   // segundo sistema de crédito. El CHECK de la BD ya exige el cliente; acá se explica.
+  if (clienteId != null && !esUuid(clienteId)) {
+    return NextResponse.json({ error: "Cliente inválido" }, { status: 400 });
+  }
   if (medioPago === "fiado" && !clienteId) {
     return NextResponse.json(
       { error: "Para fiar hay que elegir un cliente registrado" },

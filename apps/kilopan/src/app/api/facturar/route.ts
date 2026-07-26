@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
 import { exigirSesion, exigirRol } from "@/identidad/sesion.ts";
+import { esUuid } from "@/comun/validacion.ts";
 
 // AC-FIA-02 (decisión #2). Guías entregadas de un cliente que todavía no están
 // cubiertas por ninguna factura — la materia prima del fiado. Solo /facturar la
@@ -11,6 +12,7 @@ export async function GET(request: NextRequest) {
 
   const clienteId = request.nextUrl.searchParams.get("clienteId");
   if (!clienteId) return NextResponse.json({ error: "Falta clienteId" }, { status: 400 });
+  if (!esUuid(clienteId)) return NextResponse.json({ error: "Cliente inválido" }, { status: 400 });
 
   const db = await obtenerDb();
   const r = await db.query<Record<string, unknown>>(
@@ -44,6 +46,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
   }
   const { guiaIds, folioSii, rutEmisor } = cuerpo;
+  if (guiaIds?.length && !guiaIds.every((id) => esUuid(id))) {
+    return NextResponse.json({ error: "Guía inválida" }, { status: 400 });
+  }
   if (!guiaIds?.length || !rutEmisor) {
     return NextResponse.json({ error: "Faltan campos" }, { status: 400 });
   }

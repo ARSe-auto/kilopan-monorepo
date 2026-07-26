@@ -3,6 +3,7 @@
 // justamente el punto (mitiga robo de sesión por XSS).
 import type { NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
+import { esUuid } from "@/comun/validacion.ts";
 import { NOMBRE_COOKIE } from "./cookie.ts";
 
 export { NOMBRE_COOKIE };
@@ -38,6 +39,13 @@ export interface LectorCookies {
 export async function obtenerSesionActual(origen: { cookies: LectorCookies }): Promise<SesionActual | null> {
   const sesionId = origen.cookies.get(NOMBRE_COOKIE)?.value;
   if (!sesionId) return null;
+  // Una cookie que NO es un uuid es exactamente lo mismo que no tener sesión. Sin
+  // este chequeo el valor crudo llegaba a `where s.id = $1` sobre una columna uuid y
+  // Postgres lanzaba "invalid input syntax for type uuid": esta función promete
+  // "nunca lanza — devuelve null si no hay sesión viva", y esa promesa se rompía.
+  // Efecto real (red-team): cualquiera SIN sesión tumbaba con HTTP 500 y cuerpo
+  // vacío TODAS las rutas protegidas mandando `Cookie: kp_sesion=fantasma`.
+  if (!esUuid(sesionId)) return null;
 
   const db = await obtenerDb();
   const r = await db.query<{

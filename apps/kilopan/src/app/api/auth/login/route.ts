@@ -4,6 +4,7 @@ import { verificarPin } from "@/identidad/hash.ts";
 import { permitirIntento, ipDelCliente } from "@/identidad/limitador.ts";
 import { NOMBRE_COOKIE, OPCIONES_COOKIE } from "@/identidad/sesion.ts";
 import { validaRut, formatearRut } from "@/comun/valida_rut.ts";
+import { esUuid } from "@/comun/validacion.ts";
 
 // F5 Cambio de operador (PROMPT_MAESTRO.md §5): RUT + PIN + dispositivo ya enrolado.
 export async function POST(request: NextRequest) {
@@ -21,6 +22,17 @@ export async function POST(request: NextRequest) {
   const { rut, pin, dispositivoId, dispositivoSecreto } = cuerpo;
   if (!rut || !pin || !dispositivoId || !dispositivoSecreto) {
     return NextResponse.json({ error: "Faltan campos" }, { status: 400 });
+  }
+  // Superficie PRE-AUTENTICACIÓN: acá llega cualquiera, sin credenciales. Antes
+  // reventaba con 500 ante entradas triviales — un `rut` numérico hacía que
+  // validaRut(number) llamara .replace sobre un número (TypeError no capturado), y un
+  // dispositivoId mal formado moría en el cast a uuid de `where id = $1`. Un 500 en
+  // la puerta de entrada es ruido de monitoreo y fingerprinting del stack gratis.
+  if (typeof rut !== "string" || typeof pin !== "string" || typeof dispositivoSecreto !== "string") {
+    return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
+  }
+  if (!esUuid(dispositivoId)) {
+    return NextResponse.json({ error: "Dispositivo no enrolado o revocado", codigo: "dispositivo_invalido" }, { status: 401 });
   }
   if (!validaRut(rut)) {
     return NextResponse.json({ error: "RUT inválido" }, { status: 400 });
