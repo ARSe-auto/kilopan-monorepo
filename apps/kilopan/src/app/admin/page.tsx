@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { BotonPrimario, SelectorUnToque } from "@kilopan/miga/componentes/index.tsx";
+import { BotonPrimario, SelectorUnToque, Copyright } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
 import { formatearClp, parsearClp } from "@/comun/formato.ts";
 import { validaRut } from "@/comun/valida_rut.ts";
@@ -127,6 +127,8 @@ export default function AdminPage() {
       <SeccionPersonal />
       <SeccionCatalogo />
       <SeccionMediosPago />
+
+      <Copyright />
     </main>
   );
 }

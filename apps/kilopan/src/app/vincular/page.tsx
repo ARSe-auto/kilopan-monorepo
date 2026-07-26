@@ -1,8 +1,9 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { TecladoNumerico, CifraGrande, BotonPrimario } from "@kilopan/miga/componentes/index.tsx";
+import { TecladoNumerico, CifraGrande, BotonPrimario, Copyright } from "@kilopan/miga/componentes/index.tsx";
 import { guardarDispositivo } from "@/identidad/cliente/dispositivo.ts";
+import { LogoKiloPan } from "../LogoKiloPan.tsx";
 
 // Enrolar ESTE equipo. Solo hace falta una vez por tablet/teléfono — después queda
 // guardado localmente y esta pantalla no vuelve a aparecer (ver / -> redirige a
@@ -41,6 +42,7 @@ export default function VincularPage() {
 
   return (
     <main style={{ maxWidth: 420, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+      <LogoKiloPan tamano={28} />
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Vincular este equipo</h1>
         <p style={{ color: "#5B564C", fontSize: 15 }}>
@@ -93,6 +95,8 @@ export default function VincularPage() {
           </button>
         </>
       )}
+
+      <Copyright />
     </main>
   );
 }

@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { obtenerSesionActual } from "@/identidad/sesion.ts";
 import { superficie } from "@kilopan/miga/tokens.ts";
+import { Copyright } from "@kilopan/miga/componentes/index.tsx";
 import { CerrarSesionBoton } from "./CerrarSesionBoton.tsx";
+import { LogoKiloPan } from "../LogoKiloPan.tsx";
 
 // Cada opción lleva una línea que dice QUÉ SE HACE ahí, en lenguaje de panadería.
 // Antes el menú eran siete palabras sueltas: "Despacho" y "Consolidar y facturar" no
@@ -38,6 +40,7 @@ export default async function InicioPage() {
 
   return (
     <main style={{ maxWidth: 420, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+      <LogoKiloPan tamano={28} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <p style={{ fontSize: 13, color: superficie.textoFaint, margin: 0 }}>Hola,</p>
@@ -71,6 +74,8 @@ export default async function InicioPage() {
           </Link>
         ))}
       </nav>
+
+      <Copyright />
     </main>
   );
 }

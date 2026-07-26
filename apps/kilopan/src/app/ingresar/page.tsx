@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { TecladoNumerico, CifraGrande, BotonPrimario } from "@kilopan/miga/componentes/index.tsx";
+import { TecladoNumerico, CifraGrande, BotonPrimario, Copyright } from "@kilopan/miga/componentes/index.tsx";
 import { leerDispositivo, olvidarDispositivo } from "@/identidad/cliente/dispositivo.ts";
 import { recordarOperador } from "@/identidad/cliente/operador.ts";
+import { LogoKiloPan } from "../LogoKiloPan.tsx";
 
 // F5 Cambio de operador (PROMPT_MAESTRO.md §5): RUT + PIN de 4 dígitos, ≤3s. El
 // equipo ya está vinculado a esta altura (/ redirige acá solo si lo está).
@@ -80,8 +81,8 @@ export default function IngresarPage() {
       }}
     >
       <div>
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>KiloPan</h1>
-        <p style={{ color: "#5B564C", fontSize: 15 }}>Ingresa tu RUT y tu PIN.</p>
+        <LogoKiloPan tamano={28} />
+        <p style={{ color: "#5B564C", fontSize: 15, marginTop: 8 }}>Ingresa tu RUT y tu PIN.</p>
       </div>
 
       <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -128,10 +129,11 @@ export default function IngresarPage() {
         </button>
       ) : null}
 
-      <div style={{ marginTop: "auto" }}>
+      <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
         <BotonPrimario disabled={!rut || pin.length !== 4 || enviando} onClick={ingresar}>
           {enviando ? "Ingresando…" : "Ingresar"}
         </BotonPrimario>
+        <Copyright />
       </div>
     </main>
   );

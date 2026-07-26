@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { obtenerDb } from "@/comun/db.ts";
 import { obtenerSesionActual } from "@/identidad/sesion.ts";
 import { superficie, acentos, semantico } from "@kilopan/miga/tokens.ts";
+import { Copyright } from "@kilopan/miga/componentes/index.tsx";
 import { formatearKg, formatearClp } from "@/comun/formato.ts";
 import { VolverInicio } from "../VolverInicio.tsx";
 import { CtaFlota } from "./CtaFlota.tsx";
@@ -40,6 +41,7 @@ export default async function DashboardPage() {
           <VolverInicio />
         </div>
         <p style={{ color: superficie.textoDim }}>Esta pantalla es solo para administradores.</p>
+        <Copyright />
       </main>
     );
   }
@@ -134,6 +136,8 @@ export default async function DashboardPage() {
           con tus kilómetros reales, no con estimaciones.
         </p>
       )}
+
+      <Copyright />
     </main>
   );
 }
