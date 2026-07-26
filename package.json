@@ -15,7 +15,8 @@
     "gate:specs": "node packages/metodo/scripts/gate_specs.mjs",
     "panel": "node packages/metodo/panel/generar.mjs",
     "db:migrate": "node db/migrar.mjs",
-    "db:seed": "node db/sembrar.mjs"
+    "db:seed": "node db/sembrar.mjs",
+    "db:preflight": "node db/preflight-migraciones.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",

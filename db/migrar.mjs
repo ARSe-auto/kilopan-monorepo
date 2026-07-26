@@ -128,6 +128,9 @@ export async function migrar(db) {
       await db.exec("commit");
     } catch (err) {
       await db.exec("rollback").catch(() => undefined);
+      // Se anota QUÉ archivo fue antes de propagar: el catch de arriba solo veía el
+      // mensaje pelado y no había forma de saber cuál de las 15 migraciones murió.
+      err.archivoMigracion = archivo;
       throw err;
     }
     nuevas++;
@@ -144,7 +147,20 @@ async function main() {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((err) => {
+    // Postgres manda en `detail` la fila EXACTA que viola el constraint y en `hint`
+    // qué hacer; el código los tiraba a la basura y solo imprimía `message`. En el
+    // deploy del 26-jul eso costó una investigación entera: el log decía
+    // «could not create unique index "rutas_una_activa_por_repartidor_dia"» y había
+    // que ir a consultar la base a mano para descubrir CUÁLES filas la rompían.
+    // Este contenedor corre `migrar.mjs && server.js`: si la migración falla, la app
+    // no arranca — o sea, este mensaje es TODO lo que el que está de guardia va a ver.
     console.error("migrar: FALLÓ:", err.message);
+    if (err.archivoMigracion) console.error("  archivo:   ", err.archivoMigracion);
+    if (err.detail) console.error("  detalle:   ", err.detail);
+    if (err.hint) console.error("  sugerencia:", err.hint);
+    if (err.constraint) console.error("  constraint:", err.constraint);
+    if (err.table) console.error("  tabla:     ", err.table);
+    if (err.code) console.error("  código pg: ", err.code);
     process.exit(1);
   });
 }
