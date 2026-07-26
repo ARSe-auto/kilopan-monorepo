@@ -1709,3 +1709,108 @@ test("Tanda 4: la 0011 sanea rutas duplicadas preexistentes en vez de caerse (in
   );
   await db.close();
 });
+
+// El mismo patrón que tumbó el deploy con las rutas estaba diez líneas más arriba en la
+// misma migración, sobre cierres_caja, y ahí todavía no había explotado solo por suerte:
+// el preflight alcanzó a llegar a la sentencia de rutas. El cierre se manda con todos los
+// medios de pago en un POST, así que un solo reintento deja ocho duplicados de una.
+test("Tanda 4: la 0011 anula cierres de caja duplicados en vez de caerse, y no borra evidencia contable", async () => {
+  const { db, aplicarResto } = await dbMigradaHasta("0010_venta_idempotente.sql");
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "vendedor");
+  await crearSesion(db, usuarioId, dispositivoId);
+
+  // El vendedor no vio la respuesta y volvió a apretar: el mismo cierre, dos veces.
+  for (const declarado of [48000, 48000]) {
+    await db.query(
+      `insert into pan.cierres_caja (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp)
+       values ($1,$2,'efectivo',50000,$3)`,
+      [dispositivoId, usuarioId, declarado]
+    );
+  }
+
+  await aplicarResto();
+
+  const filas = await db.query(
+    `select anulado from pan.cierres_caja order by cerrado_at, id`
+  );
+  assert.equal(filas.rows.length, 2, "las dos filas siguen ahí: un cierre de caja es evidencia, no se borra");
+  assert.equal(filas.rows[0].anulado, false, "sobrevive el primero, que es el que el vendedor contó");
+  assert.equal(filas.rows[1].anulado, true, "el reintento queda marcado como anulado");
+
+  // Y la regla quedó puesta igual: un tercer cierre del mismo día/medio/vendedor rebota.
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into pan.cierres_caja (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp)
+         values ($1,$2,'efectivo',50000,48000)`,
+        [dispositivoId, usuarioId]
+      ),
+    /cierres_caja_un_cierre_por_dia|unique|duplicate/i,
+    "el índice parcial tiene que aplicar la regla igual que el unique que reemplaza"
+  );
+  await db.close();
+});
+
+// Cuál de las rutas duplicadas sobrevive no es un detalle: cerrar la que el repartidor
+// está usando es peor que el bug que la migración viene a arreglar.
+test("Tanda 4: la 0011 conserva la ruta que repartió de verdad, no la que figura más avanzada", async () => {
+  const { db, aplicarResto } = await dbMigradaHasta("0010_venta_idempotente.sql");
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "repartidor");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const clienteId = await crearCliente(db);
+  const pedidoReal = await crearPedido(db, clienteId, usuarioId, dispositivoId);
+  const pedidoHuerfano = await crearPedido(db, clienteId, usuarioId, dispositivoId);
+  for (const pedidoId of [pedidoReal, pedidoHuerfano]) {
+    // Un pedido no llega a 'en_ruta' sin pasar por 'confirmado', y confirmar exige
+    // correlativo (pedidos_confirmado_tiene_correlativo). Reproducir el camino real
+    // importa: es lo que garantiza que devolverlos a 'confirmado' sea legal.
+    await db.query(`select pan.asignar_correlativo($1)`, [pedidoId]);
+    await db.query(`update pan.pedidos set estado = 'en_ruta' where id = $1`, [pedidoId]);
+  }
+
+  // La ruta que trabajó: figura solo 'planificada', pero tiene una parada ya entregada.
+  const rutaReal = (
+    await db.query(
+      `insert into pan.rutas (repartidor_id, vehiculo, estado) values ($1,'REAL-11','planificada') returning id`,
+      [usuarioId]
+    )
+  ).rows[0].id;
+  await db.query(
+    `insert into pan.ruta_paradas (ruta_id, pedido_id, orden, estado) values ($1,$2,1,'entregada')`,
+    [rutaReal, pedidoReal]
+  );
+
+  // La del doble clic: figura 'en_curso' —más avanzada— pero no movió nada.
+  const rutaFantasma = (
+    await db.query(
+      `insert into pan.rutas (repartidor_id, vehiculo, estado) values ($1,'FANT-99','en_curso') returning id`,
+      [usuarioId]
+    )
+  ).rows[0].id;
+  await db.query(
+    `insert into pan.ruta_paradas (ruta_id, pedido_id, orden, estado) values ($1,$2,1,'pendiente')`,
+    [rutaFantasma, pedidoHuerfano]
+  );
+
+  await aplicarResto();
+
+  const vivas = await db.query(`select vehiculo from pan.rutas where estado <> 'cerrada'`);
+  assert.equal(vivas.rows.length, 1, "debe quedar una sola ruta abierta");
+  assert.equal(
+    vivas.rows[0].vehiculo,
+    "REAL-11",
+    "gana la actividad real (parada ya entregada), no el estado declarado: contar entregas no sirve porque se atan al pedido y las rutas duplicadas comparten pedidos"
+  );
+
+  // El pedido que solo iba en la ruta cerrada no puede quedar atascado en 'en_ruta':
+  // ahí no se vuelve a ofrecer para armar ruta ni puede recibir POD, y el cliente se
+  // queda sin su pan sin que nadie se entere.
+  const estados = await db.query(`select id, estado from pan.pedidos where id in ($1,$2)`, [
+    pedidoReal,
+    pedidoHuerfano,
+  ]);
+  const porId = Object.fromEntries(estados.rows.map((r) => [r.id, r.estado]));
+  assert.equal(porId[pedidoHuerfano], "confirmado", "el pedido huérfano vuelve a la cola de reparto");
+  assert.equal(porId[pedidoReal], "en_ruta", "el que sigue en la ruta viva no se toca");
+  await db.close();
+});
