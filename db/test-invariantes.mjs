@@ -444,6 +444,66 @@ test("AC-VEN-02: stock_disponible baja con la venta y nunca queda negativo por u
   await db.close();
 });
 
+test("Hallazgo ALTA #13: la merma descuenta del stock disponible — sin esto /vender ofrece pan fantasma", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const productoId = await crearProducto(db);
+
+  await pesarMostrador(db, productoId, 10000, usuarioId, dispositivoId);
+  const antesDeMerma = await db.query(`select pan.stock_disponible($1) as stock`, [productoId]);
+  assert.equal(Number(antesDeMerma.rows[0].stock), 10000);
+
+  // 3 kg del sobrante del día se pesan APARTE como merma (pesaje propio, mismo
+  // producto_id) sin que exista todavía una venta de recuperación.
+  await db.query(
+    `insert into pan.pesajes
+       (client_uuid, producto_id, gramos, destino, motivo_merma, estado_merma, usuario_id, dispositivo_id, capturado_at)
+     values (gen_random_uuid(), $1, 3000, 'merma', 'sobrante_dia', 'pendiente', $2, $3, now())`,
+    [productoId, usuarioId, dispositivoId]
+  );
+
+  const conMerma = await db.query(`select pan.stock_disponible($1) as stock`, [productoId]);
+  assert.equal(
+    Number(conMerma.rows[0].stock),
+    7000,
+    "10.000 pesados a mostrador - 3.000 de merma = 7.000 disponibles de verdad"
+  );
+  await db.close();
+});
+
+test("Hallazgo ALTA #13: la merma 'recuperada_con_venta' también descuenta del stock (0005 no la respalda con venta_lineas real)", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const productoId = await crearProducto(db);
+
+  await pesarMostrador(db, productoId, 10000, usuarioId, dispositivoId);
+  const pesaje = await db.query(
+    `insert into pan.pesajes
+       (client_uuid, producto_id, gramos, destino, motivo_merma, estado_merma, usuario_id, dispositivo_id, capturado_at)
+     values (gen_random_uuid(), $1, 3000, 'merma', 'sobrante_dia', 'pendiente', $2, $3, now()) returning id`,
+    [productoId, usuarioId, dispositivoId]
+  );
+
+  // Se "recupera" vendiéndola con descuento (AC-MERM-01, decisión #6): pan.conciliacion_diaria
+  // (0005) mueve estos gramos al casillero de venta SOLO reclasificando el propio pesaje —
+  // nunca inserta una fila real en venta_lineas para esa recuperación. Si stock_disponible
+  // dejara de descontar esta merma al marcarla recuperada, ese pan volvería a aparecer como
+  // disponible aunque ya se vendió.
+  await db.query(`update pan.pesajes set estado_merma = 'recuperada_con_venta' where id = $1`, [
+    pesaje.rows[0].id,
+  ]);
+
+  const stock = await db.query(`select pan.stock_disponible($1) as stock`, [productoId]);
+  assert.equal(
+    Number(stock.rows[0].stock),
+    7000,
+    "sigue descontada: no hay venta_lineas detrás que la reste por su cuenta"
+  );
+  await db.close();
+});
+
 test("ventas: medio_pago='fiado' exige cliente_id; el resto no lo exige", async () => {
   const db = await dbNueva();
   const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
