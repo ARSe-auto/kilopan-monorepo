@@ -10,6 +10,76 @@ el aprendizaje contradice lo que creíamos. **Qué NO va:** el estado del plan (
 
 ---
 
+## 2026-07-26 (tarde) · Diagnóstico del e2e flaky — causa raíz acotada, NO resuelta
+
+**Contexto.** Retomando `camino-dorado.spec.ts` tras el cierre de la entrada anterior:
+el test 2 («entrar con PIN abre el turno») falla de forma **100% determinística** bajo
+`pnpm exec playwright test` real (5/5 corridas, incluyendo con `retries:1`), y **nunca**
+falla en ninguna reproducción manual equivalente fuera del test runner (6+ intentos con
+`chromium.launch()` directo, mismo device, mismos permisos, misma secuencia de
+navegación). Esto es distinto del flaky de `:223` (reparto) documentado arriba — ese
+alternaba pasa/falla; este es fijo.
+
+**Arreglado de paso (commit `be49296`, ya en verde):**
+- El e2e corría contra `next dev` (compila cada ruta en su primera visita, robaba el
+  timeout de 30s de un click bajo la carga del gate completo). Ahora corre contra el
+  build de producción real, el mismo binario standalone que despliega Railway.
+- `next start` es incompatible con `output:"standalone"` (Next lo advierte, pero el
+  síntoma real era mudo: `/api/auth/login` respondía pero el navegador nunca completaba
+  la conexión). Corregido usando `node <dist>/standalone/.../server.js` directo.
+- Fallback en `ingresar/page.tsx`: si `router.push("/inicio")` no completa la transición
+  en 2s tras un login exitoso, fuerza `window.location.assign("/inicio")`.
+
+**Lo nuevo, esta sesión — diagnóstico instrumentado en profundidad:**
+
+Con logging real en servidor (`console.error` temporal en `route.ts` y `sesion.ts`,
+revertido) se confirmó el mecanismo exacto: el login SIEMPRE crea la sesión con éxito
+(200, cookie `Set-Cookie: kp_sesion=...` presente). El fetch RSC interno que
+`router.push()` dispara 60ms después SIEMPRE llega **sin la cookie** — el middleware
+(`middleware.ts`, que solo verifica *existencia* de la cookie) la rechaza antes de que la
+petición llegue siquiera al Server Component de `/inicio` (`DIAG-SESION` nunca se
+imprimió). Next.js responde 200 con el payload RSC de `/ingresar` embebido (su forma de
+comunicar un redirect a una navegación client-side), no un 307 — por eso no hay error
+visible y el router queda «colgado» ahí. El fallback de 2s, al disparar un GET real,
+choca con el mismo rechazo (307 explícito esta vez) — confirma que NO es una carrera de
+milisegundos que un poco más de tiempo resuelve.
+
+**Hipótesis probadas y descartadas, cada una con evidencia directa (no por descarte):**
+1. Cookie `Secure` sobre `http://localhost` sin TLS → `context.cookies()` confirma que
+   Chromium SÍ la guarda (trata `localhost` como origen de confianza).
+2. Contaminación de estado por reutilizar un proceso servidor de pglite entre resiembras
+   manuales (motor embebido de un solo proceso — un `rmSync` del dir bajo un proceso vivo
+   sí lo corrompe, y de hecho dio un 401 espurio una vez) → descartado como causa real
+   reiniciando el proceso en cada resiembra; el patrón real ocurre con servidor 100% fresco.
+3. Service Worker sirviendo `/inicio` desde caché stale → el código (`sw.js` v2) usa
+   estrategia red-primero para cualquier ruta no pública; confirmado que no interfiere
+   esperando explícitamente a `controller:true` antes del login.
+4. `InterceptarSesionVencida` (parchea `window.fetch` global) interceptando el fetch RSC
+   interno del router → descartado corriendo el test real con el componente desactivado:
+   falla idéntico.
+5. Condición de carrera transitoria (escritura→lectura en pglite bajo carga) → descartado
+   con `retries:1`: el retry falla exactamente igual, mismo síntoma, mismo timeout.
+
+**Lo que queda sin explicar:** por qué la cookie recién seteada por `fetch()` no viaja en
+el fetch RSC que Next.js dispara ~60ms después, **solo** bajo `@playwright/test` (test
+runner con fixtures) y nunca bajo `playwright` (librería core, `chromium.launch()`
+directo) — con `trace` activo o inactivo en ambos casos (se probó con y sin). Esa es la
+única variable que no se pudo igualar entre reproducción fallida y exitosa. Puede ser un
+bug conocido de Next.js App Router (cookie recién seteada + navegación RSC inmediata) que
+el propio test runner de Playwright expone por algún detalle de timing/CDP que
+`chromium.launch()` puro no reproduce — no confirmado a nivel de mecanismo interno.
+
+**Decisión:** no seguir cazando sin herramientas más profundas (debugger del worker
+process de Playwright, o reportar upstream a Next.js con un repro mínimo). El fallback de
+2s queda como defensa legítima para producción (Postgres real, sin este patrón — nunca se
+reprodujo fuera de pglite+test-runner). El e2e queda **rojo, no verde falso**: el test 2 y
+los 6 que dependen de él en serie no corren. `AC-POD-04` sigue abierto por esto.
+**Próximo que retome esto:** empezar por reproducir con un repro mínimo de Next.js (sin
+el resto de la app) para descartar que sea específico de KiloPan antes de reportarlo
+upstream.
+
+---
+
 ## 2026-07-26 · Auditoría de prevuelo y reparación del arnés
 
 **Contexto.** El checklist prevuelo de El Elíxir (cap. 14, 20 casillas) se corrió por
