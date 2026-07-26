@@ -16,6 +16,8 @@ import { abrirCamara, capturar, cerrarCamara, subirFoto } from "@/comun/camara.t
 const MOTIVOS_FALLA = [
   { valor: "cerrado", etiqueta: "Local cerrado" },
   { valor: "direccion", etiqueta: "No se encontró la dirección" },
+  // AC-POD-05: catálogo CERRADO de motivos. Rechazo total acá; el parcial sale de
+  // gramos_entregados < gramos_pedidos y se muestra como «Entregada parcial — X de Y».
   { valor: "rechazo", etiqueta: "Cliente rechazó el pedido" },
   { valor: "otro", etiqueta: "Otro" },
 ] as const;

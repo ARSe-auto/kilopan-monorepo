@@ -16,11 +16,9 @@ Todo lo de esta spec es **solo rol `admin`** (regla de rol testeada, §5).
 - [x] (P1) Dar de alta pan nuevo y editar precios desde la app (`/admin` +
       `POST/PATCH /api/productos`), respetando la vigencia histórica de `precios`: cambiar
       un precio crea una fila nueva, jamás edita la vigente [AC-ADM-02]
-- [ ] (P2) Edición de `pan.parametros` desde `/admin`: `clp_km_combustible`, `clp_km_ev`,
-      `co2_g_km_evitado`. §4 los declara «editables por admin, con fuente» y la tarjeta
-      «Tu flota» (`AC-DASH-02`) los consume, pero hoy solo se pueden cambiar por SQL — el
-      caso de la van eléctrica se arma con números que el dueño no puede corregir
-      [AC-ADM-03]
+- [x] (P2) Edición de `pan.parametros` desde `/admin`: la pantalla lee y escribe
+      `/api/parametros`, así que `clp_km_combustible`, `clp_km_ev` y `co2_g_km_evitado`
+      se corrigen sin SQL [AC-ADM-03]
 
 ## Notas de implementación
 

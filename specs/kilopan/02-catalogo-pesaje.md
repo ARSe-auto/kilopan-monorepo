@@ -43,9 +43,10 @@ F1 Pesar ≤4 toques; repetir producto: 2 toques.
       §5 F1 lo exige para que repetir producto cueste 2 toques. Requiere trackear
       frecuencia. Test: sembrar frecuencias desiguales y fallar si la grilla no las
       respeta [AC-PES-07]
-- [ ] (P1-SEC) UI de re-confirmación explícita cuando `pan.es_outlier_pesaje()` devuelve
-      true. Hoy la función existe y acierta, pero nada la muestra: el centinela #4 de §9
-      está cableado a medias. Cancelar **no** debe persistir nada [AC-PES-08]
+- [x] (P1-SEC) UI de re-confirmación explícita cuando `pan.es_outlier_pesaje()` devuelve
+      true: `/pesar` tiene el estado `confirmar_outlier` y conserva el sha256 de la foto
+      entre las dos vueltas de `enviar()` — el maestro no fotografía dos veces la misma
+      bandeja. Verificado en `apps/kilopan/src/app/pesar/page.tsx` [AC-PES-08]
 - [ ] (P2) Validar el camino GATT contra una báscula real antes de darlo por bueno. Las
       marcas comunes en panaderías chilenas (Toledo, CAS, Torrey) suelen usar serie
       propietario, no GATT — `AC-PES-05` está escrito pero no verificado contra hardware

@@ -31,6 +31,9 @@ const PIN_VALIDO = /^\d{4}$/;
 // una pantalla de admin, y no en la de pesaje: es un control del dueño sobre su
 // operación, no algo que quien pesa pueda apagar cuando le incomode.
 export default function AdminPage() {
+  // AC-ADM-03: clp_km_combustible, clp_km_ev y co2_g_km_evitado se corrigen desde acá.
+  // Sin esta pantalla, el caso de la van eléctrica se arma con números que el dueño
+  // no puede tocar sin SQL.
   const [parametros, setParametros] = useState<Parametro[]>([]);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -541,6 +544,8 @@ function SeccionCatalogo() {
 // AC-PAG-01: catálogo de 8 medios de pago fijo — "prender/apagar lo que de verdad
 // usa" (0003), no inventar claves nuevas. Coherente con el grant de la BD
 // (`update (activo)` solamente, nunca insert).
+// AC-PAG-03: el admin prende y apaga medios de pago, pero `pan_app` no puede borrarlos
+// ni renombrarlos — el catálogo de 8 es de la BD, no de la UI.
 function SeccionMediosPago() {
   const [medios, setMedios] = useState<MedioPagoAdmin[]>([]);
   const [cargando, setCargando] = useState(true);

@@ -90,6 +90,9 @@ export default function PesarPage() {
   // Se incrementa tras cada pesaje de reparto para releer cuánto falta: si el maestro
   // no ve bajar el faltante, no tiene cómo saber cuándo parar de cargar bandejas.
   const [refrescoLineas, setRefrescoLineas] = useState(0);
+  // AC-PES-08: `confirmar_outlier` es el centinela #4 de §9 hecho pantalla —
+  // `pan.es_outlier_pesaje()` detecta >3× la mediana y ACÁ se exige la re-confirmación.
+  // Cancelar no persiste nada.
   const [estado, setEstado] = useState<"listo" | "foto" | "enviando" | "confirmar_outlier">("listo");
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
 

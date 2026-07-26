@@ -1,3 +1,5 @@
+// AC-VEN-03: cierre de caja — esperado vs declarado con la diferencia visible (§3
+// módulo 3). El vendedor cuenta A CIEGAS: no ve lo esperado antes de declarar.
 "use client";
 import { useEffect, useState } from "react";
 import { BotonPrimario } from "@kilopan/miga/componentes/index.tsx";

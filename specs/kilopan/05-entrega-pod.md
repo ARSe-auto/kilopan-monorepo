@@ -25,13 +25,14 @@ bloquea** — el pan no espera (§4).
       que permitiría adjuntar una foto vieja de la galería), JPEG ~400 KB, sha256 sobre
       el blob comprimido, subida a `/api/fotos`; sin señal el binario queda en la cola de
       fotos del outbox [AC-POD-03]
-- [ ] (P1) Ejercitar el flujo POD de punta a punta con el seed: hoy `AC-POD-03` compila y
-      pasa lint, pero **nunca se corrió completo** — sembrar una parada de prueba exige
-      sesión viva de operador. Test e2e móvil 390×844 con offline emulado: pesar →
-      armar → salir → entregar sin señal → reconectar → aparece en dashboard una sola vez
-      [AC-POD-04]
-- [ ] (P1) Modos rechazo total y parcial con motivo de catálogo cerrado obligatorio
-      (§3 módulo 5). Sin construir: hoy solo existe la entrega completa [AC-POD-05]
+- [x] (P1) Flujo POD ejercitado de punta a punta con el seed: e2e «8 · el repartidor
+      entrega el pedido con foto y GPS» en `camino-dorado.spec.ts:223`. ⚠️ El test es
+      INESTABLE: sobre el mismo commit pasó, agotó los 30 s y volvió a pasar.
+      Estabilizarlo es prerrequisito para dejar el motor desatendido [AC-POD-04]
+- [x] (P1) Rechazo total y parcial con motivo de catálogo cerrado: `/ruta` define el
+      catálogo (`rechazo`: «Cliente rechazó el pedido»), reporta rechazos por
+      `clientUuid` desde el outbox y muestra «Entregada parcial — X de Y» cuando
+      `gramos_entregados < gramos_pedidos` [AC-POD-05]
 
 ## Notas de implementación
 

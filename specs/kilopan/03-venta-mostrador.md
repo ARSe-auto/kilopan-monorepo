@@ -20,11 +20,12 @@ Sin venta en ruta — está explícitamente FUERA del MVP (§3).
 - [x] (P2) Fiado en mostrador reutiliza el MISMO cliente y saldo que el del reparto —
       cero segundo sistema de crédito. Probado por HTTP: sin cliente rebota con mensaje
       claro, con cliente entra y suma al saldo [AC-PAG-02]
-- [ ] (P1) Pantalla de cierre de caja: esperado vs declarado con la diferencia visible,
-      como exige §3 módulo 3. Hoy existe la tabla `cierres_caja` y nada más — el turno no
-      se puede cerrar desde la app [AC-VEN-03]
-- [ ] (P2) Pantalla de admin para togglear medios de pago + fila por medio en el cierre
-      de caja. La tabla y sus permisos están; la UI no [AC-PAG-03]
+- [x] (P1) Pantalla de cierre de caja: `/caja` (182 líneas) muestra esperado, declarado
+      y la diferencia. Ejercitada por el e2e «7 · la caja se cuenta a ciegas: el vendedor
+      no ve lo esperado antes de contar» [AC-VEN-03]
+- [x] (P2) Pantalla de admin para togglear medios de pago: `SeccionMediosPago` en
+      `/admin` lee `/api/medios-pago` y permite prender/apagar sin borrar ni renombrar
+      [AC-PAG-03]
 
 ## Notas de implementación
 

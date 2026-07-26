@@ -28,17 +28,17 @@ Ningún estado se comunica solo por color.
       y un `README.md` que dice explícitamente: «se puebla en el hito de extracción,
       después del DONE de KiloPan — no escribir lógica de negocio aquí todavía»
       [AC-H0-07]
-- [ ] (P1) Escala tipográfica completa de Miga aplicada y testeada: `peso-bascula`
-      96/700 · display 34/700 · título 22/600 · cuerpo 17/400 · pie 13/400; grilla 8 px,
-      radio 12 px; botón primario full-width 56 px anclado abajo en safe-area
-      [AC-H0-08]
+- [ ] (P1) TEST que verifique la escala tipográfica completa de Miga. Los tokens ya
+      existen (`tokens.ts`: `pesoBascula` 96/700, y `CifraGrande.tsx` la aplica); lo que
+      no existe es la prueba que falle si una pantalla se sale de la escala [AC-H0-08]
 - [ ] (P1) es-CL verificado por grep de gate: `12,450 kg` (coma, 3 decimales desde
       gramos), `$12.500` (entero, punto de miles), `dd-mm-aaaa`, RUT `12.345.678-5`
       validado al escribir. **Cero strings visibles en inglés** [AC-H0-09]
-- [ ] (P1) AA medible en el gate: contraste ≥4.5:1 por axe automatizado; cero targets
-      <44 pt (test que recorre el DOM); foco visible; F1/F4/F5 completables con
-      VoiceOver; texto al 200 % sin truncar kilos ni CLP; cero `aria-label` vacíos
-      [AC-H0-10]
+- [ ] (P1) AA medible en el gate: **axe no está instalado ni como dependencia ni como
+      test** — `check.sh` solo lo nombra en un comentario y en el mensaje de «saltado».
+      Falta: contraste ≥4.5:1 automatizado, test que recorra el DOM buscando targets
+      <44 pt, foco visible, F1/F4/F5 con VoiceOver, texto al 200 % sin truncar kilos
+      ni CLP, y grep de `aria-label` vacíos [AC-H0-10]
 - [ ] (P1) Estados obligatorios en todo listado: vacío accionable / skeleton / error con
       reintentar / sin conexión con **contador real de cola** («Sin conexión — N
       registros por subir» ámbar → «Sincronizado hace Xs» verde). Undo de 8 s en vez de

@@ -22,10 +22,9 @@ eso el correlativo interno se llama `correlativo_pedido` y nunca «folio».
 - [x] (P2) UI «Consolidar y facturar»: admin elige cliente, ve sus guías sueltas, las
       marca y registra la factura que las cubre (monto = suma de las guías, no un número
       tecleado aparte). Probado: doble facturación rebota con 409 [AC-FIA-02]
-- [ ] (P1) Captura del DTE: escaneo del TED con zxing-js como mejora progresiva **y
-      captura manual tipo+folio+RUT como camino primario en iOS** (§7, AC probado en
-      iPhone real). Hoy la tabla existe y nada la alimenta desde pantalla — el bloqueo
-      del art. 55 (`AC-DES-02`) no se puede satisfacer sin salir de la app [AC-DTE-03]
+- [ ] (P1) Escaneo del TED con zxing-js como mejora progresiva. La captura MANUAL —el
+      camino primario en iOS según §7— ya existe: panel «Registrar documento del SII» en
+      `/pedidos`. Falta solo el escaneo del PDF417 [AC-DTE-03]
 
 ## Notas de implementación
 

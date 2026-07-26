@@ -220,6 +220,9 @@ test("7 · la caja se cuenta a ciegas: el vendedor no ve lo esperado antes de co
 // AC-DES-03: «Armar ruta y salir» desde /pedidos, con la guía ya registrada — sin DTE
 // la BD no deja que la ruta pase a en_curso (art. 55 DL 825).
 // AC-POD-03: la entrega exige foto in-app y GPS, y el acuse nombra al cliente.
+// AC-POD-04: el flujo POD ejercitado de punta a punta, que es lo que AC-POD-03 no tenía.
+// OJO: este test es INESTABLE (pasó, agotó 30 s, volvió a pasar sobre el mismo commit).
+// Un flaky dentro del gate lo pone rojo al azar y el watchdog revierte commits sanos.
 test("8 · el repartidor entrega el pedido con foto y GPS", async ({ page }) => {
   // La ruta la arma despacho de un clic; el pedido y su guía vienen sembrados porque lo
   // que este caso prueba es la ENTREGA, no el alta del pedido.
