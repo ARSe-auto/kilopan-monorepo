@@ -20,6 +20,21 @@ const CACHE = "kilopan-shell-v2";
 // pedidos, etc.) exige sesión — cachearlas es el bug que esta versión corrige.
 const RUTAS_PUBLICAS_CACHEABLES = new Set(["/", "/ingresar", "/vincular"]);
 
+// Cada build de Next nombra sus chunks con un hash nuevo — un chunk cacheado de un
+// build viejo no lo vuelve a pedir nadie porque el HTML del build actual ya no lo
+// referencia, pero tampoco se borra solo: sin tope, un equipo que queda prendido
+// semanas sin que se suba la versión de este archivo (CACHE) acumula cada chunk de
+// cada deploy, para siempre. cache.keys() en Chrome devuelve orden de inserción, así
+// que recortar por el principio es, en la práctica, LRU-por-inserción.
+const TOPE_ESTATICOS = 200;
+
+async function agregarConTope(cache, request, response) {
+  await cache.put(request, response);
+  const claves = await cache.keys();
+  const exceso = claves.length - TOPE_ESTATICOS;
+  if (exceso > 0) await Promise.all(claves.slice(0, exceso).map((k) => cache.delete(k)));
+}
+
 self.addEventListener("install", (evento) => {
   // No se precachea una lista fija de chunks: sus nombres llevan hash y cambian en
   // cada build, así que una lista escrita a mano quedaría obsoleta en silencio.
@@ -55,7 +70,7 @@ self.addEventListener("fetch", (evento) => {
           hit ??
           fetch(evento.request).then((resp) => {
             const copia = resp.clone();
-            void caches.open(CACHE).then((c) => c.put(evento.request, copia));
+            void caches.open(CACHE).then((c) => agregarConTope(c, evento.request, copia));
             return resp;
           })
       )
