@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TecladoNumerico, CifraGrande, BotonPrimario, Copyright } from "@kilopan/miga/componentes/index.tsx";
 import { leerDispositivo, olvidarDispositivo } from "@/identidad/cliente/dispositivo.ts";
@@ -18,10 +18,17 @@ export default function IngresarPage() {
   // desincronizado) — reintentar el PIN no arregla nada, hace falta vincularlo de
   // nuevo. Ver api/auth/login/route.ts: codigo "dispositivo_invalido".
   const [dispositivoInvalido, setDispositivoInvalido] = useState(false);
+  // Ver el fallback de router.push más abajo: el cleanup de este efecto es lo que
+  // cancela el reloj cuando la navegación SÍ funciona (el componente se desmonta al
+  // cambiar de pantalla, y React corre este cleanup en ese momento — no antes).
+  const relojFallbackRef = useRef<number | null>(null);
 
   useEffect(() => {
     const ultimo = window.localStorage.getItem("kp_ultimo_rut");
     if (ultimo) setRut(ultimo);
+    return () => {
+      if (relojFallbackRef.current !== null) window.clearTimeout(relojFallbackRef.current);
+    };
   }, []);
 
   async function ingresar() {
@@ -56,6 +63,21 @@ export default function IngresarPage() {
       // Para que la cola offline sepa, al momento de encolar, DE QUIÉN es cada
       // mutación — y así no subirla a nombre de quien esté logueado al sincronizar.
       recordarOperador(cuerpo.usuario.id);
+      // El login YA está confirmado por el servidor a esta altura — lo único que
+      // falta es la transición client-side de Next (fetch RSC + actualizar la URL).
+      // Encontrado en vivo (26-jul-2026, instrumentando el propio código): esa
+      // transición puede no completarse nunca sin lanzar ningún error, dejando al
+      // operador con "Ingresando…" congelado pese a que su turno ya abrió en el
+      // servidor. En una tablet de mesón bajo carga esto es indistinguible de un
+      // cuelgue real. `router.push` es fire-and-forget: no hay promesa que esperar
+      // ni evento de fallo que capturar, así que la única defensa posible es un
+      // plazo — si router.push no completó la navegación en 2 s, un cambio de URL
+      // duro sí funciona siempre (fuerza un GET normal, sin la capa RSC). Si router.push
+      // SÍ funciona, este componente se desmonta al cambiar de pantalla y el cleanup
+      // del useEffect de arriba cancela el reloj antes de que llegue a dispararse.
+      relojFallbackRef.current = window.setTimeout(() => {
+        window.location.assign("/inicio");
+      }, 2000);
       router.push("/inicio");
     } catch {
       setError("Sin conexión con el servidor");

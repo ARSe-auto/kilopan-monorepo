@@ -2,6 +2,12 @@ import { join } from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // distDir configurable: el e2e hace su PROPIO `next build` (contra Postgres en
+  // pglite, nunca contra producción) y necesita un directorio de salida separado del
+  // `.next` que el gate ya usó para el chequeo standalone y el presupuesto de
+  // performance — si compartieran distDir, el build del e2e lo pisaría a mitad de
+  // check.sh --full. Mismo patrón que NEXT_DIST_DIR=.next-perf en eauto-crm-next.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // Salida standalone: empaqueta solo lo que el servidor necesita en runtime, en vez
   // de arrastrar todo node_modules. En un monorepo pnpm eso importa el doble, porque
   // los symlinks de .pnpm no sobreviven a un copy ingenuo al contenedor.

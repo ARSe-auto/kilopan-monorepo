@@ -14,17 +14,20 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const APP_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
+// Mismo distDir que next.config.ts lee de NEXT_DIST_DIR (ej. .next-e2e para el build
+// propio del e2e, separado del .next de producción — ver playwright.config.ts).
+const DIST_DIR = process.env.NEXT_DIST_DIR || ".next";
 // outputFileTracingRoot (next.config.ts) apunta a la raíz del monorepo, así que el
-// standalone reproduce la ruta completa: .next/standalone/apps/kilopan/.
-const DESTINO = join(APP_DIR, ".next", "standalone", "apps", "kilopan");
+// standalone reproduce la ruta completa: <distDir>/standalone/apps/kilopan/.
+const DESTINO = join(APP_DIR, DIST_DIR, "standalone", "apps", "kilopan");
 
 if (!existsSync(DESTINO)) {
   console.error(`copiar-estaticos-standalone: no existe ${DESTINO} — ¿corriste "next build" con output:"standalone"?`);
   process.exit(1);
 }
 
-mkdirSync(join(DESTINO, ".next"), { recursive: true });
-cpSync(join(APP_DIR, ".next", "static"), join(DESTINO, ".next", "static"), { recursive: true });
+mkdirSync(join(DESTINO, DIST_DIR), { recursive: true });
+cpSync(join(APP_DIR, DIST_DIR, "static"), join(DESTINO, DIST_DIR, "static"), { recursive: true });
 cpSync(join(APP_DIR, "public"), join(DESTINO, "public"), { recursive: true });
 
 console.log("copiar-estaticos-standalone: OK (.next/static y public/ copiados al standalone)");
