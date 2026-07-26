@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
-import { exigirSesion } from "@/identidad/sesion.ts";
+import { exigirRol } from "@/identidad/sesion.ts";
 import { roundClp } from "@/comun/round_clp.ts";
 
 interface LineaEntrada {
@@ -9,7 +9,7 @@ interface LineaEntrada {
 }
 
 export async function GET(request: NextRequest) {
-  const sesion = await exigirSesion(request);
+  const sesion = await exigirRol(request, ["admin"]);
   if (sesion instanceof NextResponse) return sesion;
 
   const db = await obtenerDb();
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 // F2 Armar pedido (PROMPT_MAESTRO.md §5). El pedido nace en borrador; confirmarlo es
 // lo que le asigna correlativo — y eso lo hace SOLO pan.asignar_correlativo().
 export async function POST(request: NextRequest) {
-  const sesion = await exigirSesion(request);
+  const sesion = await exigirRol(request, ["admin"]);
   if (sesion instanceof NextResponse) return sesion;
 
   let cuerpo: { clienteId?: string; fechaEntrega?: string; lineas?: LineaEntrada[] };

@@ -3,8 +3,9 @@
 // justamente el punto (mitiga robo de sesión por XSS).
 import type { NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
+import { NOMBRE_COOKIE } from "./cookie.ts";
 
-export const NOMBRE_COOKIE = "kp_sesion";
+export { NOMBRE_COOKIE };
 
 export const OPCIONES_COOKIE = {
   httpOnly: true,
@@ -74,6 +75,22 @@ export async function exigirSesion(request: NextRequest) {
   if (!sesion) {
     const { NextResponse } = await import("next/server");
     return NextResponse.json({ error: "Sin sesión" }, { status: 401 });
+  }
+  return sesion;
+}
+
+/** Igual que `exigirSesion`, pero además exige que el rol de quien llama esté en la
+ *  lista dada — 403 si no. Patrón tomado de `POST /api/clientes` y `POST /api/rutas`,
+ *  que ya lo hacían a mano; esto lo vuelve replicable en el resto de endpoints de
+ *  escritura y en las lecturas que exponen plata. Uso:
+ *  const sesion = await exigirRol(request, ["admin", "vendedor"]);
+ *  if (sesion instanceof NextResponse) return sesion; */
+export async function exigirRol(request: NextRequest, roles: SesionActual["rol"][]) {
+  const sesion = await exigirSesion(request);
+  const { NextResponse } = await import("next/server");
+  if (sesion instanceof NextResponse) return sesion;
+  if (!roles.includes(sesion.rol)) {
+    return NextResponse.json({ error: "No tienes permiso para esto" }, { status: 403 });
   }
   return sesion;
 }

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
-import { exigirSesion } from "@/identidad/sesion.ts";
+import { exigirSesion, exigirRol } from "@/identidad/sesion.ts";
 
 export async function GET(request: NextRequest) {
   const sesion = await exigirSesion(request);
@@ -65,7 +65,8 @@ export async function POST(request: NextRequest) {
 // AC-DES-02: «Salir a ruta». El trigger de la BD es el que manda — si falta un DTE,
 // esto rebota y devuelve el motivo textual, sin override posible desde acá.
 export async function PATCH(request: NextRequest) {
-  const sesion = await exigirSesion(request);
+  // Hoy la única pantalla que llama a esto es /pedidos (armar+salir a ruta), admin-only.
+  const sesion = await exigirRol(request, ["admin"]);
   if (sesion instanceof NextResponse) return sesion;
 
   let cuerpo: { rutaId?: string; estado?: string; kmInicio?: number; kmFin?: number };
@@ -76,6 +77,14 @@ export async function PATCH(request: NextRequest) {
   }
   const { rutaId, estado, kmInicio, kmFin } = cuerpo;
   if (!rutaId || !estado) return NextResponse.json({ error: "Faltan campos" }, { status: 400 });
+  // El $/km del panel del dueño sale de estos números — un odómetro negativo o no
+  // entero los ensucia antes de que el trigger `km_fin >= km_inicio` alcance a mirarlos.
+  if (kmInicio != null && (!Number.isInteger(kmInicio) || kmInicio < 0)) {
+    return NextResponse.json({ error: "Kilómetro de inicio inválido" }, { status: 400 });
+  }
+  if (kmFin != null && (!Number.isInteger(kmFin) || kmFin < 0)) {
+    return NextResponse.json({ error: "Kilómetro final inválido" }, { status: 400 });
+  }
 
   const db = await obtenerDb();
   try {
@@ -94,6 +103,12 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json(
         { error: "No puedes salir: hay pedidos sin guía o factura asociada (art. 55 DL 825)" },
         { status: 409 }
+      );
+    }
+    if (/rutas_km_fin_mayor/i.test(mensaje)) {
+      return NextResponse.json(
+        { error: "El kilómetro final no puede ser menor que el de inicio" },
+        { status: 400 }
       );
     }
     console.error("PATCH /api/rutas:", mensaje);

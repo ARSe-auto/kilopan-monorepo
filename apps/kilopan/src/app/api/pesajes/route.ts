@@ -1,13 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
-import { exigirSesion } from "@/identidad/sesion.ts";
+import { exigirRol } from "@/identidad/sesion.ts";
 
 const MOTIVOS_MERMA = ["quemado", "sobrante_dia", "devolucion_cliente", "otro"] as const;
 
 // F1 Pesar (PROMPT_MAESTRO.md §5): ≤4 toques. client_uuid es la clave de idempotencia
 // — un doble-tap o un reintento de red con el MISMO client_uuid no duplica el pesaje.
 export async function POST(request: NextRequest) {
-  const sesion = await exigirSesion(request);
+  const sesion = await exigirRol(request, ["admin", "maestro"]);
   if (sesion instanceof NextResponse) return sesion;
 
   let cuerpo: {

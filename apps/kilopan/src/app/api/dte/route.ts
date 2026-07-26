@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
-import { exigirSesion } from "@/identidad/sesion.ts";
+import { exigirRol } from "@/identidad/sesion.ts";
 import { validaRut } from "@/comun/valida_rut.ts";
 
 const TIPOS_VALIDOS = [33, 39, 52, 61];
@@ -9,7 +9,7 @@ const TIPOS_VALIDOS = [33, 39, 52, 61];
 // folios, no crea PDFs con apariencia tributaria (art. 97 N°4 CT). Si algún día
 // alguien intenta agregar eso acá, el grep del guardrail y esta nota deberían frenarlo.
 export async function POST(request: NextRequest) {
-  const sesion = await exigirSesion(request);
+  const sesion = await exigirRol(request, ["admin"]);
   if (sesion instanceof NextResponse) return sesion;
 
   let cuerpo: Record<string, unknown>;

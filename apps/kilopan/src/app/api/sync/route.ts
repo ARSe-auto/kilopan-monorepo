@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
-import { exigirSesion } from "@/identidad/sesion.ts";
+import { exigirRol } from "@/identidad/sesion.ts";
 
 interface EntregaEntrada {
   clientUuid: string;
@@ -20,7 +20,7 @@ interface EntregaEntrada {
 // ON CONFLICT DO NOTHING: reintento infinito sin duplicar, cero merge. Un replay
 // de la cola entera es seguro por construcción (test centinela #1).
 export async function POST(request: NextRequest) {
-  const sesion = await exigirSesion(request);
+  const sesion = await exigirRol(request, ["repartidor"]);
   if (sesion instanceof NextResponse) return sesion;
 
   let cuerpo: { entregas?: EntregaEntrada[] };
@@ -40,6 +40,24 @@ export async function POST(request: NextRequest) {
     try {
       if (!e.clientUuid || !e.pedidoId || !e.receptorNombre || !e.fotoSha256) {
         rechazadas.push({ clientUuid: e.clientUuid, motivo: "faltan campos obligatorios" });
+        continue;
+      }
+      // Sin esto, cualquier sesión repartidor cierra el POD de CUALQUIER pedido del
+      // sistema con solo adivinar el id — la conciliación del día queda falseada y
+      // una parada ajena se marca entregada sin que su repartidor real se entere.
+      const parada = await db.query<{ ok: boolean }>(
+        `select true as ok
+           from pan.ruta_paradas rp
+           join pan.rutas r on r.id = rp.ruta_id
+          where rp.pedido_id = $1 and r.repartidor_id = $2 and r.estado in ('en_curso','cargando')
+          limit 1`,
+        [e.pedidoId, sesion.usuarioId]
+      );
+      if (!parada.rows[0]?.ok) {
+        rechazadas.push({
+          clientUuid: e.clientUuid,
+          motivo: "Ese pedido no es una parada de tu ruta activa",
+        });
         continue;
       }
       // Flags que NO bloquean, solo marcan para la cola "Entregas por revisar".

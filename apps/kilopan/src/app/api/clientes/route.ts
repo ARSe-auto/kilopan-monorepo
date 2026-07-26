@@ -1,10 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
-import { exigirSesion } from "@/identidad/sesion.ts";
+import { exigirSesion, exigirRol } from "@/identidad/sesion.ts";
 import { validaRut } from "@/comun/valida_rut.ts";
 
+// El saldo de fiado que devuelve esta lectura es plata: solo quien puede fiar
+// (vendedor en el mesón) o administrar clientes lo necesita.
 export async function GET(request: NextRequest) {
-  const sesion = await exigirSesion(request);
+  const sesion = await exigirRol(request, ["admin", "vendedor"]);
   if (sesion instanceof NextResponse) return sesion;
 
   const db = await obtenerDb();

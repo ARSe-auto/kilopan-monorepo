@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
-import { exigirSesion } from "@/identidad/sesion.ts";
+import { exigirRol } from "@/identidad/sesion.ts";
 import { roundClp } from "@/comun/round_clp.ts";
 
 interface LineaEntrada {
@@ -13,7 +13,7 @@ interface LineaEntrada {
 
 // F6 Venta mostrador (PROMPT_MAESTRO.md §5): contra el stock ya pesado.
 export async function POST(request: NextRequest) {
-  const sesion = await exigirSesion(request);
+  const sesion = await exigirRol(request, ["admin", "vendedor"]);
   if (sesion instanceof NextResponse) return sesion;
 
   let cuerpo: {

@@ -1,11 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
-import { exigirSesion } from "@/identidad/sesion.ts";
+import { exigirSesion, exigirRol } from "@/identidad/sesion.ts";
 
 // AC-FIA-02 (decisión #2). Guías entregadas de un cliente que todavía no están
-// cubiertas por ninguna factura — la materia prima del fiado.
+// cubiertas por ninguna factura — la materia prima del fiado. Solo /facturar la
+// consulta y esa pantalla es admin-only.
 export async function GET(request: NextRequest) {
-  const sesion = await exigirSesion(request);
+  const sesion = await exigirRol(request, ["admin"]);
   if (sesion instanceof NextResponse) return sesion;
 
   const clienteId = request.nextUrl.searchParams.get("clienteId");

@@ -1,11 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
-import { exigirSesion } from "@/identidad/sesion.ts";
+import { exigirRol } from "@/identidad/sesion.ts";
 
 // AC-VEN-01 + AC-PAG-01: el cierre de caja pasa de un par esperado/declarado a UNA
 // FILA POR MEDIO DE PAGO activo — porque ahora la panadería cobra por 8 vías, no 2.
 export async function GET(request: NextRequest) {
-  const sesion = await exigirSesion(request);
+  const sesion = await exigirRol(request, ["admin", "vendedor"]);
   if (sesion instanceof NextResponse) return sesion;
 
   const db = await obtenerDb();
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const sesion = await exigirSesion(request);
+  const sesion = await exigirRol(request, ["admin", "vendedor"]);
   if (sesion instanceof NextResponse) return sesion;
 
   let cuerpo: {

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
-import { exigirSesion } from "@/identidad/sesion.ts";
+import { exigirRol } from "@/identidad/sesion.ts";
 
 const POR_PAGINA = 50;
 
@@ -8,8 +8,9 @@ const POR_PAGINA = 50;
 // 40 del historial de auditoría obliga a Postgres a recorrer y descartar 2.000 filas;
 // con keyset el costo es constante y el índice de `recibido_at` hace todo el trabajo.
 // Además el cursor no se "corre" si entra una entrega nueva mientras el dueño scrollea.
+// Es la cola "Entregas por revisar" del dueño: nadie más la consulta hoy.
 export async function GET(request: NextRequest) {
-  const sesion = await exigirSesion(request);
+  const sesion = await exigirRol(request, ["admin"]);
   if (sesion instanceof NextResponse) return sesion;
 
   const cursor = request.nextUrl.searchParams.get("cursor"); // recibido_at de la última fila vista

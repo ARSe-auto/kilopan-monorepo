@@ -1,13 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
-import { exigirSesion } from "@/identidad/sesion.ts";
+import { exigirRol } from "@/identidad/sesion.ts";
 
 const ROLES = ["admin", "maestro", "vendedor", "repartidor"];
 
 // Solo id/nombre/rol: ni el RUT ni nada de identidad viaja de más. El pin_hash
-// obviamente jamás sale de la BD.
+// obviamente jamás sale de la BD. Aun así es la nómina completa del personal —
+// solo /pedidos la consulta (para armar rutas) y esa pantalla es admin-only.
 export async function GET(request: NextRequest) {
-  const sesion = await exigirSesion(request);
+  const sesion = await exigirRol(request, ["admin"]);
   if (sesion instanceof NextResponse) return sesion;
 
   const rol = request.nextUrl.searchParams.get("rol");
