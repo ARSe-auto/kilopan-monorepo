@@ -9,6 +9,8 @@
 // se borra al cerrar la pestaña — o sea, perdía pesajes. Ahora todo va por acá:
 // IndexedDB sobrevive al cierre del navegador y al reinicio del teléfono.
 
+import { operadorActual } from "@/identidad/cliente/operador.ts";
+
 const DB_NOMBRE = "kilopan_outbox";
 const TIENDA = "pendientes";
 const TIENDA_FOTOS = "fotos_pendientes";
@@ -27,6 +29,11 @@ export interface ItemOutbox {
   intentos: number;
   creadoAt: number;
   ultimoError?: string;
+  /** Quién estaba logueado cuando se encoló esto. El servidor atribuye la mutación a
+   *  quien esté logueado AL SINCRONIZAR, no a quien la creó — en una tablet compartida
+   *  eso le cuelga la venta de un operador a otro. Con esto, `sincronizar()` no sube un
+   *  ítem si el operador actual no es el mismo que lo encoló. */
+  operadorId: string | null;
 }
 
 export interface ItemFotoOutbox {
@@ -129,7 +136,7 @@ export async function encolar(item: {
   payload: unknown;
 }): Promise<void> {
   await conTienda("readwrite", (t) =>
-    t.put({ ...item, intentos: 0, creadoAt: Date.now() } satisfies ItemOutbox)
+    t.put({ ...item, intentos: 0, creadoAt: Date.now(), operadorId: operadorActual() } satisfies ItemOutbox)
   );
 }
 
@@ -203,11 +210,19 @@ export async function sincronizar(): Promise<ResultadoSync> {
   const rechazadas: { clientUuid: string; motivo: string }[] = [];
   let sinConexion = false;
 
+  // Ítems de OTRO operador: no se suben ahora. Si se subieran igual, el servidor los
+  // registraría a nombre de quien esté logueado EN ESTE momento (la sesión con la que
+  // viaja el fetch), no de quien los creó — en una tablet compartida eso le atribuye la
+  // venta o el pesaje de un operador a otro. Se quedan en la cola —siguen contando como
+  // pendientes— hasta que su propio operador vuelva a loguearse.
+  const operador = operadorActual();
+  const propios = pendientes.filter((p) => p.operadorId == null || p.operadorId === operador);
+
   // Las entregas van juntas a /api/sync (idempotente por lote); el resto una por una
   // a su propia ruta. Todas son idempotentes por client_uuid, así que reenviar de más
   // nunca duplica.
-  const entregas = pendientes.filter((p) => p.tipo === "entrega");
-  const otras = pendientes.filter((p) => p.tipo !== "entrega");
+  const entregas = propios.filter((p) => p.tipo === "entrega");
+  const otras = propios.filter((p) => p.tipo !== "entrega");
 
   if (entregas.length > 0) {
     try {
@@ -225,12 +240,16 @@ export async function sincronizar(): Promise<ResultadoSync> {
           await quitar(uuid);
           enviadas++;
         }
+        // `cuerpo.rechazadas` son solo rechazos DE NEGOCIO por entrega (GPS fuera de
+        // zona, pedido inexistente): un 401/403 de sesión nunca llega hasta acá porque
+        // /api/sync exige la sesión UNA vez, al principio del POST completo — si esa
+        // falla, cae en el `else` de abajo con el lote entero intacto.
         for (const rz of cuerpo.rechazadas) {
           await quitar(rz.clientUuid); // no se reintenta para siempre: se reporta
           rechazadas.push(rz);
         }
       } else {
-        sinConexion = true;
+        sinConexion = true; // incluye 401/403: el lote completo queda pendiente
       }
     } catch {
       sinConexion = true;
@@ -247,6 +266,13 @@ export async function sincronizar(): Promise<ResultadoSync> {
       if (r.ok) {
         await quitar(item.clientUuid);
         enviadas++;
+      } else if (r.status === 401 || r.status === 403) {
+        // Sesión vencida a mitad de cola: NO es un rechazo de negocio, es reintentable
+        // en cuanto el operador vuelva a autenticarse. Antes esto caía en la misma rama
+        // que un 409 de stock insuficiente y `quitar()` borraba la venta/pesaje para
+        // siempre — el operador dejaba la tablet 10 minutos y perdía lo hecho sin aviso.
+        await marcarFallo(item, `Sesión vencida (${r.status}) — se reintenta al volver a entrar`);
+        sinConexion = true;
       } else if (r.status < 500) {
         const cuerpo = await r.json().catch(() => ({}));
         await quitar(item.clientUuid);

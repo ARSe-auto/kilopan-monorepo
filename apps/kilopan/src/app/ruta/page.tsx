@@ -35,6 +35,10 @@ export default function RutaPage() {
   const [errorCamara, setErrorCamara] = useState<string | null>(null);
   const [capturando, setCapturando] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  // El outbox reporta rechazos por `clientUuid`, pero la lista de paradas vive por
+  // `parada_id` — este mapa es lo que permite, al llegar un rechazo, volver a mostrar
+  // LA PARADA correcta como pendiente en vez de dejarla desaparecida.
+  const clientUuidAParada = useRef<Map<string, string>>(new Map());
 
   const cargarRuta = useCallback(async () => {
     try {
@@ -56,7 +60,28 @@ export default function RutaPage() {
 
   useEffect(() => {
     void cargarRuta();
-    const detener = iniciarSyncAutomatico(setPendientes);
+    // Antes esto era `iniciarSyncAutomatico(setPendientes)`: pasaba el setter de React
+    // directo como callback, así que el segundo argumento (`rechazadas`) se ignoraba
+    // por completo. El outbox ya había borrado el ítem rebotado y `confirmar()` ya
+    // había marcado la parada como entregada en el estado local — la entrega
+    // desaparecía en silencio y la parada se contaba como hecha sin estarlo.
+    const detener = iniciarSyncAutomatico((n, rechazadas) => {
+      setPendientes(n);
+      if (rechazadas?.length) {
+        setEntregadasLocal((actual) => {
+          const copia = new Set(actual);
+          for (const rz of rechazadas) {
+            const paradaId = clientUuidAParada.current.get(rz.clientUuid);
+            if (paradaId) copia.delete(paradaId);
+          }
+          return copia;
+        });
+        setMensaje(
+          `${rechazadas.length} entrega(s) rebotaron y siguen pendientes: ${rechazadas[0]?.motivo ?? ""}`
+        );
+        void cargarRuta(); // el estado real de las paradas lo tiene el servidor
+      }
+    });
     void contarPendientes().then(setPendientes);
     return detener;
   }, [cargarRuta]);
@@ -137,6 +162,7 @@ export default function RutaPage() {
     // (guardado bajo el otro) y lo reenviaba para siempre. Con datos móviles eso es
     // una cola que nunca se vacía y consume datos sin parar.
     const clientUuid = crypto.randomUUID();
+    clientUuidAParada.current.set(clientUuid, parada.parada_id);
     await encolar({
       clientUuid,
       tipo: "entrega",

@@ -1,9 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
-import { CifraGrande, TecladoNumerico, BotonPrimario, SelectorUnToque } from "@kilopan/miga/componentes/index.tsx";
+import {
+  CifraGrande,
+  TecladoNumerico,
+  BotonPrimario,
+  SelectorUnToque,
+  ChipEstadoConexion,
+} from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico } from "@kilopan/miga/tokens.ts";
 import { formatearClp, formatearKg } from "@/comun/formato.ts";
-import { enviarOEncolar } from "@/pod/outbox.ts";
+import { enviarOEncolar, iniciarSyncAutomatico } from "@/pod/outbox.ts";
 import { kgTextoAGramos, pesoValido } from "@/comun/peso.ts";
 import { roundClp } from "@/comun/round_clp.ts";
 
@@ -42,6 +48,7 @@ export default function VenderPage() {
   const [enviando, setEnviando] = useState(false);
   const [clientes, setClientes] = useState<ClienteFiado[]>([]);
   const [clienteFiado, setClienteFiado] = useState("");
+  const [pendientes, setPendientes] = useState(0);
 
   useEffect(() => {
     fetch("/api/productos")
@@ -53,6 +60,19 @@ export default function VenderPage() {
     fetch("/api/clientes")
       .then((r) => r.json())
       .then((d) => setClientes(d.clientes ?? []));
+
+    // Antes esta pantalla nunca arrancaba el ciclo de sync: `enviarOEncolar` dejaba la
+    // venta en IndexedDB y ahí se quedaba para siempre, con el mensaje de éxito
+    // afirmando que "se sube sola". Mismo patrón que /pesar y /ruta.
+    return iniciarSyncAutomatico((n, rechazadas) => {
+      setPendientes(n);
+      if (rechazadas?.length) {
+        setMensaje({
+          tipo: "error",
+          texto: `${rechazadas.length} venta(s) rebotaron al subir: ${rechazadas[0]?.motivo ?? ""}`,
+        });
+      }
+    });
   }, []);
 
   const producto = productos.find((p) => p.id === productoId) ?? null;
@@ -157,7 +177,10 @@ export default function VenderPage() {
 
   return (
     <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Vender</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Vender</h1>
+        {pendientes > 0 ? <ChipEstadoConexion pendientes={pendientes} /> : null}
+      </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         {productos.map((p) => (

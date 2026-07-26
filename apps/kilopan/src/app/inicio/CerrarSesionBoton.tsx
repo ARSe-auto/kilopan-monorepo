@@ -1,5 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
+import { olvidarOperador } from "@/identidad/cliente/operador.ts";
 
 export function CerrarSesionBoton() {
   const router = useRouter();
@@ -8,6 +9,7 @@ export function CerrarSesionBoton() {
       type="button"
       onClick={async () => {
         await fetch("/api/auth/logout", { method: "POST" });
+        olvidarOperador();
         router.push("/ingresar");
       }}
       style={{

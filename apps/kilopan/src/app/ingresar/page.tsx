@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TecladoNumerico, CifraGrande, BotonPrimario } from "@kilopan/miga/componentes/index.tsx";
 import { leerDispositivo } from "@/identidad/cliente/dispositivo.ts";
+import { recordarOperador } from "@/identidad/cliente/operador.ts";
 
 // F5 Cambio de operador (PROMPT_MAESTRO.md §5): RUT + PIN de 4 dígitos, ≤3s. El
 // equipo ya está vinculado a esta altura (/ redirige acá solo si lo está).
@@ -45,6 +46,9 @@ export default function IngresarPage() {
         return;
       }
       window.localStorage.setItem("kp_ultimo_rut", rut);
+      // Para que la cola offline sepa, al momento de encolar, DE QUIÉN es cada
+      // mutación — y así no subirla a nombre de quien esté logueado al sincronizar.
+      recordarOperador(cuerpo.usuario.id);
       router.push("/inicio");
     } catch {
       setError("Sin conexión con el servidor");
