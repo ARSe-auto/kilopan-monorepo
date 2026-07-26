@@ -24,7 +24,11 @@ export const superficie = {
   tarjeta: "#FFFFFF",
   texto: "#1B1712",
   textoDim: "#5B564C",
-  textoFaint: "#8A8377",
+  // Hallazgo de la auditoría: #8A8377 daba 3.39:1 sobre `fondo` y 3.75:1 sobre
+  // `tarjeta` — bajo el 4.5:1 que exige WCAG AA para texto normal (esto se usa en
+  // 13-14px, muy por debajo del umbral de "texto grande" que se conforma con 3:1).
+  // Mismo matiz, oscurecido lo justo para cruzar 4.5:1 contra los dos fondos.
+  textoFaint: "#746E64",
   hairline: "rgba(27,23,18,.14)",
 } as const;
 

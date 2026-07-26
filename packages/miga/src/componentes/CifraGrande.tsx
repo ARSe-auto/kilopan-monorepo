@@ -1,3 +1,5 @@
+import { superficie } from "../tokens.ts";
+
 // La cifra más grande de toda la app (96/700 — PROMPT_MAESTRO.md §5). SIEMPRE
 // tabular-nums: es la razón de ser de este componente, no una opción.
 export function CifraGrande({ valor, unidad }: { valor: string; unidad?: string }) {
@@ -14,7 +16,7 @@ export function CifraGrande({ valor, unidad }: { valor: string; unidad?: string 
       >
         {valor}
       </span>
-      {unidad ? <span style={{ fontSize: 22, fontWeight: 600, color: "#8A8377" }}>{unidad}</span> : null}
+      {unidad ? <span style={{ fontSize: 22, fontWeight: 600, color: superficie.textoFaint }}>{unidad}</span> : null}
     </div>
   );
 }

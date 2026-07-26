@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { obtenerSesionActual } from "@/identidad/sesion.ts";
+import { superficie } from "@kilopan/miga/tokens.ts";
 import { CerrarSesionBoton } from "./CerrarSesionBoton.tsx";
 
 const ENLACES_POR_ROL: Record<string, { href: string; etiqueta: string }[]> = {
@@ -35,7 +36,7 @@ export default async function InicioPage() {
     <main style={{ maxWidth: 420, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <p style={{ fontSize: 13, color: "#8A8377", margin: 0 }}>Hola,</p>
+          <p style={{ fontSize: 13, color: superficie.textoFaint, margin: 0 }}>Hola,</p>
           <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{sesion.nombre}</h1>
         </div>
         <CerrarSesionBoton />
