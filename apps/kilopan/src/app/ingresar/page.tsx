@@ -81,7 +81,8 @@ export default function IngresarPage() {
       }}
     >
       <div>
-        <LogoKiloPan tamano={28} />
+        {/* En esta pantalla el logo es el título: no hay otro encabezado que lo sea. */}
+        <LogoKiloPan tamano={28} comoTitulo />
         <p style={{ color: "#5B564C", fontSize: 15, marginTop: 8 }}>Ingresa tu RUT y tu PIN.</p>
       </div>
 

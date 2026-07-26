@@ -19,3 +19,8 @@ packages/metodo/panel/estado.json
 apps/kilopan/playwright-report/
 apps/kilopan/test-results/
 apps/kilopan/blob-report/
+
+# Generados por el e2e en cada corrida (ver apps/kilopan/e2e/preparar-base.mjs).
+apps/kilopan/e2e/datos-semilla.json
+apps/kilopan/test-results/
+apps/kilopan/playwright-report/

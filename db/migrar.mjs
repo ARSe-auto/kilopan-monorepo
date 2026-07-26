@@ -33,7 +33,9 @@ export async function conectar() {
     const { PGlite } = await import("@electric-sql/pglite");
     const { pgcrypto } = await import("@electric-sql/pglite/contrib/pgcrypto");
     const { btree_gist } = await import("@electric-sql/pglite/contrib/btree_gist");
-    const dataDir = join(ROOT, "data", "pglite");
+    // Ver el mismo override en apps/kilopan/src/comun/db.ts: el e2e migra y siembra su
+    // propia base para no pisar la de desarrollo ni pelearse el lock del proceso.
+    const dataDir = env.KILOPAN_PGLITE_DIR || join(ROOT, "data", "pglite");
     const db = new PGlite(dataDir, { extensions: { pgcrypto, btree_gist } });
     return { db, modo, cerrar: () => db.close() };
   }

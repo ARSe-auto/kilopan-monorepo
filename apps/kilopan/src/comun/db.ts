@@ -229,7 +229,12 @@ async function crearPglite(): Promise<ClienteDb> {
   const { PGlite } = await import("@electric-sql/pglite");
   const { pgcrypto } = await import("@electric-sql/pglite/contrib/pgcrypto");
   const { btree_gist } = await import("@electric-sql/pglite/contrib/btree_gist");
-  const dataDir = join(hallarRaizRepo(process.cwd()), "db", "data", "pglite");
+  // KILOPAN_PGLITE_DIR permite una base aparte de la de desarrollo. pglite es un motor
+  // EMBEBIDO de un solo proceso: dos servidores sobre el mismo directorio se pelean el
+  // lock. Sin esto, correr el e2e con `pnpm dev` levantado falla por la base, no por la
+  // app — y el e2e además necesita sembrar desde cero sin borrarle los datos a nadie.
+  const dataDir =
+    entorno().KILOPAN_PGLITE_DIR || join(hallarRaizRepo(process.cwd()), "db", "data", "pglite");
   const db = new PGlite(dataDir, { extensions: { pgcrypto, btree_gist } });
   await db.exec("set role pan_app");
   // Mismo motivo que el `-c timezone=` del pool de Postgres: sin esto, current_date en

@@ -18,7 +18,22 @@ const argv = process.argv.slice(2);
 const app = argv.find((a) => a.startsWith("--app="))?.split("=")[1] ?? "kilopan";
 const estricto = argv.includes("--estricto");
 
-const IGNORAR = new Set(["node_modules", ".git", ".next", "dist", "build", "test-results", "playwright-report", "specs"]);
+// `.claude` guarda worktrees de agentes en segundo plano, y un worktree es una COPIA
+// ENTERA del repo: escanearlo cuenta cada AC dos veces y deja que el borrador de
+// cualquier agente —un plan a medio escribir, con una cita truncada— ponga el gate en
+// rojo por algo que no está en el proyecto. El contrato vive en specs/ y en el árbol
+// real, no en el scratch de nadie.
+const IGNORAR = new Set([
+  "node_modules",
+  ".git",
+  ".claude",
+  ".next",
+  "dist",
+  "build",
+  "test-results",
+  "playwright-report",
+  "specs",
+]);
 const EXT = /\.(ts|tsx|js|jsx|mjs|cjs|sql|sh|md)$/;
 // El plan y la bitácora citan todos los ACs por diseño: no cuentan como respaldo.
 const NO_CUENTA = /^(IMPLEMENTATION_PLAN|docs\/BITACORA|docs\/PROMPT_MAESTRO|AGENTS\.md|CLAUDE\.md|TRASPASO)/;
