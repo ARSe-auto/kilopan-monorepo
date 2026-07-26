@@ -27,6 +27,26 @@ async function dbNueva() {
   return db;
 }
 
+// Base con las migraciones aplicadas SOLO hasta `tope`, para poder sembrar datos sucios
+// en medio y comprobar que una migración posterior sabe convivir con ellos. Sin `set role`:
+// migrar.mjs corre como dueño en producción, y eso es lo que hay que reproducir.
+async function dbMigradaHasta(tope) {
+  const db = new PGlite({ extensions: { pgcrypto, btree_gist } });
+  const dir = join(ROOT, "migraciones");
+  const archivos = readdirSync(dir)
+    .filter((f) => f.endsWith(".sql"))
+    .sort();
+  for (const archivo of archivos.filter((a) => a <= tope)) {
+    await db.exec(readFileSync(join(dir, archivo), "utf8"));
+  }
+  const aplicarResto = async () => {
+    for (const archivo of archivos.filter((a) => a > tope)) {
+      await db.exec(readFileSync(join(dir, archivo), "utf8"));
+    }
+  };
+  return { db, aplicarResto };
+}
+
 async function crearSesion(db, usuarioId, dispositivoId) {
   await db.query(`insert into pan.sesiones_operador (dispositivo_id, usuario_id) values ($1,$2)`, [
     dispositivoId,
@@ -1640,5 +1660,52 @@ test("Tanda 4: un repartidor no puede tener dos rutas abiertas el mismo día (an
   // Cerrar la primera SÍ deja armar una ruta nueva: es "una activa a la vez", no "una para siempre".
   await db.query(`update pan.rutas set estado = 'cerrada' where repartidor_id = $1`, [repartidorId]);
   await db.query(`insert into pan.rutas (repartidor_id) values ($1)`, [repartidorId]);
+  await db.close();
+});
+
+// Incidente del 26-jul-2026: la 0011 se cayó en producción al crear este mismo índice,
+// porque el bug que venía a impedir ya había dejado 3 rutas del mismo repartidor y día sin
+// cerrar. Como el Dockerfile encadena `migrar.mjs && server.js`, eso no fue un aviso: fue el
+// deploy entero en crash-loop. El gate no lo vio porque acá arriba la base nace vacía y una
+// migración contra una base vacía siempre pasa. Este test siembra la suciedad primero.
+test("Tanda 4: la 0011 sanea rutas duplicadas preexistentes en vez de caerse (incidente 26-jul-2026)", async () => {
+  const { db, aplicarResto } = await dbMigradaHasta("0010_venta_idempotente.sql");
+  const u = await db.query(
+    `insert into pan.usuarios (nombre, rut, rol, pin_hash)
+     values ('Repartidor','12.345.678-5','repartidor','x') returning id`
+  );
+  const repartidorId = u.rows[0].id;
+
+  // Tres rutas abiertas del mismo repartidor el mismo día: el estado exacto que tenía
+  // producción. Antes de la 0011 nada lo impedía, que es justamente el problema.
+  await db.query(
+    `insert into pan.rutas (repartidor_id, vehiculo, estado) values
+       ($1,'ABCD-12','planificada'), ($1,'ABCD-12','planificada'), ($1,'ZZZZ-99','en_curso')`,
+    [repartidorId]
+  );
+
+  await aplicarResto();
+
+  const vivas = await db.query(
+    `select estado, vehiculo from pan.rutas where estado <> 'cerrada'`
+  );
+  assert.equal(
+    vivas.rows.length,
+    1,
+    "tras la migración debe quedar exactamente una ruta abierta por repartidor y día"
+  );
+  assert.equal(
+    vivas.rows[0].vehiculo,
+    "ZZZZ-99",
+    "sobrevive la ruta más avanzada (en_curso), no una al azar: cerrar la que el repartidor está usando sería peor que el bug"
+  );
+
+  // Y el índice quedó realmente creado: el saneo no puede ser a costa de no aplicar la regla.
+  await db.exec("set role pan_app");
+  await assert.rejects(
+    () => db.query(`insert into pan.rutas (repartidor_id) values ($1)`, [repartidorId]),
+    /rutas_una_activa_por_repartidor_dia|unique|duplicate/i,
+    "el índice único tiene que haberse creado igual después del saneo"
+  );
   await db.close();
 });
