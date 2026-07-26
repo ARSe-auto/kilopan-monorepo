@@ -12,11 +12,12 @@
     "guardrail": "bash packages/metodo/scripts/guardrail.sh",
     "check": "bash packages/metodo/scripts/check.sh",
     "check:full": "bash packages/metodo/scripts/check.sh --full",
-    "gate:specs": "node packages/metodo/scripts/gate_specs.mjs",
+    "gate:specs": "node packages/metodo/scripts/gate_specs.mjs --todas",
     "panel": "node packages/metodo/panel/generar.mjs",
     "db:migrate": "node db/migrar.mjs",
     "db:seed": "node db/sembrar.mjs",
-    "db:preflight": "node db/preflight-migraciones.mjs"
+    "db:preflight": "node db/preflight-migraciones.mjs",
+    "gate:refs": "node packages/metodo/scripts/verify-refs.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",

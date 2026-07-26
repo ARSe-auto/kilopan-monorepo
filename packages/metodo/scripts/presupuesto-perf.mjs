@@ -16,6 +16,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+const APP = process.argv.slice(2).find((a) => a.startsWith("--app="))?.split("=")[1] ?? "kilopan";
 // Se mide GZIP, no bytes crudos: es lo que de verdad viaja por la red. Medir crudo
 // exagera ~3x y llevaría a poner un presupuesto falso o a "optimizar" lo que no duele.
 const PRESUPUESTO_KB = 150;
@@ -24,7 +25,7 @@ const PRESUPUESTO_KB = 150;
 const RUTAS_CRITICAS = ["/pesar", "/vender", "/ruta", "/ingresar"];
 
 function leerManifiesto() {
-  const ruta = join(RAIZ, "apps", "kilopan", ".next", "app-build-manifest.json");
+  const ruta = join(RAIZ, "apps", APP, ".next", "app-build-manifest.json");
   if (!existsSync(ruta)) return null;
   return JSON.parse(readFileSync(ruta, "utf8"));
 }
@@ -35,7 +36,7 @@ function pesoKb(archivos) {
   for (const archivo of archivos) {
     if (vistos.has(archivo)) continue;
     vistos.add(archivo);
-    const ruta = join(RAIZ, "apps", "kilopan", ".next", archivo);
+    const ruta = join(RAIZ, "apps", APP, ".next", archivo);
     if (existsSync(ruta)) bytes += gzipSync(readFileSync(ruta)).length;
   }
   return Math.round(bytes / 1024);
@@ -44,7 +45,7 @@ function pesoKb(archivos) {
 function main() {
   const manifiesto = leerManifiesto();
   if (!manifiesto) {
-    console.log("presupuesto-perf: SALTADO — no hay build (correr `pnpm --filter kilopan build` primero)");
+    console.log(`presupuesto-perf: SALTADO — no hay build (correr \`pnpm --filter ${APP} build\` primero)`);
     return;
   }
 
@@ -59,7 +60,9 @@ function main() {
     const kb = pesoKb(archivos);
     const ok = kb <= PRESUPUESTO_KB;
     if (!ok) excedidas++;
-    console.log(`  ${ok ? "OK  " : "PASA"} ${ruta}: ${kb} KB (presupuesto ${PRESUPUESTO_KB} KB)`);
+    // "PASA" se leía como aprobado cuando significaba "se pasa del presupuesto":
+    // una pantalla en rojo salía rotulada con la palabra que uno busca en verde.
+    console.log(`  ${ok ? "OK    " : "EXCEDE"} ${ruta}: ${kb} KB (presupuesto ${PRESUPUESTO_KB} KB)`);
   }
 
   if (excedidas > 0) {

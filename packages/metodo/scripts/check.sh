@@ -5,7 +5,15 @@
 set -uo pipefail
 cd "$(dirname "$0")/../../.."
 FULL=0
-[ "${1:-}" = "--full" ] && FULL=1
+APP="kilopan"
+for arg in "$@"; do
+  case "$arg" in
+    --full) FULL=1 ;;
+    --app=*) APP="${arg#--app=}" ;;
+    *) echo "check.sh: argumento desconocido '$arg' (uso: [--full] [--app=kilopan|flota])"; exit 2 ;;
+  esac
+done
+[ -d "apps/$APP" ] || { echo "check.sh: apps/$APP no existe"; exit 2; }
 
 LOG_DIR="packages/metodo/panel"
 mkdir -p "$LOG_DIR"
@@ -35,6 +43,19 @@ skip_step () {
 
 bash packages/metodo/scripts/guardrail.sh || FAILED+=("guardrail")
 
+# El contrato se verifica ANTES que el código: una spec rota invalida todo lo que venga
+# después. Estos dos pasos son lo que faltaba hasta el 26-jul-2026 — gate_specs existía
+# como script npm huérfano y nadie lo llamaba.
+run_step "gate_specs ($APP): specs con Fuente: que resuelve y >=3 ACs" \
+  node packages/metodo/scripts/gate_specs.mjs "--app=$APP"
+if [ "$FULL" -eq 1 ]; then
+  run_step "verify-refs ($APP, estricto): sin AC huérfano ni [x] sin respaldo" \
+    node packages/metodo/scripts/verify-refs.mjs "--app=$APP" --estricto
+else
+  run_step "verify-refs ($APP): sin AC citado que ninguna spec defina" \
+    node packages/metodo/scripts/verify-refs.mjs "--app=$APP"
+fi
+
 if [ -f pnpm-lock.yaml ] || [ -f package.json ]; then
   if command -v pnpm >/dev/null 2>&1; then
     if [ -d node_modules ]; then
@@ -46,7 +67,7 @@ if [ -f pnpm-lock.yaml ] || [ -f package.json ]; then
       # (es SSR puro sin ellos) — un healthcheck normal no lo detecta. Sin esto, la app
       # "pasa el gate" y queda completamente muda al tocar cualquier botón en producción.
       run_step "build standalone incluye .next/static y public/ (si no, la app no hidrata)" \
-        bash -c 'test -d apps/kilopan/.next/standalone/apps/kilopan/.next/static && test -f apps/kilopan/.next/standalone/apps/kilopan/public/sw.js'
+        bash -c "test -d apps/$APP/.next/standalone/apps/$APP/.next/static && test -f apps/$APP/.next/standalone/apps/$APP/public/sw.js"
       run_step "audit (AC-SEC-03)" pnpm audit --audit-level=high
     else
       skip_step "lint/typecheck/unit/build/audit" "node_modules no existe — correr 'pnpm install' primero"
@@ -64,17 +85,17 @@ if [ "$FULL" -eq 1 ]; then
   # `next dev`, que reescribe .next en modo dev (bundles sin minificar y manifiesto
   # con solo las rutas que e2e visitó) y clava el gate en rojo aunque la build de
   # producción esté sana.
-  if [ -f apps/kilopan/.next/app-build-manifest.json ]; then
+  if [ -f "apps/$APP/.next/app-build-manifest.json" ]; then
     run_step "presupuesto de performance (gzip del flujo dorado)" \
-      node packages/metodo/scripts/presupuesto-perf.mjs
+      node packages/metodo/scripts/presupuesto-perf.mjs "--app=$APP"
   else
-    skip_step "presupuesto de performance" "no hay build todavía"
+    skip_step "presupuesto de performance" "no hay build de $APP todavía"
   fi
 
-  if [ -d apps/kilopan ] && [ -f apps/kilopan/playwright.config.ts ]; then
-    run_step "e2e móvil 390x844 + offline emulado" pnpm --filter kilopan run e2e
+  if [ -f "apps/$APP/playwright.config.ts" ]; then
+    run_step "e2e móvil 390x844 + offline emulado" pnpm --filter "$APP" run e2e
   else
-    skip_step "e2e Playwright" "apps/kilopan aún no tiene playwright.config.ts"
+    skip_step "e2e Playwright" "apps/$APP aún no tiene playwright.config.ts"
   fi
   if [ -f db/migraciones/0001_identidad.sql ]; then
     run_step "invariantes de BD (violar cada CHECK/trigger y esperar rebote)" \

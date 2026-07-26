@@ -7,10 +7,35 @@ set -uo pipefail
 export PATH="$HOME/.local/lib/nodejs/current/bin:$PATH"
 cd "$(dirname "$0")/../../.."
 
-PLAN="IMPLEMENTATION_PLAN.md"
+APP="kilopan"
+for arg in "$@"; do
+  case "$arg" in
+    --app=*) APP="${arg#--app=}" ;;
+    *) echo "loop.sh: argumento desconocido '$arg' (uso: [--app=kilopan|flota])"; exit 2 ;;
+  esac
+done
+
+# Un plan por app: `siguiente_ac` no debe cruzar productos.
+PLAN="IMPLEMENTATION_PLAN_${APP}.md"
+if [ ! -f "$PLAN" ] && [ "$APP" = "kilopan" ] && [ -f "IMPLEMENTATION_PLAN.md" ]; then
+  PLAN="IMPLEMENTATION_PLAN.md"   # nombre histórico, previo a la separación por app
+fi
+[ -f "$PLAN" ] || { echo "loop: falta $PLAN"; exit 2; }
 LOG_DIR="packages/metodo/panel"
 MAX_BUDGET_USD="${KILOPAN_MAX_BUDGET_USD:-3}"
 MODELO="${KILOPAN_MODELO:-sonnet}"
+
+# EL CONTRATO PRIMERO. Sin specs válidas no se construye — este abort es exactamente lo
+# que faltaba hasta el 26-jul-2026 y lo que dejó al motor produciendo tandas A-F de
+# reparación en vez de ACs verificados.
+if ! node packages/metodo/scripts/gate_specs.mjs "--app=$APP"; then
+  echo "ABORT: specs incompletas o sin fuente. Specs primero."
+  exit 2
+fi
+if ! node packages/metodo/scripts/verify-refs.mjs "--app=$APP"; then
+  echo "ABORT: hay ACs citados que ninguna spec define."
+  exit 2
+fi
 
 siguiente_ac() {
   for prioridad in '\(P0' '\(P1' '\(P2'; do
@@ -33,22 +58,26 @@ echo "loop: siguiente = ${AC_ID:-sin-id} :: $AC_LINEA"
 
 COMMITS_ANTES=$(git rev-list --count HEAD 2>/dev/null || echo 0)
 
-PROMPT="Estás construyendo KiloPan siguiendo IMPLEMENTATION_PLAN.md al pie de la letra.
+PROMPT="Estudiá AGENTS.md antes de tocar nada. Estás construyendo ${APP} en este monorepo.
 Implementá EXACTAMENTE este ítem, nada más:
 
 ${AC_LINEA}
 
 Reglas duras:
-- Leé el AC completo en IMPLEMENTATION_PLAN.md y, si corresponde, la sección relevante
-  de ../KiloPan-propuesta/PROMPT_MAESTRO.md antes de escribir código.
+- El AC vive en specs/${APP}/ — esa es su definición canónica y durable. ${PLAN} solo
+  lleva su estado. Leé la spec dueña del AC y la sección del maestro que cita su línea
+  'Fuente: §N' (docs/PROMPT_MAESTRO*.md) ANTES de escribir código.
 - Un AC = un commit, con su test naciendo en el mismo commit.
-- Corré 'bash packages/metodo/scripts/check.sh --full' y NO hagas commit si no queda
-  verde (arreglar lo que encuentres es parte del AC).
-- Si el gate pasa, marcá esa línea como [x] en IMPLEMENTATION_PLAN.md como parte del
+- Corré 'bash packages/metodo/scripts/check.sh --full --app=${APP}' y NO hagas commit si
+  no queda verde (arreglar lo que encuentres es parte del AC).
+- Si el gate pasa, marcá el AC como [x] EN SU SPEC (specs/${APP}/) y en ${PLAN}, en el
   MISMO commit, con una nota breve de qué se probó.
+- Un AC no se marca [x] si todavía falta parte de él. Si quedó a medias, partilo: cerrá
+  lo hecho y dejá el resto como AC abierto nuevo en la spec. Un [x] cuyo texto dice
+  'falta' pone el gate en rojo — y con razón.
 - No toques ningún otro AC ni refactorices código no relacionado.
-- Si el AC ya está hecho o no aplica todavía (depende de algo que no existe aún),
-  decilo explícitamente y no inventes trabajo ni marques nada como [x]."
+- Si el AC ya está hecho o depende de algo que no existe aún, decilo explícitamente y no
+  inventes trabajo ni marques nada como [x]."
 
 mkdir -p "$LOG_DIR"
 claude -p "$PROMPT" \

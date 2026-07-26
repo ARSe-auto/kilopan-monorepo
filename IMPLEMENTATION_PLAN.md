@@ -1,7 +1,9 @@
 # IMPLEMENTATION_PLAN — KiloPan
 
-Plan vivo del motor plan → build → verify. Fuente canónica de alcance:
-`../KiloPan-propuesta/PROMPT_MAESTRO.md` (7 módulos, invariantes de BD, guardrails) +
+Plan vivo del motor plan → build → verify. **Este documento es desechable**: el planner
+lo regenera desde cero. La definición canónica y durable de cada AC vive en
+`specs/kilopan/*.md`; acá solo vive su ESTADO. Fuente de alcance:
+`docs/PROMPT_MAESTRO.md` (7 módulos, invariantes de BD, guardrails) +
 las 9 decisiones de la lectura `docs/DECISIONES_AMPLIACION.md` (fiado, báscula conectada,
 foto de respaldo, lectura de facturador, cola de reintentos, medios de pago, mermas,
 multisucursal ligera, compartir nativo). Este documento no repite esos detalles — los
@@ -268,6 +270,36 @@ para ese AC — no antes.
       único que importa a las 4 AM. Se mide el peso GZIP del flujo dorado contra 150 KB.
       Hoy: 104 KB en /pesar, /vender, /ruta (coincide con lo que reporta Next, o sea
       está bien calibrado) [AC-PERF-04]
+
+## Trabajo abierto (recuperado 26-jul-2026)
+
+Estos 22 ACs estaban **enterrados dentro de ítems marcados `[x]`** cuyo propio texto decía
+«falta X». El plan reportaba 0 abiertos y `loop.sh` salía de inmediato: el motor llevaba
+días detenido creyendo que no quedaba trabajo. Cada uno vive ahora en su spec, y
+`gate_specs` pone el gate en rojo si un `[x]` vuelve a confesar trabajo pendiente.
+
+- [ ] (P1) Chip con el nombre del operador **siempre visible** en cada pantalla, como exige §5 F5. Hoy el relevo funciona pero el chip no existe: quien pesa no puede confirmar de un vistazo bajo qué... — spec: `specs/kilopan/01-identidad.md` [AC-ID-07]
+- [ ] (P1) Orden de productos **por frecuencia real** de pesaje, no alfabético como hoy. §5 F1 lo exige para que repetir producto cueste 2 toques. Requiere trackear frecuencia. Test: sembrar frecuen... — spec: `specs/kilopan/02-catalogo-pesaje.md` [AC-PES-07]
+- [ ] (P1-SEC) UI de re-confirmación explícita cuando `pan.es_outlier_pesaje()` devuelve true. Hoy la función existe y acierta, pero nada la muestra: el centinela #4 de §9 está cableado a medias. Cancel... — spec: `specs/kilopan/02-catalogo-pesaje.md` [AC-PES-08]
+- [ ] (P1) Pantalla de cierre de caja: esperado vs declarado con la diferencia visible, como exige §3 módulo 3. Hoy existe la tabla `cierres_caja` y nada más — el turno no se puede cerrar desde la app — spec: `specs/kilopan/03-venta-mostrador.md` [AC-VEN-03]
+- [ ] (P1) F3 Cargar van: contador N/M en 96 px, escáner de cámara full-screen con linterna (48 px, alcanzable con pulgar — madrugada real), lectura válida = beep + vibración, duplicada = tono disti... — spec: `specs/kilopan/04-despacho-reparto.md` [AC-DES-04]
+- [ ] (P1) Ejercitar el flujo POD de punta a punta con el seed: hoy `AC-POD-03` compila y pasa lint, pero **nunca se corrió completo** — sembrar una parada de prueba exige sesión viva de operador. T... — spec: `specs/kilopan/05-entrega-pod.md` [AC-POD-04]
+- [ ] (P1) Modos rechazo total y parcial con motivo de catálogo cerrado obligatorio (§3 módulo 5). Sin construir: hoy solo existe la entrega completa — spec: `specs/kilopan/05-entrega-pod.md` [AC-POD-05]
+- [ ] (P1) Captura del DTE: escaneo del TED con zxing-js como mejora progresiva **y captura manual tipo+folio+RUT como camino primario en iOS** (§7, AC probado en iPhone real). Hoy la tabla existe y... — spec: `specs/kilopan/06-registro-dte.md` [AC-DTE-03]
+- [ ] (P1) Mapa estático de pines de los PODs del día (Leaflet + OSM, **solo dashboard**, §3 módulo 7). Sin construir — spec: `specs/kilopan/07-dashboard-flota.md` [AC-DASH-05]
+- [ ] (P1) Pantalla de auditoría por usuario y dispositivo sobre la tabla `eventos` (append-only). Sin construir: hoy los eventos se escriben y nadie puede leerlos desde la app — spec: `specs/kilopan/07-dashboard-flota.md` [AC-DASH-06]
+- [ ] (P1-PERF) Cablear la paginación por cursor a una pantalla de historial de entregas. El endpoint existe desde `AC-PERF-03` y ninguna pantalla lo consume — spec: `specs/kilopan/08-seguridad-rendimiento.md` [AC-PERF-05]
+- [ ] (P1) Escala tipográfica completa de Miga aplicada y testeada: `peso-bascula` 96/700 · display 34/700 · título 22/600 · cuerpo 17/400 · pie 13/400; grilla 8 px, radio 12 px; botón primario full... — spec: `specs/kilopan/09-plataforma-miga.md` [AC-H0-08]
+- [ ] (P1) es-CL verificado por grep de gate: `12,450 kg` (coma, 3 decimales desde gramos), `$12.500` (entero, punto de miles), `dd-mm-aaaa`, RUT `12.345.678-5` validado al escribir. **Cero strings ... — spec: `specs/kilopan/09-plataforma-miga.md` [AC-H0-09]
+- [ ] (P1) AA medible en el gate: contraste ≥4.5:1 por axe automatizado; cero targets <44 pt (test que recorre el DOM); foco visible; F1/F4/F5 completables con VoiceOver; texto al 200 % sin truncar ... — spec: `specs/kilopan/09-plataforma-miga.md` [AC-H0-10]
+- [ ] (P1) Estados obligatorios en todo listado: vacío accionable / skeleton / error con reintentar / sin conexión con **contador real de cola** («Sin conexión — N registros por subir» ámbar → «Sinc... — spec: `specs/kilopan/09-plataforma-miga.md` [AC-H0-11]
+- [ ] (P2) Validar el camino GATT contra una báscula real antes de darlo por bueno. Las marcas comunes en panaderías chilenas (Toledo, CAS, Torrey) suelen usar serie propietario, no GATT — `AC-PES-0... — spec: `specs/kilopan/02-catalogo-pesaje.md` [AC-PES-09]
+- [ ] (P2) UI de resolución de mermas al día siguiente: hoy la máquina de estados existe y la TCK la respeta, pero nadie puede mover una merma a `recuperada_con_venta` desde pantalla — spec: `specs/kilopan/02-catalogo-pesaje.md` [AC-MERM-02]
+- [ ] (P2) Pantalla de admin para togglear medios de pago + fila por medio en el cierre de caja. La tabla y sus permisos están; la UI no — spec: `specs/kilopan/03-venta-mostrador.md` [AC-PAG-03]
+- [ ] (P2) Cablear el POST de ambos CTA (`lead_eauto` y `lead_kiloruta`): las tablas y el consentimiento están probados, pero el botón no envía — spec: `specs/kilopan/07-dashboard-flota.md` [AC-DASH-07]
+- [ ] (P2) Selector de sucursal en el dashboard, para que multisucursal sirva de algo cuando haya más de un local — spec: `specs/kilopan/07-dashboard-flota.md` [AC-SUC-02]
+- [ ] (P2) Botón compartir en el detalle de entrega, no solo en el cierre de caja — spec: `specs/kilopan/07-dashboard-flota.md` [AC-SHARE-02]
+- [ ] (P2) Edición de `pan.parametros` desde `/admin`: `clp_km_combustible`, `clp_km_ev`, `co2_g_km_evitado`. §4 los declara «editables por admin, con fuente» y la tarjeta «Tu flota» (`AC-DASH-02`) ... — spec: `specs/kilopan/10-administracion.md` [AC-ADM-03]
 
 ## DONE
 

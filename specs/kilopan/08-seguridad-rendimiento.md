@@ -1,0 +1,58 @@
+# 08 — Seguridad y rendimiento (transversal)
+
+Fuente: §7
+
+No es un hito: corre en paralelo a todos. Los guardrails son código, no disciplina —
+violarlos aborta el ítem.
+
+El presupuesto de performance mide lo único que importa a las 4 AM: el peso GZIP del
+flujo dorado. **No Lighthouse** — necesita Chrome headless, ~300 MB de dependencias, y su
+puntaje mezcla SEO y PWA con lo que de verdad decide si la pantalla abre.
+
+## Criterios de aceptación
+
+- [x] (P0-SEC) Bloqueo por PIN errado: 5 intentos fallidos en 10 min ⇒ dispositivo
+      bloqueado 15 min + evento `pin_bloqueado` auditable. `pan.registrar_intento_pin()`,
+      probado incluyendo aislamiento entre usuarios y dispositivos distintos [AC-SEC-01]
+- [x] (P0-SEC) Rate limit genérico en toda ruta de autenticación (no solo PIN): ventana
+      deslizante en memoria por IP (20/min) en `identidad/limitador.ts`. Nota honesta: en
+      memoria de un solo proceso; multi-nodo necesitaría Redis [AC-SEC-02]
+- [x] (P0-SEC) `pnpm audit` sin vulnerabilidades altas ni críticas en el gate; falla el
+      build si aparecen. Encontró 4 altas + 1 moderada reales (sharp/postcss/
+      brace-expansion transitivos) el primer día; corregidas con overrides [AC-SEC-03]
+- [x] (P0-SEC) Cabeceras de seguridad base (`X-Content-Type-Options`, `Referrer-Policy`,
+      `X-Frame-Options`) en `next.config.ts`. CSP completa y HSTS quedan para cuando
+      existan orígenes reales que permitir (fotos, mapa estático) — decisión deliberada:
+      no declarar una CSP amplia «por si acaso» [AC-SEC-04]
+- [x] (P0-SEC) Cookies de sesión `HttpOnly` + `Secure` (en producción) + `SameSite=Lax`;
+      ningún secreto ni token en `localStorage`. Verificado en vivo: `document.cookie` no
+      puede leer `kp_sesion` desde JS, pero el navegador la manda sola y
+      `/api/auth/logout` la valida [AC-SEC-05]
+- [x] (P0-SEC) Toda query a Postgres parametrizada (cero interpolación de string en SQL)
+      — grep en `guardrail.sh` + disciplina en `db/migrar.mjs` y `db/test-invariantes.mjs`
+      desde el primer commit [AC-SEC-06]
+- [x] (P0-SEC) Fotos write-once: tabla `pan.fotos` con trigger que rebota UPDATE y
+      DELETE, `pan_app` solo con INSERT. El servidor **recalcula** el sha256 y rechaza la
+      foto si no coincide con el declarado en el POD. Guardar el binario en la BD es
+      decisión consciente para el piloto; si crece, pasa a URL sin cambiar el contrato
+      [AC-SEC-07]
+- [x] (P1-PERF) Compresión de fotos en el cliente antes de subir: 1280 px de ancho máximo,
+      calidad 0.72, objetivo ≈400 KB, con techo duro de 1,5 MB en el servidor [AC-PERF-02]
+- [x] (P1-PERF) Paginación por CURSOR (keyset), no por OFFSET, en el listado de entregas:
+      con OFFSET la página 40 obliga a recorrer y descartar 2.000 filas, y el cursor
+      además no se corre si entra una entrega nueva mientras el dueño scrollea [AC-PERF-03]
+- [x] (P1-PERF) Presupuesto de performance en el gate: peso GZIP del flujo dorado contra
+      150 KB. Hoy 104 KB en `/pesar`, `/vender`, `/ruta` — coincide con lo que reporta
+      Next, o sea está bien calibrado [AC-PERF-04]
+- [ ] (P1-PERF) Cablear la paginación por cursor a una pantalla de historial de entregas.
+      El endpoint existe desde `AC-PERF-03` y ninguna pantalla lo consume [AC-PERF-05]
+
+## Guardrails que corren antes de cada iteración
+
+`packages/metodo/scripts/guardrail.sh`:
+
+- `DATABASE_URL` SOLO localhost o 127.0.0.1 — exit ≠ 0 aborta.
+- Secretos SOLO en `.env.local`, gitignored.
+- Grep bloqueante en `src/`: `TODO|FIXME|PLACEHOLDER|not implemented|lorem ipsum`.
+- Jamás migración destructiva ni `db:reset` sobre datos con evidencia (fotos de POD).
+- Motor OAuth-only: ventana agotada ⇒ **espera**. Jamás API de pago.
