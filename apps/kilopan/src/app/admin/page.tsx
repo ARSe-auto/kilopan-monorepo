@@ -194,7 +194,12 @@ function SeccionPersonal() {
     }
   }
 
-  async function patch(id: string, cuerpo: Record<string, unknown>) {
+  // Devuelve si de verdad se guardó. Antes no devolvía nada y solo hacía setError:
+  // el llamador no tenía cómo saber que había fallado y seguía adelante mostrando
+  // éxito — «PIN reseteado» salía igual con el servidor caído, así que el dueño le
+  // daba a la empleada un PIN que nunca se guardó y ella no podía entrar
+  // (auditoría de experiencia). Mismo problema en toggleActivo y guardarPrecio.
+  async function patch(id: string, cuerpo: Record<string, unknown>): Promise<boolean> {
     setGuardandoId(id);
     setMensaje(null); setError(null);
     try {
@@ -204,10 +209,12 @@ function SeccionPersonal() {
         body: JSON.stringify({ id, ...cuerpo }),
       });
       const cuerpoResp = await r.json();
-      if (!r.ok) { setError(cuerpoResp.error); return; }
+      if (!r.ok) { setError(cuerpoResp.error ?? "No se pudo guardar"); return false; }
       setUsuarios((us) => us.map((u) => (u.id === id ? { ...u, ...cuerpoResp } : u)));
+      return true;
     } catch {
       setError("Sin conexión con el servidor");
+      return false;
     } finally {
       setGuardandoId(null);
     }
@@ -215,7 +222,8 @@ function SeccionPersonal() {
 
   async function confirmarReset(id: string) {
     if (!PIN_VALIDO.test(pinReset)) { setError("El PIN debe ser de 4 dígitos"); return; }
-    await patch(id, { pin: pinReset });
+    const ok = await patch(id, { pin: pinReset });
+    if (!ok) return; // el error ya quedó en pantalla; NO se anuncia un reset que no pasó
     setMensaje("PIN reseteado");
     setReseteandoId(null);
     setPinReset("");

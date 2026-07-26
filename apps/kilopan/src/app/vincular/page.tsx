@@ -77,7 +77,7 @@ export default function VincularPage() {
           {/* Igual que /ingresar: los dígitos ya tecleados no van en texto plano a
               96 px — se enmascaran con ● (tecleado) / ○ (pendiente). */}
           <CifraGrande valor={"●".repeat(pin.length).padEnd(4, "○")} />
-          <TecladoNumerico valor={pin} onCambiar={(v) => setPin(v.slice(0, 4))} />
+          <TecladoNumerico valor={pin} onCambiar={(v) => setPin(v.slice(0, 4))} permitirCeroInicial />
           {error ? <p style={{ color: "#B91C1C", fontSize: 14 }} role="alert">{error}</p> : null}
           <BotonPrimario disabled={!rutAdmin || pin.length !== 4 || enviando} onClick={vincular}>
             {enviando ? "Vinculando…" : "Vincular equipo"}

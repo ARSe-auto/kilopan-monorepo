@@ -8,9 +8,20 @@ export function CerrarSesionBoton() {
     <button
       type="button"
       onClick={async () => {
-        await fetch("/api/auth/logout", { method: "POST" });
-        olvidarOperador();
-        router.push("/ingresar");
+        // try/finally: sin esto, un logout sin señal lanzaba en el fetch y NUNCA
+        // llegaba a limpiar el operador local ni a navegar — el panadero veía que no
+        // pasaba nada, dejaba la tablet, y el siguiente turno entraba a una sesión
+        // que seguía viva y vendía con el nombre anterior (auditoría de experiencia).
+        // La cookie del servidor la corta igual la expiración por inactividad
+        // (AC-ID-05) y el próximo login desplaza la sesión (AC-ID-06).
+        try {
+          await fetch("/api/auth/logout", { method: "POST" });
+        } catch {
+          // sin señal: salir del equipo IGUAL es lo correcto
+        } finally {
+          olvidarOperador();
+          router.push("/ingresar");
+        }
       }}
       style={{
         minHeight: 44,

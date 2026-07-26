@@ -51,6 +51,7 @@ export default function RutaPage() {
   const [motivoOtroTexto, setMotivoOtroTexto] = useState("");
   const [gps, setGps] = useState<{ lat: number; lng: number; precision: number } | null>(null);
   const [errorGps, setErrorGps] = useState<string | null>(null);
+  const [buscandoGps, setBuscandoGps] = useState(false);
   const [fotoSha, setFotoSha] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [entregadasLocal, setEntregadasLocal] = useState<Set<string>>(new Set());
@@ -111,6 +112,31 @@ export default function RutaPage() {
 
   const parada = paradas.find((p) => p.parada_id === activa) ?? null;
 
+  // Extraída de iniciarEntrega para poder REINTENTARLA: dentro de un galpón o con la
+  // ubicación recién activada, el primer fix falla y antes no había forma de volver a
+  // pedirlo — el repartidor quedaba en un callejón sin salida (auditoría de
+  // experiencia, ALTA). `buscandoGps` distingue "todavía buscando" de "no se pudo".
+  function pedirUbicacion() {
+    if (!navigator.geolocation) {
+      setErrorGps("Este equipo no tiene GPS.");
+      return;
+    }
+    setBuscandoGps(true);
+    setErrorGps(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude, precision: Math.round(pos.coords.accuracy) });
+        setErrorGps(null);
+        setBuscandoGps(false);
+      },
+      () => {
+        setErrorGps("No se pudo tomar la ubicación. Revisa el permiso o inténtalo de nuevo.");
+        setBuscandoGps(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }
+
   // «Entregar»: pide GPS y abre la cámara del equipo (getUserMedia in-app — nunca un
   // <input type=file>, porque eso dejaría adjuntar una foto vieja como si fuera de
   // ahora). El obturador de verdad va en el paso "foto".
@@ -120,18 +146,7 @@ export default function RutaPage() {
     setActiva(paradaId);
     setPaso("foto");
 
-    if (!navigator.geolocation) {
-      setErrorGps("Este equipo no tiene GPS. No se puede confirmar la entrega.");
-    } else {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude, precision: Math.round(pos.coords.accuracy) });
-          setErrorGps(null);
-        },
-        () => setErrorGps("Sin permiso de ubicación. Actívalo para poder confirmar la entrega."),
-        { enableHighAccuracy: true, timeout: 10000 }
-      );
-    }
+    pedirUbicacion();
 
     abrirCamara()
       .then(setStream)
@@ -247,10 +262,9 @@ export default function RutaPage() {
   // casos), pero 0 g entregados y un motivo en vez de receptor/cantidad.
   async function confirmarFallida() {
     if (!parada || !fotoSha) return;
-    if (!gps) {
-      setErrorGps("Esperando la ubicación… si no aparece, revisa el permiso de GPS.");
-      return;
-    }
+    // A diferencia de la entrega exitosa, la FALLIDA no exige GPS: no se está
+    // afirmando haber dejado el pan en ningún punto, y exigirlo dejaba al repartidor
+    // sin poder registrar ni el intento dentro de un galpón (migración 0015).
     const motivo =
       motivoFallida === "otro"
         ? motivoOtroTexto.trim()
@@ -268,9 +282,9 @@ export default function RutaPage() {
         pedidoId: parada.pedido_id,
         receptorNombre: "No aplica — entrega no realizada",
         fotoSha256: fotoSha,
-        lat: gps.lat,
-        lng: gps.lng,
-        precisionM: gps.precision,
+        lat: gps?.lat ?? null,
+        lng: gps?.lng ?? null,
+        precisionM: gps?.precision ?? null,
         gramosEntregados: 0,
         motivoRechazo: motivo,
         capturadoAt: new Date().toISOString(),
@@ -333,8 +347,21 @@ export default function RutaPage() {
         <p style={{ margin: "4px 0 0", fontSize: 14, fontWeight: 600 }}>
           {gps
             ? `${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)} · ±${gps.precision} m${gps.precision > 100 ? " (impreciso, igual sirve)" : ""}`
-            : "Buscando ubicación…"}
+            : buscandoGps
+              ? "Buscando ubicación…"
+              : "Sin ubicación todavía"}
         </p>
+        {/* Sin este reintento, un GPS que no fija al primer intento dejaba al
+            repartidor encerrado: no podía confirmar ni cancelar hacia algo útil. */}
+        {!gps && !buscandoGps ? (
+          <button
+            type="button"
+            onClick={pedirUbicacion}
+            style={{ marginTop: 8, minHeight: 44, padding: "0 14px", borderRadius: 10, border: `1px solid ${superficie.hairline}`, background: "#fff", fontWeight: 700, fontSize: 14 }}
+          >
+            Reintentar ubicación
+          </button>
+        ) : null}
       </div>
     );
 
@@ -373,7 +400,7 @@ export default function RutaPage() {
           {errorGps ? <p style={{ color: semantico.error, fontSize: 14 }} role="alert">{errorGps}</p> : null}
 
           <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
-            <BotonPrimario disabled={!gps || !motivoListo} onClick={confirmarFallida}>
+            <BotonPrimario disabled={!motivoListo} onClick={confirmarFallida}>
               Confirmar: no se pudo entregar
             </BotonPrimario>
             <BotonPrimario variante="neutro" onClick={() => setModoFallida(false)}>Volver</BotonPrimario>
@@ -404,7 +431,7 @@ export default function RutaPage() {
               <CifraGrande valor={gramosTexto || "0"} unidad="kg" />
             </div>
             <TecladoNumerico valor={gramosTexto} onCambiar={setGramosTexto} permitirDecimal />
-            {!gramosValidos ? (
+            {gramosTexto && !gramosValidos ? (
               <p style={{ color: semantico.error, fontSize: 13, margin: 0 }} role="alert">
                 Máximo {formatearKg(gramosPedidosNum)} (lo pedido) — no se puede entregar más de eso
               </p>
@@ -419,7 +446,12 @@ export default function RutaPage() {
             </span>
             <button
               type="button"
-              onClick={() => setEditandoGramos(true)}
+              onClick={() => {
+                // Se limpia el campo al entrar a editar: el teclado APENDA, así que
+                // sobre el total precargado ("10") tocar 5 daba "105" en vez de 5.
+                setGramosTexto("");
+                setEditandoGramos(true);
+              }}
               style={{ fontSize: 14, fontWeight: 700, color: superficie.textoDim, background: "none", border: "none" }}
             >
               Editar

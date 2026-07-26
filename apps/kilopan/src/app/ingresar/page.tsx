@@ -110,7 +110,7 @@ export default function IngresarPage() {
         <CifraGrande valor={"●".repeat(pin.length).padEnd(4, "○")} />
       </div>
 
-      <TecladoNumerico valor={pin} onCambiar={(v) => setPin(v.slice(0, 4))} />
+      <TecladoNumerico valor={pin} onCambiar={(v) => setPin(v.slice(0, 4))} permitirCeroInicial />
 
       {error ? (
         <p style={{ color: "#B91C1C", fontSize: 14, textAlign: "center" }} role="alert">

@@ -8,9 +8,11 @@ interface EntregaEntrada {
   receptorNombre: string;
   receptorRut?: string | null;
   fotoSha256: string;
-  lat: number;
-  lng: number;
-  precisionM: number;
+  // Opcionales: una entrega FALLIDA se puede registrar sin GPS (migración 0015).
+  // La exitosa los sigue exigiendo — se valida en el handler.
+  lat?: number | null;
+  lng?: number | null;
+  precisionM?: number | null;
   gramosEntregados: number;
   motivoRechazo?: string | null;
   capturadoAt: string;
@@ -53,6 +55,15 @@ export async function POST(request: NextRequest) {
         rechazadas.push({ clientUuid: e.clientUuid, motivo: "faltan campos obligatorios" });
         continue;
       }
+      // El GPS es la prueba de que el pan llegó a la dirección correcta: la entrega
+      // EXITOSA no se registra sin él. La FALLIDA sí — ahí no se afirma haber dejado
+      // nada, y exigirlo dejaba al repartidor sin poder registrar ni el intento
+      // cuando el GPS no fija dentro de un galpón (ver migración 0015).
+      const tieneGps = typeof e.lat === "number" && typeof e.lng === "number";
+      if (!esFallida && !tieneGps) {
+        rechazadas.push({ clientUuid: e.clientUuid, motivo: "falta la ubicación de la entrega" });
+        continue;
+      }
       // Sin esto, cualquier sesión repartidor cierra el POD de CUALQUIER pedido del
       // sistema con solo adivinar el id — la conciliación del día queda falseada y
       // una parada ajena se marca entregada sin que su repartidor real se entere.
@@ -85,15 +96,19 @@ export async function POST(request: NextRequest) {
         continue;
       }
       // Flags que NO bloquean, solo marcan para la cola "Entregas por revisar".
-      const gpsDegradado = e.precisionM > 100;
-      const distanciaOk = await db.query<{ fuera: boolean }>(
-        `select coalesce(
-                  sqrt(power((c.lat - $1) * 111000, 2) + power((c.lng - $2) * 90000, 2)) > 300,
-                  false) as fuera
-           from pan.pedidos p join pan.clientes c on c.id = p.cliente_id
-          where p.id = $3`,
-        [e.lat, e.lng, e.pedidoId]
-      );
+      // Una fallida sin GPS se marca degradada: no es sospechosa, pero el dueño tiene
+      // que poder distinguirla de una con ubicación confirmada al revisar.
+      const gpsDegradado = !tieneGps || (e.precisionM ?? 0) > 100;
+      const distanciaOk = tieneGps
+        ? await db.query<{ fuera: boolean }>(
+            `select coalesce(
+                      sqrt(power((c.lat - $1) * 111000, 2) + power((c.lng - $2) * 90000, 2)) > 300,
+                      false) as fuera
+               from pan.pedidos p join pan.clientes c on c.id = p.cliente_id
+              where p.id = $3`,
+            [e.lat, e.lng, e.pedidoId]
+          )
+        : { rows: [{ fuera: false }] };
 
       // La foto se sube apenas se toma —en paralelo a que el repartidor completa la
       // pantalla del receptor— para que la resistencia offline no dependa de una
@@ -125,9 +140,9 @@ export async function POST(request: NextRequest) {
           e.receptorRut ?? null,
           e.fotoSha256,
           fotoEstado,
-          e.lat,
-          e.lng,
-          e.precisionM,
+          tieneGps ? e.lat : null,
+          tieneGps ? e.lng : null,
+          tieneGps ? (e.precisionM ?? 0) : null,
           gpsDegradado,
           distanciaOk.rows[0]?.fuera ?? false,
           e.gramosEntregados,

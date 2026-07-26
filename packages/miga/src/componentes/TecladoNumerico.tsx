@@ -6,10 +6,19 @@ export function TecladoNumerico({
   valor,
   onCambiar,
   permitirDecimal = false,
+  permitirCeroInicial = false,
 }: {
   valor: string;
   onCambiar: (nuevoValor: string) => void;
   permitirDecimal?: boolean;
+  /** Para PIN y otros códigos, donde "0512" NO es lo mismo que "512". Sin esto, el
+   *  colapso del cero inicial —correcto para un monto: "0" + "5" es 5, no 05— hacía
+   *  literalmente IMPOSIBLE teclear un PIN que empieza con cero: el operador tocaba
+   *  0, después 5, y el 0 se reemplazaba por el 5. La bolita no avanzaba, parecía
+   *  colgado, y a los pocos intentos quedaba bloqueado 15 minutos por AC-SEC-01 con
+   *  un error que lo culpaba a él. Lo encontró la auditoría de experiencia; nunca se
+   *  vio porque los usuarios sembrados usan PIN "1234". */
+  permitirCeroInicial?: boolean;
 }) {
   function tocar(tecla: string) {
     if (tecla === "⌫") {
@@ -21,7 +30,7 @@ export function TecladoNumerico({
       onCambiar(valor.length === 0 ? "0," : valor + ",");
       return;
     }
-    onCambiar(valor === "0" ? tecla : valor + tecla);
+    onCambiar(!permitirCeroInicial && valor === "0" ? tecla : valor + tecla);
   }
 
   return (
