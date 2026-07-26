@@ -38,13 +38,17 @@ export async function POST(request: NextRequest) {
 
   for (const e of entregas) {
     try {
+      // Fallida = motivoRechazo presente: no se dejó nada, así que exige exactamente 0 g.
+      // Exitosa (total o parcial) = sin motivo: exige haber dejado algo, nunca 0.
+      // Separa los dos caminos en el dato mismo, sin estado intermedio ambiguo.
+      const esFallida = !!e.motivoRechazo;
       if (
         !e.clientUuid ||
         !e.pedidoId ||
         !e.receptorNombre ||
         !e.fotoSha256 ||
         !Number.isInteger(e.gramosEntregados) ||
-        e.gramosEntregados < 1
+        (esFallida ? e.gramosEntregados !== 0 : e.gramosEntregados < 1)
       ) {
         rechazadas.push({ clientUuid: e.clientUuid, motivo: "faltan campos obligatorios" });
         continue;
@@ -102,12 +106,16 @@ export async function POST(request: NextRequest) {
       ]);
       const fotoEstado = fotoYaSubida.rows[0]?.ok ? "subida" : "pendiente_subida";
 
+      // Una fallida NO cierra el POD del pedido (cerrada=false): el índice único
+      // `entregas_una_vigente_por_pedido` solo mira filas cerradas, así que un intento
+      // fallido no bloquea el reintento de mañana ni exige encadenar supersede_id. El
+      // pedido sigue disponible para una parada nueva en otra ruta.
       const r = await db.query<{ id: string }>(
         `insert into pan.entregas
            (client_uuid, pedido_id, receptor_nombre, receptor_rut, foto_sha256, foto_estado,
             lat, lng, precision_m, gps_degradado, gps_fuera_de_zona,
             gramos_entregados, motivo_rechazo, cerrada, usuario_id, dispositivo_id, capturado_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,true,$14,$15,$16)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
          on conflict (client_uuid) do nothing
          returning id`,
         [
@@ -124,6 +132,7 @@ export async function POST(request: NextRequest) {
           distanciaOk.rows[0]?.fuera ?? false,
           e.gramosEntregados,
           e.motivoRechazo ?? null,
+          !esFallida,
           sesion.usuarioId,
           sesion.dispositivoId,
           e.capturadoAt,
@@ -134,14 +143,25 @@ export async function POST(request: NextRequest) {
       // es un éxito igual: lo importante es que puede borrar el ítem local.
       aceptadas.push(e.clientUuid);
       if (r.rows[0]?.id) {
+        // Fallida: la parada vuelve disponible como 'rechazada', NO 'entregada'.
         await db.query(
-          `update pan.ruta_paradas set estado = 'entregada'
-            where pedido_id = $1 and estado = 'pendiente'`,
-          [e.pedidoId]
+          `update pan.ruta_paradas set estado = $1
+            where pedido_id = $2 and estado = 'pendiente'`,
+          [esFallida ? "rechazada" : "entregada", e.pedidoId]
         );
-        await db.query(`update pan.pedidos set estado = 'entregado' where id = $1 and estado <> 'entregado'`, [
-          e.pedidoId,
-        ]);
+        if (esFallida) {
+          // POST /api/rutas ahora sí mueve el pedido a 'en_ruta' al armar la ruta (fix
+          // de idempotencia posterior a este): sin este update, una entrega fallida lo
+          // dejaba atascado ahí para siempre — "Armar ruta y salir" solo ofrece
+          // pedidos en 'confirmado', así que nunca volvía a aparecer para reintentarlo.
+          await db.query(`update pan.pedidos set estado = 'confirmado' where id = $1 and estado = 'en_ruta'`, [
+            e.pedidoId,
+          ]);
+        } else {
+          await db.query(`update pan.pedidos set estado = 'entregado' where id = $1 and estado <> 'entregado'`, [
+            e.pedidoId,
+          ]);
+        }
       }
     } catch (err) {
       const mensaje = err instanceof Error ? err.message : String(err);

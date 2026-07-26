@@ -1,10 +1,24 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BotonPrimario, ChipEstadoConexion, CifraGrande } from "@kilopan/miga/componentes/index.tsx";
+import {
+  BotonPrimario,
+  ChipEstadoConexion,
+  CifraGrande,
+  TecladoNumerico,
+  SelectorUnToque,
+} from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
 import { formatearKg } from "@/comun/formato.ts";
+import { kgTextoAGramos, pesoValido, gramosAKgTexto } from "@/comun/peso.ts";
 import { encolar, encolarFoto, iniciarSyncAutomatico, contarPendientes } from "@/pod/outbox.ts";
 import { abrirCamara, capturar, cerrarCamara, subirFoto } from "@/comun/camara.ts";
+
+const MOTIVOS_FALLA = [
+  { valor: "cerrado", etiqueta: "Local cerrado" },
+  { valor: "direccion", etiqueta: "No se encontró la dirección" },
+  { valor: "rechazo", etiqueta: "Cliente rechazó el pedido" },
+  { valor: "otro", etiqueta: "Otro" },
+] as const;
 
 interface Parada {
   parada_id: string;
@@ -26,6 +40,15 @@ export default function RutaPage() {
   const [pendientes, setPendientes] = useState(0);
   const [paso, setPaso] = useState<"lista" | "foto" | "receptor">("lista");
   const [receptor, setReceptor] = useState("");
+  // Precargados con el total del pedido (camino rápido, cero toques extra); editables
+  // para la entrega parcial — nunca se manda `gramos_pedidos` a ciegas (ALTA #10).
+  const [gramosTexto, setGramosTexto] = useState("");
+  const [editandoGramos, setEditandoGramos] = useState(false);
+  // "No se pudo entregar" (ALTA #18): mismo paso "receptor", mismo GPS/foto ya
+  // capturados — solo cambia qué se le pide al repartidor y qué payload se manda.
+  const [modoFallida, setModoFallida] = useState(false);
+  const [motivoFallida, setMotivoFallida] = useState<string | null>(null);
+  const [motivoOtroTexto, setMotivoOtroTexto] = useState("");
   const [gps, setGps] = useState<{ lat: number; lng: number; precision: number } | null>(null);
   const [errorGps, setErrorGps] = useState<string | null>(null);
   const [fotoSha, setFotoSha] = useState<string | null>(null);
@@ -127,6 +150,23 @@ export default function RutaPage() {
     setErrorCamara(null);
   }
 
+  // Limpia todo lo que junta el flujo de UNA parada, tanto tras confirmar como al
+  // cancelar desde el paso "receptor" — así el próximo "Entregar" no arrastra el
+  // motivo, el peso editado o el modo fallida de la parada anterior.
+  function volverALista() {
+    setPaso("lista");
+    setActiva(null);
+    setFotoSha(null);
+    setGps(null);
+    setErrorGps(null);
+    setReceptor("");
+    setGramosTexto("");
+    setEditandoGramos(false);
+    setModoFallida(false);
+    setMotivoFallida(null);
+    setMotivoOtroTexto("");
+  }
+
   // El obturador real: toma el cuadro actual, lo comprime a JPEG (~400 KB) y calcula
   // el sha256 sobre el blob ya comprimido — es el mismo que el servidor recalcula al
   // recibir la imagen. Se intenta subir al tiro; si falla (sin señal / 5xx) la foto NO
@@ -142,6 +182,9 @@ export default function RutaPage() {
       if (!subida) await encolarFoto(captura.sha256, captura.blob);
       setFotoSha(captura.sha256);
       setReceptor(parada?.contacto_nombre ?? "");
+      // Precarga con el total del pedido: la entrega completa (el caso corriente)
+      // sigue sin pedir un toque de más. Editar es la excepción, no la regla.
+      setGramosTexto(gramosAKgTexto(Number(parada?.gramos_pedidos ?? 0)));
       setPaso("receptor");
     } catch {
       setErrorCamara("No se pudo tomar la foto. Intenta de nuevo.");
@@ -150,12 +193,22 @@ export default function RutaPage() {
     }
   }
 
+  let gramosEntregadosNum = 0;
+  try {
+    gramosEntregadosNum = kgTextoAGramos(gramosTexto);
+  } catch {
+    gramosEntregadosNum = 0; // el teclado propio no puede producirlo, pero no revienta la pantalla
+  }
+  const gramosPedidosNum = parada ? Number(parada.gramos_pedidos) : 0;
+  const gramosValidos = pesoValido(gramosEntregadosNum) && gramosEntregadosNum <= gramosPedidosNum;
+
   async function confirmar() {
     if (!parada || !fotoSha) return;
     if (!gps) {
       setErrorGps("Esperando la ubicación… si no aparece, revisa el permiso de GPS.");
       return;
     }
+    if (!gramosValidos) return;
     // UN SOLO client_uuid para la clave del outbox y para el payload. Antes se
     // generaban dos por separado: el servidor aceptaba la entrega y devolvía el uuid
     // del payload, la cola intentaba borrar por ESE uuid, no encontraba el ítem
@@ -175,17 +228,58 @@ export default function RutaPage() {
         lat: gps.lat,
         lng: gps.lng,
         precisionM: gps.precision,
-        gramosEntregados: Number(parada.gramos_pedidos),
+        gramosEntregados: gramosEntregadosNum,
         capturadoAt: new Date().toISOString(),
       },
     });
     setEntregadasLocal((s) => new Set(s).add(parada.parada_id));
     setPendientes(await contarPendientes());
-    setMensaje(`Entregada — ${parada.razon_social}`);
-    setPaso("lista");
-    setActiva(null);
-    setFotoSha(null);
-    setGps(null);
+    setMensaje(
+      gramosEntregadosNum < gramosPedidosNum
+        ? `Entregada parcial — ${parada.razon_social}: ${formatearKg(gramosEntregadosNum)} de ${formatearKg(gramosPedidosNum)}`
+        : `Entregada — ${parada.razon_social}`
+    );
+    volverALista();
+  }
+
+  // "No se pudo entregar": mismo GPS y foto ya capturados en el paso "foto" (misma
+  // exigencia de evidencia que una entrega exitosa — el POD es evidencia en los dos
+  // casos), pero 0 g entregados y un motivo en vez de receptor/cantidad.
+  async function confirmarFallida() {
+    if (!parada || !fotoSha) return;
+    if (!gps) {
+      setErrorGps("Esperando la ubicación… si no aparece, revisa el permiso de GPS.");
+      return;
+    }
+    const motivo =
+      motivoFallida === "otro"
+        ? motivoOtroTexto.trim()
+        : (MOTIVOS_FALLA.find((m) => m.valor === motivoFallida)?.etiqueta ?? "");
+    if (!motivo) return;
+
+    const clientUuid = crypto.randomUUID();
+    clientUuidAParada.current.set(clientUuid, parada.parada_id);
+    await encolar({
+      clientUuid,
+      tipo: "entrega",
+      ruta: "/api/sync",
+      payload: {
+        clientUuid,
+        pedidoId: parada.pedido_id,
+        receptorNombre: "No aplica — entrega no realizada",
+        fotoSha256: fotoSha,
+        lat: gps.lat,
+        lng: gps.lng,
+        precisionM: gps.precision,
+        gramosEntregados: 0,
+        motivoRechazo: motivo,
+        capturadoAt: new Date().toISOString(),
+      },
+    });
+    setEntregadasLocal((s) => new Set(s).add(parada.parada_id));
+    setPendientes(await contarPendientes());
+    setMensaje(`No se pudo entregar — ${parada.razon_social}: ${motivo}`);
+    volverALista();
   }
 
   if (paso === "foto" && parada) {
@@ -233,19 +327,67 @@ export default function RutaPage() {
   }
 
   if (paso === "receptor" && parada) {
+    const gpsBox = (
+      <div style={{ padding: 14, borderRadius: 12, background: superficie.tarjeta, border: `1px solid ${superficie.hairline}` }}>
+        <p style={{ margin: 0, fontSize: 13, color: superficie.textoFaint }}>Foto tomada · GPS</p>
+        <p style={{ margin: "4px 0 0", fontSize: 14, fontWeight: 600 }}>
+          {gps
+            ? `${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)} · ±${gps.precision} m${gps.precision > 100 ? " (impreciso, igual sirve)" : ""}`
+            : "Buscando ubicación…"}
+        </p>
+      </div>
+    );
+
+    // "No se pudo entregar": la foto y el GPS ya se tomaron en el paso anterior — se
+    // reutilizan tal cual, solo cambia qué se pide después de eso (motivo, no receptor).
+    if (modoFallida) {
+      const motivoListo =
+        motivoFallida === "otro" ? motivoOtroTexto.trim().length > 0 : motivoFallida !== null;
+      return (
+        <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16, minHeight: "100dvh" }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{parada.razon_social}</h1>
+          <p style={{ margin: 0, color: superficie.textoDim, fontSize: 15 }}>{parada.direccion}</p>
+
+          {gpsBox}
+
+          <div>
+            <p style={{ fontSize: 13, fontWeight: 600, color: superficie.textoDim, margin: "0 0 8px" }}>
+              ¿Por qué no se pudo entregar?
+            </p>
+            <SelectorUnToque
+              opciones={MOTIVOS_FALLA as unknown as { valor: string; etiqueta: string }[]}
+              valor={motivoFallida}
+              onCambiar={setMotivoFallida}
+            />
+          </div>
+
+          {motivoFallida === "otro" ? (
+            <input
+              value={motivoOtroTexto}
+              onChange={(e) => setMotivoOtroTexto(e.target.value)}
+              placeholder="Describe brevemente"
+              style={{ minHeight: 44, borderRadius: 12, border: `1px solid ${superficie.hairline}`, padding: "0 14px", fontSize: 17 }}
+            />
+          ) : null}
+
+          {errorGps ? <p style={{ color: semantico.error, fontSize: 14 }} role="alert">{errorGps}</p> : null}
+
+          <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+            <BotonPrimario disabled={!gps || !motivoListo} onClick={confirmarFallida}>
+              Confirmar: no se pudo entregar
+            </BotonPrimario>
+            <BotonPrimario variante="neutro" onClick={() => setModoFallida(false)}>Volver</BotonPrimario>
+          </div>
+        </main>
+      );
+    }
+
     return (
       <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16, minHeight: "100dvh" }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{parada.razon_social}</h1>
         <p style={{ margin: 0, color: superficie.textoDim, fontSize: 15 }}>{parada.direccion}</p>
 
-        <div style={{ padding: 14, borderRadius: 12, background: superficie.tarjeta, border: `1px solid ${superficie.hairline}` }}>
-          <p style={{ margin: 0, fontSize: 13, color: superficie.textoFaint }}>Foto tomada · GPS</p>
-          <p style={{ margin: "4px 0 0", fontSize: 14, fontWeight: 600 }}>
-            {gps
-              ? `${gps.lat.toFixed(5)}, ${gps.lng.toFixed(5)} · ±${gps.precision} m${gps.precision > 100 ? " (impreciso, igual sirve)" : ""}`
-              : "Buscando ubicación…"}
-          </p>
-        </div>
+        {gpsBox}
 
         <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: superficie.textoDim }}>Quién recibe</span>
@@ -256,15 +398,47 @@ export default function RutaPage() {
           />
         </label>
 
-        <p style={{ margin: 0, fontSize: 15 }}>
-          Entrega: <strong>{formatearKg(Number(parada.gramos_pedidos))}</strong>
-        </p>
+        {editandoGramos ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", justifyContent: "center", padding: "4px 0" }}>
+              <CifraGrande valor={gramosTexto || "0"} unidad="kg" />
+            </div>
+            <TecladoNumerico valor={gramosTexto} onCambiar={setGramosTexto} permitirDecimal />
+            {!gramosValidos ? (
+              <p style={{ color: semantico.error, fontSize: 13, margin: 0 }} role="alert">
+                Máximo {formatearKg(gramosPedidosNum)} (lo pedido) — no se puede entregar más de eso
+              </p>
+            ) : null}
+            <BotonPrimario variante="neutro" onClick={() => setEditandoGramos(false)}>Listo</BotonPrimario>
+          </div>
+        ) : (
+          <p style={{ margin: 0, fontSize: 15, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+            <span>
+              Entrega: <strong>{formatearKg(gramosEntregadosNum)}</strong>
+              {gramosEntregadosNum < gramosPedidosNum ? ` de ${formatearKg(gramosPedidosNum)} pedidos (parcial)` : ""}
+            </span>
+            <button
+              type="button"
+              onClick={() => setEditandoGramos(true)}
+              style={{ fontSize: 14, fontWeight: 700, color: superficie.textoDim, background: "none", border: "none" }}
+            >
+              Editar
+            </button>
+          </p>
+        )}
 
         {errorGps ? <p style={{ color: semantico.error, fontSize: 14 }} role="alert">{errorGps}</p> : null}
 
         <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
-          <BotonPrimario disabled={!gps} onClick={confirmar}>Confirmar entrega</BotonPrimario>
-          <BotonPrimario variante="neutro" onClick={() => { setPaso("lista"); setActiva(null); }}>Cancelar</BotonPrimario>
+          <BotonPrimario disabled={!gps || !gramosValidos} onClick={confirmar}>Confirmar entrega</BotonPrimario>
+          <BotonPrimario variante="neutro" onClick={volverALista}>Cancelar</BotonPrimario>
+          <button
+            type="button"
+            onClick={() => setModoFallida(true)}
+            style={{ fontSize: 14, fontWeight: 700, color: semantico.error, background: "none", border: "none", padding: "8px 0" }}
+          >
+            No se pudo entregar
+          </button>
         </div>
       </main>
     );

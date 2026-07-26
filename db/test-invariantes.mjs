@@ -878,6 +878,134 @@ test("AC-POD-01: un segundo POD vigente para el MISMO pedido rebota (índice par
   await db.close();
 });
 
+// =============================================================================
+// AC-POD — entrega parcial y entrega fallida (ALTA #10, #18 de la auditoría)
+// =============================================================================
+
+test("AC-POD: una entrega parcial (menos gramos que lo pedido) es válida y la TCK cuenta lo entregado, no lo pedido", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "repartidor");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const clienteId = await crearCliente(db);
+  const pedidoId = await crearPedido(db, clienteId, usuarioId, dispositivoId);
+
+  // El pedido pide 5.000 g pero el repartidor solo deja 3.000 (le faltó pan en el furgón).
+  await db.query(
+    `insert into pan.entregas (client_uuid, pedido_id, receptor_nombre, foto_sha256, lat, lng, precision_m, gramos_entregados, cerrada, usuario_id, dispositivo_id, capturado_at)
+     values (gen_random_uuid(), $1, 'Juan', 'abc', -33.45, -70.66, 20, 3000, true, $2, $3, now())`,
+    [pedidoId, usuarioId, dispositivoId]
+  );
+
+  const tck = await db.query(`select g_pod_ok from pan.conciliacion_diaria where fecha = current_date`);
+  assert.equal(Number(tck.rows[0].g_pod_ok), 3000, "la TCK ve los 3.000 g realmente dejados, no los 5.000 pedidos");
+  await db.close();
+});
+
+test("AC-POD: una entrega fallida exige gramos_entregados=0 y cerrada=false (constraint de la BD, no solo de la UI)", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "repartidor");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const clienteId = await crearCliente(db);
+  const pedidoId = await crearPedido(db, clienteId, usuarioId, dispositivoId);
+
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into pan.entregas (client_uuid, pedido_id, receptor_nombre, foto_sha256, lat, lng, precision_m, gramos_entregados, motivo_rechazo, cerrada, usuario_id, dispositivo_id, capturado_at)
+         values (gen_random_uuid(), $1, 'Nadie', 'abc', -33.45, -70.66, 20, 1500, 'Local cerrado', false, $2, $3, now())`,
+        [pedidoId, usuarioId, dispositivoId]
+      ),
+    /constraint|check/i,
+    "una fallida con gramos > 0 es un estado ambiguo: ¿se entregó algo o no? — la BD lo rebota"
+  );
+
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into pan.entregas (client_uuid, pedido_id, receptor_nombre, foto_sha256, lat, lng, precision_m, gramos_entregados, motivo_rechazo, cerrada, usuario_id, dispositivo_id, capturado_at)
+         values (gen_random_uuid(), $1, 'Nadie', 'abc', -33.45, -70.66, 20, 0, 'Local cerrado', true, $2, $3, now())`,
+        [pedidoId, usuarioId, dispositivoId]
+      ),
+    /constraint|check/i,
+    "una fallida marcada cerrada=true bloquearía el reintento de mañana — la BD tampoco deja eso"
+  );
+  await db.close();
+});
+
+test("AC-POD: una entrega fallida (cerrada=false) NO cuenta en la conciliación diaria (TCK)", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "repartidor");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const clienteId = await crearCliente(db);
+  const pedidoId = await crearPedido(db, clienteId, usuarioId, dispositivoId);
+
+  // Un pesaje cualquiera para que exista fila de conciliación hoy.
+  const productoId = await crearProducto(db);
+  await db.query(
+    `insert into pan.pesajes (client_uuid, producto_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+     values (gen_random_uuid(), $1, 5000, 'mostrador', $2, $3, now())`,
+    [productoId, usuarioId, dispositivoId]
+  );
+
+  await db.query(
+    `insert into pan.entregas (client_uuid, pedido_id, receptor_nombre, foto_sha256, lat, lng, precision_m, gramos_entregados, motivo_rechazo, cerrada, usuario_id, dispositivo_id, capturado_at)
+     values (gen_random_uuid(), $1, 'Nadie', 'abc', -33.45, -70.66, 20, 0, 'Local cerrado', false, $2, $3, now())`,
+    [pedidoId, usuarioId, dispositivoId]
+  );
+
+  const tck = await db.query(`select g_pod_ok from pan.conciliacion_diaria where fecha = current_date`);
+  assert.equal(Number(tck.rows[0].g_pod_ok), 0, "un intento fallido no es un kilo conciliado");
+  await db.close();
+});
+
+test("AC-POD: una entrega fallida no bloquea un reintento exitoso posterior del MISMO pedido", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "repartidor");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const clienteId = await crearCliente(db);
+  const pedidoId = await crearPedido(db, clienteId, usuarioId, dispositivoId);
+
+  // Primer intento: local cerrado. cerrada=false — no es el POD final del pedido.
+  await db.query(
+    `insert into pan.entregas (client_uuid, pedido_id, receptor_nombre, foto_sha256, lat, lng, precision_m, gramos_entregados, motivo_rechazo, cerrada, usuario_id, dispositivo_id, capturado_at)
+     values (gen_random_uuid(), $1, 'Nadie', 'abc', -33.45, -70.66, 20, 0, 'Local cerrado', false, $2, $3, now())`,
+    [pedidoId, usuarioId, dispositivoId]
+  );
+
+  // Reintento al día siguiente: esta vez sí se entrega. Sin supersede_id — si
+  // `entregas_una_vigente_por_pedido` mirara la fallida como vigente, esto rebotaría.
+  await db.query(
+    `insert into pan.entregas (client_uuid, pedido_id, receptor_nombre, foto_sha256, lat, lng, precision_m, gramos_entregados, cerrada, usuario_id, dispositivo_id, capturado_at)
+     values (gen_random_uuid(), $1, 'Juan', 'def', -33.45, -70.66, 20, 5000, true, $2, $3, now())`,
+    [pedidoId, usuarioId, dispositivoId]
+  );
+
+  const n = await db.query(`select count(*)::int as n from pan.entregas where pedido_id = $1`, [pedidoId]);
+  assert.equal(n.rows[0].n, 2, "el intento fallido y la entrega exitosa conviven: los dos son evidencia real");
+  await db.close();
+});
+
+test("AC-POD: dos intentos fallidos seguidos del mismo pedido no chocan entre sí", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "repartidor");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const clienteId = await crearCliente(db);
+  const pedidoId = await crearPedido(db, clienteId, usuarioId, dispositivoId);
+
+  const fallar = () =>
+    db.query(
+      `insert into pan.entregas (client_uuid, pedido_id, receptor_nombre, foto_sha256, lat, lng, precision_m, gramos_entregados, motivo_rechazo, cerrada, usuario_id, dispositivo_id, capturado_at)
+       values (gen_random_uuid(), $1, 'Nadie', 'abc', -33.45, -70.66, 20, 0, 'Local cerrado', false, $2, $3, now())`,
+      [pedidoId, usuarioId, dispositivoId]
+    );
+  await fallar();
+  await fallar();
+
+  const n = await db.query(`select count(*)::int as n from pan.entregas where pedido_id = $1`, [pedidoId]);
+  assert.equal(n.rows[0].n, 2, "cada intento fallido queda registrado — el índice único solo protege lo cerrado");
+  await db.close();
+});
+
 test("AC-POD-02: replay del mismo client_uuid no duplica la entrega (test centinela #1)", async () => {
   const db = await dbNueva();
   const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "repartidor");
