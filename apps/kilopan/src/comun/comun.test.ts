@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { roundClp } from "./round_clp.ts";
 import { validaRut, calcularDv, formatearRut } from "./valida_rut.ts";
-import { formatearKg, formatearClp, formatearFecha } from "./formato.ts";
+import { formatearKg, formatearClp, formatearFecha, parsearClp } from "./formato.ts";
 
 // --- round_clp (AC-H0 apoyo, invariante "dinero = CLP entero") ---
 test("roundClp: redondea hacia abajo/arriba según el decimal", () => {
@@ -59,6 +59,19 @@ test("formatearClp: punto de miles, sin decimales, entero", () => {
 });
 test("formatearClp: rechaza CLP no entero (invariante: dinero = CLP integer)", () => {
   assert.throws(() => formatearClp(1250.5));
+});
+test("parsearClp: quita el punto de miles chileno (reproduce el bug del cierre de caja)", () => {
+  assert.equal(parsearClp("45.000"), 45000, "Number(\"45.000\") da 45 — este es el bug que se corrigió");
+  assert.equal(parsearClp("1.000.000"), 1000000);
+  assert.equal(parsearClp("500"), 500);
+});
+test("parsearClp: acepta coma decimal y redondea", () => {
+  assert.equal(parsearClp("45.000,50"), 45001);
+  assert.equal(parsearClp("45.000,49"), 45000);
+});
+test("parsearClp: vacío o solo espacios es 0", () => {
+  assert.equal(parsearClp(""), 0);
+  assert.equal(parsearClp("   "), 0);
 });
 test("formatearFecha: dd-mm-aaaa", () => {
   assert.equal(formatearFecha(new Date(2026, 6, 25)), "25-07-2026"); // mes 6 = julio (0-index)

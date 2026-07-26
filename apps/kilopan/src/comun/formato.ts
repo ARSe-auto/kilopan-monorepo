@@ -21,6 +21,14 @@ export function formatearClp(clp: number): string {
   return `${clp < 0 ? "-" : ""}$${conMiles}`;
 }
 
+/** "45.000" o "45.000,50" -> 45000 (redondeado). Inverso de formatearClp: en Chile el
+ *  punto es separador de miles y la coma es decimal — `Number("45.000")` da 45 y pierde
+ *  tres ceros, que es exactamente el bug que esta función existe para no repetir. */
+export function parsearClp(texto: string): number {
+  const limpio = texto.trim().replace(/\./g, "").replace(",", ".");
+  return Math.round(Number(limpio || "0"));
+}
+
 /** Date -> "dd-mm-aaaa", con reloj de servidor (el llamador decide qué Date pasar:
  *  `recibido_at` para negocio, `capturado_at` solo para diagnóstico/TCK). */
 export function formatearFecha(fecha: Date): string {

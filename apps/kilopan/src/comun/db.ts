@@ -190,12 +190,26 @@ export function obtenerDb(): Promise<ClienteDb> {
   if (modo === "postgres") {
     const url = env.DATABASE_URL;
     if (!url) throw new Error("DB_MODE=postgres requiere DATABASE_URL");
-    if (!poolPromise) poolPromise = crearPool(url);
+    // Si `crearPool` rechaza (corte de red, Railway reiniciando), NO cachear ese
+    // promise: sin el .catch de acá, el rechazo queda pegado en `poolPromise` para
+    // siempre y cada request futuro recibe el mismo error viejo sin volver a intentar
+    // conectarse, aunque la red ya se haya recuperado hace rato.
+    if (!poolPromise) {
+      poolPromise = crearPool(url).catch((err) => {
+        poolPromise = null;
+        throw err;
+      });
+    }
     return poolPromise;
   }
 
   if (modo === "pglite") {
-    if (!pglitePromise) pglitePromise = crearPglite();
+    if (!pglitePromise) {
+      pglitePromise = crearPglite().catch((err) => {
+        pglitePromise = null;
+        throw err;
+      });
+    }
     return pglitePromise;
   }
 

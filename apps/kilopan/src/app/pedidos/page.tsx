@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { BotonPrimario } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
-import { formatearClp } from "@/comun/formato.ts";
+import { formatearClp, parsearClp } from "@/comun/formato.ts";
 import { kgTextoAGramos, pesoValido } from "@/comun/peso.ts";
 
 interface Pedido {
@@ -95,7 +95,7 @@ export default function PedidosPage() {
         tipoDte: Number(dteTipo),
         folioSii: Number(dteFolio),
         rutEmisor: dteRut,
-        montoTotal: Number(dteMonto || "0"),
+        montoTotal: parsearClp(dteMonto || "0"),
         pedidoId: dtePedidoId,
         origenCaptura: "manual",
       }),

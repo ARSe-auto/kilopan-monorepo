@@ -511,7 +511,7 @@ export default function PesarPage() {
 
       {estado !== "confirmar_outlier" ? (
         <div style={{ marginTop: "auto" }}>
-          <BotonPrimario disabled={!puedeConfirmar || destino === "reparto"} onClick={alConfirmar}>
+          <BotonPrimario disabled={!puedeConfirmar} onClick={alConfirmar}>
             {estado === "enviando" ? "Pesando…" : exigeFoto ? "Confirmar con foto" : "Confirmar"}
           </BotonPrimario>
         </div>

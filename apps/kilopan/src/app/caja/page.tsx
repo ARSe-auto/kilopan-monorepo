@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { BotonPrimario } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico } from "@kilopan/miga/tokens.ts";
-import { formatearClp } from "@/comun/formato.ts";
+import { formatearClp, parsearClp } from "@/comun/formato.ts";
 import { compartir, sePuedeCompartir } from "@/comun/compartir.ts";
 
 interface MedioCaja { medio_pago: string; etiqueta: string; esperado_clp: string }
@@ -31,9 +31,9 @@ export default function CajaPage() {
       body: JSON.stringify({
         declarados: medios.map((m) => ({
           medioPago: m.medio_pago,
-          declaradoClp: Math.round(Number(declarados[m.medio_pago] || "0")),
+          declaradoClp: parsearClp(declarados[m.medio_pago] || "0"),
         })),
-        totalFacturadorClp: totalFacturador ? Math.round(Number(totalFacturador)) : null,
+        totalFacturadorClp: totalFacturador ? parsearClp(totalFacturador) : null,
       }),
     });
     const cuerpo = await r.json();
