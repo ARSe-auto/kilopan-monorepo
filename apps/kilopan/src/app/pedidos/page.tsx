@@ -4,6 +4,7 @@ import { BotonPrimario } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
 import { formatearClp, parsearClp } from "@/comun/formato.ts";
 import { kgTextoAGramos, pesoValido } from "@/comun/peso.ts";
+import { validaRut } from "@/comun/valida_rut.ts";
 
 interface Pedido {
   id: string;
@@ -32,6 +33,18 @@ export default function PedidosPage() {
   const [clienteId, setClienteId] = useState("");
   const [productoId, setProductoId] = useState("");
   const [kilos, setKilos] = useState("");
+
+  // AC-DES (Tanda 5 de la auditoría): bloqueador raíz. No existía NINGUNA pantalla que
+  // llamara a POST /api/clientes — sin clientes no hay pedidos, ni reparto, ni fiado,
+  // ni facturación.
+  const [nuevoClienteAbierto, setNuevoClienteAbierto] = useState(false);
+  const [nuevoRut, setNuevoRut] = useState("");
+  const [nuevoRazonSocial, setNuevoRazonSocial] = useState("");
+  const [nuevoCanal, setNuevoCanal] = useState<"reparto" | "mostrador">("reparto");
+  const [nuevoDireccion, setNuevoDireccion] = useState("");
+  const [nuevoContactoNombre, setNuevoContactoNombre] = useState("");
+  const [nuevoContactoFono, setNuevoContactoFono] = useState("");
+  const [creandoCliente, setCreandoCliente] = useState(false);
 
   const [dtePedidoId, setDtePedidoId] = useState<string | null>(null);
   const [dteTipo, setDteTipo] = useState("52");
@@ -84,6 +97,50 @@ export default function PedidosPage() {
     setMensaje({ tipo: "ok", texto: `Pedido N° ${cuerpo.correlativo} · ${formatearClp(cuerpo.totalClp)}` });
     setKilos("");
     void cargar();
+  }
+
+  async function crearCliente() {
+    if (!nuevoRazonSocial.trim()) {
+      setMensaje({ tipo: "error", texto: "Falta la razón social del cliente" });
+      return;
+    }
+    if (!validaRut(nuevoRut)) {
+      setMensaje({ tipo: "error", texto: "RUT inválido" });
+      return;
+    }
+    setCreandoCliente(true);
+    try {
+      const r = await fetch("/api/clientes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rut: nuevoRut,
+          razonSocial: nuevoRazonSocial,
+          canal: nuevoCanal,
+          direccion: nuevoDireccion || undefined,
+          contactoNombre: nuevoContactoNombre || undefined,
+          contactoFono: nuevoContactoFono || undefined,
+        }),
+      });
+      const cuerpo = await r.json();
+      if (!r.ok) {
+        setMensaje({ tipo: "error", texto: cuerpo.error });
+        return;
+      }
+      setMensaje({ tipo: "ok", texto: `Cliente «${nuevoRazonSocial}» dado de alta` });
+      setNuevoRut("");
+      setNuevoRazonSocial("");
+      setNuevoDireccion("");
+      setNuevoContactoNombre("");
+      setNuevoContactoFono("");
+      setNuevoClienteAbierto(false);
+      await cargar();
+      if (nuevoCanal === "reparto") setClienteId(cuerpo.id);
+    } catch {
+      setMensaje({ tipo: "error", texto: "Sin conexión con el servidor" });
+    } finally {
+      setCreandoCliente(false);
+    }
   }
 
   async function registrarDte() {
@@ -149,10 +206,61 @@ export default function PedidosPage() {
 
       <section style={{ background: superficie.tarjeta, border: `1px solid ${superficie.hairline}`, borderRadius: 14, padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
         <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Nuevo pedido</h2>
-        <select value={clienteId} onChange={(e) => setClienteId(e.target.value)} style={campo}>
-          <option value="">Cliente…</option>
-          {clientes.map((c) => <option key={c.id} value={c.id}>{c.razon_social}</option>)}
-        </select>
+        <div style={{ display: "flex", gap: 8 }}>
+          <select value={clienteId} onChange={(e) => setClienteId(e.target.value)} style={{ ...campo, flex: 1 }}>
+            <option value="">Cliente…</option>
+            {clientes.map((c) => <option key={c.id} value={c.id}>{c.razon_social}</option>)}
+          </select>
+          <button
+            type="button"
+            onClick={() => setNuevoClienteAbierto((v) => !v)}
+            style={{ minHeight: 44, padding: "0 14px", borderRadius: 12, border: `1px solid ${superficie.hairline}`, background: "#fff", fontWeight: 700, fontSize: 14, whiteSpace: "nowrap" }}
+          >
+            + Nuevo cliente
+          </button>
+        </div>
+        {clientes.length === 0 ? (
+          <p style={{ margin: 0, fontSize: 13, color: semantico.alerta }}>
+            No hay clientes de reparto todavía — dar de alta uno es el primer paso.
+          </p>
+        ) : null}
+
+        {nuevoClienteAbierto ? (
+          <div style={{ border: `2px solid ${acentos.kilopan}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>Nuevo cliente</p>
+            <input value={nuevoRazonSocial} onChange={(e) => setNuevoRazonSocial(e.target.value)} placeholder="Razón social" style={campo} />
+            <input value={nuevoRut} onChange={(e) => setNuevoRut(e.target.value)} placeholder="RUT (ej: 12.345.678-5)" style={campo} />
+            <div style={{ display: "flex", gap: 8 }}>
+              {(["reparto", "mostrador"] as const).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setNuevoCanal(c)}
+                  style={{
+                    flex: 1,
+                    minHeight: 44,
+                    borderRadius: 10,
+                    border: nuevoCanal === c ? `2px solid ${acentos.kilopan}` : `1px solid ${superficie.hairline}`,
+                    background: nuevoCanal === c ? "#FEF3E2" : "#fff",
+                    fontWeight: 700,
+                    fontSize: 14,
+                  }}
+                >
+                  {c === "reparto" ? "Reparto" : "Mostrador"}
+                </button>
+              ))}
+            </div>
+            {nuevoCanal === "reparto" ? (
+              <input value={nuevoDireccion} onChange={(e) => setNuevoDireccion(e.target.value)} placeholder="Dirección de entrega" style={campo} />
+            ) : null}
+            <input value={nuevoContactoNombre} onChange={(e) => setNuevoContactoNombre(e.target.value)} placeholder="Contacto (opcional)" style={campo} />
+            <input value={nuevoContactoFono} onChange={(e) => setNuevoContactoFono(e.target.value)} placeholder="Teléfono (opcional)" style={campo} inputMode="tel" />
+            <BotonPrimario disabled={creandoCliente} onClick={crearCliente}>
+              {creandoCliente ? "Guardando…" : "Guardar cliente"}
+            </BotonPrimario>
+          </div>
+        ) : null}
+
         <select value={productoId} onChange={(e) => setProductoId(e.target.value)} style={campo}>
           <option value="">Producto…</option>
           {productos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}

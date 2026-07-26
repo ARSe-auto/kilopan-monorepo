@@ -116,6 +116,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // La foto se sube apenas se toma, en paralelo a que el maestro termina de pesar —
+  // así que cuando esta request llega, `pan.fotos` puede tener el JPEG desde ANTES de
+  // que este pesaje exista. Si se ignora eso e insertar siempre en 'pendiente_subida',
+  // el pesaje queda marcado como sin foto para siempre aunque el archivo ya esté.
+  let fotoEstado: "pendiente_subida" | "subida" | null = fotoSha256 ? "pendiente_subida" : null;
+  if (fotoSha256) {
+    const fotoYaSubida = await db.query<{ ok: boolean }>(`select true as ok from pan.fotos where sha256 = $1`, [
+      fotoSha256,
+    ]);
+    if (fotoYaSubida.rows[0]?.ok) fotoEstado = "subida";
+  }
+
   try {
     const r = await db.query<{ id: string }>(
       `insert into pan.pesajes
@@ -135,7 +147,7 @@ export async function POST(request: NextRequest) {
         fotoSha256 ?? null,
         // Mismo contrato que el POD: el hash viaja con el pesaje y el JPEG se sube
         // aparte; /api/fotos marca 'subida' cuando el binario llega y el hash cuadra.
-        fotoSha256 ? "pendiente_subida" : null,
+        fotoEstado,
         sesion.usuarioId,
         sesion.dispositivoId,
       ]

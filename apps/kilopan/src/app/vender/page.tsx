@@ -115,7 +115,18 @@ export default function VenderPage() {
         clientUuid: crypto.randomUUID(),
         medioPago,
         clienteId: medioPago === "fiado" ? clienteFiado : undefined,
-        lineas: carrito.map((l) => ({ productoId: l.productoId, gramos: l.gramos, precioClp: l.precioClp })),
+        lineas: carrito.map((l) => ({
+          productoId: l.productoId,
+          gramos: l.gramos,
+          // El carro se arma ANTES de elegir a quién se le fía, con el precio de
+          // mostrador (es lo único que la pantalla conoce). Si el cliente elegido
+          // tiene una lista de precios distinta, el servidor cobra la suya —correcto,
+          // el precio lo pone el servidor— pero mandar el precio de mostrador como
+          // `precioClp` disparaba el chequeo de "el precio cambió" con un 409 que se
+          // repetía para siempre, porque nada en la pantalla lo volvía a calcular.
+          // Fiado: no se manda, y se deja que el total final lo confirme el servidor.
+          precioClp: medioPago === "fiado" ? undefined : l.precioClp,
+        })),
       });
       if (resultado.estado === "rechazado") {
         setMensaje({ tipo: "error", texto: resultado.error });

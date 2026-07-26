@@ -38,25 +38,45 @@ export async function POST(request: NextRequest) {
 
   for (const e of entregas) {
     try {
-      if (!e.clientUuid || !e.pedidoId || !e.receptorNombre || !e.fotoSha256) {
+      if (
+        !e.clientUuid ||
+        !e.pedidoId ||
+        !e.receptorNombre ||
+        !e.fotoSha256 ||
+        !Number.isInteger(e.gramosEntregados) ||
+        e.gramosEntregados < 1
+      ) {
         rechazadas.push({ clientUuid: e.clientUuid, motivo: "faltan campos obligatorios" });
         continue;
       }
       // Sin esto, cualquier sesión repartidor cierra el POD de CUALQUIER pedido del
       // sistema con solo adivinar el id — la conciliación del día queda falseada y
       // una parada ajena se marca entregada sin que su repartidor real se entere.
-      const parada = await db.query<{ ok: boolean }>(
-        `select true as ok
+      const parada = await db.query<{ ok: boolean; gramos_pedidos: string }>(
+        `select true as ok, coalesce(sum(pl.gramos_pedidos), 0)::text as gramos_pedidos
            from pan.ruta_paradas rp
            join pan.rutas r on r.id = rp.ruta_id
+           join pan.pedido_lineas pl on pl.pedido_id = rp.pedido_id
           where rp.pedido_id = $1 and r.repartidor_id = $2 and r.estado in ('en_curso','cargando')
-          limit 1`,
+          group by rp.id`,
         [e.pedidoId, sesion.usuarioId]
       );
       if (!parada.rows[0]?.ok) {
         rechazadas.push({
           clientUuid: e.clientUuid,
           motivo: "Ese pedido no es una parada de tu ruta activa",
+        });
+        continue;
+      }
+      // AC-POD (Tanda 5): antes se aceptaba lo que mandara el cliente sin mirar el
+      // pedido, y ese número alimenta directo la TCK del dueño — un repartidor
+      // apurado (o un cliente HTTP hablando directo) podía inflarla sin que nada lo
+      // notara. No se permite entregar MÁS de lo que el pedido pide.
+      const gramosPedidos = Number(parada.rows[0].gramos_pedidos);
+      if (e.gramosEntregados > gramosPedidos) {
+        rechazadas.push({
+          clientUuid: e.clientUuid,
+          motivo: `Se intentó entregar ${e.gramosEntregados} g pero el pedido es de ${gramosPedidos} g`,
         });
         continue;
       }
@@ -71,12 +91,23 @@ export async function POST(request: NextRequest) {
         [e.lat, e.lng, e.pedidoId]
       );
 
+      // La foto se sube apenas se toma —en paralelo a que el repartidor completa la
+      // pantalla del receptor— para que la resistencia offline no dependa de una
+      // segunda vuelta de red. Eso significa que cuando llega ACÁ, `pan.fotos` ya
+      // puede tener el JPEG desde antes de que esta entrega exista: si se ignora eso y
+      // se inserta siempre en 'pendiente_subida', el POD queda marcado como sin foto
+      // para siempre aunque el archivo ya esté guardado.
+      const fotoYaSubida = await db.query<{ ok: boolean }>(`select true as ok from pan.fotos where sha256 = $1`, [
+        e.fotoSha256,
+      ]);
+      const fotoEstado = fotoYaSubida.rows[0]?.ok ? "subida" : "pendiente_subida";
+
       const r = await db.query<{ id: string }>(
         `insert into pan.entregas
            (client_uuid, pedido_id, receptor_nombre, receptor_rut, foto_sha256, foto_estado,
             lat, lng, precision_m, gps_degradado, gps_fuera_de_zona,
             gramos_entregados, motivo_rechazo, cerrada, usuario_id, dispositivo_id, capturado_at)
-         values ($1,$2,$3,$4,$5,'pendiente_subida',$6,$7,$8,$9,$10,$11,$12,true,$13,$14,$15)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,true,$14,$15,$16)
          on conflict (client_uuid) do nothing
          returning id`,
         [
@@ -85,6 +116,7 @@ export async function POST(request: NextRequest) {
           e.receptorNombre,
           e.receptorRut ?? null,
           e.fotoSha256,
+          fotoEstado,
           e.lat,
           e.lng,
           e.precisionM,
