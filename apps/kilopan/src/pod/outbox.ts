@@ -29,6 +29,15 @@ export interface ItemOutbox {
   intentos: number;
   creadoAt: number;
   ultimoError?: string;
+  /** Antes de esto, un ciclo de sync (cada 30 s, cada `online`, cada vez que la pestaña
+   *  vuelve al frente) reintentaba cada pendiente, sin importar cuántas veces
+   *  hubieran fallado ya — con el WiFi de la panadería caído y 20 ítems en cola, eso es
+   *  20 requests fallidos cada 30 s, indefinidamente, hasta que vuelva la señal. Con
+   *  backoff exponencial (ver `calcularProximoIntento`) un ítem que lleva varios
+   *  fracasos espera más entre intentos, sin dejar nunca de reintentarse (no hay tope:
+   *  perder una venta o un pesaje real por dejar de reintentar es peor que la señal
+   *  de red que se gasta). */
+  proximoIntentoAt?: number;
   /** Quién estaba logueado cuando se encoló esto. El servidor atribuye la mutación a
    *  quien esté logueado AL SINCRONIZAR, no a quien la creó — en una tablet compartida
    *  eso le cuelga la venta de un operador a otro. Con esto, `sincronizar()` no sube un
@@ -158,8 +167,20 @@ async function quitar(clientUuid: string): Promise<void> {
   await conTienda("readwrite", (t) => t.delete(clientUuid));
 }
 
+const BACKOFF_BASE_MS = 30_000;
+const BACKOFF_TOPE_MS = 5 * 60_000;
+
+/** 30 s, 1 min, 2 min, 4 min... con tope de 5 min — no crece para siempre porque
+ *  esto es "cuánto esperar antes del próximo intento", no "cuántos intentos hacer". */
+function calcularProximoIntento(intentos: number): number {
+  return Date.now() + Math.min(BACKOFF_BASE_MS * 2 ** intentos, BACKOFF_TOPE_MS);
+}
+
 async function marcarFallo(item: ItemOutbox, error: string): Promise<void> {
-  await conTienda("readwrite", (t) => t.put({ ...item, intentos: item.intentos + 1, ultimoError: error }));
+  const intentos = item.intentos + 1;
+  await conTienda("readwrite", (t) =>
+    t.put({ ...item, intentos, ultimoError: error, proximoIntentoAt: calcularProximoIntento(intentos) })
+  );
 }
 
 export interface ResultadoSync {
@@ -223,7 +244,10 @@ export async function sincronizar(): Promise<ResultadoSync> {
   // venta o el pesaje de un operador a otro. Se quedan en la cola —siguen contando como
   // pendientes— hasta que su propio operador vuelva a loguearse.
   const operador = operadorActual();
-  const propios = pendientes.filter((p) => p.operadorId == null || p.operadorId === operador);
+  const ahora = Date.now();
+  const propios = pendientes.filter(
+    (p) => (p.operadorId == null || p.operadorId === operador) && (p.proximoIntentoAt == null || p.proximoIntentoAt <= ahora)
+  );
 
   // Las entregas van juntas a /api/sync (idempotente por lote); el resto una por una
   // a su propia ruta. Todas son idempotentes por client_uuid, así que reenviar de más
@@ -314,16 +338,19 @@ export function iniciarSyncAutomatico(
     alCambiar(n, r?.rechazadas);
   }
 
+  function alVisible() {
+    if (document.visibilityState === "visible") void ciclo();
+  }
+
   const intervalo = setInterval(ciclo, 30_000);
   window.addEventListener("online", ciclo);
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") void ciclo();
-  });
+  document.addEventListener("visibilitychange", alVisible);
   void ciclo();
 
   return () => {
     vivo = false;
     clearInterval(intervalo);
     window.removeEventListener("online", ciclo);
+    document.removeEventListener("visibilitychange", alVisible);
   };
 }
