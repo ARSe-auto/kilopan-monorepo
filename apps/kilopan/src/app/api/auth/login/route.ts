@@ -37,12 +37,24 @@ export async function POST(request: NextRequest) {
     [dispositivoId]
   );
   const dispositivo = dispositivos.rows[0];
+  // `codigo: "dispositivo_invalido"` en los dos rechazos a nivel de EQUIPO (no de
+  // credenciales): antes esto llegaba a /ingresar como el mismo error de texto
+  // plano que un RUT o PIN malo, y el operador no tenía ninguna salida — el equipo
+  // sigue "vinculado" según su propio localStorage, pero el servidor ya no lo
+  // reconoce (revocado, o el secreto no calza). Sin una señal que el cliente pueda
+  // distinguir, no había forma de ofrecer "vincula este equipo de nuevo".
   if (!dispositivo) {
-    return NextResponse.json({ error: "Dispositivo no enrolado o revocado" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Dispositivo no enrolado o revocado", codigo: "dispositivo_invalido" },
+      { status: 401 }
+    );
   }
   const dispositivoOk = await verificarPin(dispositivoSecreto, dispositivo.secreto_hash);
   if (!dispositivoOk) {
-    return NextResponse.json({ error: "Dispositivo no reconocido" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Dispositivo no reconocido", codigo: "dispositivo_invalido" },
+      { status: 401 }
+    );
   }
 
   const usuarios = await db.query<{ id: string; nombre: string; rol: string; pin_hash: string }>(

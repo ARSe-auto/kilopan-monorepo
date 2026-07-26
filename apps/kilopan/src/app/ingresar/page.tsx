@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TecladoNumerico, CifraGrande, BotonPrimario } from "@kilopan/miga/componentes/index.tsx";
-import { leerDispositivo } from "@/identidad/cliente/dispositivo.ts";
+import { leerDispositivo, olvidarDispositivo } from "@/identidad/cliente/dispositivo.ts";
 import { recordarOperador } from "@/identidad/cliente/operador.ts";
 
 // F5 Cambio de operador (PROMPT_MAESTRO.md §5): RUT + PIN de 4 dígitos, ≤3s. El
@@ -13,6 +13,10 @@ export default function IngresarPage() {
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  // El servidor ya no reconoce ESTE equipo (revocado, o el secreto local quedó
+  // desincronizado) — reintentar el PIN no arregla nada, hace falta vincularlo de
+  // nuevo. Ver api/auth/login/route.ts: codigo "dispositivo_invalido".
+  const [dispositivoInvalido, setDispositivoInvalido] = useState(false);
 
   useEffect(() => {
     const ultimo = window.localStorage.getItem("kp_ultimo_rut");
@@ -27,6 +31,7 @@ export default function IngresarPage() {
     }
     setEnviando(true);
     setError(null);
+    setDispositivoInvalido(false);
     try {
       const r = await fetch("/api/auth/login", {
         method: "POST",
@@ -41,6 +46,7 @@ export default function IngresarPage() {
       const cuerpo = await r.json();
       if (!r.ok) {
         setError(cuerpo.error ?? "No se pudo ingresar");
+        setDispositivoInvalido(cuerpo.codigo === "dispositivo_invalido");
         setPin("");
         setEnviando(false);
         return;
@@ -54,6 +60,11 @@ export default function IngresarPage() {
       setError("Sin conexión con el servidor");
       setEnviando(false);
     }
+  }
+
+  function vincularDeNuevo() {
+    olvidarDispositivo();
+    router.push("/vincular");
   }
 
   return (
@@ -105,6 +116,16 @@ export default function IngresarPage() {
         <p style={{ color: "#B91C1C", fontSize: 14, textAlign: "center" }} role="alert">
           {error}
         </p>
+      ) : null}
+
+      {dispositivoInvalido ? (
+        <button
+          type="button"
+          onClick={vincularDeNuevo}
+          style={{ minHeight: 44, background: "none", border: "none", color: "#5B564C", fontSize: 14, fontWeight: 700, textAlign: "center" }}
+        >
+          Vincular este equipo de nuevo
+        </button>
       ) : null}
 
       <div style={{ marginTop: "auto" }}>
