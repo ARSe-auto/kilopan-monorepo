@@ -1376,3 +1376,37 @@ test("AC-PES-06: el stock de mostrador NO se lleva lo que se pesó para reparto"
   );
   await db.close();
 });
+
+// =============================================================================
+// Tanda 3 de la auditoría — zona horaria. Sin `set timezone`, `current_date` y los
+// `::date` de toda la app usan la zona horaria del SERVIDOR de Postgres — en Railway,
+// UTC: a las 20:00 en Chile (00:00 UTC) el día salta y un pedido armado esa tarde
+// desaparece de "hoy" hasta la medianoche. La app pasa `-c timezone=America/Santiago`
+// en el startup packet de la conexión real (comun/db.ts) — acá se reproduce el mismo
+// ajuste sobre pglite y se prueba el caso de borde exacto que encontró la auditoría
+// en vivo. (No se prueba el caso "sin fijar TimeZone": el default de pglite hereda la
+// zona del proceso que corre el test, así que en una máquina que YA está en horario de
+// Chile ese caso no reproduce nada — dependería de dónde se ejecuta, no de la app.)
+// =============================================================================
+
+test("Tanda 3: con TimeZone=America/Santiago fijado (igual que comun/db.ts), un timestamp de las 21:00 cae en el día CORRECTO", async () => {
+  const db = await dbNueva();
+  await db.exec("set timezone = 'America/Santiago'"); // mismo ajuste que crearPglite()
+  const tz = await db.query(`select current_setting('TimeZone') as tz`);
+  assert.equal(tz.rows[0].tz, "America/Santiago");
+
+  const fecha = await db.query(
+    `select (timestamptz '2026-07-25 21:00:00-04')::date as d`
+  );
+  assert.equal(
+    fecha.rows[0].d.toISOString().slice(0, 10),
+    "2026-07-25",
+    "a las 21:00 en Chile todavía es 25 de julio — un pedido armado a esa hora debe seguir viéndose como 'hoy'"
+  );
+
+  // current_date también depende de TimeZone, no solo los casts explícitos — es lo que
+  // usan directamente api/pedidos, api/rutas, api/cierre-caja y pan.conciliacion_diaria.
+  const hoy = await db.query(`select current_date as hoy`);
+  assert.ok(hoy.rows[0].hoy, "current_date responde con TimeZone=America/Santiago fijado");
+  await db.close();
+});

@@ -134,7 +134,18 @@ async function crearPool(url: string): Promise<ClienteDb> {
     ssl: tls.ssl,
     // AC-SEC-08 en el handshake: si pan_app no existe o no se puede asumir, la
     // conexión no se establece. Nunca se degrada a superusuario en silencio.
-    options: "-c role=pan_app",
+    //
+    // -c timezone=America/Santiago (Tanda 3 de la auditoría): Railway corre Postgres
+    // en UTC, y `current_date`/`col::date` dependen de la zona horaria de LA SESIÓN, no
+    // del reloj de la máquina. A las 00:00 UTC —20:00 en Chile— "hoy" saltaba de día
+    // para toda la app a mitad de la jornada: pedidos armados a las 20:02 desaparecían
+    // de la lista, el cierre de caja del atardecer caía en el día siguiente. Fijarlo acá,
+    // en el startup packet (igual que `role`), corrige de una vez cada `current_date`/`::date`
+    // de golpe —en las queries, en la vista pan.conciliacion_diaria y en los DEFAULT de
+    // columna— sin tocarlos uno por uno y sin depender de que nadie se acuerde de usar
+    // un helper. Ver docs/OPERACION_5G_Y_POSTGRES.md sobre por qué el startup packet es
+    // el único canal confiable con PgBouncer en modo transacción.
+    options: "-c role=pan_app -c timezone=America/Santiago",
     max: Number(env.DB_POOL_MAX ?? 10),
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
@@ -147,11 +158,15 @@ async function crearPool(url: string): Promise<ClienteDb> {
     console.error("pool de Postgres:", err.message);
   });
 
-  // Verificación en la primera conexión: que el rol efectivo sea pan_app de verdad.
-  // Si `options` no llegara a aplicarse (un pooler que lo filtre, por ejemplo), es
-  // mejor caerse acá con un mensaje claro que operar como superusuario todo el día.
-  const comprobacion = await pool.query<{ rol: string }>("select current_user as rol");
+  // Verificación en la primera conexión: que el rol Y la zona horaria efectivos sean
+  // los correctos de verdad. Si `options` no llegara a aplicarse (un pooler que lo
+  // filtre, por ejemplo), es mejor caerse acá con un mensaje claro que operar como
+  // superusuario, o en UTC, todo el día sin que nadie lo note hasta la noche.
+  const comprobacion = await pool.query<{ rol: string; tz: string }>(
+    "select current_user as rol, current_setting('TimeZone') as tz"
+  );
   const rol = comprobacion.rows[0]?.rol;
+  const tz = comprobacion.rows[0]?.tz;
   if (rol !== "pan_app") {
     await pool.end();
     throw new Error(
@@ -160,7 +175,15 @@ async function crearPool(url: string): Promise<ClienteDb> {
         "filtre los startup parameters."
     );
   }
-  console.log(`db: Postgres conectado como ${rol} — ${tls.razon}`);
+  if (tz !== "America/Santiago") {
+    await pool.end();
+    throw new Error(
+      `La conexión quedó con TimeZone="${tz}" y no "America/Santiago": current_date y ` +
+        "los ::date de toda la app volverían a cortar el día a las 20:00. Revisa que el " +
+        "pooler no filtre los startup parameters."
+    );
+  }
+  console.log(`db: Postgres conectado como ${rol}, TimeZone=${tz} — ${tls.razon}`);
 
   return {
     query: (sql, params) => pool.query(sql, params as unknown[]) as never,
@@ -180,6 +203,10 @@ async function crearPglite(): Promise<ClienteDb> {
   const dataDir = join(hallarRaizRepo(process.cwd()), "db", "data", "pglite");
   const db = new PGlite(dataDir, { extensions: { pgcrypto, btree_gist } });
   await db.exec("set role pan_app");
+  // Mismo motivo que el `-c timezone=` del pool de Postgres: sin esto, current_date en
+  // desarrollo local queda en la zona horaria del sistema (o UTC) y el comportamiento
+  // no coincide con producción — el bug de las 20:00 no se hubiera visto en local.
+  await db.exec("set timezone = 'America/Santiago'");
   return db as unknown as ClienteDb;
 }
 
