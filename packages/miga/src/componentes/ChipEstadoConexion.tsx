@@ -1,7 +1,19 @@
 // Estado obligatorio de todo listado con cola (PROMPT_MAESTRO.md §5): "Sin conexión —
 // N registros por subir" ámbar -> "Sincronizado hace Xs" verde. Nunca silencioso.
-export function ChipEstadoConexion({ pendientes }: { pendientes: number }) {
-  const sinConexion = pendientes > 0;
+//
+// Hallazgo menor de la auditoría: antes esto deducía "sin conexión" SOLO de que
+// `pendientes > 0` — mentía en los dos sentidos. Con buena señal y algo recién
+// encolado (o reintentando tras un error de servidor), decía "sin conexión" sin
+// serlo. Sin nada encolado pero con el WiFi caído, decía "Sincronizado" sin estarlo.
+// `online` es opcional (no toda pantalla que usa este chip rastrea navigator.onLine
+// todavía): sin el dato, se asume en línea y el chip se comporta como antes.
+export function ChipEstadoConexion({ pendientes, online = true }: { pendientes: number; online?: boolean }) {
+  const alerta = !online || pendientes > 0;
+  let texto: string;
+  if (!online) texto = pendientes > 0 ? `Sin conexión — ${pendientes} por subir` : "Sin conexión";
+  else if (pendientes > 0) texto = `Subiendo — ${pendientes} pendiente(s)`;
+  else texto = "Sincronizado";
+
   return (
     <div
       role="status"
@@ -13,11 +25,11 @@ export function ChipEstadoConexion({ pendientes }: { pendientes: number }) {
         borderRadius: 100,
         fontSize: 13,
         fontWeight: 700,
-        background: sinConexion ? "rgba(180,83,9,.13)" : "rgba(21,128,61,.12)",
-        color: sinConexion ? "#B45309" : "#15803D",
+        background: alerta ? "rgba(180,83,9,.13)" : "rgba(21,128,61,.12)",
+        color: alerta ? "#B45309" : "#15803D",
       }}
     >
-      {sinConexion ? `Sin conexión — ${pendientes} por subir` : "Sincronizado"}
+      {texto}
     </div>
   );
 }

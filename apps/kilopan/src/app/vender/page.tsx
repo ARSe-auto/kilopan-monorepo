@@ -12,6 +12,7 @@ import { formatearClp, formatearKg } from "@/comun/formato.ts";
 import { enviarOEncolar, iniciarSyncAutomatico } from "@/pod/outbox.ts";
 import { kgTextoAGramos, pesoValido } from "@/comun/peso.ts";
 import { roundClp } from "@/comun/round_clp.ts";
+import { useEnLinea } from "@/comun/useEnLinea.ts";
 
 interface Producto {
   id: string;
@@ -49,6 +50,7 @@ export default function VenderPage() {
   const [clientes, setClientes] = useState<ClienteFiado[]>([]);
   const [clienteFiado, setClienteFiado] = useState("");
   const [pendientes, setPendientes] = useState(0);
+  const enLinea = useEnLinea();
 
   useEffect(() => {
     fetch("/api/productos")
@@ -199,7 +201,7 @@ export default function VenderPage() {
     <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Vender</h1>
-        {pendientes > 0 ? <ChipEstadoConexion pendientes={pendientes} /> : null}
+        {pendientes > 0 || !enLinea ? <ChipEstadoConexion pendientes={pendientes} online={enLinea} /> : null}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>

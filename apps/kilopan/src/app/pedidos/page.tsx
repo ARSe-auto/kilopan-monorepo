@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BotonPrimario } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
 import { formatearClp, parsearClp } from "@/comun/formato.ts";
@@ -54,6 +54,11 @@ export default function PedidosPage() {
   const [creandoCliente, setCreandoCliente] = useState(false);
 
   const [dtePedidoId, setDtePedidoId] = useState<string | null>(null);
+  // Hallazgo menor de la auditoría: el panel "Registrar documento" aparece DESPUÉS de
+  // la lista de pedidos — con la lista larga, tocar "Asociar guía o factura" en un
+  // pedido de más abajo abría el panel fuera de la vista, sin ninguna señal de que
+  // pasó algo.
+  const panelDteRef = useRef<HTMLElement | null>(null);
   const [dteTipo, setDteTipo] = useState("52");
   const [dteFolio, setDteFolio] = useState("");
   const [dteRut, setDteRut] = useState("76.192.083-9");
@@ -293,7 +298,14 @@ export default function PedidosPage() {
                 : `✓ ${p.dte_count} documento(s) registrado(s)`}
             </p>
             {p.dte_count === 0 ? (
-              <button type="button" onClick={() => setDtePedidoId(p.id)} style={{ marginTop: 8, minHeight: 44, padding: "0 14px", borderRadius: 10, border: `1px solid ${superficie.hairline}`, background: "#fff", fontWeight: 700, fontSize: 14 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setDtePedidoId(p.id);
+                  requestAnimationFrame(() => panelDteRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
+                }}
+                style={{ marginTop: 8, minHeight: 44, padding: "0 14px", borderRadius: 10, border: `1px solid ${superficie.hairline}`, background: "#fff", fontWeight: 700, fontSize: 14 }}
+              >
                 Asociar guía o factura
               </button>
             ) : null}
@@ -302,7 +314,7 @@ export default function PedidosPage() {
       </section>
 
       {dtePedidoId ? (
-        <section style={{ background: superficie.tarjeta, border: `2px solid ${acentos.kilopan}`, borderRadius: 14, padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+        <section ref={panelDteRef} style={{ background: superficie.tarjeta, border: `2px solid ${acentos.kilopan}`, borderRadius: 14, padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
           <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Registrar documento del SII</h2>
           <p style={{ margin: 0, fontSize: 13, color: superficie.textoDim }}>
             KiloPan no emite documentos: registra el folio de uno que el SII ya emitió.

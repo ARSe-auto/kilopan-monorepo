@@ -10,6 +10,7 @@ import {
 import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
 import { formatearKg } from "@/comun/formato.ts";
 import { kgTextoAGramos, pesoValido } from "@/comun/peso.ts";
+import { useEnLinea } from "@/comun/useEnLinea.ts";
 import { enviarOEncolar, encolarFoto, iniciarSyncAutomatico } from "@/pod/outbox.ts";
 import { abrirCamara, capturar, cerrarCamara, subirFoto } from "@/comun/camara.ts";
 
@@ -91,6 +92,7 @@ export default function PesarPage() {
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
 
   const [pendientes, setPendientes] = useState(0);
+  const enLinea = useEnLinea();
 
   // AC-PES-04: lo prende el admin en /admin y no se puede apagar desde acá — ese es
   // el punto de la decisión #1. Se cachea junto al catálogo porque sin señal la
@@ -410,7 +412,7 @@ export default function PesarPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{producto.nombre}</h1>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {pendientes > 0 ? <ChipEstadoConexion pendientes={pendientes} /> : null}
+          {pendientes > 0 || !enLinea ? <ChipEstadoConexion pendientes={pendientes} online={enLinea} /> : null}
           <button
             type="button"
             onClick={() => setProductoId(null)}
