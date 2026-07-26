@@ -6,7 +6,9 @@ import { formatearClp, parsearClp } from "@/comun/formato.ts";
 import { compartir, sePuedeCompartir } from "@/comun/compartir.ts";
 import { VolverInicio } from "../VolverInicio.tsx";
 
-interface MedioCaja { medio_pago: string; etiqueta: string; esperado_clp: string }
+// esperado_clp es OPCIONAL a propósito: el servidor NO se lo manda a quien vende
+// (conteo a ciegas). Solo el admin lo recibe. Ver api/cierre-caja GET.
+interface MedioCaja { medio_pago: string; etiqueta: string; esperado_clp?: string }
 interface FilaResultado { medioPago: string; esperado: number; declarado: number; diferencia: number }
 
 // F6 (cierre) + AC-PAG-01 + AC-DASH-04: una fila por medio de pago activo, y el total
@@ -36,7 +38,7 @@ export default function CajaPage() {
       .finally(() => setCargando(false));
   }, []);
 
-  const totalEsperado = medios.reduce((s, m) => s + Number(m.esperado_clp), 0);
+  const totalEsperado = medios.reduce((s, m) => s + Number(m.esperado_clp ?? 0), 0);
 
   async function cerrar() {
     if (enviando) return; // doble toque con las manos ocupadas no debe mandar el cierre dos veces
@@ -81,8 +83,14 @@ export default function CajaPage() {
         <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>Cierre de caja</h1>
         <VolverInicio />
       </div>
+      {/* Conteo A CIEGAS (hallazgo ALTA del red-team): antes cada fila mostraba
+          "esperado $145.000" ANTES de declarar nada. El vendedor que sacó plata
+          tecleaba justo esa cifra y salía "cuadra"; el honesto pero apurado la copiaba
+          por pereza y nunca contaba de verdad. El cierre —el único control anti-robo
+          por el que paga el dueño— se volvía teatro: todo cuadraba siempre. Ahora lo
+          esperado y la diferencia se revelan RECIÉN al cerrar. */}
       <p style={{ margin: 0, fontSize: 14, color: superficie.textoDim }}>
-        Cuenta lo que hay en cada medio y anótalo. La app te muestra la diferencia.
+        Cuenta la plata de cada medio y anótala. Al cerrar te mostramos si cuadra.
       </p>
 
       {cargando ? (
@@ -96,13 +104,12 @@ export default function CajaPage() {
       ) : null}
 
       {medios.map((m) => {
-        const esperado = Number(m.esperado_clp);
         return (
           <div key={m.medio_pago} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
             <div style={{ flex: 1 }}>
               <p style={{ margin: 0, fontWeight: 600 }}>{m.etiqueta}</p>
               <p style={{ margin: 0, fontSize: 13, color: superficie.textoFaint, fontVariantNumeric: "tabular-nums" }}>
-                esperado {formatearClp(esperado)}
+                {m.esperado_clp != null ? `esperado ${formatearClp(Number(m.esperado_clp))}` : "¿cuánto contaste?"}
               </p>
             </div>
             <input
@@ -139,7 +146,14 @@ export default function CajaPage() {
             <div key={f.medioPago} style={{ display: "flex", justifyContent: "space-between", fontSize: 15, padding: "3px 0" }}>
               {/* La clave interna ("mercadopago") no es lo que el vendedor reconoce —
                   arriba en la misma pantalla ya se traduce a la etiqueta. */}
-              <span>{medios.find((m) => m.medio_pago === f.medioPago)?.etiqueta ?? f.medioPago}</span>
+              <span>
+                {medios.find((m) => m.medio_pago === f.medioPago)?.etiqueta ?? f.medioPago}
+                {/* El desglose se revela RECIEN aca: contaste X, esperado Y. Antes de
+                    cerrar, quien vende no vio ninguna de las dos cifras. */}
+                <span style={{ display: "block", fontSize: 12, color: superficie.textoFaint, fontVariantNumeric: "tabular-nums" }}>
+                  contaste {formatearClp(f.declarado)} · esperado {formatearClp(f.esperado)}
+                </span>
+              </span>
               <span style={{ fontVariantNumeric: "tabular-nums", color: f.diferencia === 0 ? semantico.ok : semantico.alerta }}>
                 {f.diferencia === 0 ? "cuadra" : `${f.diferencia > 0 ? "+" : ""}${formatearClp(f.diferencia)}`}
               </span>

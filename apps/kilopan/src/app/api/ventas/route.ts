@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
 import { exigirRol } from "@/identidad/sesion.ts";
 import { roundClp } from "@/comun/round_clp.ts";
+import { esUuid, normalizarUuid } from "@/comun/validacion.ts";
 
 interface LineaEntrada {
   productoId: string;
@@ -86,12 +87,20 @@ export async function POST(request: NextRequest) {
   // comparaba contra el stock COMPLETO por separado, así que dos líneas del mismo
   // producto (agregar 5 kg, después otros 5 kg) pasaban la validación una por una
   // aunque juntas superaran lo disponible — se vendía pan que no estaba en el mesón.
+  //
+  // La clave del Map va NORMALIZADA a minúsculas: Postgres trata `uuid` como
+  // insensible a mayúsculas pero JS no, así que mandar la misma línea dos veces con
+  // distinta capitalización ("a1b2…" y "A1B2…") las hacía ver como dos productos
+  // distintos. Cada una pasaba la validación contra el stock COMPLETO por separado y
+  // se vendía pan que no estaba en el mesón — exactamente el agujero que este
+  // acumulador existe para tapar, reabierto por esa asimetría (red-team, ALTA).
   const gramosPorProducto = new Map<string, number>();
   for (const linea of lineas) {
-    if (!linea.productoId || !Number.isInteger(linea.gramos) || linea.gramos < 1) {
+    if (!esUuid(linea.productoId) || !Number.isInteger(linea.gramos) || linea.gramos < 1) {
       return NextResponse.json({ error: "Línea de venta inválida" }, { status: 400 });
     }
-    gramosPorProducto.set(linea.productoId, (gramosPorProducto.get(linea.productoId) ?? 0) + linea.gramos);
+    const clave = normalizarUuid(linea.productoId);
+    gramosPorProducto.set(clave, (gramosPorProducto.get(clave) ?? 0) + linea.gramos);
   }
   for (const [productoIdAcumulado, gramosAcumulados] of gramosPorProducto) {
     const stockAcumulado = await db.query<{ stock: number }>(`select pan.stock_disponible($1) as stock`, [

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
 import { exigirRol } from "@/identidad/sesion.ts";
+import { esUuid } from "@/comun/validacion.ts";
 
 const MOTIVOS_MERMA = ["quemado", "sobrante_dia", "devolucion_cliente", "otro"] as const;
 
@@ -28,6 +29,11 @@ export async function POST(request: NextRequest) {
 
   if (!clientUuid || !productoId || !destino) {
     return NextResponse.json({ error: "Faltan campos" }, { status: 400 });
+  }
+  // Sin esto, un productoId mal formado reventaba en el cast a uuid ANTES del
+  // try/catch (la consulta de outlier) y salía un HTTP 500 con el cuerpo vacío.
+  if (!esUuid(productoId)) {
+    return NextResponse.json({ error: "Producto inválido" }, { status: 400 });
   }
   if (!Number.isInteger(gramos) || (gramos as number) < 1 || (gramos as number) > 100_000) {
     return NextResponse.json({ error: "Gramos debe ser un entero entre 1 y 100.000" }, { status: 400 });
@@ -100,6 +106,25 @@ export async function POST(request: NextRequest) {
       { error: "Esta panadería exige foto por cada pesaje" },
       { status: 400 }
     );
+  }
+
+  // No se puede mermar pan que no está. `pan.stock_disponible()` resta la merma
+  // (0012), así que sin este tope el stock quedaba NEGATIVO sin límite: el maestro
+  // ladino escribía merma ilimitada para lavar pan robado o vendido por fuera, esos
+  // gramos entraban a la conciliación como "merma tipificada" y el dueño veía merma
+  // sana en vez de un faltante (red-team, ALTA — verificado llegando a -139.000 g).
+  // El camino de venta ya tenía esta guarda; el de pesaje se había quedado sin ella.
+  if (destino === "merma") {
+    const disponible = await db.query<{ stock: number }>(`select pan.stock_disponible($1) as stock`, [
+      productoId,
+    ]);
+    const stock = disponible.rows[0]?.stock ?? 0;
+    if ((gramos as number) > stock) {
+      return NextResponse.json(
+        { error: `No puedes mermar más de lo que hay (disponible: ${stock} g)` },
+        { status: 409 }
+      );
+    }
   }
 
   // AC-PES-03: test centinela "báscula mal tipeada" — outlier >3x mediana exige que
