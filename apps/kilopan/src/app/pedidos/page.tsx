@@ -182,7 +182,11 @@ export default function PedidosPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tipoDte: Number(dteTipo),
-          folioSii: Number(dteFolio),
+          // parsearClp() y no Number(): mismo bug que ya se corrigió en facturar/page.tsx
+          // y en el monto de más abajo — un folio SII tecleado con el punto de miles
+          // chileno ("1.234.567") daba Number.isInteger(1.234567) = false en el
+          // servidor, y el panadero veía "folio inválido" por un folio que escribió bien.
+          folioSii: parsearClp(dteFolio),
           rutEmisor: dteRut,
           montoTotal: parsearClp(dteMonto || "0"),
           pedidoId: dtePedidoId,
