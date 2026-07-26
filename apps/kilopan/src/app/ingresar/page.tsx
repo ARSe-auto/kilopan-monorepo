@@ -91,7 +91,12 @@ export default function IngresarPage() {
       </label>
 
       <div style={{ display: "flex", justifyContent: "center", padding: "12px 0" }}>
-        <CifraGrande valor={pin.padEnd(4, "•").slice(0, 4)} />
+        {/* Hallazgo menor de la auditoría: antes solo se rellenaban los dígitos SIN
+            teclear con "•" — los YA tecleados se mostraban en texto plano a 96 px,
+            legibles desde el otro lado del mesón. Acá se enmascaran los dos casos con
+            símbolos distintos (● tecleado, ○ pendiente) para conservar el feedback de
+            cuántos dígitos van sin revelar cuáles son. */}
+        <CifraGrande valor={"●".repeat(pin.length).padEnd(4, "○")} />
       </div>
 
       <TecladoNumerico valor={pin} onCambiar={(v) => setPin(v.slice(0, 4))} />

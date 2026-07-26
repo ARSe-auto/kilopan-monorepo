@@ -113,8 +113,10 @@ export default function FacturarPage() {
             </label>
           ))}
 
+          {/* Antes esto usaba total.toLocaleString("es-CL") + unidad="CLP" — un formato
+              CLP distinto al de formatearClp() de acá abajo, en la misma pantalla. */}
           <div style={{ display: "flex", justifyContent: "center", padding: "8px 0" }}>
-            <CifraGrande valor={total.toLocaleString("es-CL")} unidad="CLP" />
+            <CifraGrande valor={formatearClp(total)} />
           </div>
 
           <input value={folio} onChange={(e) => setFolio(e.target.value)} placeholder="Folio de la factura que emitiste" inputMode="numeric"

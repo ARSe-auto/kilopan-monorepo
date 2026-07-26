@@ -3,7 +3,7 @@ import { obtenerDb } from "@/comun/db.ts";
 import { verificarPin } from "@/identidad/hash.ts";
 import { permitirIntento, ipDelCliente } from "@/identidad/limitador.ts";
 import { NOMBRE_COOKIE, OPCIONES_COOKIE } from "@/identidad/sesion.ts";
-import { validaRut } from "@/comun/valida_rut.ts";
+import { validaRut, formatearRut } from "@/comun/valida_rut.ts";
 
 // F5 Cambio de operador (PROMPT_MAESTRO.md §5): RUT + PIN + dispositivo ya enrolado.
 export async function POST(request: NextRequest) {
@@ -25,6 +25,10 @@ export async function POST(request: NextRequest) {
   if (!validaRut(rut)) {
     return NextResponse.json({ error: "RUT inválido" }, { status: 400 });
   }
+  // Hallazgo menor de la auditoría: pan.usuarios.rut se guarda con puntos y guión
+  // (formatearRut), pero acá se comparaba el texto tal cual llegó — escribir el RUT
+  // sin puntos daba "RUT o PIN incorrecto" y gastaba un intento del bloqueo de 15 min.
+  const rutNormalizado = formatearRut(rut);
 
   const db = await obtenerDb();
 
@@ -43,7 +47,7 @@ export async function POST(request: NextRequest) {
 
   const usuarios = await db.query<{ id: string; nombre: string; rol: string; pin_hash: string }>(
     `select id, nombre, rol, pin_hash from pan.usuarios where rut = $1 and activo`,
-    [rut]
+    [rutNormalizado]
   );
   const usuario = usuarios.rows[0];
   if (!usuario) {

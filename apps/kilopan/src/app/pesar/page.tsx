@@ -439,7 +439,7 @@ export default function PesarPage() {
             <p style={{ fontSize: 14, color: superficie.textoFaint, margin: 0 }}>Buscando pedidos…</p>
           ) : lineasPedido.length === 0 ? (
             <p style={{ fontSize: 14, color: semantico.alerta, margin: 0 }}>
-              Ningún pedido de hoy está esperando {producto.nombre}. Ármalo primero en Pedidos.
+              Ningún pedido de hoy está esperando {producto.nombre}. Ármalo primero en Despacho.
             </p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

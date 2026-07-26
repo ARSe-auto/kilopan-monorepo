@@ -30,8 +30,13 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
   }
   const { clave, valor } = cuerpo;
-  if (!clave || !Number.isInteger(valor)) {
+  if (!clave || valor == null || !Number.isInteger(valor)) {
     return NextResponse.json({ error: "Faltan campos" }, { status: 400 });
+  }
+  // El servidor es el que manda, no la pantalla: un ajuste negativo (o un 0 colado por
+  // un campo vaciado sin querer) alimenta directo el $/km del panel del dueño.
+  if (valor < 0) {
+    return NextResponse.json({ error: "El valor no puede ser negativo" }, { status: 400 });
   }
 
   const db = await obtenerDb();

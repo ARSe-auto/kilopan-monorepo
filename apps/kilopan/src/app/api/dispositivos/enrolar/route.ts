@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
 import { hashearPin, verificarPin } from "@/identidad/hash.ts";
 import { permitirIntento, ipDelCliente } from "@/identidad/limitador.ts";
-import { validaRut } from "@/comun/valida_rut.ts";
+import { validaRut, formatearRut } from "@/comun/valida_rut.ts";
 
 // Enrolar un equipo nuevo exige credenciales de un admin EN EL MOMENTO (no una sesión
 // de dispositivo, porque este dispositivo todavía no tiene ninguna) — es la única
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
   const db = await obtenerDb();
   const admins = await db.query<{ id: string; rol: string; pin_hash: string }>(
     `select id, rol, pin_hash from pan.usuarios where rut = $1 and activo`,
-    [rutAdmin]
+    [formatearRut(rutAdmin)]
   );
   const admin = admins.rows[0];
   if (!admin || admin.rol !== "admin") {

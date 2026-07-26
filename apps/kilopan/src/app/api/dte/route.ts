@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
 import { exigirRol } from "@/identidad/sesion.ts";
-import { validaRut } from "@/comun/valida_rut.ts";
+import { validaRut, formatearRut } from "@/comun/valida_rut.ts";
 
 const TIPOS_VALIDOS = [33, 39, 52, 61];
 
@@ -38,6 +38,12 @@ export async function POST(request: NextRequest) {
   if (!Number.isInteger(montoTotal) || montoTotal < 0) {
     return NextResponse.json({ error: "Monto inválido" }, { status: 400 });
   }
+  // Hallazgo menor de la auditoría: sin normalizar, el mismo folio con el RUT del
+  // emisor escrito distinto ("76.192.083-9" vs "76192083-9") se cuela dos veces pese
+  // al UNIQUE (tipo_dte, folio_sii, rut_emisor).
+  const rutEmisorNormalizado = formatearRut(rutEmisor);
+  const rutReceptor = cuerpo.rutReceptor ? String(cuerpo.rutReceptor) : null;
+  const rutReceptorNormalizado = rutReceptor ? formatearRut(rutReceptor) : null;
 
   const db = await obtenerDb();
   try {
@@ -49,8 +55,8 @@ export async function POST(request: NextRequest) {
       [
         tipoDte,
         folioSii,
-        rutEmisor,
-        cuerpo.rutReceptor ? String(cuerpo.rutReceptor) : null,
+        rutEmisorNormalizado,
+        rutReceptorNormalizado,
         montoTotal,
         origenCaptura,
         cuerpo.tedXml ? String(cuerpo.tedXml) : null,

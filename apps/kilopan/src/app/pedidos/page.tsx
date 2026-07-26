@@ -34,6 +34,13 @@ export default function PedidosPage() {
   const [productoId, setProductoId] = useState("");
   const [kilos, setKilos] = useState("");
 
+  // Hallazgo menor de la auditoría: "Armar ruta y salir" tomaba SIEMPRE repartidores[0]
+  // y una patente inventada ("ABCD-12") — un residuo de desarrollo que llegó a
+  // producción. Con dos o más repartidores dados de alta, toda ruta quedaba atribuida
+  // al primero de la lista sin que nadie lo eligiera.
+  const [repartidorId, setRepartidorId] = useState("");
+  const [vehiculo, setVehiculo] = useState("");
+
   // AC-DES (Tanda 5 de la auditoría): bloqueador raíz. No existía NINGUNA pantalla que
   // llamara a POST /api/clientes — sin clientes no hay pedidos, ni reparto, ni fiado,
   // ni facturación.
@@ -167,15 +174,15 @@ export default function PedidosPage() {
   }
 
   async function armarYSalir() {
-    const repartidor = repartidores[0];
-    if (!repartidor) { setMensaje({ tipo: "error", texto: "No hay repartidores dados de alta" }); return; }
+    if (!repartidorId) { setMensaje({ tipo: "error", texto: "Elige quién sale a repartir" }); return; }
+    if (!vehiculo.trim()) { setMensaje({ tipo: "error", texto: "Escribe la patente del vehículo" }); return; }
     const paraRuta = pedidos.filter((p) => p.estado === "confirmado");
     if (paraRuta.length === 0) { setMensaje({ tipo: "error", texto: "No hay pedidos confirmados" }); return; }
 
     const ruta = await fetch("/api/rutas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ repartidorId: repartidor.id, vehiculo: "ABCD-12", pedidoIds: paraRuta.map((p) => p.id) }),
+      body: JSON.stringify({ repartidorId, vehiculo: vehiculo.trim(), pedidoIds: paraRuta.map((p) => p.id) }),
     });
     const rutaCuerpo = await ruta.json();
     if (!ruta.ok) { setMensaje({ tipo: "error", texto: rutaCuerpo.error }); return; }
@@ -313,7 +320,15 @@ export default function PedidosPage() {
         </section>
       ) : null}
 
-      <BotonPrimario onClick={armarYSalir}>Armar ruta y salir</BotonPrimario>
+      <section style={{ background: superficie.tarjeta, border: `1px solid ${superficie.hairline}`, borderRadius: 14, padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Armar ruta y salir</h2>
+        <select value={repartidorId} onChange={(e) => setRepartidorId(e.target.value)} style={campo}>
+          <option value="">¿Quién reparte?</option>
+          {repartidores.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
+        </select>
+        <input value={vehiculo} onChange={(e) => setVehiculo(e.target.value)} placeholder="Patente (ej: ABCD-12)" style={campo} />
+        <BotonPrimario onClick={armarYSalir}>Armar ruta y salir</BotonPrimario>
+      </section>
     </main>
   );
 }

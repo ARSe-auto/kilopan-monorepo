@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
 import { exigirSesion, exigirRol } from "@/identidad/sesion.ts";
-import { validaRut } from "@/comun/valida_rut.ts";
+import { validaRut, formatearRut } from "@/comun/valida_rut.ts";
 
 // El saldo de fiado que devuelve esta lectura es plata: solo quien puede fiar
 // (vendedor en el mesón) o administrar clientes lo necesita.
@@ -41,13 +41,17 @@ export async function POST(request: NextRequest) {
   if (canal !== "mostrador" && canal !== "reparto") {
     return NextResponse.json({ error: "Canal inválido" }, { status: 400 });
   }
+  // Hallazgo menor de la auditoría: sin normalizar, "76.192.083-9" y "76192083-9"
+  // conviven como dos clientes DISTINTOS pese al UNIQUE de rut — parte el saldo de
+  // fiado de la misma panadería en dos.
+  const rutNormalizado = formatearRut(rut);
 
   const db = await obtenerDb();
   try {
     const r = await db.query<{ id: string }>(
       `insert into pan.clientes (rut, razon_social, canal, direccion, contacto_nombre, contacto_fono)
        values ($1,$2,$3,$4,$5,$6) returning id`,
-      [rut, razonSocial, canal, direccion ?? null, contactoNombre ?? null, contactoFono ?? null]
+      [rutNormalizado, razonSocial, canal, direccion ?? null, contactoNombre ?? null, contactoFono ?? null]
     );
     return NextResponse.json({ id: r.rows[0]?.id });
   } catch (err) {

@@ -73,8 +73,19 @@ export default function AdminPage() {
               type="number"
               defaultValue={p.valor}
               onBlur={(e) => {
+                // Vaciar el campo (Number("") = 0) o escribir un negativo guardaba
+                // silenciosamente un costo por km de $0 o negativo, sin que nadie lo
+                // pidiera — alimenta el $/km del panel del dueño.
+                if (e.target.value.trim() === "") {
+                  e.target.value = String(p.valor);
+                  return;
+                }
                 const v = Math.round(Number(e.target.value));
-                if (v !== p.valor && Number.isInteger(v)) void guardar(p.clave, v);
+                if (!Number.isInteger(v) || v < 0) {
+                  e.target.value = String(p.valor);
+                  return;
+                }
+                if (v !== p.valor) void guardar(p.clave, v);
               }}
               style={{ width: 110, minHeight: 44, borderRadius: 12, border: `1px solid ${superficie.hairline}`, padding: "0 12px", fontSize: 17, fontVariantNumeric: "tabular-nums", textAlign: "right" }}
             />

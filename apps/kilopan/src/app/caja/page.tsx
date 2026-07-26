@@ -101,7 +101,9 @@ export default function CajaPage() {
         <div style={{ background: superficie.tarjeta, border: `1px solid ${superficie.hairline}`, borderRadius: 14, padding: 16 }}>
           {resultado.filas.filter((f) => f.esperado > 0 || f.declarado > 0).map((f) => (
             <div key={f.medioPago} style={{ display: "flex", justifyContent: "space-between", fontSize: 15, padding: "3px 0" }}>
-              <span>{f.medioPago}</span>
+              {/* La clave interna ("mercadopago") no es lo que el vendedor reconoce —
+                  arriba en la misma pantalla ya se traduce a la etiqueta. */}
+              <span>{medios.find((m) => m.medio_pago === f.medioPago)?.etiqueta ?? f.medioPago}</span>
               <span style={{ fontVariantNumeric: "tabular-nums", color: f.diferencia === 0 ? semantico.ok : semantico.alerta }}>
                 {f.diferencia === 0 ? "cuadra" : `${f.diferencia > 0 ? "+" : ""}${formatearClp(f.diferencia)}`}
               </span>

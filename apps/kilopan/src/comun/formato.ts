@@ -2,14 +2,17 @@
 // literal directo con `.toFixed()` o similar (grep de gate en guardrail.sh evoluciona
 // para bloquear eso una vez exista UI real). El componente que renderiza el resultado
 // debe aplicar `tabular-nums` (packages/miga tokens.tabularNums).
+import { gramosAKgTexto } from "./peso.ts";
 
-/** gramos (entero) -> "12,450 kg" — coma decimal, 3 decimales fijos desde gramos. */
+/** gramos (entero) -> "12,45 kg" — coma decimal, sin ceros de relleno. Hallazgo menor de
+ *  la auditoría: la versión anterior fijaba SIEMPRE 3 decimales ("1,000 kg" para 1 kilo),
+ *  que en una pantalla se lee como "mil kilos". Reusa gramosAKgTexto (comun/peso.ts), que
+ *  ya resolvía exactamente este mismo problema para el campo editable de pesaje. */
 export function formatearKg(gramos: number): string {
   if (!Number.isInteger(gramos)) {
     throw new RangeError(`formatearKg: gramos debe ser entero (${gramos})`);
   }
-  const kg = (gramos / 1000).toFixed(3).replace(".", ",");
-  return `${kg} kg`;
+  return `${gramosAKgTexto(gramos)} kg`;
 }
 
 /** CLP entero -> "$12.500" — sin decimales, punto de miles. */

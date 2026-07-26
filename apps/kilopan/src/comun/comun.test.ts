@@ -45,9 +45,11 @@ test("formatearRut: produce la forma es-CL estándar", () => {
 });
 
 // --- formato es-CL ---
-test("formatearKg: coma decimal, 3 decimales desde gramos enteros", () => {
-  assert.equal(formatearKg(12450), "12,450 kg");
-  assert.equal(formatearKg(1000), "1,000 kg");
+test("formatearKg: coma decimal, sin ceros de relleno (1 kilo no se lee como mil)", () => {
+  assert.equal(formatearKg(12450), "12,45 kg");
+  assert.equal(formatearKg(1000), "1 kg");
+  assert.equal(formatearKg(1500), "1,5 kg");
+  assert.equal(formatearKg(1001), "1,001 kg");
 });
 test("formatearKg: rechaza gramos no enteros (invariante de BD: gramos es integer)", () => {
   assert.throws(() => formatearKg(12450.5));
