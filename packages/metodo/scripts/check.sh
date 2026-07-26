@@ -59,6 +59,18 @@ else
 fi
 
 if [ "$FULL" -eq 1 ]; then
+  # AC-PERF-04: las pantallas de la madrugada no pueden colgarse en 4G malo.
+  # Se mide ANTES de e2e a propósito: el webServer de playwright.config.ts levanta
+  # `next dev`, que reescribe .next en modo dev (bundles sin minificar y manifiesto
+  # con solo las rutas que e2e visitó) y clava el gate en rojo aunque la build de
+  # producción esté sana.
+  if [ -f apps/kilopan/.next/app-build-manifest.json ]; then
+    run_step "presupuesto de performance (gzip del flujo dorado)" \
+      node packages/metodo/scripts/presupuesto-perf.mjs
+  else
+    skip_step "presupuesto de performance" "no hay build todavía"
+  fi
+
   if [ -d apps/kilopan ] && [ -f apps/kilopan/playwright.config.ts ]; then
     run_step "e2e móvil 390x844 + offline emulado" pnpm --filter kilopan run e2e
   else
@@ -69,14 +81,6 @@ if [ "$FULL" -eq 1 ]; then
       node db/test-invariantes.mjs
   else
     skip_step "invariantes de BD" "migraciones aún no existen"
-  fi
-
-  # AC-PERF-04: las pantallas de la madrugada no pueden colgarse en 4G malo.
-  if [ -f apps/kilopan/.next/app-build-manifest.json ]; then
-    run_step "presupuesto de performance (gzip del flujo dorado)" \
-      node packages/metodo/scripts/presupuesto-perf.mjs
-  else
-    skip_step "presupuesto de performance" "no hay build todavía"
   fi
 else
   skip_step "e2e / axe / invariantes de BD / lighthouse" "correr con --full"
