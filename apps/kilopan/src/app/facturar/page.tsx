@@ -26,16 +26,33 @@ export default function FacturarPage() {
   const [rutEmisor, setRutEmisor] = useState("76.192.083-9");
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
   const [consolidando, setConsolidando] = useState(false);
+  const [cargandoGuias, setCargandoGuias] = useState(false);
+  const [errorGuias, setErrorGuias] = useState(false);
 
   useEffect(() => {
     fetch("/api/clientes").then((r) => r.json()).then((d) => setClientes(d.clientes ?? []));
   }, []);
 
+  // Sin distinguir error de vacío, un fetch caído (sin red, sesión vencida) pintaba
+  // "Este cliente no tiene guías pendientes de facturar" — el dueño concluía que no
+  // había fiado mayorista que cobrar y dejaba la plata sin facturar (auditoría de
+  // experiencia, ALTA).
   const cargarGuias = useCallback(async (id: string) => {
-    if (!id) { setGuias([]); return; }
-    const d = await (await fetch(`/api/facturar?clienteId=${id}`)).json();
-    setGuias(d.guias ?? []);
-    setElegidas(new Set((d.guias ?? []).map((g: Guia) => g.id)));
+    if (!id) { setGuias([]); setErrorGuias(false); return; }
+    setCargandoGuias(true);
+    setErrorGuias(false);
+    try {
+      const r = await fetch(`/api/facturar?clienteId=${id}`);
+      if (!r.ok) throw new Error(String(r.status));
+      const d = await r.json();
+      setGuias(d.guias ?? []);
+      setElegidas(new Set((d.guias ?? []).map((g: Guia) => g.id)));
+    } catch {
+      setGuias([]);
+      setErrorGuias(true);
+    } finally {
+      setCargandoGuias(false);
+    }
   }, []);
 
   useEffect(() => { void cargarGuias(clienteId); }, [clienteId, cargarGuias]);
@@ -114,6 +131,16 @@ export default function FacturarPage() {
         </div>
       ) : null}
 
+      {clienteId && cargandoGuias ? (
+        <p style={{ color: superficie.textoDim, fontSize: 14 }}>Buscando guías…</p>
+      ) : null}
+      {clienteId && errorGuias ? (
+        <p style={{ color: semantico.error, fontSize: 14 }} role="alert">
+          No se pudieron consultar las guías de este cliente. Revisa la conexión e
+          inténtalo de nuevo — puede haber fiado sin cobrar.
+        </p>
+      ) : null}
+
       {guias.length > 0 ? (
         <>
           <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: superficie.textoDim }}>
@@ -157,7 +184,7 @@ export default function FacturarPage() {
             {consolidando ? "Registrando…" : `Registrar factura por ${formatearClp(total)}`}
           </BotonPrimario>
         </>
-      ) : clienteId ? (
+      ) : clienteId && !cargandoGuias && !errorGuias ? (
         <p style={{ color: superficie.textoFaint, fontSize: 14 }}>Este cliente no tiene guías pendientes de facturar.</p>
       ) : null}
 

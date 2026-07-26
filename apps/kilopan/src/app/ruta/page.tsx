@@ -52,6 +52,8 @@ export default function RutaPage() {
   const [gps, setGps] = useState<{ lat: number; lng: number; precision: number } | null>(null);
   const [errorGps, setErrorGps] = useState<string | null>(null);
   const [buscandoGps, setBuscandoGps] = useState(false);
+  const [cargandoRuta, setCargandoRuta] = useState(true);
+  const [errorRuta, setErrorRuta] = useState(false);
   const [fotoSha, setFotoSha] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [entregadasLocal, setEntregadasLocal] = useState<Set<string>>(new Set());
@@ -64,14 +66,25 @@ export default function RutaPage() {
   // LA PARADA correcta como pendiente en vez de dejarla desaparecida.
   const clientUuidAParada = useRef<Map<string, string>>(new Map());
 
+  // `errorRuta` separa "no hay reparto hoy" de "no pude consultar". Sin eso, una
+  // sesión vencida o el server caído dejaban `paradas` vacío y la pantalla decía
+  // "No tienes paradas hoy": el repartidor se iba a la casa con el furgón cargado
+  // (auditoría de experiencia, ALTA). Solo se marca error si NO hay nada en pantalla:
+  // con un snapshot ya cargado, seguir mostrándolo es lo correcto sin señal.
   const cargarRuta = useCallback(async () => {
     try {
       const r = await fetch("/api/rutas/mi-ruta");
-      if (!r.ok) return;
+      if (!r.ok) throw new Error(String(r.status));
       const d = await r.json();
       setParadas(d.paradas ?? []);
+      setErrorRuta(false);
     } catch {
-      // sin señal: se sigue con lo que ya está en pantalla (snapshot del día)
+      setParadas((actuales) => {
+        setErrorRuta(actuales.length === 0);
+        return actuales; // sin señal: se sigue con el snapshot del día
+      });
+    } finally {
+      setCargandoRuta(false);
     }
   }, []);
 
@@ -489,7 +502,28 @@ export default function RutaPage() {
         <p role="status" style={{ color: semantico.ok, fontSize: 14, margin: 0 }}>{mensaje}</p>
       ) : null}
 
-      {pendientesDeRuta.length === 0 ? (
+      {/* Tres estados distintos, nunca uno solo: buscando / no se pudo / de verdad
+          no hay. Antes los tres se veían iguales y el repartidor no tenía cómo
+          distinguir "hoy no hay reparto" de "la app no pudo preguntar". */}
+      {pendientesDeRuta.length === 0 && cargandoRuta ? (
+        <div style={{ padding: 24, textAlign: "center", color: superficie.textoDim }}>
+          <p style={{ fontSize: 15 }}>Buscando tu ruta…</p>
+        </div>
+      ) : pendientesDeRuta.length === 0 && errorRuta ? (
+        <div style={{ padding: 24, textAlign: "center" }}>
+          <p style={{ fontSize: 15, color: semantico.error }} role="alert">
+            No se pudo cargar tu ruta. NO quiere decir que no tengas reparto hoy —
+            revisa la señal y reintenta antes de volver.
+          </p>
+          <button
+            type="button"
+            onClick={() => { setCargandoRuta(true); void cargarRuta(); }}
+            style={{ marginTop: 12, minHeight: 44, padding: "0 16px", borderRadius: 10, border: `1px solid ${superficie.hairline}`, background: "#fff", fontWeight: 700, fontSize: 14 }}
+          >
+            Reintentar
+          </button>
+        </div>
+      ) : pendientesDeRuta.length === 0 ? (
         <div style={{ padding: 24, textAlign: "center", color: superficie.textoDim }}>
           <CifraGrande valor={String(paradas.length - pendientesDeRuta.length)} />
           <p style={{ fontSize: 15 }}>

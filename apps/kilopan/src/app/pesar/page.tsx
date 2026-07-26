@@ -292,7 +292,15 @@ export default function PesarPage() {
     }
 
     setMensaje(
-      resultado.estado === "encolado" && resultado.motivo === "error_servidor"
+      resultado.estado === "encolado" && resultado.motivo === "sesion_vencida"
+        ? {
+            // El pesaje quedó en la cola, pero no se sube hasta que el maestro vuelva
+            // a entrar. Antes el 401 se trataba como rechazo de negocio y la bandeja
+            // se DESCARTABA: kilos despachados que nunca entraban al sistema.
+            tipo: "error",
+            texto: `Pesado: ${formatearKg(gramosNum)} · ${producto.nombre} — tu sesión se cerró. Vuelve a entrar para que se suba.`,
+          }
+        : resultado.estado === "encolado" && resultado.motivo === "error_servidor"
         ? {
             // Antes esto se anunciaba igual que "sin señal", con el mismo verde de
             // éxito — un 500 con buena señal es un problema real, no falta de cobertura.

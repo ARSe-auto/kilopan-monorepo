@@ -200,7 +200,10 @@ export async function enviarOEncolar(
   // "sin_red": no se pudo ni intentar (catch de fetch) — de verdad no hay señal.
   // "error_servidor": SÍ hubo señal, el servidor respondió 5xx — un problema real que
   // "se sube solo" con buena señal disfraza de "sin señal", con el mismo verde de éxito.
-  | { estado: "encolado"; motivo: "sin_red" | "error_servidor" }
+  // "sesion_vencida": había señal y el servidor contestó 401/403. La mutación NO se
+  // pierde (se encola y se sube cuando el operador vuelve a entrar), pero hay que
+  // decírselo: si no, cree que quedó registrada y nadie vuelve a entrar.
+  | { estado: "encolado"; motivo: "sin_red" | "error_servidor" | "sesion_vencida" }
   | { estado: "rechazado"; error: string }
 > {
   try {
@@ -211,6 +214,15 @@ export async function enviarOEncolar(
     });
     if (r.ok) return { estado: "enviado", cuerpo: await r.json().catch(() => ({})) };
 
+    // 401/403 NO es un rechazo de negocio: la sesión venció por inactividad
+    // (AC-ID-05) mientras el operador armaba la venta. Antes caía en la rama 4xx de
+    // abajo y la mutación se DESCARTABA — el vendedor cobraba, veía "Sin sesión" en
+    // rojo y la venta no existía para nadie. `sincronizar()` ya trataba el 401 como
+    // reintentable en el ciclo de fondo; este camino se había quedado inconsistente.
+    if (r.status === 401 || r.status === 403) {
+      await encolar({ clientUuid: payload.clientUuid, tipo, ruta, payload });
+      return { estado: "encolado", motivo: "sesion_vencida" };
+    }
     // 5xx = el servidor está mal, vale la pena reintentar. 4xx = respuesta legítima
     // (stock insuficiente, outlier, validación) que el operador tiene que ver AHORA:
     // encolarla sería mentirle diciendo que quedó registrada.

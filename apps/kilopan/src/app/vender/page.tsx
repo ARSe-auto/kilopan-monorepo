@@ -151,7 +151,14 @@ export default function VenderPage() {
         | { totalClp?: number }
         | null;
       setMensaje(
-        resultado.estado === "encolado" && resultado.motivo === "error_servidor"
+        resultado.estado === "encolado" && resultado.motivo === "sesion_vencida"
+          ? {
+              // La venta NO se perdió (quedó en la cola), pero nadie la va a subir
+              // hasta que el operador vuelva a entrar: hay que decirlo, y decir qué hacer.
+              tipo: "error",
+              texto: `Cobrado: ${formatearClp(totalCarrito)} — tu sesión se cerró. Vuelve a entrar para que se suba.`,
+            }
+          : resultado.estado === "encolado" && resultado.motivo === "error_servidor"
           ? {
               // Antes esto se anunciaba igual que "sin señal", con el mismo verde de
               // éxito — un 500 con buena señal es un problema real, no falta de cobertura.
