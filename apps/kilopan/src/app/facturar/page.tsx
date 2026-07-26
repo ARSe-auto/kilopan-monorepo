@@ -25,6 +25,7 @@ export default function FacturarPage() {
   const [folio, setFolio] = useState("");
   const [rutEmisor, setRutEmisor] = useState("76.192.083-9");
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
+  const [consolidando, setConsolidando] = useState(false);
 
   useEffect(() => {
     fetch("/api/clientes").then((r) => r.json()).then((d) => setClientes(d.clientes ?? []));
@@ -48,24 +49,32 @@ export default function FacturarPage() {
   }
 
   async function consolidar() {
+    if (consolidando) return; // doble toque no debe consolidar la misma guía dos veces
     setMensaje(null);
-    const r = await fetch("/api/facturar", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      // parsearClp() y no Number(): un folio grande tecleado con el punto de miles
-      // chileno ("123.456") daba Number.isInteger(123.456) = false y el servidor
-      // respondía "Faltan campos" como si el folio nunca hubiera llegado.
-      body: JSON.stringify({ guiaIds: [...elegidas], folioSii: parsearClp(folio), rutEmisor }),
-    });
-    const cuerpo = await r.json();
-    if (!r.ok) { setMensaje({ tipo: "error", texto: cuerpo.error }); return; }
-    setMensaje({
-      tipo: "ok",
-      texto: `Factura ${folio} registrada: ${cuerpo.guiasConsolidadas} guía(s) por ${formatearClp(cuerpo.montoTotal)}`,
-    });
-    setFolio("");
-    void cargarGuias(clienteId);
-    fetch("/api/clientes").then((r) => r.json()).then((d) => setClientes(d.clientes ?? []));
+    setConsolidando(true);
+    try {
+      const r = await fetch("/api/facturar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // parsearClp() y no Number(): un folio grande tecleado con el punto de miles
+        // chileno ("123.456") daba Number.isInteger(123.456) = false y el servidor
+        // respondía "Faltan campos" como si el folio nunca hubiera llegado.
+        body: JSON.stringify({ guiaIds: [...elegidas], folioSii: parsearClp(folio), rutEmisor }),
+      });
+      const cuerpo = await r.json();
+      if (!r.ok) { setMensaje({ tipo: "error", texto: cuerpo.error }); return; }
+      setMensaje({
+        tipo: "ok",
+        texto: `Factura ${folio} registrada: ${cuerpo.guiasConsolidadas} guía(s) por ${formatearClp(cuerpo.montoTotal)}`,
+      });
+      setFolio("");
+      await cargarGuias(clienteId);
+      await fetch("/api/clientes").then((r) => r.json()).then((d) => setClientes(d.clientes ?? []));
+    } catch {
+      setMensaje({ tipo: "error", texto: "Sin conexión con el servidor" });
+    } finally {
+      setConsolidando(false);
+    }
   }
 
   const cliente = clientes.find((c) => c.id === clienteId);
@@ -134,8 +143,8 @@ export default function FacturarPage() {
           <input value={rutEmisor} onChange={(e) => setRutEmisor(e.target.value)} placeholder="RUT emisor"
             style={{ minHeight: 44, borderRadius: 12, border: `1px solid ${superficie.hairline}`, padding: "0 14px", fontSize: 17 }} />
 
-          <BotonPrimario disabled={elegidas.size === 0 || !folio} onClick={consolidar}>
-            Registrar factura por {formatearClp(total)}
+          <BotonPrimario disabled={elegidas.size === 0 || !folio || consolidando} onClick={consolidar}>
+            {consolidando ? "Registrando…" : `Registrar factura por ${formatearClp(total)}`}
           </BotonPrimario>
         </>
       ) : clienteId ? (

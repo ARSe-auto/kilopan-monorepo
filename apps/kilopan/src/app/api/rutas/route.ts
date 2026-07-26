@@ -48,6 +48,24 @@ export async function POST(request: NextRequest) {
     // La ruta y sus paradas entran juntas o ninguna: antes un corte a mitad del `for`
     // dejaba una ruta sin todas sus paradas, invisible para "Mi ruta" del repartidor.
     const rutaId = await db.transaccion(async (tx) => {
+      // pan.pedidos nunca pasaba a 'en_ruta' al armar la ruta (el valor existe en el
+      // CHECK desde 0004 pero nada lo usaba): un pedido "confirmado" lo seguía siendo
+      // para siempre, así que dos clics del mismo botón —o dos rutas armadas más tarde
+      // el mismo día para OTRO repartidor— podían meter el mismo pedido en dos rutas.
+      // `for update` fija la fila mientras se decide para no correr esa carrera contra
+      // un segundo POST casi simultáneo.
+      const vigentes = await tx.query<{ id: string }>(
+        `select id from pan.pedidos where id = any($1::uuid[]) and estado = 'confirmado' for update`,
+        [pedidoIds]
+      );
+      const idsVigentes = new Set(vigentes.rows.map((p) => p.id));
+      const aRutear = pedidoIds.filter((id) => idsVigentes.has(id));
+      if (aRutear.length === 0) {
+        throw Object.assign(new Error("pedidos_ya_ruteados"), {
+          publico: "Esos pedidos ya están en otra ruta o ya no están confirmados",
+        });
+      }
+
       const ruta = await tx.query<{ id: string }>(
         `insert into pan.rutas (repartidor_id, vehiculo) values ($1,$2) returning id`,
         [repartidorId, vehiculo ?? null]
@@ -56,16 +74,17 @@ export async function POST(request: NextRequest) {
       if (!id) throw new Error("No se pudo crear la ruta");
 
       // Orden a mano: el índice del array ES el orden de la ruta (sin VRP, por diseño).
-      for (const [i, pedidoId] of pedidoIds.entries()) {
+      for (const [i, pedidoId] of aRutear.entries()) {
         await tx.query(`insert into pan.ruta_paradas (ruta_id, pedido_id, orden) values ($1,$2,$3)`, [
           id,
           pedidoId,
           i + 1,
         ]);
+        await tx.query(`update pan.pedidos set estado = 'en_ruta' where id = $1`, [pedidoId]);
       }
-      return id;
+      return { id, paradas: aRutear.length };
     });
-    return NextResponse.json({ id: rutaId, paradas: pedidoIds.length });
+    return NextResponse.json({ id: rutaId.id, paradas: rutaId.paradas });
   } catch (err) {
     const mensaje = err instanceof Error ? err.message : String(err);
     if (/rutas_una_activa_por_repartidor_dia/i.test(mensaje)) {
@@ -74,6 +93,8 @@ export async function POST(request: NextRequest) {
         { status: 409 }
       );
     }
+    const publico = err instanceof Error ? (err as Error & { publico?: string }).publico : undefined;
+    if (publico) return NextResponse.json({ error: publico }, { status: 409 });
     console.error("POST /api/rutas:", mensaje);
     return NextResponse.json({ error: "No se pudo armar la ruta" }, { status: 500 });
   }

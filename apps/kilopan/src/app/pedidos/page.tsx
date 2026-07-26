@@ -65,6 +65,15 @@ export default function PedidosPage() {
   const [dteRut, setDteRut] = useState("76.192.083-9");
   const [dteMonto, setDteMonto] = useState("");
 
+  // Doble toque con las manos ocupadas: ninguno de los tres botones de abajo se
+  // deshabilitaba mientras su petición estaba en vuelo. Para "Armar ruta y salir" es
+  // el más caro de los tres —son dos POST/PATCH seguidos— así que además el servidor
+  // (api/rutas) ahora es idempotente por su cuenta; esto es la primera línea de
+  // defensa, no la única.
+  const [creandoPedido, setCreandoPedido] = useState(false);
+  const [registrandoDte, setRegistrandoDte] = useState(false);
+  const [armandoRuta, setArmandoRuta] = useState(false);
+
   const cargar = useCallback(async () => {
     const [p, c, pr, u] = await Promise.all([
       fetch("/api/pedidos").then((r) => r.json()),
@@ -81,6 +90,7 @@ export default function PedidosPage() {
   useEffect(() => { void cargar(); }, [cargar]);
 
   async function crearPedido() {
+    if (creandoPedido) return;
     // Antes acá vivía `Math.round(Number(kilos)*1000)`, una segunda conversión de
     // kilos a gramos distinta de la del pesaje. Math.round tapaba el error del
     // flotante por casualidad, pero dos implementaciones de la misma regla terminan
@@ -96,20 +106,27 @@ export default function PedidosPage() {
       setMensaje({ tipo: "error", texto: "Elige cliente, producto y kilos" });
       return;
     }
-    const r = await fetch("/api/pedidos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        clienteId,
-        fechaEntrega: new Date().toISOString().slice(0, 10),
-        lineas: [{ productoId, gramosPedidos: gramos }],
-      }),
-    });
-    const cuerpo = await r.json();
-    if (!r.ok) { setMensaje({ tipo: "error", texto: cuerpo.error }); return; }
-    setMensaje({ tipo: "ok", texto: `Pedido N° ${cuerpo.correlativo} · ${formatearClp(cuerpo.totalClp)}` });
-    setKilos("");
-    void cargar();
+    setCreandoPedido(true);
+    try {
+      const r = await fetch("/api/pedidos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clienteId,
+          fechaEntrega: new Date().toISOString().slice(0, 10),
+          lineas: [{ productoId, gramosPedidos: gramos }],
+        }),
+      });
+      const cuerpo = await r.json();
+      if (!r.ok) { setMensaje({ tipo: "error", texto: cuerpo.error }); return; }
+      setMensaje({ tipo: "ok", texto: `Pedido N° ${cuerpo.correlativo} · ${formatearClp(cuerpo.totalClp)}` });
+      setKilos("");
+      await cargar();
+    } catch {
+      setMensaje({ tipo: "error", texto: "Sin conexión con el servidor" });
+    } finally {
+      setCreandoPedido(false);
+    }
   }
 
   async function crearCliente() {
@@ -157,54 +174,69 @@ export default function PedidosPage() {
   }
 
   async function registrarDte() {
-    if (!dtePedidoId) return;
-    const r = await fetch("/api/dte", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tipoDte: Number(dteTipo),
-        folioSii: Number(dteFolio),
-        rutEmisor: dteRut,
-        montoTotal: parsearClp(dteMonto || "0"),
-        pedidoId: dtePedidoId,
-        origenCaptura: "manual",
-      }),
-    });
-    const cuerpo = await r.json();
-    if (!r.ok) { setMensaje({ tipo: "error", texto: cuerpo.error }); return; }
-    setMensaje({ tipo: "ok", texto: `Documento ${dteTipo} folio ${dteFolio} registrado` });
-    setDtePedidoId(null);
-    setDteFolio("");
-    setDteMonto("");
-    void cargar();
+    if (!dtePedidoId || registrandoDte) return;
+    setRegistrandoDte(true);
+    try {
+      const r = await fetch("/api/dte", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipoDte: Number(dteTipo),
+          folioSii: Number(dteFolio),
+          rutEmisor: dteRut,
+          montoTotal: parsearClp(dteMonto || "0"),
+          pedidoId: dtePedidoId,
+          origenCaptura: "manual",
+        }),
+      });
+      const cuerpo = await r.json();
+      if (!r.ok) { setMensaje({ tipo: "error", texto: cuerpo.error }); return; }
+      setMensaje({ tipo: "ok", texto: `Documento ${dteTipo} folio ${dteFolio} registrado` });
+      setDtePedidoId(null);
+      setDteFolio("");
+      setDteMonto("");
+      await cargar();
+    } catch {
+      setMensaje({ tipo: "error", texto: "Sin conexión con el servidor" });
+    } finally {
+      setRegistrandoDte(false);
+    }
   }
 
   async function armarYSalir() {
+    if (armandoRuta) return;
     if (!repartidorId) { setMensaje({ tipo: "error", texto: "Elige quién sale a repartir" }); return; }
     if (!vehiculo.trim()) { setMensaje({ tipo: "error", texto: "Escribe la patente del vehículo" }); return; }
     const paraRuta = pedidos.filter((p) => p.estado === "confirmado");
     if (paraRuta.length === 0) { setMensaje({ tipo: "error", texto: "No hay pedidos confirmados" }); return; }
 
-    const ruta = await fetch("/api/rutas", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ repartidorId, vehiculo: vehiculo.trim(), pedidoIds: paraRuta.map((p) => p.id) }),
-    });
-    const rutaCuerpo = await ruta.json();
-    if (!ruta.ok) { setMensaje({ tipo: "error", texto: rutaCuerpo.error }); return; }
+    setArmandoRuta(true);
+    try {
+      const ruta = await fetch("/api/rutas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repartidorId, vehiculo: vehiculo.trim(), pedidoIds: paraRuta.map((p) => p.id) }),
+      });
+      const rutaCuerpo = await ruta.json();
+      if (!ruta.ok) { setMensaje({ tipo: "error", texto: rutaCuerpo.error }); return; }
 
-    const salir = await fetch("/api/rutas", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rutaId: rutaCuerpo.id, estado: "en_curso", kmInicio: 0 }),
-    });
-    const salirCuerpo = await salir.json();
-    if (!salir.ok) {
-      setMensaje({ tipo: "error", texto: salirCuerpo.error });
-      return;
+      const salir = await fetch("/api/rutas", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rutaId: rutaCuerpo.id, estado: "en_curso", kmInicio: 0 }),
+      });
+      const salirCuerpo = await salir.json();
+      if (!salir.ok) {
+        setMensaje({ tipo: "error", texto: salirCuerpo.error });
+        return;
+      }
+      setMensaje({ tipo: "ok", texto: `Ruta en curso con ${rutaCuerpo.paradas} parada(s)` });
+      await cargar();
+    } catch {
+      setMensaje({ tipo: "error", texto: "Sin conexión con el servidor" });
+    } finally {
+      setArmandoRuta(false);
     }
-    setMensaje({ tipo: "ok", texto: `Ruta en curso con ${rutaCuerpo.paradas} parada(s)` });
-    void cargar();
   }
 
   return (
@@ -282,7 +314,9 @@ export default function PedidosPage() {
           {productos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
         </select>
         <input value={kilos} onChange={(e) => setKilos(e.target.value)} placeholder="Kilos (ej: 12)" style={campo} inputMode="decimal" />
-        <BotonPrimario onClick={crearPedido}>Confirmar pedido</BotonPrimario>
+        <BotonPrimario onClick={crearPedido} disabled={creandoPedido}>
+          {creandoPedido ? "Confirmando…" : "Confirmar pedido"}
+        </BotonPrimario>
       </section>
 
       <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -332,7 +366,9 @@ export default function PedidosPage() {
           <input value={dteFolio} onChange={(e) => setDteFolio(e.target.value)} placeholder="Folio" style={campo} inputMode="numeric" />
           <input value={dteRut} onChange={(e) => setDteRut(e.target.value)} placeholder="RUT emisor" style={campo} />
           <input value={dteMonto} onChange={(e) => setDteMonto(e.target.value)} placeholder="Monto total" style={campo} inputMode="numeric" />
-          <BotonPrimario onClick={registrarDte}>Registrar documento</BotonPrimario>
+          <BotonPrimario onClick={registrarDte} disabled={registrandoDte}>
+            {registrandoDte ? "Registrando…" : "Registrar documento"}
+          </BotonPrimario>
         </section>
       ) : null}
 
@@ -343,7 +379,9 @@ export default function PedidosPage() {
           {repartidores.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
         </select>
         <input value={vehiculo} onChange={(e) => setVehiculo(e.target.value)} placeholder="Patente (ej: ABCD-12)" style={campo} />
-        <BotonPrimario onClick={armarYSalir}>Armar ruta y salir</BotonPrimario>
+        <BotonPrimario onClick={armarYSalir} disabled={armandoRuta}>
+          {armandoRuta ? "Armando ruta…" : "Armar ruta y salir"}
+        </BotonPrimario>
       </section>
     </main>
   );
