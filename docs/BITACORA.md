@@ -10,7 +10,64 @@ el aprendizaje contradice lo que creíamos. **Qué NO va:** el estado del plan (
 
 ---
 
+## 2026-07-26 (noche) · RESUELTO: la cookie de sesión salía `Secure` sobre `http://`
+
+**Causa raíz.** `OPCIONES_COOKIE` decidía el atributo `Secure` con
+`process.env.NODE_ENV === "production"`. Esa condición no responde la pregunta que
+importa —«¿esta conexión va cifrada?»—, solo dice cómo se compiló el bundle. El servidor
+standalone fija `NODE_ENV=production` **siempre**, así que al servir por `http://` (el
+e2e, y también una tablet contra un equipo de la red local sin certificado) se emitía una
+cookie `Secure` sobre una conexión sin TLS. **El navegador la descarta entera.** El
+operador queda sin sesión después de un login que respondió 200 y dejó su turno abierto en
+la base — sin ningún error visible en ninguna capa.
+
+De ahí salía todo lo demás en cascada: sin cookie, el middleware rechazaba `/inicio`, la
+navegación del router quedaba «colgada», y el fallback chocaba con el mismo rechazo.
+
+**Arreglo** (`identidad/sesion.ts`): `Secure` se decide por el protocolo REAL de la
+petición — `x-forwarded-proto` (último salto, el que pone el proxy de borde; mismo
+razonamiento que `ipDelCliente`) y si no, `request.nextUrl.protocol`. En Railway la
+petición llega por https y sigue saliendo `Secure` igual que antes: **no se afloja nada en
+el despliegue real**, solo deja de mentir cuando no hay TLS.
+
+De paso, el `Set-Cookie` se serializa a mano con `Max-Age` y **sin `Expires`**:
+`cookies.set()` de Next deriva un `Expires` cuya fecha lleva una coma, y la coma es el
+separador de headers repetidos — cualquier intermediario que junte o reescriba headers
+puede partir el `Set-Cookie` en dos fragmentos rotos. Se vio partido de verdad en el trace
+(`Expires=Mon` | `27 Jul 2026 …`). No era la causa del fallo, pero es un riesgo real en
+producción y salía gratis cerrarlo. Mismo tratamiento en el logout (`cookies.delete()`
+emitía `Expires=Thu, 01 Jan 1970 …`, otra coma: si se parte, la sesión no se cierra al
+apretar «Salir»).
+
+**Estado:** `check.sh --full` VERDE — 12 pasos, 0 fallas, 0 saltados. **e2e 10/10**,
+incluido el test 8 del repartidor que la entrada del mediodía daba por flaky: no era
+flaky, era este mismo bug. Se quitó el fallback de 2 s que se había puesto en
+`ingresar/page.tsx` sobre el diagnóstico equivocado; el código volvió a su forma simple.
+
+**Aprendizajes (los caros de hoy):**
+
+1. **Comparé dos escenarios distintos y saqué la conclusión contraria.** Vi el
+   `Set-Cookie` partido en el trace y lo descarté como «artefacto del parser» porque en
+   paralelo `context.cookies()` me mostraba la cookie bien guardada — pero esa
+   verificación la corrí contra un servidor levantado a mano, no contra el del test
+   runner. Dos escenarios, una conclusión. Costó horas.
+2. **`NODE_ENV` no es una señal de transporte.** Dice cómo se compiló, no si hay TLS.
+   Cualquier decisión sobre `Secure`, cookies o redirecciones a https tiene que mirar el
+   protocolo de la petición.
+3. **El «test flaky» no era flaky.** Se documentó como no-determinista y se propuso
+   supervisarlo; en realidad fallaba siempre por una causa concreta. Rotular algo de
+   flaky es una hipótesis, no un diagnóstico — y rotularlo mal apaga la búsqueda.
+4. **`.next-e2e` entraba al lint.** El distDir propio del e2e no estaba en los ignores de
+   ESLint (que solo cubrían `.next`), y sumaba ~12.700 quejas sobre JS minificado
+   generado: el gate en rojo por un artefacto de build. Corregido a `.next*`.
+
+---
+
 ## 2026-07-26 (tarde) · Diagnóstico del e2e flaky — causa raíz acotada, NO resuelta
+
+> **Superada por la entrada de la noche.** El mecanismo descrito acá (la cookie no llega
+> al fetch RSC) era correcto; la causa que se le atribuyó, no. Se conserva porque el
+> registro de las hipótesis descartadas sigue siendo útil.
 
 **Contexto.** Retomando `camino-dorado.spec.ts` tras el cierre de la entrada anterior:
 el test 2 («entrar con PIN abre el turno») falla de forma **100% determinística** bajo

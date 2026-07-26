@@ -27,3 +27,6 @@ apps/kilopan/playwright-report/
 
 # locks del arnes (efimeros, por worktree)
 .metodo-locks/
+
+# distDir del e2e (build propio, separado del .next de produccion)
+apps/kilopan/.next-e2e/

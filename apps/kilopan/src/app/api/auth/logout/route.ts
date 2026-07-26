@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
-import { NOMBRE_COOKIE, obtenerSesionActual } from "@/identidad/sesion.ts";
+import { cabeceraCookieSesionBorrada, obtenerSesionActual } from "@/identidad/sesion.ts";
 
 export async function POST(request: NextRequest) {
   const sesion = await obtenerSesionActual(request);
@@ -11,6 +11,6 @@ export async function POST(request: NextRequest) {
     ]);
   }
   const respuesta = NextResponse.json({ ok: true });
-  respuesta.cookies.delete(NOMBRE_COOKIE);
+  respuesta.headers.set("Set-Cookie", cabeceraCookieSesionBorrada(request));
   return respuesta;
 }

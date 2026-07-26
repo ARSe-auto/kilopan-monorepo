@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
 import { verificarPin } from "@/identidad/hash.ts";
 import { permitirIntento, ipDelCliente } from "@/identidad/limitador.ts";
-import { NOMBRE_COOKIE, OPCIONES_COOKIE } from "@/identidad/sesion.ts";
+import { cabeceraCookieSesion } from "@/identidad/sesion.ts";
 import { validaRut, formatearRut } from "@/comun/valida_rut.ts";
 import { esUuid } from "@/comun/validacion.ts";
 
@@ -111,6 +111,6 @@ export async function POST(request: NextRequest) {
   const respuesta = NextResponse.json({
     usuario: { id: usuario.id, nombre: usuario.nombre, rol: usuario.rol },
   });
-  respuesta.cookies.set(NOMBRE_COOKIE, sesionId, OPCIONES_COOKIE);
+  respuesta.headers.set("Set-Cookie", cabeceraCookieSesion(sesionId, request));
   return respuesta;
 }

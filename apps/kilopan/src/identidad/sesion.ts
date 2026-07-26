@@ -1,4 +1,4 @@
-// Cookie de sesión: HttpOnly + Secure (en producción) + SameSite=Lax (AC-SEC-05).
+// Cookie de sesión: HttpOnly + Secure (cuando la conexión va por TLS) + SameSite=Lax (AC-SEC-05).
 // Nunca en localStorage — la cookie HttpOnly es invisible a JS del cliente, que es
 // justamente el punto (mitiga robo de sesión por XSS).
 import type { NextRequest } from "next/server";
@@ -8,13 +8,57 @@ import { NOMBRE_COOKIE } from "./cookie.ts";
 
 export { NOMBRE_COOKIE };
 
-export const OPCIONES_COOKIE = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax" as const,
-  path: "/",
-  maxAge: 60 * 60 * 12, // 12h de tope duro; la inactividad de 10 min (AC-ID-05) la corta la UI
-};
+// 12h de tope duro; la inactividad de 10 min (AC-ID-05) la corta la UI.
+const MAX_EDAD_COOKIE_S = 60 * 60 * 12;
+
+/** Serializa el `Set-Cookie` de la sesión a mano: con `Max-Age` y SIN `Expires`.
+ *
+ *  No es estilo, es un defecto real encontrado el 26-jul-2026. `respuesta.cookies.set()`
+ *  de Next DERIVA un `Expires` a partir de `maxAge`, y esa fecha lleva una coma
+ *  («Expires=Mon, 27 Jul 2026 09:55:37 GMT»). La coma es justamente el separador con que
+ *  se juntan headers repetidos, así que cualquier intermediario que junte o reescriba
+ *  headers puede partir ese `Set-Cookie` en dos fragmentos rotos. El navegador entonces
+ *  no descarta el fragmento: descarta la cookie ENTERA, y el operador queda sin sesión
+ *  después de un login que respondió 200 — sin ningún error visible en ninguna capa.
+ *
+ *  Síntoma con el que se manifestó: el e2e fallaba el 100% de las veces bajo el test
+ *  runner (`context.cookies()` devolvía lista vacía tras el login) y nunca al reproducirlo
+ *  a mano, porque los dos caminos de red no parten el header igual. En producción, un
+ *  proxy que haga lo mismo rompe el ingreso de la misma forma.
+ *
+ *  `Max-Age` por sí solo expresa el mismo tope y no contiene comas. */
+export function cabeceraCookieSesion(sesionId: string, request: NextRequest): string {
+  return armarCookie(`${NOMBRE_COOKIE}=${sesionId}`, `Max-Age=${MAX_EDAD_COOKIE_S}`, request);
+}
+
+/** El borrado de la sesión tiene el MISMO problema: `cookies.delete()` de Next emite
+ *  `Expires=Thu, 01 Jan 1970 00:00:00 GMT` — otra coma. Si ese header se parte, la cookie
+ *  no se borra y el operador sigue con la sesión abierta después de apretar «Salir».
+ *  `Max-Age=0` la caduca igual, sin comas. */
+export function cabeceraCookieSesionBorrada(request: NextRequest): string {
+  return armarCookie(`${NOMBRE_COOKIE}=`, "Max-Age=0", request);
+}
+
+/** AC-SEC-05: `Secure` según el PROTOCOLO REAL de la petición, no según `NODE_ENV`.
+ *
+ *  `NODE_ENV === "production"` no responde la pregunta que importa —«¿esta conexión va
+ *  cifrada?»—, solo dice cómo se compiló. El servidor standalone fija `NODE_ENV=production`
+ *  siempre, así que servir por http:// (el e2e, o una tablet en la panadería contra un
+ *  equipo de la red local sin certificado) emitía una cookie `Secure` sobre una conexión
+ *  sin TLS: el navegador la descarta entera y el operador queda sin sesión tras un login
+ *  que respondió 200, sin ningún error visible. En Railway la petición llega por https
+ *  (o con `x-forwarded-proto: https` desde el proxy de borde), así que ahí sigue saliendo
+ *  `Secure` exactamente como antes — no se afloja nada en el despliegue real. */
+function armarCookie(asignacion: string, edad: string, request: NextRequest): string {
+  const partes = [asignacion, "Path=/", edad, "HttpOnly", "SameSite=Lax"];
+  const protoDeclarado = request.headers.get("x-forwarded-proto");
+  // El último salto es el que puso el proxy de borde; los anteriores los puede rellenar
+  // el cliente (mismo razonamiento que ipDelCliente en identidad/limitador.ts).
+  const protoBorde = protoDeclarado?.split(",").map((s) => s.trim()).pop();
+  const porTls = protoBorde ? protoBorde === "https" : request.nextUrl.protocol === "https:";
+  if (porTls) partes.push("Secure");
+  return partes.join("; ");
+}
 
 export interface SesionActual {
   sesionId: string;
