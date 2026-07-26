@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { obtenerDb } from "@/comun/db.ts";
-import { NOMBRE_COOKIE } from "@/identidad/sesion.ts";
+import { obtenerSesionActual } from "@/identidad/sesion.ts";
 import { CerrarSesionBoton } from "./CerrarSesionBoton.tsx";
 
 const ENLACES_POR_ROL: Record<string, { href: string; etiqueta: string }[]> = {
@@ -23,19 +22,10 @@ const ENLACES_POR_ROL: Record<string, { href: string; etiqueta: string }[]> = {
 };
 
 export default async function InicioPage() {
-  const cookieStore = await cookies();
-  const sesionId = cookieStore.get(NOMBRE_COOKIE)?.value;
-  if (!sesionId) redirect("/ingresar");
-
-  const db = await obtenerDb();
-  const r = await db.query<{ nombre: string; rol: string }>(
-    `select u.nombre, u.rol
-       from pan.sesiones_operador s
-       join pan.usuarios u on u.id = s.usuario_id
-      where s.id = $1 and s.fin is null and u.activo`,
-    [sesionId]
-  );
-  const sesion = r.rows[0];
+  // Antes esta pantalla reimplementaba la consulta de sesión a mano y se le había
+  // olvidado el chequeo de expiración por inactividad (AC-ID-05) que sí tiene
+  // obtenerSesionActual — una sesión vencida hacía "F5" acá y seguía adentro.
+  const sesion = await obtenerSesionActual({ cookies: await cookies() });
   if (!sesion) redirect("/ingresar");
 
   const enlaces = ENLACES_POR_ROL[sesion.rol] ?? [];

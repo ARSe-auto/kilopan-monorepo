@@ -6,7 +6,19 @@
 // que decirle "sin conexión". Los datos que sí deben sobrevivir sin red van por el
 // outbox de IndexedDB, que es explícito sobre lo que está pendiente.
 
-const CACHE = "kilopan-shell-v1";
+// v2 (Tanda 6 de la auditoría): v1 cacheaba CUALQUIER página, incluidas las
+// autenticadas (/caja, /dashboard, /pedidos...). El Cache Storage ignora por diseño
+// las cabeceras Cache-Control, así que un `no-store` del servidor no alcanzaba para
+// evitarlo — sin señal justo en ese instante, el service worker le servía al SIGUIENTE
+// operador de la tablet el HTML (con datos) de la sesión anterior. Subir la versión
+// además borra cualquier página autenticada que ya haya quedado cacheada por v1 en
+// equipos que ya tenían el service worker instalado (ver `activate` más abajo).
+const CACHE = "kilopan-shell-v2";
+
+// Únicas páginas que tiene sentido servir desde caché sin conexión: no tienen datos de
+// sesión, así que no importa a quién se las sirva. Todo lo demás (dashboard, caja,
+// pedidos, etc.) exige sesión — cachearlas es el bug que esta versión corrige.
+const RUTAS_PUBLICAS_CACHEABLES = new Set(["/", "/ingresar", "/vincular"]);
 
 self.addEventListener("install", (evento) => {
   // No se precachea una lista fija de chunks: sus nombres llevan hash y cambian en
@@ -51,15 +63,25 @@ self.addEventListener("fetch", (evento) => {
     return;
   }
 
-  // Páginas: red primero (para no servir una versión vieja de la app), con el caché
-  // como red de seguridad cuando no hay señal.
+  // Páginas: red primero (para no servir una versión vieja de la app). El caché como
+  // red de seguridad sin conexión SOLO aplica a las rutas públicas — cachear /caja o
+  // /dashboard es exactamente el bug que esta versión corrige.
+  const esPublica = RUTAS_PUBLICAS_CACHEABLES.has(url.pathname);
   evento.respondWith(
     fetch(evento.request)
       .then((resp) => {
-        const copia = resp.clone();
-        void caches.open(CACHE).then((c) => c.put(evento.request, copia));
+        if (esPublica) {
+          const copia = resp.clone();
+          void caches.open(CACHE).then((c) => c.put(evento.request, copia));
+        }
         return resp;
       })
-      .catch(() => caches.match(evento.request).then((hit) => hit ?? caches.match("/ingresar")))
+      .catch(() =>
+        esPublica
+          ? caches.match(evento.request).then((hit) => hit ?? caches.match("/ingresar"))
+          // Una página autenticada sin red: nunca desde caché. Redirigir a /ingresar es
+          // seguro (esa sí es pública) y el middleware la manda de vuelta si hay sesión.
+          : caches.match("/ingresar")
+      )
   );
 });

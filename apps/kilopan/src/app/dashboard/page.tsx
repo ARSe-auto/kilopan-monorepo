@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { obtenerDb } from "@/comun/db.ts";
-import { NOMBRE_COOKIE } from "@/identidad/sesion.ts";
+import { obtenerSesionActual } from "@/identidad/sesion.ts";
 import { superficie, acentos, semantico } from "@kilopan/miga/tokens.ts";
 import { formatearKg, formatearClp } from "@/comun/formato.ts";
 
@@ -21,19 +21,13 @@ type Conciliacion = Record<string, unknown> & {
 // sobre eventos, nunca un snapshot. Server Component: la sesión se valida acá y las
 // cifras nunca viajan al cliente sin pasar por el chequeo de rol.
 export default async function DashboardPage() {
-  const cookieStore = await cookies();
-  const sesionId = cookieStore.get(NOMBRE_COOKIE)?.value;
-  if (!sesionId) redirect("/ingresar");
+  // Antes esta pantalla reimplementaba la consulta de sesión a mano y se le había
+  // olvidado el chequeo de expiración por inactividad (AC-ID-05) que sí tiene
+  // obtenerSesionActual — una sesión vencida hacía "F5" acá y seguía viendo la plata.
+  const usuario = await obtenerSesionActual({ cookies: await cookies() });
+  if (!usuario) redirect("/ingresar");
 
   const db = await obtenerDb();
-  const sesion = await db.query<{ nombre: string; rol: string }>(
-    `select u.nombre, u.rol from pan.sesiones_operador s
-       join pan.usuarios u on u.id = s.usuario_id
-      where s.id = $1 and s.fin is null and u.activo`,
-    [sesionId]
-  );
-  const usuario = sesion.rows[0];
-  if (!usuario) redirect("/ingresar");
   // Regla de rol testeada: el CLP y el $/km viven solo acá, jamás en el teléfono
   // del repartidor (PROMPT_MAESTRO.md §5).
   if (usuario.rol !== "admin") {

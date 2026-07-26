@@ -1,13 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
 import { verificarPin } from "@/identidad/hash.ts";
-import { permitirIntento } from "@/identidad/limitador.ts";
+import { permitirIntento, ipDelCliente } from "@/identidad/limitador.ts";
 import { NOMBRE_COOKIE, OPCIONES_COOKIE } from "@/identidad/sesion.ts";
 import { validaRut } from "@/comun/valida_rut.ts";
 
 // F5 Cambio de operador (PROMPT_MAESTRO.md §5): RUT + PIN + dispositivo ya enrolado.
 export async function POST(request: NextRequest) {
-  const ip = request.headers.get("x-forwarded-for") ?? "desconocida";
+  const ip = ipDelCliente(request);
   if (!permitirIntento(ip)) {
     return NextResponse.json({ error: "Demasiados intentos. Espera un minuto." }, { status: 429 });
   }

@@ -23,11 +23,20 @@ export interface SesionActual {
   rol: "admin" | "maestro" | "vendedor" | "repartidor";
 }
 
+/** Lo mínimo que hace falta para leer la cookie de sesión — tanto `NextRequest.cookies`
+ *  (rutas API) como el `cookies()` de `next/headers` (Server Components) cumplen esta
+ *  forma, así que `obtenerSesionActual` sirve para los dos sin duplicar la consulta.
+ *  Tanda 6 de la auditoría: /inicio y /dashboard reimplementaban esta misma query a
+ *  mano y se les había olvidado el chequeo de expiración por inactividad (AC-ID-05). */
+export interface LectorCookies {
+  get: (nombre: string) => { value: string } | undefined;
+}
+
 /** Lee la cookie, valida contra sesiones_operador (fin IS NULL) y trae el usuario.
  *  Devuelve null si no hay sesión viva — nunca lanza, para que cada ruta decida qué
  *  hacer (401 la mayoría, pero el login mismo también consulta esto). */
-export async function obtenerSesionActual(request: NextRequest): Promise<SesionActual | null> {
-  const sesionId = request.cookies.get(NOMBRE_COOKIE)?.value;
+export async function obtenerSesionActual(origen: { cookies: LectorCookies }): Promise<SesionActual | null> {
+  const sesionId = origen.cookies.get(NOMBRE_COOKIE)?.value;
   if (!sesionId) return null;
 
   const db = await obtenerDb();

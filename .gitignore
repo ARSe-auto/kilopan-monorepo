@@ -16,3 +16,6 @@ packages/metodo/panel/index.html
 packages/metodo/panel/estado.json
 .ralph/
 *.tsbuildinfo
+apps/kilopan/playwright-report/
+apps/kilopan/test-results/
+apps/kilopan/blob-report/
