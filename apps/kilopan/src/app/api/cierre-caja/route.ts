@@ -9,6 +9,10 @@ export async function GET(request: NextRequest) {
   if (sesion instanceof NextResponse) return sesion;
 
   const db = await obtenerDb();
+  // Filtrado por DISPOSITIVO, no por quien está logueado: "esperado" es lo que ESTE
+  // mesón vendió hoy. Filtrar por vendedor_id de sesión hacía que un admin cerrando
+  // caja (o revisándola) viera siempre $0 esperado, porque el admin no vende — no es
+  // dueño de ninguna venta con su propio usuario_id.
   const r = await db.query<{ medio_pago: string; etiqueta: string; esperado_clp: string }>(
     `select mp.clave as medio_pago, mp.etiqueta,
             coalesce(sum(v.total_clp), 0)::text as esperado_clp
@@ -16,11 +20,11 @@ export async function GET(request: NextRequest) {
        left join pan.ventas v
               on v.medio_pago = mp.clave
              and v.creado_at::date = current_date
-             and v.vendedor_id = $1
+             and v.dispositivo_id = $1
       where mp.activo
       group by mp.clave, mp.etiqueta, mp.orden
       order by mp.orden`,
-    [sesion.usuarioId]
+    [sesion.dispositivoId]
   );
   return NextResponse.json({ medios: r.rows });
 }
@@ -60,8 +64,8 @@ export async function POST(request: NextRequest) {
       for (const d of declarados) {
         const esperado = await tx.query<{ esperado: string }>(
           `select coalesce(sum(total_clp), 0)::text as esperado from pan.ventas
-            where medio_pago = $1 and creado_at::date = current_date and vendedor_id = $2`,
-          [d.medioPago, sesion.usuarioId]
+            where medio_pago = $1 and creado_at::date = current_date and dispositivo_id = $2`,
+          [d.medioPago, sesion.dispositivoId]
         );
         const esperadoClp = Number(esperado.rows[0]?.esperado ?? 0);
 

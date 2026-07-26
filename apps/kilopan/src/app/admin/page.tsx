@@ -65,7 +65,9 @@ export default function AdminPage() {
       ) : null}
 
       <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Costos de reparto</h2>
+        {/* Antes decía "Costos de reparto", pero acá también viven parámetros que no
+            son costos (CO2 evitado por km, umbral de rutas para mostrar "Tu flota"). */}
+        <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Ajustes de reparto y flota</h2>
         {resto.map((p) => (
           <label key={p.clave} style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{ flex: 1, fontSize: 14, color: superficie.textoDim }}>{p.descripcion}</span>

@@ -63,15 +63,24 @@ export async function POST(request: NextRequest) {
     // otra. El `for update` bloquea esas filas hasta el commit; si una segunda
     // transacción llega a pedir las mismas guías, espera y las encuentra ya tomadas.
     const resultado = await db.transaccion(async (tx) => {
-      const guias = await tx.query<{ id: string; monto_total: number; pedido_id: string }>(
-        `select id, monto_total, pedido_id
-           from pan.documento_tributario
-          where id = any($1::uuid[]) and consolidado_en_id is null and tipo_dte = 52
-          for update`,
+      const guias = await tx.query<{ id: string; monto_total: number; pedido_id: string; cliente_id: string }>(
+        `select d.id, d.monto_total, d.pedido_id, p.cliente_id
+           from pan.documento_tributario d
+           join pan.pedidos p on p.id = d.pedido_id
+          where d.id = any($1::uuid[]) and d.consolidado_en_id is null and d.tipo_dte = 52
+          for update of d`,
         [guiaIds]
       );
       if (guias.rows.length !== guiaIds.length) {
         throw new Error("guias_no_disponibles");
+      }
+      // Hallazgo menor de la auditoría: nada impedía consolidar guías de CLIENTES
+      // distintos en una sola factura — el monto quedaba bien sumado, pero atribuido
+      // al cliente de la primera guía nomás, mientras las otras se daban por pagadas
+      // sin estarlo.
+      const clienteId = guias.rows[0]!.cliente_id;
+      if (guias.rows.some((g) => g.cliente_id !== clienteId)) {
+        throw new Error("clientes_mezclados");
       }
       // El monto de la factura es la SUMA de las guías que cubre — no un número
       // tecleado aparte que podría no cuadrar con la evidencia.
@@ -107,6 +116,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Alguna guía ya está facturada o no existe" },
         { status: 409 }
+      );
+    }
+    if (mensaje === "clientes_mezclados") {
+      return NextResponse.json(
+        { error: "Las guías elegidas son de clientes distintos" },
+        { status: 400 }
       );
     }
     if (/unique|duplicate/i.test(mensaje)) {

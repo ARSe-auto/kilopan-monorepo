@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { obtenerSesionActual } from "@/identidad/sesion.ts";
 import { CerrarSesionBoton } from "./CerrarSesionBoton.tsx";
 
@@ -39,9 +40,13 @@ export default async function InicioPage() {
         </div>
         <CerrarSesionBoton />
       </div>
+      {/* <Link>, no <a href>: con mala señal, un <a> es una navegación de documento
+          completa que golpea la red — si la ruta nunca se visitó, el service worker
+          no tiene nada que servir y cae a /ingresar. <Link> navega del lado del
+          cliente con lo que el JS de la app ya tiene cargado en esta sesión. */}
       <nav style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {enlaces.map((e) => (
-          <a
+          <Link
             key={e.href}
             href={e.href}
             style={{
@@ -58,7 +63,7 @@ export default async function InicioPage() {
             }}
           >
             {e.etiqueta}
-          </a>
+          </Link>
         ))}
       </nav>
     </main>

@@ -82,6 +82,15 @@ export default function VincularPage() {
           <BotonPrimario disabled={!rutAdmin || pin.length !== 4 || enviando} onClick={vincular}>
             {enviando ? "Vinculando…" : "Vincular equipo"}
           </BotonPrimario>
+          {/* Antes no había forma de volver a corregir el nombre del equipo sin
+              recargar la página entera y perder lo ya tecleado acá. */}
+          <button
+            type="button"
+            onClick={() => setPaso("nombre")}
+            style={{ minHeight: 44, background: "none", border: "none", color: "#5B564C", fontSize: 14, fontWeight: 700 }}
+          >
+            ← Volver
+          </button>
         </>
       )}
     </main>
