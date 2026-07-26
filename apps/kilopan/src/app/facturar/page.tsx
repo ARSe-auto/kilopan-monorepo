@@ -121,7 +121,17 @@ export default function FacturarPage() {
           </p>
           {guias.map((g) => (
             <label key={g.id} style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 44, background: superficie.tarjeta, border: `1px solid ${superficie.hairline}`, borderRadius: 12, padding: "8px 14px" }}>
-              <input type="checkbox" checked={elegidas.has(g.id)} onChange={() => alternar(g.id)} style={{ width: 22, height: 22 }} />
+              {/* El input en sí mide 22×22 — bajo el mínimo táctil de 44×44 — pero el
+                  <label> completo (arriba) ya cubre toda la fila con minHeight: 44 y
+                  la alterna al tocar cualquier parte, así que el blanco real ya es
+                  correcto; esto solo agranda el glifo visible para no obligar a
+                  apuntar con precisión con las manos enharinadas. */}
+              <input
+                type="checkbox"
+                checked={elegidas.has(g.id)}
+                onChange={() => alternar(g.id)}
+                style={{ width: 26, height: 26, flexShrink: 0 }}
+              />
               <span style={{ flex: 1, fontSize: 15 }}>
                 Guía {g.folio_sii} · pedido N° {g.correlativo_pedido ?? "—"} · {formatearFecha(new Date(g.fecha_emision))}
               </span>
