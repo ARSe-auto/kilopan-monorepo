@@ -51,7 +51,10 @@ for (const app of apps) {
     err(`${app}: specs/${app}/ no existe. Sin contrato no se construye.`);
     continue;
   }
-  const archivos = readdirSync(dirSpecs).filter((f) => f.endsWith(".md")).sort();
+  // README.md documenta el directorio, no es una spec.
+  const archivos = readdirSync(dirSpecs)
+    .filter((f) => f.endsWith(".md") && f !== "README.md")
+    .sort();
   if (archivos.length === 0) {
     err(`${app}: specs/${app}/ está vacío. Sin contrato no se construye.`);
     continue;
