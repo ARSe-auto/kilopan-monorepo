@@ -17,7 +17,10 @@ import { abrirCamara, capturar, cerrarCamara, subirFoto } from "@/comun/camara.t
 import { useSesion } from "../SesionCliente.tsx";
 import { puedeEntrar } from "../navegacion.ts";
 import { Pantalla } from "../Pantalla.tsx";
+import { Pasos } from "../Pasos.tsx";
 import { SiguientePaso, type AccionSiguiente } from "../SiguientePaso.tsx";
+
+const PASOS_PESAR = ["Producto", "Peso y destino", "Confirmado"];
 
 interface Producto {
   id: string;
@@ -397,6 +400,7 @@ export default function PesarPage() {
   if (!producto) {
     return (
       <Pantalla titulo="Pesar">
+        <Pasos pasos={PASOS_PESAR} actual={0} />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           {productos.map((p) => (
             <button
@@ -486,6 +490,8 @@ export default function PesarPage() {
         </div>
       }
     >
+      <Pasos pasos={PASOS_PESAR} actual={ultimoPesaje ? 2 : 1} />
+
       <div style={{ display: "flex", justifyContent: "center", padding: "8px 0" }}>
         <CifraGrande valor={kilos || "0"} unidad="kg" />
       </div>

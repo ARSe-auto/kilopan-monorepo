@@ -14,7 +14,15 @@ import { kgTextoAGramos, pesoValido } from "@/comun/peso.ts";
 import { roundClp } from "@/comun/round_clp.ts";
 import { useEnLinea } from "@/comun/useEnLinea.ts";
 import { Pantalla } from "../Pantalla.tsx";
+import { Pasos } from "../Pasos.tsx";
 import { SiguientePaso } from "../SiguientePaso.tsx";
+
+// Ninguna palabra "carrito": Playwright's getByText("Carrito") empareja por
+// SUBSTRING sin distinguir mayúsculas — "Armar el carrito" también la contiene y
+// dejaba `getByText("Carrito")` con dos coincidencias en vez de una (el e2e real del
+// camino dorado, no un caso hipotético). "Elegir productos" no comparte ninguna
+// palabra con el resto de los textos visibles de la pantalla.
+const PASOS_VENDER = ["Producto y peso", "Elegir productos", "Cobrado"];
 import { useSesion } from "../SesionCliente.tsx";
 import { puedeEntrar } from "../navegacion.ts";
 
@@ -210,6 +218,7 @@ export default function VenderPage() {
           </button>
         }
       >
+        <Pasos pasos={PASOS_VENDER} actual={0} />
         <p style={{ margin: 0, fontSize: 13, color: superficie.textoFaint }}>
           Disponible: {formatearKg(producto.stock_disponible_g)}
         </p>
@@ -236,6 +245,8 @@ export default function VenderPage() {
       titulo="Vender"
       accesorio={pendientes > 0 || !enLinea ? <ChipEstadoConexion pendientes={pendientes} online={enLinea} /> : undefined}
     >
+      <Pasos pasos={PASOS_VENDER} actual={ultimaVenta ? 2 : 1} />
+
       {cargandoProductos ? (
         <p style={{ color: superficie.textoDim, fontSize: 14 }}>Cargando catálogo…</p>
       ) : errorProductos ? (

@@ -52,9 +52,28 @@ export function Pantalla({
             <ChipOperador nombre={sesion.nombre} anchoMaximo={220} />
           </div>
         ) : null}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.15 }}>
+        {/* `flexWrap: "wrap"` + SIN `minWidth: 0` en el título: con un accesorio ancho
+            (el combo chip de conexión + «Cambiar» de /pesar en un teléfono de 375 px),
+            `minWidth: 0` deja que el título se encoja hasta casi nada y el texto —una
+            sola palabra, "Marraqueta", sin espacio donde partir— se desborda por encima
+            del accesorio en vez de recortarse. Verificado en el navegador: se veían
+            superpuestos. Sin `minWidth: 0`, el mínimo del título es el de su contenido
+            (la palabra completa); cuando eso más el accesorio no entran en una línea,
+            el accesorio cae a la siguiente en vez de aplastar el título. */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ flex: 1 }}>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: 28,
+                fontWeight: 800,
+                letterSpacing: "-0.02em",
+                lineHeight: 1.15,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
               {titulo}
             </h1>
             {bajada ? (
