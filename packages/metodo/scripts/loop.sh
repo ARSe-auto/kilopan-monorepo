@@ -79,6 +79,12 @@ Reglas duras:
 - Un AC = un commit, con su test naciendo en el mismo commit.
 - Corré 'bash packages/metodo/scripts/check.sh --full --app=${APP}' y NO hagas commit si
   no queda verde (arreglar lo que encuentres es parte del AC).
+- CITÁ el id del AC (${AC_ID}) en un comentario del código o del test que lo implementa.
+  Sin esa cita, 'verify-refs --estricto' ve un [x] sin respaldo y pone el gate
+  en ROJO — y ahí NINGÚN commit posterior puede pasar, ni el tuyo ni el de la iteración
+  siguiente: el motor queda girando en falso hasta que un humano lo destrabe. Pasó de
+  verdad el 26-jul-2026 con AC-ID-07. La cita no es burocracia: es lo que deja ir del
+  código al contrato y de vuelta.
 - Si el gate pasa, marcá el AC como [x] EN SU SPEC (specs/${APP}/) y en ${PLAN}, en el
   MISMO commit, con una nota breve de qué se probó.
 - Un AC no se marca [x] si todavía falta parte de él. Si quedó a medias, partilo: cerrá
