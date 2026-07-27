@@ -40,3 +40,13 @@ export function formatearFecha(fecha: Date): string {
   const aaaa = fecha.getFullYear();
   return `${dd}-${mm}-${aaaa}`;
 }
+
+/** Date -> "dd-mm-aaaa hh:mm". Para el historial de pesajes: la fecha sola no basta
+ *  cuando la pregunta es "¿a qué hora se pesó esto?" — el reloj de la panadería
+ *  arranca antes del amanecer y varias bandejas del mismo producto pueden caer el
+ *  mismo día. */
+export function formatearFechaHora(fecha: Date): string {
+  const hh = String(fecha.getHours()).padStart(2, "0");
+  const min = String(fecha.getMinutes()).padStart(2, "0");
+  return `${formatearFecha(fecha)} ${hh}:${min}`;
+}

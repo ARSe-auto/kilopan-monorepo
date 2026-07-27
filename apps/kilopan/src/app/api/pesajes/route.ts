@@ -3,6 +3,75 @@ import { obtenerDb } from "@/comun/db.ts";
 import { exigirRol } from "@/identidad/sesion.ts";
 import { esUuid } from "@/comun/validacion.ts";
 
+const LIMITE_DEFECTO = 30;
+const LIMITE_MAXIMO = 100;
+
+type FilaHistorial = Record<string, unknown> & {
+  id: string;
+  gramos: number;
+  destino: string;
+  motivo_merma: string | null;
+  foto_sha256: string | null;
+  foto_estado: string | null;
+  recibido_at: string;
+  producto_nombre: string;
+  maestro_nombre: string;
+};
+
+// Historial acumulativo de pesajes, con fecha, hora y foto (si la panadería la exige).
+// El maestro ve SIEMPRE el suyo, sin excepción — no hay parámetro que lo cambie: es su
+// propio registro de trabajo, no una vitrina del de los demás. El admin puede acotar a
+// un maestro (?usuarioId=) o ver la panadería entera (sin el parámetro).
+export async function GET(request: NextRequest) {
+  const sesion = await exigirRol(request, ["admin", "maestro"]);
+  if (sesion instanceof NextResponse) return sesion;
+
+  const params = request.nextUrl.searchParams;
+
+  let usuarioId: string | null = null;
+  if (sesion.rol === "maestro") {
+    usuarioId = sesion.usuarioId;
+  } else {
+    const solicitado = params.get("usuarioId");
+    if (solicitado) {
+      if (!esUuid(solicitado)) return NextResponse.json({ error: "usuarioId inválido" }, { status: 400 });
+      usuarioId = solicitado;
+    }
+  }
+
+  // Paginación por cursor sobre `recibido_at`, no por número de página: la lista crece
+  // todos los días y un OFFSET se vuelve más lento (y más inconsistente si algo se
+  // inserta entre medio) cuanto más atrás se pagina.
+  const cursor = params.get("antes");
+  if (cursor && Number.isNaN(Date.parse(cursor))) {
+    return NextResponse.json({ error: "El cursor 'antes' no es una fecha válida" }, { status: 400 });
+  }
+  const limiteCrudo = Number(params.get("limite") ?? LIMITE_DEFECTO);
+  const limite = Number.isFinite(limiteCrudo)
+    ? Math.min(Math.max(Math.trunc(limiteCrudo), 1), LIMITE_MAXIMO)
+    : LIMITE_DEFECTO;
+
+  const db = await obtenerDb();
+  const r = await db.query<FilaHistorial>(
+    `select pe.id, pe.gramos, pe.destino, pe.motivo_merma, pe.foto_sha256, pe.foto_estado,
+            pe.recibido_at, pr.nombre as producto_nombre, u.nombre as maestro_nombre
+       from pan.pesajes pe
+       join pan.productos pr on pr.id = pe.producto_id
+       join pan.usuarios u on u.id = pe.usuario_id
+      where ($1::uuid is null or pe.usuario_id = $1)
+        and ($2::timestamptz is null or pe.recibido_at < $2)
+      order by pe.recibido_at desc
+      limit $3`,
+    [usuarioId, cursor, limite]
+  );
+
+  // Hay más páginas si esta vino llena: si vino corta, el "límite" no se alcanzó a
+  // agotar y no queda nada más atrás que buscar.
+  const siguienteCursor = r.rows.length === limite ? r.rows[r.rows.length - 1]?.recibido_at ?? null : null;
+
+  return NextResponse.json({ pesajes: r.rows, siguienteCursor });
+}
+
 const MOTIVOS_MERMA = ["quemado", "sobrante_dia", "devolucion_cliente", "otro"] as const;
 
 // F1 Pesar (PROMPT_MAESTRO.md §5): ≤4 toques. client_uuid es la clave de idempotencia

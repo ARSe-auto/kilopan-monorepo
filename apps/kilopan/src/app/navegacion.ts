@@ -30,6 +30,7 @@ export interface Destino {
 export const DESTINOS_POR_ROL: Record<Rol, Destino[]> = {
   admin: [
     { href: "/pesar", etiqueta: "Pesaje", detalle: "Anotar las bandejas que salen del horno" },
+    { href: "/historial", etiqueta: "Historial de pesaje", detalle: "Lo pesado por cada maestro, con fecha, hora y foto" },
     { href: "/vender", etiqueta: "Venta mostrador", detalle: "Cobrar en el mesón" },
     { href: "/pedidos", etiqueta: "Despacho", detalle: "Pedidos de clientes y armar la ruta del furgón" },
     { href: "/caja", etiqueta: "Cierre de caja", detalle: "Contar la plata al final del turno" },
@@ -37,7 +38,10 @@ export const DESTINOS_POR_ROL: Record<Rol, Destino[]> = {
     { href: "/dashboard", etiqueta: "Panel del dueño", detalle: "Cómo va el día: kilos, ventas y pérdidas" },
     { href: "/admin", etiqueta: "Ajustes", detalle: "Personal, productos, precios y medios de pago" },
   ],
-  maestro: [{ href: "/pesar", etiqueta: "Pesaje", detalle: "Anotar las bandejas que salen del horno" }],
+  maestro: [
+    { href: "/pesar", etiqueta: "Pesaje", detalle: "Anotar las bandejas que salen del horno" },
+    { href: "/historial", etiqueta: "Mi historial", detalle: "Lo que has pesado, con fecha, hora y foto" },
+  ],
   vendedor: [
     { href: "/vender", etiqueta: "Venta mostrador", detalle: "Cobrar en el mesón" },
     { href: "/caja", etiqueta: "Cierre de caja", detalle: "Contar la plata al final del turno" },
@@ -139,10 +143,18 @@ export function tituloDeRuta(pathname: string): string {
 /** Pantallas sin sesión: no llevan barra (no hay tarea que seguir ni operador que nombrar). */
 export const RUTAS_SIN_BARRA = new Set(["/", "/ingresar", "/vincular"]);
 
-/** Dónde aterriza el operador al entrar. Un rol con una sola pantalla no tiene por qué
- *  pasar por un menú de un elemento para llegar a lo único que puede hacer: el maestro
- *  entra directo a pesar. Con dos o más, «Hoy» es quien decide y por eso ahí se aterriza. */
+/** A qué pantalla saltar de inmediato al entrar — explícito por rol, no derivado de
+ *  contar destinos. Antes decía "si el rol tiene una sola pantalla, entra directo a
+ *  ella": funcionaba mientras maestro y repartidor tuvieran exactamente un destino cada
+ *  uno, y se rompió en cuanto "Mi historial" les agregó un segundo — con el conteo,
+ *  ambos habrían empezado a aterrizar en «Hoy» aunque su trabajo principal sigue siendo
+ *  uno solo. El trabajo diario de cada rol no cambia porque se le sume una pantalla de
+ *  consulta secundaria. */
+const DESTINO_DE_INGRESO: Partial<Record<Rol, string>> = {
+  maestro: "/pesar",
+  repartidor: "/ruta",
+};
+
 export function destinoDeIngreso(rol: string): string {
-  const destinos = destinosDe(rol);
-  return destinos.length === 1 && destinos[0] ? destinos[0].href : "/inicio";
+  return DESTINO_DE_INGRESO[rol as Rol] ?? "/inicio";
 }
