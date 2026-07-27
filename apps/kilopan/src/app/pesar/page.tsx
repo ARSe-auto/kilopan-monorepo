@@ -16,6 +16,8 @@ import { enviarOEncolar, encolarFoto, iniciarSyncAutomatico } from "@/pod/outbox
 import { abrirCamara, capturar, cerrarCamara, subirFoto } from "@/comun/camara.ts";
 import { useSesion } from "../SesionCliente.tsx";
 import { puedeEntrar } from "../navegacion.ts";
+import { Pantalla } from "../Pantalla.tsx";
+import { SiguientePaso, type AccionSiguiente } from "../SiguientePaso.tsx";
 
 interface Producto {
   id: string;
@@ -79,6 +81,7 @@ export default function PesarPage() {
   // atajo a quien no puede entrar es mandarlo a un 302 hacia el login.
   const sesion = useSesion();
   const puedeDespachar = puedeEntrar(sesion?.rol, "/pedidos");
+  const puedeVender = puedeEntrar(sesion?.rol, "/vender");
   const [productos, setProductos] = useState<Producto[]>([]);
   const [errorCatalogo, setErrorCatalogo] = useState(false);
   const [productoId, setProductoId] = useState<string | null>(null);
@@ -104,6 +107,11 @@ export default function PesarPage() {
 
   const [pendientes, setPendientes] = useState(0);
   const enLinea = useEnLinea();
+  // Reemplaza la línea verde de éxito de antes: confirma qué se acaba de pesar y, solo
+  // cuando de verdad hay otra tarea a la que saltar (vender lo pesado, armar la ruta de
+  // un pedido que se completó), ofrece el atajo. Seguir pesando NO necesita botón: el
+  // teclado ya queda limpio y el producto sigue elegido — es el estado por defecto.
+  const [ultimoPesaje, setUltimoPesaje] = useState<{ texto: string; detalle?: string; acciones: AccionSiguiente[] } | null>(null);
 
   // AC-PES-04: lo prende el admin en /admin y no se puede apagar desde acá — ese es
   // el punto de la decisión #1. Se cachea junto al catálogo porque sin señal la
@@ -273,6 +281,13 @@ export default function PesarPage() {
     if (!producto) return;
     setEstado("enviando");
     setMensaje(null);
+    setUltimoPesaje(null);
+
+    // Snapshot de la línea de pedido ANTES de enviar: tras `limpiarParaElSiguiente` el
+    // efecto que refresca `lineasPedido` corre en segundo plano (petición de red), así
+    // que en el instante de armar la tarjeta todavía no hay dato fresco. El faltante se
+    // estima restando esta bandeja — se corrige solo en la próxima vuelta del efecto.
+    const lineaAlEnviar = destino === "reparto" ? lineasPedido.find((l) => l.linea_id === pedidoLineaId) : undefined;
 
     // Offline-first de verdad: `enviarOEncolar` intenta enviar y, si no hay red,
     // encola en IndexedDB (que sobrevive al cierre del navegador). El maestro nunca
@@ -300,30 +315,58 @@ export default function PesarPage() {
       return;
     }
 
-    setMensaje(
-      resultado.estado === "encolado" && resultado.motivo === "sesion_vencida"
-        ? {
-            // El pesaje quedó en la cola, pero no se sube hasta que el maestro vuelva
-            // a entrar. Antes el 401 se trataba como rechazo de negocio y la bandeja
-            // se DESCARTABA: kilos despachados que nunca entraban al sistema.
-            tipo: "error",
-            texto: `Pesado: ${formatearKg(gramosNum)} · ${producto.nombre} — tu sesión se cerró. Vuelve a entrar para que se suba.`,
-          }
-        : resultado.estado === "encolado" && resultado.motivo === "error_servidor"
-        ? {
-            // Antes esto se anunciaba igual que "sin señal", con el mismo verde de
-            // éxito — un 500 con buena señal es un problema real, no falta de cobertura.
-            tipo: "error",
-            texto: `Pesado: ${formatearKg(gramosNum)} · ${producto.nombre} — hubo un problema al guardarlo, se reintenta solo`,
-          }
-        : {
-            tipo: "ok",
-            texto:
-              resultado.estado === "encolado"
-                ? `Pesado sin señal: ${formatearKg(gramosNum)} · ${producto.nombre} — se sube solo`
-                : `Pesado: ${formatearKg(gramosNum)} · ${producto.nombre}`,
-          }
-    );
+    const esSesionVencida = resultado.estado === "encolado" && resultado.motivo === "sesion_vencida";
+    const esErrorServidor = resultado.estado === "encolado" && resultado.motivo === "error_servidor";
+
+    if (esSesionVencida) {
+      // El pesaje quedó en la cola, pero no se sube hasta que el maestro vuelva a
+      // entrar. Antes el 401 se trataba como rechazo de negocio y la bandeja se
+      // DESCARTABA: kilos despachados que nunca entraban al sistema.
+      setMensaje({
+        tipo: "error",
+        texto: `Pesado: ${formatearKg(gramosNum)} · ${producto.nombre} — tu sesión se cerró. Vuelve a entrar para que se suba.`,
+      });
+    } else if (esErrorServidor) {
+      // Antes esto se anunciaba igual que "sin señal", con el mismo verde de éxito —
+      // un 500 con buena señal es un problema real, no falta de cobertura.
+      setMensaje({
+        tipo: "error",
+        texto: `Pesado: ${formatearKg(gramosNum)} · ${producto.nombre} — hubo un problema al guardarlo, se reintenta solo`,
+      });
+    } else {
+      // Éxito de verdad (llegó al servidor, o quedó encolado solo por falta de señal):
+      // la tarjeta de siguiente paso reemplaza la línea verde de antes.
+      const detalle =
+        resultado.estado === "encolado" ? "Sin señal — se sube solo en cuanto vuelva la conexión." : undefined;
+      if (destino === "reparto" && lineaAlEnviar) {
+        const faltanteEstimado = Math.max(0, Number(lineaAlEnviar.gramos_faltantes) - gramosNum);
+        setUltimoPesaje(
+          faltanteEstimado <= 0
+            ? {
+                texto: `Pedido completo: ${lineaAlEnviar.razon_social}`,
+                detalle,
+                acciones: puedeDespachar ? [{ etiqueta: "Armar la ruta", href: "/pedidos" }] : [],
+              }
+            : {
+                texto: `Pesado: ${formatearKg(gramosNum)} · ${producto.nombre}`,
+                detalle: [detalle, `Faltan ${formatearKg(faltanteEstimado)} para ${lineaAlEnviar.razon_social}.`]
+                  .filter(Boolean)
+                  .join(" "),
+                acciones: [],
+              }
+        );
+      } else {
+        setUltimoPesaje({
+          texto:
+            destino === "merma"
+              ? `Registrado como merma: ${formatearKg(gramosNum)} · ${producto.nombre}`
+              : `Pesado: ${formatearKg(gramosNum)} · ${producto.nombre}`,
+          detalle,
+          acciones:
+            destino === "mostrador" && puedeVender ? [{ etiqueta: "Vender en el mesón", href: "/vender" }] : [],
+        });
+      }
+    }
     if (resultado.estado === "encolado") setPendientes((n) => n + 1);
     // Releer cuánto le falta al pedido. Solo si de verdad llegó al servidor: si quedó
     // encolado, el trigger que suma gramos_pesados todavía no corrió y refrescar
@@ -353,16 +396,16 @@ export default function PesarPage() {
 
   if (!producto) {
     return (
-      <main style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700 }}>Pesar</h1>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
+      <Pantalla titulo="Pesar">
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           {productos.map((p) => (
             <button
               key={p.id}
               type="button"
-              onClick={() => setProductoId(p.id)}
+              onClick={() => {
+                setUltimoPesaje(null);
+                setProductoId(p.id);
+              }}
               style={{
                 minHeight: 64,
                 borderRadius: 12,
@@ -382,7 +425,7 @@ export default function PesarPage() {
             {errorCatalogo ? "No se pudo cargar el catálogo. Revisa la conexión e inténtalo de nuevo." : "Cargando catálogo…"}
           </p>
         ) : null}
-      </main>
+      </Pantalla>
     );
   }
 
@@ -391,11 +434,7 @@ export default function PesarPage() {
   // galería como si fuera de esta bandeja (PROMPT_MAESTRO.md §7).
   if (estado === "foto") {
     return (
-      <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{producto.nombre}</h1>
-        <p style={{ margin: 0, color: superficie.textoDim, fontSize: 15 }}>
-          Foto de respaldo · {formatearKg(gramosNum)}
-        </p>
+      <Pantalla titulo={producto.nombre} bajada={`Foto de respaldo · ${formatearKg(gramosNum)}`}>
 
         <div style={{ position: "relative", aspectRatio: "3 / 4", borderRadius: 14, overflow: "hidden", background: "#000", border: `1px solid ${superficie.hairline}` }}>
           {stream ? (
@@ -424,36 +463,29 @@ export default function PesarPage() {
             Cancelar
           </BotonPrimario>
         </div>
-      </main>
+      </Pantalla>
     );
   }
 
   return (
-    <main
-      style={{
-        maxWidth: 480,
-        margin: "0 auto",
-        padding: 24,
-        display: "flex",
-        flexDirection: "column",
-        gap: 16,
-        flex: 1,
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{producto.nombre}</h1>
+    <Pantalla
+      titulo={producto.nombre}
+      accesorio={
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {pendientes > 0 || !enLinea ? <ChipEstadoConexion pendientes={pendientes} online={enLinea} /> : null}
           <button
             type="button"
-            onClick={() => setProductoId(null)}
+            onClick={() => {
+              setUltimoPesaje(null);
+              setProductoId(null);
+            }}
             style={{ minHeight: 44, minWidth: 44, padding: "0 12px", fontSize: 14, fontWeight: 700, color: superficie.textoDim, background: "none", border: "none" }}
           >
             Cambiar
           </button>
         </div>
-      </div>
-
+      }
+    >
       <div style={{ display: "flex", justifyContent: "center", padding: "8px 0" }}>
         <CifraGrande valor={kilos || "0"} unidad="kg" />
       </div>
@@ -461,10 +493,11 @@ export default function PesarPage() {
       <TecladoNumerico
         valor={kilos}
         onCambiar={(v) => {
-          // El mensaje de éxito del pesaje anterior se quedaba en pantalla mientras
-          // se tecleaba el peso de la SIGUIENTE bandeja — se podía confundir con la
-          // confirmación de la que está en curso, todavía sin enviar.
+          // El mensaje de éxito del pesaje anterior (ahora la tarjeta SiguientePaso) se
+          // quedaba en pantalla mientras se tecleaba el peso de la SIGUIENTE bandeja —
+          // se podía confundir con la confirmación de la que está en curso, sin enviar.
           if (mensaje) setMensaje(null);
+          if (ultimoPesaje) setUltimoPesaje(null);
           setKilos(v);
         }}
         permitirDecimal
@@ -614,9 +647,16 @@ export default function PesarPage() {
       ) : null}
 
       {mensaje ? (
-        <p role="status" style={{ color: mensaje.tipo === "ok" ? semantico.ok : semantico.error, fontSize: 14 }}>
+        <p role="alert" style={{ color: semantico.error, fontSize: 14 }}>
           {mensaje.texto}
         </p>
+      ) : null}
+
+      {/* La tarjeta que reemplaza la vieja línea verde: qué se acaba de pesar, y el
+          atajo a la tarea siguiente solo cuando de verdad hay una distinta a la de
+          seguir pesando (que ya está lista, sin botón, arriba). */}
+      {ultimoPesaje ? (
+        <SiguientePaso texto={ultimoPesaje.texto} detalle={ultimoPesaje.detalle} acciones={ultimoPesaje.acciones} />
       ) : null}
 
       {estado !== "confirmar_outlier" ? (
@@ -626,6 +666,6 @@ export default function PesarPage() {
           </BotonPrimario>
         </div>
       ) : null}
-    </main>
+    </Pantalla>
   );
 }
