@@ -6,7 +6,9 @@ import { test, expect } from "@playwright/test";
 test.describe("middleware de autorización", () => {
   test("una ruta protegida sin sesión redirige a /ingresar", async ({ page }) => {
     await page.goto("/caja");
-    await expect(page).toHaveURL(/\/ingresar$/);
+    // Con el motivo en la URL (?motivo=sin-sesion): /ingresar lo traduce a una frase
+    // en vez de dejar al operador en un login sin ninguna explicación.
+    await expect(page).toHaveURL(/\/ingresar\?motivo=sin-sesion$/);
   });
 
   test("/ingresar es pública y muestra el teclado de PIN", async ({ page }) => {

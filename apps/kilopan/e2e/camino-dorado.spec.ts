@@ -54,10 +54,14 @@ async function ingresar(page: Page, rol: keyof typeof datos.usuarios) {
 
   await teclear(page, datos.pin);
   await page.getByRole("button", { name: "Ingresar" }).click();
-  await expect(page).toHaveURL(/\/inicio$/);
-  // Esperar al menú y no solo a la URL: el push del router sigue en curso cuando la URL
-  // ya cambió, y un goto() inmediato lo interrumpe. Un e2e que arranca la navegación
-  // siguiente antes de que la anterior termine falla por sí mismo, no por la app.
+  // Un rol con una sola pantalla (maestro → Pesaje, repartidor → Mi ruta) entra DIRECTO
+  // a ella; admin y vendedor aterrizan en "Hoy" (destinoDeIngreso en navegacion.ts).
+  // Esperar a que la URL YA NO sea /ingresar —no fijar una sola— es lo único que vale
+  // para los cuatro roles a la vez, y evita que un goto() siguiente interrumpa la
+  // navegación con `window.location.assign` que el login todavía tiene en curso.
+  await expect(page).not.toHaveURL(/\/ingresar/, { timeout: 10_000 });
+  // Esperar a la tab bar y no solo a la URL: es lo que confirma que la pantalla de
+  // destino ya montó de verdad, con sesión y todo.
   await expect(page.getByRole("link").first()).toBeVisible();
 }
 
@@ -131,7 +135,9 @@ test("3 · el teclado acepta un PIN que empieza con cero", async ({ page }) => {
 // AC-POD-03: la foto se toma con getUserMedia in-app, nunca con <input type=file>.
 test("4 · el maestro pesa la hornada y el pan entra al stock del mesón", async ({ page }) => {
   await ingresar(page, "maestro");
-  await irA(page, /Pesaje/);
+  // El maestro ya entra DIRECTO a Pesaje: un rol de una sola pantalla no pasa por un
+  // menú de una opción para llegar a ella (destinoDeIngreso en navegacion.ts).
+  await expect(page).toHaveURL(/\/pesar$/);
 
   await fichaProducto(page, "Marraqueta").click();
   await teclear(page, "12");
@@ -241,7 +247,8 @@ test("8 · el repartidor entrega el pedido con foto y GPS", async ({ page }) => 
   });
 
   await ingresar(page, "repartidor");
-  await irA(page, /Mi ruta/);
+  // El repartidor ya entra DIRECTO a Mi ruta, mismo motivo que el maestro arriba.
+  await expect(page).toHaveURL(/\/ruta$/);
   await expect(page.getByRole("heading", { name: "Mi ruta" })).toBeVisible();
   await expect(page.getByText(datos.cliente.razonSocial)).toBeVisible({ timeout: 15_000 });
 

@@ -32,9 +32,8 @@ test("la grilla de /pesar ordena por frecuencia real de pesaje, no alfabético",
     await page.getByRole("button", { name: caracter, exact: true }).click();
   }
   await page.getByRole("button", { name: "Ingresar" }).click();
-  await expect(page).toHaveURL(/\/inicio$/);
-
-  await page.getByRole("link", { name: /Pesaje/ }).click();
+  // El maestro tiene una sola pantalla y entra DIRECTO a ella (destinoDeIngreso en
+  // navegacion.ts): pasar por "Hoy" para elegir entre una única opción no decide nada.
   await expect(page).toHaveURL(/\/pesar$/);
 
   const nombresConocidos = ["Marraqueta", "Hallulla", "Frica", "Dobladitas", "Integral"];
