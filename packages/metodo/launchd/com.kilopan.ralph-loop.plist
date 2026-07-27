@@ -15,23 +15,42 @@
   <key>Label</key>
   <string>com.kilopan.ralph-loop</string>
 
+  <!-- El token se LEE del archivo en tiempo de ejecución; no se copia acá. Así el secreto
+       vive en un solo lugar, con sus permisos 600, y este plist se puede versionar sin
+       filtrar nada. Si el archivo falta o está vacío, sale con 78 (EX_CONFIG) en vez de
+       arrancar un motor que fallaría en cada iteración. -->
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>REEMPLAZAR_RAIZ/packages/metodo/scripts/watchdog.sh</string>
+    <string>-c</string>
+    <string>set -e; T="$(cat "$HOME/.claude-oauth-token")"; [ -n "$T" ] || exit 78; export CLAUDE_CODE_OAUTH_TOKEN="$T"; exec bash "REEMPLAZAR_RAIZ/packages/metodo/scripts/watchdog.sh"</string>
   </array>
 
   <key>WorkingDirectory</key>
   <string>REEMPLAZAR_RAIZ</string>
 
   <!-- El PATH de launchd NO es el de la terminal. watchdog.sh aborta si `claude` o
-       `pnpm` no resuelven — así se perdieron ~15 h en eauto-crm-next. -->
+       `pnpm` no resuelven — así se perdieron ~15 h en eauto-crm-next.
+
+       HOME explícito: sin él, `claude` no encuentra su configuración bajo launchd.
+
+       La credencial va por `CLAUDE_CODE_OAUTH_TOKEN` (ver ProgramArguments arriba), que
+       es la variable que `claude` realmente lee — el token lo genera `claude setup-token`.
+       La primera versión de este plist inventaba `CLAUDE_CODE_OAUTH_TOKEN_FILE`, que no
+       existe, y el motor moría en cada iteración con «Not logged in · Please run /login».
+       El síntoma engañaba: el gate corría VERDE, el loop elegía el AC, y recién ahí
+       fallaba — parecía cosa del builder y era de la credencial.
+
+       Ojo con el precedente: `com.eauto.ralph-loop` NO sirve de modelo para esto. Figura
+       cargado pero con pid `-` (no corre); el motor de eauto que sí avanza se arrancó a
+       mano desde una terminal, heredando una sesión ya autenticada. Ningún agente de
+       launchd de esta máquina se autenticaba hasta ahora. -->
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
     <string>REEMPLAZAR_HOME/.local/lib/nodejs/current/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
-    <key>CLAUDE_CODE_OAUTH_TOKEN_FILE</key>
-    <string>REEMPLAZAR_HOME/.claude-oauth-token</string>
+    <key>HOME</key>
+    <string>REEMPLAZAR_HOME</string>
   </dict>
 
   <!-- KeepAlive solo ante fallo: si el watchdog termina limpio (DONE, o tope de

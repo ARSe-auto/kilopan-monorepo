@@ -10,6 +10,48 @@ el aprendizaje contradice lo que creíamos. **Qué NO va:** el estado del plan (
 
 ---
 
+## 2026-07-26 (cierre) · Motor 24/7 cargado (casilla 14) y panel apuntando a `specs/` (casilla 16)
+
+**Casilla 16 — fuente de verdad del panel.** `panel/generar.mjs` contaba ACs desde
+`IMPLEMENTATION_PLAN.md`, que es desechable: el planner lo regenera desde cero, así que
+bastaba que lo reescribiera para que el porcentaje saltara sin haberse construido nada. Y
+fue justo un plan mal regenerado —0 abiertos, con 22 ACs enterrados dentro de ítems `[x]`—
+el que dejó al motor detenido creyendo que había terminado. Un panel que lee el archivo que
+mintió repite la mentira. Ahora lee `specs/<app>/`, el contrato durable, agrupando por spec
+y acumulando el bloque completo de cada ítem (envuelven varias líneas y el id queda en la
+última). Verificado: 61/77, idéntico al conteo directo, sin ítems sin id.
+
+**Casilla 14 — el motor sobrevive a la sesión.** Cargado y **construyendo**: tomó
+`AC-ID-07` y escribió `ChipOperador.tsx` y `EncabezadoConOperador.tsx`. Dos obstáculos, y
+ninguno se anunciaba como lo que era:
+
+1. **El repo estaba en `~/Documents`.** macOS (TCC) le niega a los agentes de launchd el
+   acceso a esa carpeta. El agente cargaba «bien» —`launchctl list` con pid y estado 0— y
+   moría al instante con `Operation not permitted`, sin una línea de stdout. El repo se
+   movió a `~/kilopan-monorepo` (respaldo previo en `git bundle`, 4 worktrees reparados con
+   `git worktree repair`). **No devolverlo a Documents.**
+2. **La credencial iba por una variable inexistente.** El plist apuntaba
+   `CLAUDE_CODE_OAUTH_TOKEN_FILE`; la que `claude` lee es `CLAUDE_CODE_OAUTH_TOKEN`. El
+   motor moría en cada iteración con «Not logged in». Ahora el token se lee de
+   `~/.claude-oauth-token` en tiempo de ejecución, sin copiarlo dentro del plist.
+
+**Aprendizajes:**
+
+1. **«Cargado» no es «corriendo», y «corriendo» no es «autenticado».** El agente pasó por
+   los tres estados aparentando estar bien: `launchctl list` mostraba pid y estado 0
+   mientras moría por permisos; después arrancaba y corría el gate en VERDE mientras cada
+   iteración fallaba por credencial. Cada capa daba señal verde sobre la de abajo rota.
+2. **El precedente que parecía probado no lo estaba.** Se copió el plist de eauto por ser
+   «el que lleva meses funcionando». Figura cargado con pid `-`: no corre. El motor de
+   eauto que sí avanza se arrancó a mano desde una terminal, heredando una sesión ya
+   autenticada. Ningún launchd de esta máquina se había autenticado nunca. Verificar que el
+   modelo funciona **antes** de copiarlo, no después de que falle.
+3. **Un gate verde no dice nada sobre si el motor puede construir.** `gate_specs` y
+   `verify-refs` corrían en VERDE y el loop elegía su AC; el fallo aparecía recién al
+   invocar al builder. Son capas independientes y hay que verificarlas por separado.
+
+---
+
 ## 2026-07-26 (noche) · RESUELTO: la cookie de sesión salía `Secure` sobre `http://`
 
 **Causa raíz.** `OPCIONES_COOKIE` decidía el atributo `Secure` con

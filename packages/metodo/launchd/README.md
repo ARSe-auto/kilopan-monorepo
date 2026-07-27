@@ -3,17 +3,36 @@
 Casilla 14 del prevuelo. Sin esto, el motor muere al cerrar el portátil o la terminal, y
 «construir de noche» depende de que nadie toque nada.
 
-## ⚠️ Estos plists NO están cargados, a propósito
+## Estado: CARGADO desde el 26-jul-2026 (casilla 14 cerrada)
 
-Cargarlos **arranca el builder autónomo de KiloPan**, que consume la ventana OAuth. Y esa
-ventana es una sola: §8 del maestro fija **un solo motor OAuth a la vez**, y el Anexo C
-fija el orden *KiloPan hasta DONE → extracción a `nucleo-*` → `apps/flota`*.
+El motor de KiloPan corre bajo launchd y sobrevive a la sesión, la terminal y el reinicio.
+Comprobar con `launchctl list | grep kilopan`: un pid numérico = corriendo.
 
-Al 26-jul-2026 el motor de `eauto-crm-next` está corriendo bajo su propio launchd. Cargar
-este sin apagar aquel pone dos motores a competir por la misma ventana: ambos avanzan más
-lento y el panel de consumo deja de significar nada.
+Sigue vigente que §8 del maestro fija **un solo motor OAuth a la vez**, y el Anexo C el
+orden *KiloPan hasta DONE → extracción a `nucleo-*` → `apps/flota`*. Al cargarlo, el motor
+de `eauto-crm-next` seguía andando —arrancado a mano, ver abajo— y los dos comparten la
+misma credencial. Apagar uno es decisión del dueño, no del arnés.
 
-**Decisión del dueño, no del arnés.** Por eso quedan escritos y sin cargar.
+## Dos cosas que costaron caro y no son obvias
+
+**1. El repo NO puede vivir en `~/Documents`.** macOS (TCC) le niega a los agentes de
+launchd el acceso a `~/Documents`, `~/Desktop` y `~/Downloads`. Con el repo ahí, el agente
+cargaba «bien» —`launchctl list` mostraba pid y estado 0— y moría al instante con
+`Operation not permitted` en el stderr, sin una sola línea de stdout. Por eso el repo se
+movió a `~/kilopan-monorepo`. **No lo devuelvas a Documents.**
+
+**2. La credencial va por `CLAUDE_CODE_OAUTH_TOKEN`**, que es la variable que `claude` lee
+de verdad. El token lo genera `claude setup-token`, se guarda en `~/.claude-oauth-token`
+(permisos 600) y el plist lo lee **en tiempo de ejecución**, nunca copiado adentro, para
+que este archivo se pueda versionar sin filtrar un secreto. La primera versión inventó una
+variable inexistente (`CLAUDE_CODE_OAUTH_TOKEN_FILE`) y el motor moría en cada iteración
+con «Not logged in · Please run /login». **El síntoma engañaba:** el gate corría VERDE, el
+loop elegía su AC, y recién ahí fallaba — parecía cosa del builder y era de la credencial.
+
+**No tomes `com.eauto.ralph-loop` como modelo.** Figura cargado pero con pid `-`, o sea
+que NO corre; el motor de eauto que sí avanza se arrancó a mano desde una terminal,
+heredando una sesión ya autenticada. Hasta ahora ningún agente de launchd de esta máquina
+se había autenticado nunca: el precedente que parecía probado no lo estaba.
 
 ## Instalar
 
