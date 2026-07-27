@@ -1,15 +1,25 @@
 #!/usr/bin/env node
-// Panel de control y monitoreo — lee SOLO estado verificable (git, IMPLEMENTATION_PLAN.md,
-// el log del último check.sh). Nunca "proceso vivo" como prueba de avance — ver
+// Panel de control y monitoreo — lee SOLO estado verificable (git, specs/<app>/, el log
+// del último check.sh). Nunca "proceso vivo" como prueba de avance — ver
 // docs/LECCION_RALPH.md. Diseñado para correr una vez o en loop (`--watch`).
+//
+// Casilla 16 del prevuelo: el conteo sale de `specs/<app>/`, que es el contrato DURABLE,
+// y NO de `IMPLEMENTATION_PLAN.md`, que es desechable — el planner lo regenera desde cero
+// cada vez. Con la fuente vieja el panel medía avance contra un archivo que cambia solo:
+// bastaba que el planner reescribiera el plan para que el porcentaje saltara sin que se
+// hubiera construido nada. Peor todavía, fue justo un plan mal regenerado —que reportaba
+// 0 abiertos con 22 ACs enterrados dentro de ítems `[x]`— el que dejó al motor detenido
+// creyendo que había terminado (ver docs/BITACORA.md, 26-jul-2026). Un panel que lee el
+// mismo archivo que mintió repite la mentira.
 import { execSync } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, statSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, basename } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..", "..");
-const PLAN = join(ROOT, "IMPLEMENTATION_PLAN.md");
+const APP = (process.argv.find((a) => a.startsWith("--app=")) ?? "--app=kilopan").slice(6);
+const SPECS = join(ROOT, "specs", APP);
 const OUT_HTML = join(HERE, "index.html");
 const OUT_JSON = join(HERE, "estado.json");
 const CHECK_LOG = join(HERE, "ultimo-check.log");
@@ -25,30 +35,58 @@ function sh(cmd, fallback = "") {
 }
 
 function leerPlan() {
-  if (!existsSync(PLAN)) return { hitos: [], abiertos: 0, cerrados: 0 };
-  const texto = readFileSync(PLAN, "utf8");
-  const lineas = texto.split("\n");
+  if (!existsSync(SPECS)) return { hitos: [], abiertos: 0, cerrados: 0, fuente: SPECS };
+  const archivos = readdirSync(SPECS)
+    .filter((f) => f.endsWith(".md") && f.toLowerCase() !== "readme.md")
+    .sort();
+
   const hitos = [];
-  let actual = null;
-  const acRe = /^- \[( |x)\] \((P[0-9](?:-[A-Z]+)?)\)\s+(.*?)(?:\s+\[([A-Z0-9-]+)\])?$/;
-  for (const linea of lineas) {
-    const hitoMatch = linea.match(/^## (Hito .+|Endurecimiento transversal.*)/);
-    if (hitoMatch) {
-      actual = { titulo: hitoMatch[1], abiertos: 0, cerrados: 0, items: [] };
-      hitos.push(actual);
-      continue;
+  for (const archivo of archivos) {
+    const texto = readFileSync(join(SPECS, archivo), "utf8");
+    const lineas = texto.split("\n");
+    // El título del spec es su encabezado `# NN — Título`; si faltara, el nombre del
+    // archivo sirve igual y el panel no se cae por un spec a medio escribir.
+    const titulo = (lineas.find((l) => l.startsWith("# ")) ?? `# ${basename(archivo, ".md")}`)
+      .replace(/^#\s*/, "")
+      .trim();
+    const grupo = { titulo, abiertos: 0, cerrados: 0, items: [] };
+
+    // Un ítem ENVUELVE varias líneas (la continuación va indentada), y el id `[AC-…]`
+    // suele quedar en la última. Contar línea por línea perdía casi todos los ítems y
+    // dejaba el id vacío: hay que acumular el bloque hasta el próximo `- [` o encabezado.
+    let bloque = null;
+    const cerrarBloque = () => {
+      if (!bloque) return;
+      const texto = bloque.lineas.join(" ").replace(/\s+/g, " ").trim();
+      const ac = texto.match(/\[(AC-[A-Z0-9]+-[0-9]+)\]/)?.[1] ?? "";
+      const prioridad = texto.match(/^\((P[0-9](?:-[A-Z]+)?)\)/)?.[1] ?? "";
+      grupo.items.push({ cerrado: bloque.cerrado, prioridad, ac, descripcion: texto });
+      bloque.cerrado ? grupo.cerrados++ : grupo.abiertos++;
+      bloque = null;
+    };
+
+    for (const linea of lineas) {
+      const inicio = linea.match(/^- \[( |x)\]\s*(.*)$/);
+      if (inicio) {
+        cerrarBloque();
+        bloque = { cerrado: inicio[1] === "x", lineas: [inicio[2]] };
+        continue;
+      }
+      if (/^#{1,6}\s/.test(linea)) {
+        cerrarBloque();
+        continue;
+      }
+      if (bloque && linea.trim()) bloque.lineas.push(linea.trim());
+      else if (bloque && !linea.trim()) cerrarBloque();
     }
-    const m = linea.match(acRe);
-    if (m && actual) {
-      const cerrado = m[1] === "x";
-      const [, , prioridad, descripcion, ac] = m;
-      actual.items.push({ cerrado, prioridad, descripcion, ac: ac ?? "" });
-      cerrado ? actual.cerrados++ : actual.abiertos++;
-    }
+    cerrarBloque();
+
+    if (grupo.items.length) hitos.push(grupo);
   }
+
   const abiertos = hitos.reduce((s, h) => s + h.abiertos, 0);
   const cerrados = hitos.reduce((s, h) => s + h.cerrados, 0);
-  return { hitos, abiertos, cerrados };
+  return { hitos, abiertos, cerrados, fuente: `specs/${APP}/` };
 }
 
 function leerGit() {
@@ -177,10 +215,10 @@ function render(estado) {
   </div>
   <p class="note">${esc(cuelgue.detalle)} — el conteo de commits y de ACs manda siempre sobre si el proceso está vivo (ver docs/LECCION_RALPH.md).</p>
 
-  <h2>Avance por hito</h2>
+  <h2>Avance por spec</h2>
   <table>
-    <thead><tr><th>Hito</th><th>ACs</th><th>Barra</th><th>%</th></tr></thead>
-    <tbody>${filasHitos || '<tr><td colspan="4">Sin hitos leídos de IMPLEMENTATION_PLAN.md todavía.</td></tr>'}</tbody>
+    <thead><tr><th>Spec</th><th>ACs</th><th>Barra</th><th>%</th></tr></thead>
+    <tbody>${filasHitos || '<tr><td colspan="4">Sin ACs leídos de specs/ todavía.</td></tr>'}</tbody>
   </table>
 
   <h2>Últimos commits</h2>
