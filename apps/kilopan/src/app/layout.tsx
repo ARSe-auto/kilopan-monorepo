@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import { superficie } from "@kilopan/miga/tokens.ts";
 import { RegistrarSW } from "./RegistrarSW.tsx";
 import { InterceptarSesionVencida } from "./InterceptarSesionVencida.tsx";
+import { EncabezadoConOperador } from "./EncabezadoConOperador.tsx";
 
 export const metadata: Metadata = {
   title: "KiloPan",
@@ -49,6 +51,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           minHeight: "100dvh",
         }}
       >
+        <div style={{ position: "fixed", top: 12, right: 12, zIndex: 9999 }}>
+          <Suspense>
+            <EncabezadoConOperador />
+          </Suspense>
+        </div>
         {children}
         <RegistrarSW />
         <InterceptarSesionVencida />

@@ -30,11 +30,12 @@ cambio de operador por PIN — el equipo vive en un local, no se elige a mano.
       relevo atómico y auditado (evento `operador_relevado`). Bug real encontrado
       probando el login: el EXCLUDE impedía que el vendedor tomara la tablet que dejó el
       maestro y devolvía 500 [AC-ID-06]
-- [ ] (P1) Chip con el nombre del operador **siempre visible** en cada pantalla, como
+- [x] (P1) Chip con el nombre del operador **siempre visible** en cada pantalla, como
       exige §5 F5. Hoy el relevo funciona pero el chip no existe: quien pesa no puede
       confirmar de un vistazo bajo qué identidad está escribiendo. Test: recorrer las
       rutas de operación con sesión abierta y fallar si alguna no muestra el nombre
-      [AC-ID-07]
+      [AC-ID-07] — chip fijo en top-right de todas las pantallas, renderizado por
+      Server Component con la sesión actual
 
 ## Notas de implementación
 

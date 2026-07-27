@@ -278,7 +278,7 @@ verificarlos uno por uno **leyendo el código, no grepeando** —un grep no dist
 pantalla de un comentario que la menciona— 7 ya estaban construidos y 2 estaban a medias.
 Quedan 16 reales. Cada AC cerrado hoy lleva su cita en el archivo que lo implementa.
 
-- [ ] (P1) Chip con el nombre del operador **siempre visible** en cada pantalla, como exige §5 F5. Hoy el relevo funciona pero el chip no existe: quien pesa no puede confirmar de un vistazo baj… — spec: `specs/kilopan/01-identidad.md` [AC-ID-07]
+- [x] (P1) Chip con el nombre del operador **siempre visible** en cada pantalla, como exige §5 F5. Hoy el relevo funciona pero el chip no existe: quien pesa no puede confirmar de un vistazo baj… — spec: `specs/kilopan/01-identidad.md` [AC-ID-07]
 - [ ] (P1) Orden de productos **por frecuencia real** de pesaje, no alfabético como hoy. §5 F1 lo exige para que repetir producto cueste 2 toques. Requiere trackear frecuencia. Test: sembrar fr… — spec: `specs/kilopan/02-catalogo-pesaje.md` [AC-PES-07]
 - [ ] (P1) F3 Cargar van: contador N/M en 96 px, escáner de cámara full-screen con linterna (48 px, alcanzable con pulgar — madrugada real), lectura válida = beep + vibración, duplicada = tono … — spec: `specs/kilopan/04-despacho-reparto.md` [AC-DES-04]
 - [ ] (P1) Escaneo del TED con zxing-js como mejora progresiva. La captura MANUAL —el camino primario en iOS según §7— ya existe: panel «Registrar documento del SII» en `/pedidos`. Falta solo e… — spec: `specs/kilopan/06-registro-dte.md` [AC-DTE-03]

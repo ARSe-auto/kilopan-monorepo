@@ -34,6 +34,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ productos: r.rows });
   }
 
+  // AC-PES-07 (§5 F1): la grilla de /pesar ordena por frecuencia REAL de pesaje —
+  // repetir el producto de siempre cuesta 2 toques solo si ese producto está arriba.
+  // El conteo es histórico completo (no una ventana): un pan que se pesa todos los
+  // días acumula más pesajes que uno que se pesa una vez al mes, y el orden lo refleja
+  // solo. Empate (incluido 0 pesajes, p.ej. un producto recién dado de alta) cae a
+  // alfabético para que la grilla no "baile" sin motivo entre cargas.
   const r = await db.query<{
     id: string;
     nombre: string;
@@ -47,8 +53,13 @@ export async function GET(request: NextRequest) {
              order by vigente_desde desc limit 1) as precio_mostrador_clp,
            pan.stock_disponible(p.id) as stock_disponible_g
       from pan.productos p
+      left join (
+        select producto_id, count(*) as frecuencia
+          from pan.pesajes
+         group by producto_id
+      ) f on f.producto_id = p.id
      where p.activo
-     order by p.nombre
+     order by coalesce(f.frecuencia, 0) desc, p.nombre
   `);
   return NextResponse.json({ productos: r.rows });
 }

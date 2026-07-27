@@ -113,6 +113,23 @@ await db.query(
 // el control antifraude de verdad, y el que además cubre la cámara in-app.
 await db.query(`update pan.parametros set valor = 1 where clave = 'pesaje_foto_obligatoria'`);
 
+// AC-PES-07: frecuencias desiguales para que la grilla de /pesar tenga algo real que
+// ordenar. Frica (10) > Hallulla (5) > el resto (0, sin sembrar) — bien lejos de
+// cualquier incidental +1 que deje un pesaje real hecho durante el propio e2e, para que
+// el test de orden no dependa de en qué momento corra respecto de los demás specs.
+async function sembrarPesajes(nombreProducto, cantidad) {
+  for (let i = 0; i < cantidad; i++) {
+    await db.query(
+      `insert into pan.pesajes
+         (client_uuid, producto_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+       values (gen_random_uuid(), $1, 1000, 'mostrador', $2, $3, now())`,
+      [productos[nombreProducto], usuarios.admin.id, dispositivo.id]
+    );
+  }
+}
+await sembrarPesajes("Frica", 10);
+await sembrarPesajes("Hallulla", 5);
+
 await db.query(`delete from pan.sesiones_operador`);
 
 const datos = {
