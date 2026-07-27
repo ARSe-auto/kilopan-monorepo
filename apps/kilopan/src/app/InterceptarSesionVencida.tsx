@@ -24,7 +24,9 @@ export function InterceptarSesionVencida() {
       const url = input instanceof Request ? input.url : String(input);
       const pathname = new URL(url, window.location.origin).pathname;
       if (respuesta.status === 401 && metodo === "GET" && pathname.startsWith("/api/") && pathname !== "/api/auth/me") {
-        window.location.assign("/ingresar");
+        // Con motivo: la pantalla de ingreso explica por qué apareció. Sin él, la app
+        // parecía botar al operador a la nada en mitad de una bandeja.
+        window.location.assign("/ingresar?motivo=vencida");
       }
       return respuesta;
     };

@@ -6,7 +6,6 @@ import { BotonPrimario } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico } from "@kilopan/miga/tokens.ts";
 import { formatearClp, parsearClp } from "@/comun/formato.ts";
 import { compartir, sePuedeCompartir } from "@/comun/compartir.ts";
-import { VolverInicio } from "../VolverInicio.tsx";
 
 // esperado_clp es OPCIONAL a propósito: el servidor NO se lo manda a quien vende
 // (conteo a ciegas). Solo el admin lo recibe. Ver api/cierre-caja GET.
@@ -83,7 +82,6 @@ export default function CajaPage() {
     <main style={{ maxWidth: 520, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
         <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>Cierre de caja</h1>
-        <VolverInicio />
       </div>
       {/* Conteo A CIEGAS (hallazgo ALTA del red-team): antes cada fila mostraba
           "esperado $145.000" ANTES de declarar nada. El vendedor que sacó plata

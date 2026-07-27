@@ -77,19 +77,43 @@ export interface LectorCookies {
   get: (nombre: string) => { value: string } | undefined;
 }
 
+/** Por qué NO hay sesión. Existe para que la pantalla de ingreso pueda decir la verdad
+ *  en vez de aparecer en blanco: hasta acá, una sesión caída botaba al operador a
+ *  /ingresar sin una sola palabra de explicación, y desde el lado del mesón eso se lee
+ *  como que la app se rompió. Se distinguen los tres casos porque la acción del panadero
+ *  es distinta en cada uno (volver a entrar / avisar que le tomaron el RUT / vincular). */
+export type MotivoSinSesion =
+  /** Nunca hubo cookie: entrada directa a una URL protegida, o primera vez. */
+  | "sin-sesion"
+  /** Había sesión viva y se cerró sola por 10 min de inactividad (AC-ID-05). */
+  | "vencida"
+  /** La cookie existe pero la sesión ya no está abierta: alguien entró con el mismo RUT
+   *  en otro equipo (AC-ID-04), pasaron las 12 h de tope duro, o se cerró desde otro lado. */
+  | "cerrada";
+
+export type ResultadoSesion =
+  | { sesion: SesionActual; motivo: null }
+  | { sesion: null; motivo: MotivoSinSesion };
+
 /** Lee la cookie, valida contra sesiones_operador (fin IS NULL) y trae el usuario.
  *  Devuelve null si no hay sesión viva — nunca lanza, para que cada ruta decida qué
  *  hacer (401 la mayoría, pero el login mismo también consulta esto). */
 export async function obtenerSesionActual(origen: { cookies: LectorCookies }): Promise<SesionActual | null> {
+  return (await obtenerSesionOMotivo(origen)).sesion;
+}
+
+/** Igual que `obtenerSesionActual`, pero dice POR QUÉ no hay sesión. Lo usan las pantallas
+ *  que redirigen a /ingresar, para pasarle el motivo y que se pueda explicar. */
+export async function obtenerSesionOMotivo(origen: { cookies: LectorCookies }): Promise<ResultadoSesion> {
   const sesionId = origen.cookies.get(NOMBRE_COOKIE)?.value;
-  if (!sesionId) return null;
+  if (!sesionId) return { sesion: null, motivo: "sin-sesion" };
   // Una cookie que NO es un uuid es exactamente lo mismo que no tener sesión. Sin
   // este chequeo el valor crudo llegaba a `where s.id = $1` sobre una columna uuid y
   // Postgres lanzaba "invalid input syntax for type uuid": esta función promete
   // "nunca lanza — devuelve null si no hay sesión viva", y esa promesa se rompía.
   // Efecto real (red-team): cualquiera SIN sesión tumbaba con HTTP 500 y cuerpo
   // vacío TODAS las rutas protegidas mandando `Cookie: kp_sesion=fantasma`.
-  if (!esUuid(sesionId)) return null;
+  if (!esUuid(sesionId)) return { sesion: null, motivo: "sin-sesion" };
 
   const db = await obtenerDb();
   const r = await db.query<{
@@ -112,7 +136,7 @@ export async function obtenerSesionActual(origen: { cookies: LectorCookies }): P
     [sesionId]
   );
   const fila = r.rows[0];
-  if (!fila) return null;
+  if (!fila) return { sesion: null, motivo: "cerrada" };
 
   // AC-ID-05: auto-bloqueo a los 10 min de inactividad, validado EN EL SERVIDOR.
   // Un cliente adulterado simplemente no llamaría al cierre por su cuenta, así que
@@ -122,16 +146,19 @@ export async function obtenerSesionActual(origen: { cookies: LectorCookies }): P
   ]);
   if (expirada.rows[0]?.expirada) {
     await db.query(`update pan.sesiones_operador set fin = now() where id = $1 and fin is null`, [sesionId]);
-    return null;
+    return { sesion: null, motivo: "vencida" };
   }
   await db.query(`select pan.tocar_sesion($1)`, [sesionId]);
 
   return {
-    sesionId: fila.sesion_id,
-    usuarioId: fila.usuario_id,
-    dispositivoId: fila.dispositivo_id,
-    nombre: fila.nombre,
-    rol: fila.rol,
+    sesion: {
+      sesionId: fila.sesion_id,
+      usuarioId: fila.usuario_id,
+      dispositivoId: fila.dispositivo_id,
+      nombre: fila.nombre,
+      rol: fila.rol,
+    },
+    motivo: null,
   };
 }
 

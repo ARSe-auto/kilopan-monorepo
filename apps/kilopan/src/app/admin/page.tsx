@@ -4,7 +4,6 @@ import { BotonPrimario, SelectorUnToque, Copyright } from "@kilopan/miga/compone
 import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
 import { formatearClp, parsearClp } from "@/comun/formato.ts";
 import { validaRut } from "@/comun/valida_rut.ts";
-import { VolverInicio } from "../VolverInicio.tsx";
 
 interface Parametro { clave: string; valor: number; descripcion: string }
 interface Usuario { id: string; nombre: string; rut: string; rol: string; activo: boolean }
@@ -62,7 +61,6 @@ export default function AdminPage() {
     <main style={{ maxWidth: 620, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
         <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>Ajustes</h1>
-        <VolverInicio />
       </div>
 
       {foto ? (

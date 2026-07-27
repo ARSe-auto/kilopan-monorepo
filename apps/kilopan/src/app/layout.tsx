@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Suspense } from "react";
+import { cookies } from "next/headers";
 import { superficie } from "@kilopan/miga/tokens.ts";
+import { obtenerSesionActual } from "@/identidad/sesion.ts";
 import { RegistrarSW } from "./RegistrarSW.tsx";
 import { InterceptarSesionVencida } from "./InterceptarSesionVencida.tsx";
-import { EncabezadoConOperador } from "./EncabezadoConOperador.tsx";
+import { ProveedorSesion } from "./SesionCliente.tsx";
+import { BarraApp } from "./BarraApp.tsx";
 
 export const metadata: Metadata = {
   title: "KiloPan",
@@ -27,15 +29,21 @@ const pilaTipografica =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 
 // El único CSS global de la app. `box-sizing: border-box` no es preferencia de estilo:
-// sin él, las pantallas que combinan `minHeight: 100dvh` con `padding: 24` miden
-// 100dvh + 48px, y el botón principal —«Confirmar» en Pesar, «Ingresar», «Confirmar
-// entrega»— queda parcialmente bajo el pliegue. Medido en un iPhone de 812px: el botón
-// terminaba en 836. Obliga a hacer scroll para completar la acción más frecuente de
-// la app, con las manos enharinadas. Encontrado recién al mirar el despliegue real en
-// viewport de teléfono; en el escritorio no se nota nunca.
+// sin él, las pantallas que combinan alto completo con `padding: 24` miden 100dvh + 48px,
+// y el botón principal —«Confirmar» en Pesar, «Ingresar», «Confirmar entrega»— queda
+// parcialmente bajo el pliegue. Medido en un iPhone de 812px: el botón terminaba en 836.
+// Obliga a hacer scroll para completar la acción más frecuente de la app, con las manos
+// enharinadas. Encontrado recién al mirar el despliegue real en viewport de teléfono; en
+// el escritorio no se nota nunca.
 const RESET_GLOBAL = `*,*::before,*::after{box-sizing:border-box}`;
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // La sesión se lee UNA vez acá, en el servidor, desde la cookie HttpOnly. La barra y el
+  // menú la necesitan en todas las pantallas; bajarla por contexto evita que cada pantalla
+  // de cliente tenga que pedir /api/auth/me por su cuenta.
+  const sesion = await obtenerSesionActual({ cookies: await cookies() });
+  const sesionCliente = sesion ? { nombre: sesion.nombre, rol: sesion.rol } : null;
+
   return (
     // "Solo modo claro en el MVP": fijado acá, no dejado a que el navegador/SO decida.
     <html lang="es-CL" style={{ colorScheme: "light" }}>
@@ -48,15 +56,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           fontFamily: pilaTipografica,
           background: superficie.fondo,
           color: superficie.texto,
+          // Columna flex en vez de `minHeight: 100dvh` suelto en cada <main>: la barra
+          // ocupa su alto y el contenido rellena EXACTAMENTE lo que queda. Con el alto
+          // fijo de antes, sumarle una barra de 56 px habría empujado bajo el pliegue el
+          // botón «Confirmar» — el mismo defecto que el reset de arriba corrige.
           minHeight: "100dvh",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
-        <div style={{ position: "fixed", top: 12, right: 12, zIndex: 9999 }}>
-          <Suspense>
-            <EncabezadoConOperador />
-          </Suspense>
-        </div>
-        {children}
+        <ProveedorSesion sesion={sesionCliente}>
+          <BarraApp />
+          {children}
+        </ProveedorSesion>
         <RegistrarSW />
         <InterceptarSesionVencida />
       </body>

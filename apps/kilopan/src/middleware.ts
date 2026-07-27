@@ -40,7 +40,9 @@ export function middleware(request: NextRequest) {
   if (RUTAS_PUBLICAS.has(pathname)) return NextResponse.next();
 
   if (!request.cookies.get(NOMBRE_COOKIE)?.value) {
-    return NextResponse.redirect(new URL("/ingresar", request.url));
+    // Con el motivo: /ingresar lo traduce a una frase. Un login "en blanco" después de
+    // tocar un botón normal es indistinguible de una app rota.
+    return NextResponse.redirect(new URL("/ingresar?motivo=sin-sesion", request.url));
   }
   return NextResponse.next();
 }

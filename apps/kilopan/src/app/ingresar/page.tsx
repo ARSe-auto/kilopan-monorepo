@@ -6,6 +6,16 @@ import { leerDispositivo, olvidarDispositivo } from "@/identidad/cliente/disposi
 import { recordarOperador } from "@/identidad/cliente/operador.ts";
 import { LogoKiloPan } from "../LogoKiloPan.tsx";
 
+// Cada motivo se redacta con la ACCIÓN que le toca al panadero, no con el nombre técnico
+// del estado. Los emite `obtenerSesionOMotivo` (identidad/sesion.ts), el middleware y el
+// interceptor de 401.
+const MOTIVOS: Record<string, string> = {
+  vencida: "Tu sesión se cerró sola tras 10 minutos sin usar la app. Vuelve a entrar: nada de lo que registraste se perdió.",
+  cerrada: "Tu sesión ya no está abierta. Suele ser porque alguien entró con tu mismo RUT en otro equipo — en KiloPan solo hay una sesión por persona.",
+  "sin-sesion": "Para entrar a esa pantalla necesitas iniciar sesión.",
+  salida: "Sesión cerrada. El equipo queda libre para el siguiente turno.",
+};
+
 // F5 Cambio de operador (PROMPT_MAESTRO.md §5): RUT + PIN de 4 dígitos, ≤3s. El
 // equipo ya está vinculado a esta altura (/ redirige acá solo si lo está).
 export default function IngresarPage() {
@@ -18,10 +28,17 @@ export default function IngresarPage() {
   // desincronizado) — reintentar el PIN no arregla nada, hace falta vincularlo de
   // nuevo. Ver api/auth/login/route.ts: codigo "dispositivo_invalido".
   const [dispositivoInvalido, setDispositivoInvalido] = useState(false);
+  // Por qué está viendo esta pantalla. Sin esto, cualquier corte de sesión —los 10 min de
+  // inactividad, el mismo RUT abierto en otro equipo— dejaba al operador en el login sin
+  // una palabra: desde el mesón se lee como que la app se cayó sola.
+  const [aviso, setAviso] = useState<string | null>(null);
 
   useEffect(() => {
     const ultimo = window.localStorage.getItem("kp_ultimo_rut");
     if (ultimo) setRut(ultimo);
+    // `window.location.search` en vez de `useSearchParams`: no obliga a envolver la
+    // pantalla en un <Suspense> solo para leer un parámetro que ya está en el navegador.
+    setAviso(MOTIVOS[new URLSearchParams(window.location.search).get("motivo") ?? ""] ?? null);
   }, []);
 
   async function ingresar() {
@@ -77,7 +94,7 @@ export default function IngresarPage() {
         display: "flex",
         flexDirection: "column",
         gap: 20,
-        minHeight: "100dvh",
+        flex: 1,
       }}
     >
       <div>
@@ -85,6 +102,24 @@ export default function IngresarPage() {
         <LogoKiloPan tamano={28} comoTitulo />
         <p style={{ color: "#5B564C", fontSize: 15, marginTop: 8 }}>Ingresa tu RUT y tu PIN.</p>
       </div>
+
+      {aviso ? (
+        <p
+          role="status"
+          style={{
+            margin: 0,
+            padding: "12px 14px",
+            borderRadius: 12,
+            background: "#FEF3E2",
+            border: "1px solid rgba(180,83,9,.35)",
+            color: "#7C3E06",
+            fontSize: 14,
+            lineHeight: 1.45,
+          }}
+        >
+          {aviso}
+        </p>
+      ) : null}
 
       <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: "#5B564C" }}>RUT</span>

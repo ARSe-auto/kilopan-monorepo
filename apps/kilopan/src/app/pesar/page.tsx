@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   CifraGrande,
   TecladoNumerico,
@@ -11,9 +12,10 @@ import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
 import { formatearKg } from "@/comun/formato.ts";
 import { kgTextoAGramos, pesoValido } from "@/comun/peso.ts";
 import { useEnLinea } from "@/comun/useEnLinea.ts";
-import { VolverInicio } from "../VolverInicio.tsx";
 import { enviarOEncolar, encolarFoto, iniciarSyncAutomatico } from "@/pod/outbox.ts";
 import { abrirCamara, capturar, cerrarCamara, subirFoto } from "@/comun/camara.ts";
+import { useSesion } from "../SesionCliente.tsx";
+import { puedeEntrar } from "../navegacion.ts";
 
 interface Producto {
   id: string;
@@ -73,6 +75,10 @@ function guardarCatalogoCache(productos: Producto[]) {
 // -> destino en un toque -> confirmar. Encadena con el último producto para el
 // siguiente pesaje (manos ocupadas, cero volver al inicio entre bandejas).
 export default function PesarPage() {
+  // Solo los roles que tienen /pedidos en su menú pueden armar un despacho: ofrecerle el
+  // atajo a quien no puede entrar es mandarlo a un 302 hacia el login.
+  const sesion = useSesion();
+  const puedeDespachar = puedeEntrar(sesion?.rol, "/pedidos");
   const [productos, setProductos] = useState<Producto[]>([]);
   const [errorCatalogo, setErrorCatalogo] = useState(false);
   const [productoId, setProductoId] = useState<string | null>(null);
@@ -350,7 +356,6 @@ export default function PesarPage() {
       <main style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
           <h1 style={{ fontSize: 22, fontWeight: 700 }}>Pesar</h1>
-          <VolverInicio />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 16 }}>
           {productos.map((p) => (
@@ -386,7 +391,7 @@ export default function PesarPage() {
   // galería como si fuera de esta bandeja (PROMPT_MAESTRO.md §7).
   if (estado === "foto") {
     return (
-      <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16, minHeight: "100dvh" }}>
+      <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{producto.nombre}</h1>
         <p style={{ margin: 0, color: superficie.textoDim, fontSize: 15 }}>
           Foto de respaldo · {formatearKg(gramosNum)}
@@ -432,7 +437,7 @@ export default function PesarPage() {
         display: "flex",
         flexDirection: "column",
         gap: 16,
-        minHeight: "100dvh",
+        flex: 1,
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
@@ -493,9 +498,59 @@ export default function PesarPage() {
           {cargandoLineas ? (
             <p style={{ fontSize: 14, color: superficie.textoFaint, margin: 0 }}>Buscando pedidos…</p>
           ) : lineasPedido.length === 0 ? (
-            <p style={{ fontSize: 14, color: semantico.alerta, margin: 0 }}>
-              Ningún pedido de hoy está esperando {producto.nombre}. Ármalo primero en Despacho.
-            </p>
+            // Callejón sin salida real, verificado en el navegador: el mensaje mandaba a
+            // «Despacho» y ahí se acababa la pantalla. Al maestro lo mandaba a una
+            // pantalla que su rol NO tiene en el menú, así que le pedía hacer algo
+            // imposible; al admin, que sí puede, no le daba forma de llegar. Ahora cada
+            // rol recibe la salida que le sirve, y todos tienen la de siempre: mostrador.
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <p style={{ fontSize: 14, color: semantico.alerta, margin: 0 }}>
+                Ningún pedido de hoy está esperando {producto.nombre}.
+              </p>
+              {puedeDespachar ? (
+                <Link
+                  href="/pedidos"
+                  style={{
+                    minHeight: 44,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    padding: "0 16px",
+                    borderRadius: 12,
+                    border: `1px solid ${superficie.hairline}`,
+                    background: superficie.tarjeta,
+                    color: superficie.texto,
+                    fontSize: 15,
+                    fontWeight: 700,
+                    textDecoration: "none",
+                    alignSelf: "flex-start",
+                  }}
+                >
+                  Armar el pedido en Despacho →
+                </Link>
+              ) : (
+                <p style={{ fontSize: 14, color: superficie.textoDim, margin: 0, lineHeight: 1.45 }}>
+                  Los pedidos los arma el administrador en Despacho. Mientras tanto, esta
+                  bandeja puede salir a <strong>Mostrador</strong>.
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => setDestino("mostrador")}
+                style={{
+                  minHeight: 44,
+                  padding: "0 16px",
+                  borderRadius: 12,
+                  border: `1px solid ${superficie.hairline}`,
+                  background: "none",
+                  color: superficie.textoDim,
+                  fontSize: 14,
+                  fontWeight: 700,
+                  alignSelf: "flex-start",
+                }}
+              >
+                Mandarla a Mostrador
+              </button>
+            </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {lineasPedido.map((l) => {

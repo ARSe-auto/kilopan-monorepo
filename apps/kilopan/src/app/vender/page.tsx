@@ -13,7 +13,6 @@ import { enviarOEncolar, iniciarSyncAutomatico } from "@/pod/outbox.ts";
 import { kgTextoAGramos, pesoValido } from "@/comun/peso.ts";
 import { roundClp } from "@/comun/round_clp.ts";
 import { useEnLinea } from "@/comun/useEnLinea.ts";
-import { VolverInicio } from "../VolverInicio.tsx";
 
 interface Producto {
   id: string;
@@ -222,7 +221,6 @@ export default function VenderPage() {
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Vender</h1>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {pendientes > 0 || !enLinea ? <ChipEstadoConexion pendientes={pendientes} online={enLinea} /> : null}
-          <VolverInicio />
         </div>
       </div>
 

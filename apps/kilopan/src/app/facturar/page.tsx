@@ -3,7 +3,6 @@ import { useCallback, useEffect, useState } from "react";
 import { BotonPrimario, CifraGrande } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico } from "@kilopan/miga/tokens.ts";
 import { formatearClp, formatearFecha, parsearClp } from "@/comun/formato.ts";
-import { VolverInicio } from "../VolverInicio.tsx";
 
 interface Cliente { id: string; razon_social: string; saldo_pendiente_clp: number | null }
 interface Guia {
@@ -105,7 +104,6 @@ export default function FacturarPage() {
             Cada despacho ya salió con su guía. Aquí las agrupas en una factura para cobrar.
           </p>
         </div>
-        <VolverInicio />
       </div>
 
       <select

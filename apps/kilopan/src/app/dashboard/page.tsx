@@ -5,7 +5,6 @@ import { obtenerSesionActual } from "@/identidad/sesion.ts";
 import { superficie, acentos, semantico } from "@kilopan/miga/tokens.ts";
 import { Copyright } from "@kilopan/miga/componentes/index.tsx";
 import { formatearKg, formatearClp } from "@/comun/formato.ts";
-import { VolverInicio } from "../VolverInicio.tsx";
 import { CtaFlota } from "./CtaFlota.tsx";
 
 // Los agregados llegan como string desde Postgres (bigint/numeric no entran en un
@@ -38,7 +37,6 @@ export default async function DashboardPage() {
       <main style={{ maxWidth: 640, margin: "0 auto", padding: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
           <h1 style={{ fontSize: 22, fontWeight: 700 }}>Panel del dueño</h1>
-          <VolverInicio />
         </div>
         <p style={{ color: superficie.textoDim }}>Esta pantalla es solo para administradores.</p>
         <Copyright />
@@ -71,7 +69,6 @@ export default async function DashboardPage() {
           <p style={{ fontSize: 13, color: superficie.textoFaint, margin: 0 }}>Panel del dueño · hoy</p>
           <h1 style={{ fontSize: 28, fontWeight: 800, margin: 0 }}>{usuario.nombre}</h1>
         </div>
-        <VolverInicio />
       </div>
 
       <section

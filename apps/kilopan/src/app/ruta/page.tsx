@@ -313,7 +313,7 @@ export default function RutaPage() {
 
   if (paso === "foto" && parada) {
     return (
-      <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16, minHeight: "100dvh" }}>
+      <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{parada.razon_social}</h1>
         <p style={{ margin: 0, color: superficie.textoDim, fontSize: 15 }}>Foto de la entrega como comprobante</p>
 
@@ -386,7 +386,7 @@ export default function RutaPage() {
       const motivoListo =
         motivoFallida === "otro" ? motivoOtroTexto.trim().length > 0 : motivoFallida !== null;
       return (
-        <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16, minHeight: "100dvh" }}>
+        <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
           <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{parada.razon_social}</h1>
           <p style={{ margin: 0, color: superficie.textoDim, fontSize: 15 }}>{parada.direccion}</p>
 
@@ -425,7 +425,7 @@ export default function RutaPage() {
     }
 
     return (
-      <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16, minHeight: "100dvh" }}>
+      <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{parada.razon_social}</h1>
         <p style={{ margin: 0, color: superficie.textoDim, fontSize: 15 }}>{parada.direccion}</p>
 
