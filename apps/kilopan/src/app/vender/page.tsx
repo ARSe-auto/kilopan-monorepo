@@ -13,6 +13,10 @@ import { enviarOEncolar, iniciarSyncAutomatico } from "@/pod/outbox.ts";
 import { kgTextoAGramos, pesoValido } from "@/comun/peso.ts";
 import { roundClp } from "@/comun/round_clp.ts";
 import { useEnLinea } from "@/comun/useEnLinea.ts";
+import { Pantalla } from "../Pantalla.tsx";
+import { SiguientePaso } from "../SiguientePaso.tsx";
+import { useSesion } from "../SesionCliente.tsx";
+import { puedeEntrar } from "../navegacion.ts";
 
 interface Producto {
   id: string;
@@ -39,6 +43,8 @@ interface LineaCarrito {
 
 // F6 Venta mostrador — contra el stock ya pesado (PROMPT_MAESTRO.md §5).
 export default function VenderPage() {
+  const sesion = useSesion();
+  const puedeCerrarCaja = puedeEntrar(sesion?.rol, "/caja");
   const [productos, setProductos] = useState<Producto[]>([]);
   const [mediosPago, setMediosPago] = useState<MedioPago[]>([]);
   const [productoId, setProductoId] = useState<string | null>(null);
@@ -51,6 +57,9 @@ export default function VenderPage() {
   const [clienteFiado, setClienteFiado] = useState("");
   const [pendientes, setPendientes] = useState(0);
   const enLinea = useEnLinea();
+  // Reemplaza la línea verde de éxito: qué se acaba de cobrar, y el atajo a Caja SOLO
+  // si el rol la tiene — vender de nuevo no necesita botón, el mesón ya está listo.
+  const [ultimaVenta, setUltimaVenta] = useState<{ texto: string; detalle?: string } | null>(null);
   // Sin esto, "no hay productos" (catálogo vacío, estado real) y "no pude consultar"
   // (sin red, 401, 500) se veían exactamente igual: la grilla vacía. Con las manos
   // ocupadas y la pantalla en blanco, no hay forma de saber si hay que reintentar o si
@@ -107,6 +116,7 @@ export default function VenderPage() {
 
   function agregarAlCarrito() {
     if (!producto || !pesoValido(gramosNum)) return;
+    setUltimaVenta(null); // empieza un carrito nuevo: la tarjeta de la venta anterior ya cumplió
     setCarrito((c) => [
       ...c,
       { productoId: producto.id, nombre: producto.nombre, gramos: gramosNum, precioClp: precioLinea },
@@ -119,6 +129,7 @@ export default function VenderPage() {
     if (!medioPago || carrito.length === 0) return;
     setEnviando(true);
     setMensaje(null);
+    setUltimaVenta(null);
     // Igual que el pesaje: se intenta enviar y, si no hay señal, se encola en
     // IndexedDB. Antes esto era un `fetch` crudo — una venta hecha sin señal
     // simplemente se perdía y la caja no cuadraba al cierre. Sobre datos móviles eso
@@ -149,29 +160,29 @@ export default function VenderPage() {
       const cuerpo = (resultado.estado === "enviado" ? resultado.cuerpo : null) as
         | { totalClp?: number }
         | null;
-      setMensaje(
-        resultado.estado === "encolado" && resultado.motivo === "sesion_vencida"
-          ? {
-              // La venta NO se perdió (quedó en la cola), pero nadie la va a subir
-              // hasta que el operador vuelva a entrar: hay que decirlo, y decir qué hacer.
-              tipo: "error",
-              texto: `Cobrado: ${formatearClp(totalCarrito)} — tu sesión se cerró. Vuelve a entrar para que se suba.`,
-            }
-          : resultado.estado === "encolado" && resultado.motivo === "error_servidor"
-          ? {
-              // Antes esto se anunciaba igual que "sin señal", con el mismo verde de
-              // éxito — un 500 con buena señal es un problema real, no falta de cobertura.
-              tipo: "error",
-              texto: `Cobrado: ${formatearClp(totalCarrito)} — hubo un problema al guardarlo, se reintenta solo`,
-            }
-          : {
-              tipo: "ok",
-              texto:
-                resultado.estado === "encolado"
-                  ? `Cobrado sin señal: ${formatearClp(totalCarrito)} — se sube solo`
-                  : `Venta cobrada: ${formatearClp(cuerpo?.totalClp ?? totalCarrito)}`,
-            }
-      );
+      if (resultado.estado === "encolado" && resultado.motivo === "sesion_vencida") {
+        // La venta NO se perdió (quedó en la cola), pero nadie la va a subir hasta que
+        // el operador vuelva a entrar: hay que decirlo, y decir qué hacer.
+        setMensaje({
+          tipo: "error",
+          texto: `Cobrado: ${formatearClp(totalCarrito)} — tu sesión se cerró. Vuelve a entrar para que se suba.`,
+        });
+      } else if (resultado.estado === "encolado" && resultado.motivo === "error_servidor") {
+        // Antes esto se anunciaba igual que "sin señal", con el mismo verde de éxito —
+        // un 500 con buena señal es un problema real, no falta de cobertura.
+        setMensaje({
+          tipo: "error",
+          texto: `Cobrado: ${formatearClp(totalCarrito)} — hubo un problema al guardarlo, se reintenta solo`,
+        });
+      } else {
+        setUltimaVenta({
+          texto:
+            resultado.estado === "encolado"
+              ? `Cobrado sin señal: ${formatearClp(totalCarrito)}`
+              : `Venta cobrada: ${formatearClp(cuerpo?.totalClp ?? totalCarrito)}`,
+          detalle: resultado.estado === "encolado" ? "Se sube solo en cuanto vuelva la conexión." : undefined,
+        });
+      }
       setCarrito([]);
       setMedioPago(null);
       setClienteFiado("");
@@ -187,13 +198,18 @@ export default function VenderPage() {
 
   if (producto) {
     return (
-      <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{producto.nombre}</h1>
-          <button type="button" onClick={() => setProductoId(null)} style={{ minHeight: 44, minWidth: 44, padding: "0 12px", fontSize: 14, fontWeight: 700, color: superficie.textoDim, background: "none", border: "none" }}>
+      <Pantalla
+        titulo={producto.nombre}
+        accesorio={
+          <button
+            type="button"
+            onClick={() => setProductoId(null)}
+            style={{ minHeight: 44, minWidth: 44, padding: "0 12px", fontSize: 14, fontWeight: 700, color: superficie.textoDim, background: "none", border: "none" }}
+          >
             Cambiar
           </button>
-        </div>
+        }
+      >
         <p style={{ margin: 0, fontSize: 13, color: superficie.textoFaint }}>
           Disponible: {formatearKg(producto.stock_disponible_g)}
         </p>
@@ -211,19 +227,15 @@ export default function VenderPage() {
         {gramosNum > producto.stock_disponible_g ? (
           <p style={{ color: semantico.error, fontSize: 13 }}>No hay ese stock disponible.</p>
         ) : null}
-      </main>
+      </Pantalla>
     );
   }
 
   return (
-    <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Vender</h1>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {pendientes > 0 || !enLinea ? <ChipEstadoConexion pendientes={pendientes} online={enLinea} /> : null}
-        </div>
-      </div>
-
+    <Pantalla
+      titulo="Vender"
+      accesorio={pendientes > 0 || !enLinea ? <ChipEstadoConexion pendientes={pendientes} online={enLinea} /> : undefined}
+    >
       {cargandoProductos ? (
         <p style={{ color: superficie.textoDim, fontSize: 14 }}>Cargando catálogo…</p>
       ) : errorProductos ? (
@@ -239,7 +251,10 @@ export default function VenderPage() {
           <button
             key={p.id}
             type="button"
-            onClick={() => setProductoId(p.id)}
+            onClick={() => {
+              setUltimaVenta(null);
+              setProductoId(p.id);
+            }}
             disabled={p.stock_disponible_g <= 0}
             style={{
               minHeight: 72,
@@ -325,7 +340,7 @@ export default function VenderPage() {
           ) : null}
 
           {mensaje ? (
-            <p role="status" style={{ color: mensaje.tipo === "ok" ? semantico.ok : semantico.error, fontSize: 14 }}>
+            <p role="alert" style={{ color: semantico.error, fontSize: 14 }}>
               {mensaje.texto}
             </p>
           ) : null}
@@ -340,10 +355,19 @@ export default function VenderPage() {
           </div>
         </div>
       ) : mensaje ? (
-        <p role="status" style={{ color: mensaje.tipo === "ok" ? semantico.ok : semantico.error, fontSize: 14 }}>
+        <p role="alert" style={{ color: semantico.error, fontSize: 14 }}>
           {mensaje.texto}
         </p>
+      ) : ultimaVenta ? (
+        // Reemplaza la línea verde de antes: qué se acaba de cobrar. Vender de nuevo no
+        // necesita botón —el mesón ya muestra la grilla, lista—; Cerrar caja sí es un
+        // salto real de tarea, y solo aparece si el rol la tiene.
+        <SiguientePaso
+          texto={ultimaVenta.texto}
+          detalle={ultimaVenta.detalle}
+          acciones={puedeCerrarCaja ? [{ etiqueta: "Cerrar caja", href: "/caja" }] : []}
+        />
       ) : null}
-    </main>
+    </Pantalla>
   );
 }
