@@ -5,6 +5,7 @@ import { TecladoNumerico, CifraGrande, BotonPrimario, Copyright } from "@kilopan
 import { leerDispositivo, olvidarDispositivo } from "@/identidad/cliente/dispositivo.ts";
 import { recordarOperador } from "@/identidad/cliente/operador.ts";
 import { LogoKiloPan } from "../LogoKiloPan.tsx";
+import { destinoDeIngreso } from "../navegacion.ts";
 
 // Cada motivo se redacta con la ACCIÓN que le toca al panadero, no con el nombre técnico
 // del estado. Los emite `obtenerSesionOMotivo` (identidad/sesion.ts), el middleware y el
@@ -73,7 +74,19 @@ export default function IngresarPage() {
       // Para que la cola offline sepa, al momento de encolar, DE QUIÉN es cada
       // mutación — y así no subirla a nombre de quien esté logueado al sincronizar.
       recordarOperador(cuerpo.usuario.id);
-      router.push("/inicio");
+      // Un rol con una sola pantalla (maestro → Pesaje, repartidor → Mi ruta) entra
+      // DIRECTO a lo único que puede hacer: pasar por "Hoy" para elegir entre una
+      // opción es un clic que nunca decide nada. Con dos o más, "Hoy" sigue siendo
+      // quien decide qué sigue.
+      //
+      // window.location.assign, no router.push: el layout raíz lee la sesión UNA vez
+      // en el servidor y Next reutiliza esa lectura en las navegaciones de cliente que
+      // se quedan dentro del mismo árbol de layouts. Con router.push, el chip y la tab
+      // bar seguían mostrando "sin sesión" (el estado de ANTES del login) hasta la
+      // primera recarga completa — verificado en el navegador: aterrizaba en la
+      // pantalla correcta pero sin encabezado ni barra. Una navegación dura fuerza al
+      // servidor a releer la cookie recién puesta.
+      window.location.assign(destinoDeIngreso(cuerpo.usuario.rol));
     } catch {
       setError("Sin conexión con el servidor");
       setEnviando(false);

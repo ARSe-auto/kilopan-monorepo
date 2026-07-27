@@ -1,5 +1,4 @@
 "use client";
-import { useRouter } from "next/navigation";
 import { superficie } from "@kilopan/miga/tokens.ts";
 import { olvidarOperador } from "@/identidad/cliente/operador.ts";
 
@@ -8,7 +7,6 @@ import { olvidarOperador } from "@/identidad/cliente/operador.ts";
 // lo mismo. Un turno que termina en el mesón no debería tener que buscar la pantalla
 // correcta para entregar el equipo.
 export function CerrarSesionBoton({ variante = "pildora" }: { variante?: "pildora" | "fila" }) {
-  const router = useRouter();
   const esFila = variante === "fila";
   return (
     <button
@@ -26,7 +24,12 @@ export function CerrarSesionBoton({ variante = "pildora" }: { variante?: "pildor
           // sin señal: salir del equipo IGUAL es lo correcto
         } finally {
           olvidarOperador();
-          router.push("/ingresar?motivo=salida");
+          // Navegación DURA, no router.push: el layout raíz lee la sesión en el
+          // servidor y Next reutiliza esa lectura entre navegaciones de cliente dentro
+          // del mismo árbol de layouts — sin esto, el chip del operador anterior y la
+          // tab bar de su rol seguían un instante en pantalla después de "Salir",
+          // porque el layout no se volvía a ejecutar solo por cambiar de ruta.
+          window.location.assign("/ingresar?motivo=salida");
         }
       }}
       style={{
