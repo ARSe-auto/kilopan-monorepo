@@ -6,6 +6,10 @@ import { BotonPrimario } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico } from "@kilopan/miga/tokens.ts";
 import { formatearClp, parsearClp } from "@/comun/formato.ts";
 import { compartir, sePuedeCompartir } from "@/comun/compartir.ts";
+import { Pantalla } from "../Pantalla.tsx";
+import { SiguientePaso } from "../SiguientePaso.tsx";
+import { useSesion } from "../SesionCliente.tsx";
+import { puedeEntrar } from "../navegacion.ts";
 
 // esperado_clp es OPCIONAL a propósito: el servidor NO se lo manda a quien vende
 // (conteo a ciegas). Solo el admin lo recibe. Ver api/cierre-caja GET.
@@ -15,6 +19,8 @@ interface FilaResultado { medioPago: string; esperado: number; declarado: number
 // F6 (cierre) + AC-PAG-01 + AC-DASH-04: una fila por medio de pago activo, y el total
 // que marcó el facturador tecleado una vez para compararlo (decisión #3, fase 1).
 export default function CajaPage() {
+  const sesion = useSesion();
+  const puedeVerPanel = puedeEntrar(sesion?.rol, "/dashboard");
   const [medios, setMedios] = useState<MedioCaja[]>([]);
   const [declarados, setDeclarados] = useState<Record<string, string>>({});
   const [totalFacturador, setTotalFacturador] = useState("");
@@ -79,20 +85,13 @@ export default function CajaPage() {
   }
 
   return (
-    <main style={{ maxWidth: 520, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>Cierre de caja</h1>
-      </div>
-      {/* Conteo A CIEGAS (hallazgo ALTA del red-team): antes cada fila mostraba
-          "esperado $145.000" ANTES de declarar nada. El vendedor que sacó plata
-          tecleaba justo esa cifra y salía "cuadra"; el honesto pero apurado la copiaba
-          por pereza y nunca contaba de verdad. El cierre —el único control anti-robo
-          por el que paga el dueño— se volvía teatro: todo cuadraba siempre. Ahora lo
-          esperado y la diferencia se revelan RECIÉN al cerrar. */}
-      <p style={{ margin: 0, fontSize: 14, color: superficie.textoDim }}>
-        Cuenta la plata de cada medio y anótala. Al cerrar te mostramos si cuadra.
-      </p>
-
+    // Conteo A CIEGAS (hallazgo ALTA del red-team): antes cada fila mostraba "esperado
+    // $145.000" ANTES de declarar nada. El vendedor que sacó plata tecleaba justo esa
+    // cifra y salía "cuadra"; el honesto pero apurado la copiaba por pereza y nunca
+    // contaba de verdad. El cierre —el único control anti-robo por el que paga el
+    // dueño— se volvía teatro: todo cuadraba siempre. Ahora lo esperado y la
+    // diferencia se revelan RECIÉN al cerrar.
+    <Pantalla titulo="Cierre de caja" bajada="Cuenta la plata de cada medio y anótala. Al cerrar te mostramos si cuadra." ancho={520}>
       {cargando ? (
         <p style={{ color: superficie.textoDim, fontSize: 14 }}>Cargando…</p>
       ) : errorCarga ? (
@@ -177,6 +176,12 @@ export default function CajaPage() {
           {enviando ? "Cerrando…" : "Cerrar caja"}
         </BotonPrimario>
       )}
-    </main>
+
+      {/* El día cerrado es exactamente el momento en que el panel del dueño tiene algo
+          nuevo que mostrar — el salto solo aparece cuando el rol puede verlo. */}
+      {resultado && puedeVerPanel ? (
+        <SiguientePaso texto="Caja cerrada" acciones={[{ etiqueta: "Ver el panel del día", href: "/dashboard" }]} />
+      ) : null}
+    </Pantalla>
   );
 }

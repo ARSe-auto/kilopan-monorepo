@@ -5,6 +5,10 @@ import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
 import { formatearClp, parsearClp } from "@/comun/formato.ts";
 import { kgTextoAGramos, pesoValido } from "@/comun/peso.ts";
 import { validaRut } from "@/comun/valida_rut.ts";
+import { Pantalla } from "../Pantalla.tsx";
+import { SiguientePaso, type AccionSiguiente } from "../SiguientePaso.tsx";
+import { useSesion } from "../SesionCliente.tsx";
+import { puedeEntrar } from "../navegacion.ts";
 
 interface Pedido {
   id: string;
@@ -24,11 +28,18 @@ interface Repartidor { id: string; nombre: string }
 // art. 55 DL 825 se ve acá en pantalla: los pedidos sin DTE salen en rojo y «Salir a
 // ruta» rebota mientras quede uno.
 export default function PedidosPage() {
+  const sesion = useSesion();
+  const puedeVerPanel = puedeEntrar(sesion?.rol, "/dashboard");
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [repartidores, setRepartidores] = useState<Repartidor[]>([]);
-  const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
+  // `acciones` solo se llena para el UNO de estos cuatro resultados que de verdad abre
+  // una tarea distinta (armar la ruta y salir): los otros tres —confirmar pedido, dar de
+  // alta un cliente, registrar un documento— ya dejan su resultado a la vista en la
+  // misma pantalla (la lista de pedidos, el selector de cliente), así que un texto
+  // simple basta.
+  const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string; acciones?: AccionSiguiente[] } | null>(null);
 
   const [clienteId, setClienteId] = useState("");
   const [productoId, setProductoId] = useState("");
@@ -233,7 +244,11 @@ export default function PedidosPage() {
         setMensaje({ tipo: "error", texto: salirCuerpo.error });
         return;
       }
-      setMensaje({ tipo: "ok", texto: `Ruta en curso con ${rutaCuerpo.paradas} parada(s)` });
+      setMensaje({
+        tipo: "ok",
+        texto: `Ruta en curso con ${rutaCuerpo.paradas} parada(s)`,
+        acciones: puedeVerPanel ? [{ etiqueta: "Ver el panel del día", href: "/dashboard" }] : [],
+      });
       await cargar();
     } catch {
       setMensaje({ tipo: "error", texto: "Sin conexión con el servidor" });
@@ -243,15 +258,15 @@ export default function PedidosPage() {
   }
 
   return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>Despacho</h1>
-      </div>
-
+    <Pantalla titulo="Despacho" ancho={720}>
       {mensaje ? (
-        <p role="status" style={{ color: mensaje.tipo === "ok" ? semantico.ok : semantico.error, fontSize: 14, margin: 0 }}>
-          {mensaje.texto}
-        </p>
+        mensaje.tipo === "ok" && mensaje.acciones ? (
+          <SiguientePaso texto={mensaje.texto} acciones={mensaje.acciones} />
+        ) : (
+          <p role={mensaje.tipo === "error" ? "alert" : "status"} style={{ color: mensaje.tipo === "ok" ? semantico.ok : semantico.error, fontSize: 14, margin: 0 }}>
+            {mensaje.texto}
+          </p>
+        )
       ) : null}
 
       <section style={{ background: superficie.tarjeta, border: `1px solid ${superficie.hairline}`, borderRadius: 14, padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -385,7 +400,7 @@ export default function PedidosPage() {
           {armandoRuta ? "Armando ruta…" : "Armar ruta y salir"}
         </BotonPrimario>
       </section>
-    </main>
+    </Pantalla>
   );
 }
 

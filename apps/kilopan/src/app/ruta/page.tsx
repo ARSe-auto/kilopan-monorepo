@@ -12,6 +12,7 @@ import { formatearKg } from "@/comun/formato.ts";
 import { kgTextoAGramos, pesoValido, gramosAKgTexto } from "@/comun/peso.ts";
 import { encolar, encolarFoto, iniciarSyncAutomatico, contarPendientes } from "@/pod/outbox.ts";
 import { abrirCamara, capturar, cerrarCamara, subirFoto } from "@/comun/camara.ts";
+import { Pantalla } from "../Pantalla.tsx";
 
 const MOTIVOS_FALLA = [
   { valor: "cerrado", etiqueta: "Local cerrado" },
@@ -313,10 +314,7 @@ export default function RutaPage() {
 
   if (paso === "foto" && parada) {
     return (
-      <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{parada.razon_social}</h1>
-        <p style={{ margin: 0, color: superficie.textoDim, fontSize: 15 }}>Foto de la entrega como comprobante</p>
-
+      <Pantalla titulo={parada.razon_social} bajada="Foto de la entrega como comprobante">
         <div
           style={{
             position: "relative",
@@ -351,7 +349,7 @@ export default function RutaPage() {
           </BotonPrimario>
           <BotonPrimario variante="neutro" onClick={cancelarEntrega}>Cancelar</BotonPrimario>
         </div>
-      </main>
+      </Pantalla>
     );
   }
 
@@ -386,10 +384,7 @@ export default function RutaPage() {
       const motivoListo =
         motivoFallida === "otro" ? motivoOtroTexto.trim().length > 0 : motivoFallida !== null;
       return (
-        <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{parada.razon_social}</h1>
-          <p style={{ margin: 0, color: superficie.textoDim, fontSize: 15 }}>{parada.direccion}</p>
-
+        <Pantalla titulo={parada.razon_social} bajada={parada.direccion ?? undefined}>
           {gpsBox}
 
           <div>
@@ -420,15 +415,12 @@ export default function RutaPage() {
             </BotonPrimario>
             <BotonPrimario variante="neutro" onClick={() => setModoFallida(false)}>Volver</BotonPrimario>
           </div>
-        </main>
+        </Pantalla>
       );
     }
 
     return (
-      <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{parada.razon_social}</h1>
-        <p style={{ margin: 0, color: superficie.textoDim, fontSize: 15 }}>{parada.direccion}</p>
-
+      <Pantalla titulo={parada.razon_social} bajada={parada.direccion ?? undefined}>
         {gpsBox}
 
         <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -487,19 +479,14 @@ export default function RutaPage() {
             No se pudo entregar
           </button>
         </div>
-      </main>
+      </Pantalla>
     );
   }
 
   const pendientesDeRuta = paradas.filter((p) => !entregadasLocal.has(p.parada_id) && p.estado === "pendiente");
 
   return (
-    <main style={{ maxWidth: 480, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Mi ruta</h1>
-        <ChipEstadoConexion pendientes={pendientes} />
-      </div>
-
+    <Pantalla titulo="Mi ruta" accesorio={<ChipEstadoConexion pendientes={pendientes} />}>
       {mensaje ? (
         <p role="status" style={{ color: semantico.ok, fontSize: 14, margin: 0 }}>{mensaje}</p>
       ) : null}
@@ -564,6 +551,6 @@ export default function RutaPage() {
           </div>
         );
       })}
-    </main>
+    </Pantalla>
   );
 }
