@@ -2,10 +2,96 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { obtenerSesionOMotivo } from "@/identidad/sesion.ts";
-import { superficie, acentos } from "@kilopan/miga/tokens.ts";
+import { obtenerDb } from "@/comun/db.ts";
+import { superficie } from "@kilopan/miga/tokens.ts";
 import { Copyright } from "@kilopan/miga/componentes/index.tsx";
-import { LogoKiloPan } from "../LogoKiloPan.tsx";
+import { Pantalla } from "../Pantalla.tsx";
+import { SiguientePaso, type AccionSiguiente } from "../SiguientePaso.tsx";
 import { destinosDe, ETIQUETA_ROL } from "../navegacion.ts";
+
+// "Hoy" ya no es un menú: es el motor de la jornada (docs/HANDOFF.md §5.5, patrón
+// `hoy/page.tsx` del CRM E-Auto Next). Antes esta pantalla era una lista de siete
+// botones sueltos —"Despacho", "Consolidar y facturar"— sin decir cuál de todos es el
+// que TOCA ahora. Ahora la primera tarjeta contesta esa pregunta contra el estado real
+// del día; el resto de los destinos del rol sigue abajo para cuando de verdad haga
+// falta cambiar de tarea a propósito (rehacer algo, revisar otra cosa).
+//
+// Solo admin y vendedor aterrizan acá: maestro y repartidor —con una sola pantalla—
+// entran directo a la suya desde /ingresar (`destinoDeIngreso`). Por eso el cálculo del
+// paso solo cubre esos dos roles.
+
+interface PasoDelDia {
+  texto: string;
+  detalle?: string;
+  acciones: AccionSiguiente[];
+}
+
+// El "día" de la panadería se corta a las 00:00 hora de Chile, no a las 00:00 UTC.
+// Railway corre en UTC: sin este ajuste, entre las 20:00 y medianoche (hora de Chile)
+// el día ya habría avanzado para el servidor y "hoy" mostraría la jornada de mañana,
+// vacía (Tanda 3 de docs/AUDITORIA_NAVEGACION.md).
+const HOY_CHILE = `(now() at time zone 'America/Santiago')::date`;
+
+async function pasoDelDiaAdmin(): Promise<PasoDelDia> {
+  const db = await obtenerDb();
+  const [pesajes, pedidosSinRuta, rutaActiva, cajaCerrada] = await Promise.all([
+    db.query<{ n: number }>(
+      `select count(*)::int as n from pan.pesajes where (recibido_at at time zone 'America/Santiago')::date = ${HOY_CHILE}`
+    ),
+    db.query<{ n: number }>(
+      `select count(*)::int as n from pan.pedidos where estado = 'confirmado' and fecha_entrega = ${HOY_CHILE}`
+    ),
+    db.query<{ n: number }>(`select count(*)::int as n from pan.rutas where estado = 'en_curso' and fecha = ${HOY_CHILE}`),
+    db.query<{ n: number }>(
+      `select count(*)::int as n from pan.cierres_caja where fecha = ${HOY_CHILE} and not anulado`
+    ),
+  ]);
+
+  if ((pesajes.rows[0]?.n ?? 0) === 0) {
+    return {
+      texto: "Todavía no se pesó nada hoy",
+      detalle: "El primer paso del día es siempre pesar lo que sale del horno.",
+      acciones: [{ etiqueta: "Empezar a pesar", href: "/pesar" }],
+    };
+  }
+  const nPedidos = pedidosSinRuta.rows[0]?.n ?? 0;
+  if (nPedidos > 0) {
+    return {
+      texto: `${nPedidos} pedido${nPedidos === 1 ? "" : "s"} confirmado${nPedidos === 1 ? "" : "s"} esperando salir`,
+      detalle: "Arma la ruta del furgón en Despacho para que no se acumulen.",
+      acciones: [{ etiqueta: "Armar la ruta", href: "/pedidos" }],
+    };
+  }
+  if ((rutaActiva.rows[0]?.n ?? 0) > 0) {
+    return {
+      texto: "El furgón está en reparto",
+      detalle: "El repartidor va marcando cada entrega desde su teléfono.",
+      acciones: [{ etiqueta: "Ver el panel del día", href: "/dashboard" }],
+    };
+  }
+  if ((cajaCerrada.rows[0]?.n ?? 0) === 0) {
+    return {
+      texto: "Aún no se cerró la caja de hoy",
+      detalle: "Cuando termine el turno del mesón, cuenta la plata y cierra.",
+      acciones: [{ etiqueta: "Cerrar caja", href: "/caja" }],
+    };
+  }
+  return {
+    texto: "El día está al día",
+    detalle: "Pesaje, despacho y caja ya están resueltos — no hay nada esperando.",
+    acciones: [{ etiqueta: "Ver el panel del día", href: "/dashboard" }],
+  };
+}
+
+async function pasoDelDiaVendedor(): Promise<PasoDelDia> {
+  const db = await obtenerDb();
+  const cajaCerrada = await db.query<{ n: number }>(
+    `select count(*)::int as n from pan.cierres_caja where fecha = ${HOY_CHILE} and not anulado`
+  );
+  return (cajaCerrada.rows[0]?.n ?? 0) > 0
+    ? { texto: "Caja ya cerrada hoy", detalle: "Buen turno. Mañana se cuenta de nuevo.", acciones: [] }
+    : { texto: "El mesón está listo para vender", detalle: undefined, acciones: [{ etiqueta: "Vender en el mesón", href: "/vender" }] };
+}
 
 export default async function InicioPage() {
   // Antes esta pantalla reimplementaba la consulta de sesión a mano y se le había
@@ -18,24 +104,15 @@ export default async function InicioPage() {
   if (!sesion) redirect(`/ingresar?motivo=${motivo}`);
 
   const destinos = destinosDe(sesion.rol);
+  const paso =
+    sesion.rol === "admin" ? await pasoDelDiaAdmin() : sesion.rol === "vendedor" ? await pasoDelDiaVendedor() : null;
 
   return (
-    <main style={{ maxWidth: 420, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 20, width: "100%" }}>
-      <LogoKiloPan tamano={28} />
-      <div>
-        <p style={{ fontSize: 13, color: superficie.textoFaint, margin: 0 }}>Hola,</p>
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{sesion.nombre}</h1>
-        {/* Con qué perfil está dentro. Es la diferencia entre «esta app tiene una sola
-            pantalla» y «el maestro solo pesa»: sin decirlo, lo primero es lo que parece. */}
-        <p style={{ fontSize: 13, color: superficie.textoFaint, margin: "2px 0 0" }}>
-          {ETIQUETA_ROL[sesion.rol]}
-        </p>
-      </div>
+    <Pantalla titulo="Hoy" bajada={`Hola, ${sesion.nombre} · ${ETIQUETA_ROL[sesion.rol]}`}>
+      {paso ? <SiguientePaso texto={paso.texto} detalle={paso.detalle} acciones={paso.acciones} /> : null}
 
-      {/* <Link>, no <a href>: con mala señal, un <a> es una navegación de documento
-          completa que golpea la red — si la ruta nunca se visitó, el service worker
-          no tiene nada que servir y cae a /ingresar. <Link> navega del lado del
-          cliente con lo que el JS de la app ya tiene cargado en esta sesión. */}
+      {/* El resto de las tareas del rol, para cambiar de una a otra A PROPÓSITO —no es
+          el único camino, la tarjeta de arriba ya señaló cuál sigue. */}
       <nav style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {destinos.map((d) => (
           <Link
@@ -60,23 +137,7 @@ export default async function InicioPage() {
         ))}
       </nav>
 
-      {/* Un rol con una sola pantalla no tiene por qué parecer una app a medio hacer:
-          se dice qué hace ese perfil y quién hace el resto. */}
-      {destinos.length === 1 ? (
-        <p style={{ fontSize: 13, color: superficie.textoFaint, margin: 0, lineHeight: 1.5 }}>
-          Tu perfil tiene esta única pantalla, y es a propósito: cada quien firma solo lo
-          suyo. El resto del día —pedidos, mesón, caja y panel— lo maneja el administrador
-          con su propio RUT.
-        </p>
-      ) : null}
-
-      <p style={{ fontSize: 13, color: superficie.textoFaint, margin: 0 }}>
-        Desde cualquier pantalla, el botón{" "}
-        <span style={{ fontWeight: 700, color: acentos.kilopan }}>☰ Menú</span> de arriba te
-        trae de vuelta acá.
-      </p>
-
       <Copyright />
-    </main>
+    </Pantalla>
   );
 }
