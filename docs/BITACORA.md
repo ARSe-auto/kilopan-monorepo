@@ -10,6 +10,75 @@ el aprendizaje contradice lo que creíamos. **Qué NO va:** el estado del plan (
 
 ---
 
+## 2026-07-27 · Navegación rediseñada de punta a punta: secuencial, no un árbol de menús
+
+Alexis, entrando como Pedro Maestro (rol `maestro`, que solo ve Pesaje): «la navegacion
+no lleva a ninguna parte. es inflexible e ilogica» → «rediseña asi, todo» → «la logica de
+navegacion debe ser SECUENCIAL. Una etapa se sigue naturalmente de la siguiente». Pidió
+usar de referencia el CRM E-Auto Next. Se ejecutó de un tirón, autónomo durante la noche
+(reloj de traspaso de 5h armado y desarmado dos veces sin necesitarlo), plan completo en
+`docs/HANDOFF.md` (ahora resuelto — ver abajo si hace falta el detalle histórico).
+
+**Lo que estaba roto, verificado en el navegador, no leído en el código:**
+- Elegido un producto en `/pesar` o `/vender`, el enlace «← Menú» DESAPARECÍA — con una
+  bandeja a medio pesar no quedaba un solo control que llevara a otra parte. `/ruta`
+  nunca lo tuvo en ningún estado.
+- El destino «Reparto» sin pedidos mandaba a Despacho, pantalla que el maestro no tiene.
+- El chip del operador (`position: fixed`) se montaba encima del botón «Cambiar».
+- Una sesión caída (10 min de inactividad, o el mismo RUT en otro equipo) botaba al
+  login sin una palabra de explicación.
+- Terminar cualquier acción no llevaba a ningún lado: confirmar un pesaje dejaba una
+  línea verde y punto.
+
+**Lo que se construyó (7 piezas, en orden):**
+1. **Tab bar inferior** (`BarraPestanas.tsx`) reemplaza el menú deslizante superior —
+   Hoy + hasta 2 pantallas propias del rol + Más, siempre al alcance del pulgar.
+2. **`<Pantalla>`** — encabezado único (chip + título + accesorio) en las 9 pantallas;
+   antes cada una se lo dibujaba a mano, con tamaños distintos.
+3. **`<SiguientePaso>`** — la pieza central del encargo. Reemplaza la línea verde muda:
+   dice qué acaba de pasar y ofrece el salto SOLO cuando hay una tarea distinta a la que
+   sigue («Vender lo mostrador», «Armar la ruta si el pedido se completó», «Cerrar caja
+   → Ver el panel»). Seguir haciendo lo mismo —el 90% de los casos— no pide ningún clic.
+4. **Aterrizaje directo por rol** — un rol de una sola pantalla (maestro, repartidor)
+   entra derecho a ella; ya no pasa por un menú de una opción. Encontrado en el camino:
+   con `router.push`, el layout raíz (sesión leída en el servidor) no se re-ejecutaba en
+   la navegación de cliente — el chip y la tab bar seguían un instante mostrando «sin
+   sesión». Se resolvió navegando con `window.location.assign` en los 3 puntos donde
+   cambia el estado de auth (login, logout, "/" con sesión viva).
+5. **`/inicio` = «Hoy»**, no un menú — motor de la jornada (patrón `hoy/page.tsx` del
+   CRM): admin y vendedor ven una tarjeta con el paso real del día, calculada contra la
+   BD (pesajes, pedidos confirmados, ruta activa, cierre de caja — zona horaria de
+   Chile, no UTC).
+6. **Stepper** (`<Pasos>`) dentro de /pesar y /vender — avance visual liviano, no
+   navegación.
+7. **Gate completo VERDE** (12/12: lint, typecheck, unit, build, e2e móvil, invariantes
+   de BD) + verificación visual a 375×812 con los cuatro roles.
+
+**Dos defectos reales que solo aparecieron al verificar en el navegador, no al leer el
+código — quedan documentados porque el patrón vale para lo próximo que se toque:**
+- El desborde de `<Pantalla>`: con un accesorio ancho (chip de conexión + «Cambiar»),
+  `minWidth: 0` en el contenedor del título dejaba que el texto —una palabra sin espacio
+  donde partir— se desbordara VISUALMENTE encima del accesorio. Arreglado con
+  `flexWrap: "wrap"` en la fila y quitando el `minWidth: 0`.
+- El e2e detectó una colisión de texto real: la etiqueta del stepper "Carrito" (y
+  después "Armar el carrito") coincidía por substring, sin distinguir mayúsculas —así
+  matchea `getByText` de Playwright— con el `<p>Carrito</p>` real de la pantalla.
+  Renombrado a "Elegir productos", sin ninguna palabra compartida.
+
+**Aprendizaje para la próxima sesión que use el arnés de automatización del navegador:**
+los clics sintéticos (`computer.left_click`) dejaron de registrar en esta sesión —mismo
+síntoma que ya documentó `AUDITORIA_NAVEGACION.md`—; hubo que conducir la verificación
+por `javascript_tool` ejercitando los mismos manejadores de React. Y: basta con tocar
+`.next` mientras el service worker sigue registrado para que la app quede sirviendo un
+chunk viejo (`Cannot read properties of undefined`) — hay que limpiar `caches`+SW desde
+la consola del navegador después de cualquier build de producción que corra en paralelo
+al dev server (el gate `--full` corre `next build`, que pisa el `.next` del dev server).
+
+**Estado al cierre:** `check.sh --full` VERDE — 12/12, marcador `verde-20260727-022530`.
+Commits `df7d34e`..`543e3e3`. Nada pendiente de esta tarea.
+
+---
+
 ## 2026-07-26 (cierre) · Motor 24/7 cargado (casilla 14) y panel apuntando a `specs/` (casilla 16)
 
 **Casilla 16 — fuente de verdad del panel.** `panel/generar.mjs` contaba ACs desde
