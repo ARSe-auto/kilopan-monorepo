@@ -22,7 +22,15 @@ export const config = {
   // cualquier ruta bajo /api/ (cada endpoint ya exige su propia sesión con
   // exigirSesion/exigirRol, y a una API no le corresponde REDIRIGIR — le corresponde
   // devolver 401/403 en JSON, que es lo que ya hace).
-  matcher: ["/((?!api/|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js).*)"],
+  //
+  // Los archivos de marca van en esa misma lista y no por prolijidad: sin sesión,
+  // /icono-192.png caía en la redirección a /ingresar y devolvía HTML. Resultado: el
+  // logo salía como imagen rota justo en la pantalla de login y de vinculación —las
+  // dos públicas—, y el manifest (que sí pasa) apuntaba a íconos que el navegador no
+  // podía bajar para instalar la PWA.
+  matcher: [
+    "/((?!api/|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icono-192.png|icono-512.png|logo-kilopan.svg).*)",
+  ],
 };
 
 const RUTAS_PUBLICAS = new Set(["/", "/ingresar", "/vincular"]);

@@ -1,5 +1,8 @@
 // Mismo ícono que /icono-192.png (manifest.ts) — un solo asset de marca, no uno
-// nuevo para pantalla y otro para PWA.
+// nuevo para pantalla y otro para PWA. El original de la marca es
+// /logo-kilopan.svg (la balanza sobre el cuadrado ámbar de kilopan.cl); los PNG se
+// rasterizan de ahí. Si hace falta otro tamaño, sale de ese SVG: no se dibuja una
+// marca nueva.
 //
 // `comoTitulo` existe porque en /ingresar el logo ES el título de la página: al
 // reemplazar el <h1>KiloPan</h1> por este componente, la pantalla quedó sin ningún
