@@ -111,6 +111,14 @@ export function puedeEntrar(rol: string | undefined, href: string): boolean {
   return !!rol && destinosDe(rol).some((d) => d.href === href);
 }
 
+/** Lo que «Más» tiene que listar: los destinos del rol que NO ya tienen su propia pestaña.
+ *  Para el maestro, el vendedor y el repartidor esto sale vacío — sus una o dos pantallas
+ *  ya están en la barra — y «Más» les sirve solo para ver su nombre/rol y Salir. */
+export function destinosEnMas(rol: string): Destino[] {
+  const enPestanas = new Set(pestanasDe(rol).map((p) => p.href));
+  return destinosDe(rol).filter((d) => !enPestanas.has(d.href));
+}
+
 const TITULOS: Record<string, string> = {
   "/inicio": "Hoy",
   "/mas": "Más",

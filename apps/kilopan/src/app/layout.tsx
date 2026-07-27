@@ -5,7 +5,7 @@ import { obtenerSesionActual } from "@/identidad/sesion.ts";
 import { RegistrarSW } from "./RegistrarSW.tsx";
 import { InterceptarSesionVencida } from "./InterceptarSesionVencida.tsx";
 import { ProveedorSesion } from "./SesionCliente.tsx";
-import { BarraApp } from "./BarraApp.tsx";
+import { BarraPestanas, ALTO_BARRA_PESTANAS } from "./BarraPestanas.tsx";
 
 export const metadata: Metadata = {
   title: "KiloPan",
@@ -66,8 +66,22 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         }}
       >
         <ProveedorSesion sesion={sesionCliente}>
-          <BarraApp />
-          {children}
+          {/* La tab bar es de posición fija: reserva su alto acá para que el botón
+              primario de cada pantalla («Confirmar», «Cobrar») no quede tapado detrás
+              de ella — el mismo defecto que ya corrigió el reset de box-sizing arriba,
+              esta vez por el lado de abajo. Sin sesión no hay tab bar (RUTAS_SIN_BARRA
+              en navegacion.ts), así que tampoco hace falta el relleno. */}
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              paddingBottom: sesionCliente ? ALTO_BARRA_PESTANAS : 0,
+            }}
+          >
+            {children}
+          </div>
+          <BarraPestanas />
         </ProveedorSesion>
         <RegistrarSW />
         <InterceptarSesionVencida />
