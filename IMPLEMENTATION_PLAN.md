@@ -359,8 +359,17 @@ chequear el commit real. `watchdog.sh` lo repite con: (a) verificación de `comm
 claude`/`pnpm` en su PROPIO PATH antes de arrancar, (b) tope de iteraciones totales
 (`KILOPAN_MAX_ITERACIONES`, default 20) y (c) corte tras N iteraciones seguidas sin
 commit nuevo (`KILOPAN_MAX_SIN_AVANCE`, default 3) — nunca "corre indefinido hasta que
-alguien se dé cuenta". Escritos y probada su sintaxis; **todavía no se lanzaron en modo
-desatendido** — eso queda a decisión explícita de cada sesión (ver docs/LECCION_RALPH.md).
+alguien se dé cuenta". Escritos y probada su sintaxis.
+
+**Estado 2-ago-2026 (cierre de Ola 1):** las cuatro condiciones de encendido de
+`docs/PROMPT_CORRECTIVO.md` §9.4 están verificadas — gate 0 saltados, los 5 mutantes de
+Anexo B en rojo (`campana.mjs --had` 100%), CI verde en 3 commits distintos
+(`.github/workflows/gate.yml`, corridas #8/#9/#10), `lock.sh` exit 7 confirmado — pero
+el motor **todavía no se cargó en launchd**: `com.eauto.ralph-loop` está corriendo en
+vivo en esta máquina ahora mismo, y ambos motores comparten la misma credencial OAuth
+(`packages/metodo/launchd/README.md`); el propio maestro exige un solo motor a la vez.
+Encender el de KiloPan mientras el de eauto vive rompería esa regla. Queda a decisión
+explícita de Alexis (pausar eauto o esperar a que termine) — ver docs/BITACORA.md.
 
 ## Panel (qué debe poder leer `packages/metodo/panel/generar.mjs`)
 
