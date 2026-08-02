@@ -670,6 +670,36 @@ test("AC-DES-02 (art. 55 DL 825): una ruta con un pedido SIN DTE no puede pasar 
   await db.close();
 });
 
+test("P0-5 (art. 55 DL 825): una NOTA DE CRÉDITO (61) asociada al pedido NO habilita la ruta", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "repartidor");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const clienteId = await crearCliente(db);
+  const pedidoId = await crearPedido(db, clienteId, usuarioId, dispositivoId);
+  const ruta = await db.query(
+    `insert into pan.rutas (repartidor_id, vehiculo) values ($1,'ABCD12') returning id`,
+    [usuarioId]
+  );
+  const rutaId = ruta.rows[0].id;
+  await db.query(`insert into pan.ruta_paradas (ruta_id, pedido_id, orden) values ($1,$2,1)`, [rutaId, pedidoId]);
+
+  // specs/kilopan/06-registro-dte.md: "NC 61 como anulación" — es lo contrario de un
+  // respaldo de despacho. Antes del fix, el trigger solo miraba estado='registrado'
+  // sin mirar tipo_dte, así que esto dejaba salir el furgón sin guía ni factura real.
+  await registrarDte(db, pedidoId, usuarioId, dispositivoId, 9001, 61);
+  await assert.rejects(
+    () => db.query(`update pan.rutas set estado = 'en_curso' where id = $1`, [rutaId]),
+    /sin DTE asociado/i,
+    "una nota de crédito no es un documento de despacho — la ruta sigue sin poder salir"
+  );
+
+  // Y una guía real SÍ la habilita, incluso con la nota de crédito ya presente.
+  await registrarDte(db, pedidoId, usuarioId, dispositivoId, 9002, 52);
+  const ok = await db.query(`update pan.rutas set estado = 'en_curso' where id = $1 returning estado`, [rutaId]);
+  assert.equal(ok.rows[0].estado, "en_curso", "con la guía real registrada, ahora sí sale");
+  await db.close();
+});
+
 test("AC-DTE-01: (tipo, folio, rut_emisor) es único — el mismo folio no se registra dos veces", async () => {
   const db = await dbNueva();
   const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
