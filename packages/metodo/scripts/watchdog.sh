@@ -46,6 +46,22 @@ while [ "$i" -lt "$MAX_ITERACIONES" ]; do
   case "$rc" in
     0)
       sin_avance=0
+      # P1 (auditoría 1-ago-2026): loop.sh le pide al AGENTE que corra check.sh --full
+      # ANTES de comitear — el marcador last-green que ESE check.sh estampa queda con
+      # el HEAD de ANTES del commit (el árbol verificado era el working tree sucio, que
+      # recién se vuelve un commit después). "El verde lo estampa el exit code del
+      # gate, jamás un agente" (docs/PROMPT_CORRECTIVO.md §9.2) — acá es donde eso se
+      # cumple de verdad: watchdog, DUEÑO del proceso y no parte del trabajo del
+      # agente, vuelve a correr el gate completo DESPUÉS del commit, sobre el HEAD
+      # real. Si no queda verde, el commit que el agente dio por bueno no lo era: se
+      # aborta en vez de seguir construyendo sobre algo que nunca se verificó de
+      # verdad. No se revierte solo (la lección de camino-dorado.spec.ts:223: un
+      # veredicto malo revirtiendo un commit sano es peor que uno rojo esperando).
+      echo "watchdog: commit nuevo — re-verificando el gate completo de forma independiente sobre HEAD" | tee -a "$LOG"
+      if ! bash packages/metodo/scripts/check.sh --full 2>&1 | tee -a "$LOG"; then
+        echo "watchdog: ABORT — el gate independiente NO dio verde sobre el HEAD que el agente acaba de comitear ($(git rev-parse --short HEAD)). El auto-reporte del agente no es evidencia; revisar a mano, NO reintentar solo." | tee -a "$LOG"
+        exit 1
+      fi
       ;;
     3)
       # INFRA caída (casilla 5): NO es árbol rojo y NO cuenta como falta de avance.
