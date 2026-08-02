@@ -14,10 +14,19 @@ import { operadorActual } from "@/identidad/cliente/operador.ts";
 const DB_NOMBRE = "kilopan_outbox";
 const TIENDA = "pendientes";
 const TIENDA_FOTOS = "fotos_pendientes";
+const TIENDA_RECHAZADOS = "rechazados";
 // v3: agrega fotos_pendientes — el sha256 del POD viajaba en la entrega, pero el JPEG
 // (multipart, /api/fotos) se subía "al tiro nomás" sin cola: si esa subida fallaba por
 // mala señal, la foto se perdía para siempre aunque la entrega quedara confirmada.
-const VERSION = 3;
+// v4 (P0-2, auditoría 1-ago-2026): agrega rechazados. Antes, un ítem que rebotaba con
+// 4xx al sincronizar (409 stock insuficiente al volver la señal tras vender sin red,
+// por ejemplo) se borraba de `pendientes` con `quitar()` y su único rastro era un
+// mensaje efímero de React que la siguiente tecla —o el siguiente ciclo de 30 s—
+// pisaba. La venta ya estaba cobrada en efectivo: quedaba plata en la mano del
+// vendedor sin ningún registro en ninguna parte. Ahora el rechazo se persiste ACÁ
+// antes de borrarse de la cola de reintento, y sobrevive hasta que un operador lo
+// descarta explícitamente (bandeja de pendientes, Ola 2).
+const VERSION = 4;
 
 export type TipoMutacion = "entrega" | "pesaje" | "venta";
 
@@ -63,6 +72,9 @@ function abrir(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(TIENDA_FOTOS)) {
         db.createObjectStore(TIENDA_FOTOS, { keyPath: "sha256" });
       }
+      if (!db.objectStoreNames.contains(TIENDA_RECHAZADOS)) {
+        db.createObjectStore(TIENDA_RECHAZADOS, { keyPath: "clientUuid" });
+      }
     };
     req.onsuccess = () => resolver(req.result);
     req.onerror = () => rechazar(req.error);
@@ -89,6 +101,60 @@ async function conTiendaFotos<T>(modo: IDBTransactionMode, fn: (t: IDBObjectStor
     req.onerror = () => rechazar(req.error);
     tx.oncomplete = () => db.close();
   });
+}
+
+async function conTiendaRechazados<T>(
+  modo: IDBTransactionMode,
+  fn: (t: IDBObjectStore) => IDBRequest
+): Promise<T> {
+  const db = await abrir();
+  return new Promise<T>((resolver, rechazar) => {
+    const tx = db.transaction(TIENDA_RECHAZADOS, modo);
+    const req = fn(tx.objectStore(TIENDA_RECHAZADOS));
+    req.onsuccess = () => resolver(req.result as T);
+    req.onerror = () => rechazar(req.error);
+    tx.oncomplete = () => db.close();
+  });
+}
+
+export interface ItemRechazado {
+  clientUuid: string;
+  tipo: TipoMutacion;
+  ruta: string;
+  payload: unknown;
+  motivo: string;
+  rechazadoAt: number;
+}
+
+/** P0-2: persiste un ítem que el servidor rechazó con 4xx de negocio, ANTES de que
+ *  `sincronizar()` lo borre de la cola de reintento. Es la diferencia entre "la venta
+ *  desapareció" y "la venta quedó marcada para que un admin la revise" — la bandeja que
+ *  la lee (Ola 2) todavía no existe, pero el dato ya no se pierde mientras se construye. */
+async function encolarRechazado(item: ItemOutbox, motivo: string): Promise<void> {
+  await conTiendaRechazados("readwrite", (t) =>
+    t.put({
+      clientUuid: item.clientUuid,
+      tipo: item.tipo,
+      ruta: item.ruta,
+      payload: item.payload,
+      motivo,
+      rechazadoAt: Date.now(),
+    } satisfies ItemRechazado)
+  );
+}
+
+export async function listarRechazados(): Promise<ItemRechazado[]> {
+  return conTiendaRechazados<ItemRechazado[]>("readonly", (t) => t.getAll());
+}
+
+export async function contarRechazados(): Promise<number> {
+  return conTiendaRechazados<number>("readonly", (t) => t.count());
+}
+
+/** Solo para cuando un operador ya resolvió el caso a mano (bandeja de Ola 2). Nunca la
+ *  llama el ciclo de sync automático. */
+export async function descartarRechazado(clientUuid: string): Promise<void> {
+  await conTiendaRechazados("readwrite", (t) => t.delete(clientUuid));
 }
 
 /** Encola el JPEG de un POD que no se pudo subir al tiro (sin señal / 5xx). El sha256
@@ -318,11 +384,14 @@ export async function sincronizar(): Promise<ResultadoSync> {
         sinConexion = true;
       } else if (r.status < 500) {
         const cuerpo = await r.json().catch(() => ({}));
+        const motivo = (cuerpo as { error?: string }).error ?? `Error ${r.status}`;
+        // P0-2: persistir el rechazo ANTES de sacarlo de la cola de reintento. El
+        // orden importa — si `quitar()` corriera primero y el proceso muriera entre
+        // medio (el teléfono se queda sin batería, se cierra la pestaña), el ítem se
+        // perdería sin dejar ni el registro de rechazo.
+        await encolarRechazado(item, motivo);
         await quitar(item.clientUuid);
-        rechazadas.push({
-          clientUuid: item.clientUuid,
-          motivo: (cuerpo as { error?: string }).error ?? `Error ${r.status}`,
-        });
+        rechazadas.push({ clientUuid: item.clientUuid, motivo });
       } else {
         await marcarFallo(item, `Error ${r.status}`);
         sinConexion = true;
