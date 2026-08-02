@@ -35,10 +35,15 @@ jobs:
       - name: Instalar dependencias (lockfile congelado)
         run: pnpm install --frozen-lockfile
 
-      # Solo Chromium: playwright.config.ts usa devices["iPhone 13"], que es Chromium.
+      # Solo WebKit: playwright.config.ts usa devices["iPhone 13"] — los presets de
+      # dispositivos iOS de Playwright usan WebKit por defecto (Safari real es WebKit,
+      # no Chrome), NO Chromium. Confirmado con el error real de la corrida #6:
+      # "browserType.launch: Executable doesn't exist at
+      # /home/runner/.cache/ms-playwright/webkit-2336/pw_run.sh" — el comentario
+      # anterior de este archivo afirmaba Chromium y estaba equivocado.
       # --with-deps trae las librerías de sistema que el runner de Ubuntu no trae de serie.
-      - name: Instalar navegador de Playwright (Chromium)
-        run: pnpm --filter kilopan exec playwright install --with-deps chromium
+      - name: Instalar navegador de Playwright (WebKit)
+        run: pnpm --filter kilopan exec playwright install --with-deps webkit
 
       - name: check.sh --full
         run: pnpm check:full
