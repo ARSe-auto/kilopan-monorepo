@@ -42,9 +42,18 @@ export default defineConfig({
     // <input type=file>, que dejaría adjuntar una foto vieja de la galería como si fuera
     // de esta bandeja). Sin cámara falsa esas dos pantallas son intesteables, que es
     // justamente por qué el e2e se había quedado en dos casos de autorización.
-    launchOptions: {
-      args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"],
-    },
+    //
+    // SIN launchOptions.args (bug encontrado en CI, Ola 1 2-ago-2026):
+    // --use-fake-ui-for-media-stream/--use-fake-device-for-media-stream son flags de
+    // línea de comando de CHROMIUM — devices["iPhone 13"] fuerza el motor WebKit (un
+    // iPhone real corre Safari, no Chrome), y el WebKit de Linux en CI rebota con
+    // "Cannot parse arguments: Unknown option" y el browser nunca lanza. El WebKit de
+    // este Mac los tolera en silencio (parser más permisivo), que es por qué nunca se
+    // notó en local — el mismo patrón que ya encontró AC-SEC-06 (verde local, hueco
+    // real). No hacen falta: el getUserMedia falso de Playwright lo activa
+    // `permissions: ["camera"]` de abajo, sin flags de motor, igual en los tres
+    // navegadores.
+    //
     // Las dos juntas: `permissions` REEMPLAZA el set del contexto, así que pedir solo
     // geolocalización deja la cámara denegada y el obturador nunca se habilita.
     permissions: ["geolocation", "camera"],
