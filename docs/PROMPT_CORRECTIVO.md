@@ -254,6 +254,17 @@ con e2e de Playwright y captura — nunca con juicio estético:
   pudo subir y por qué. Nada que la cola rechace desaparece sin decisión del operador.
 - **El teclado grande** (`TecladoNumerico`, ya existe) en todo campo de plata, incluido el arqueo,
   que hoy usa el teclado chico del sistema.
+- **F23 — sin `<select>` nativo en manos enharinadas** (declarado 2-ago-2026, encontrado por una
+  sesión hermana auditando en solo lectura): `vender/page.tsx` (elegir el cliente al fiar) y
+  `admin/page.tsx` (cambiar el rol de un usuario) usan `<select>` del sistema — el mismo defecto de
+  fondo que el teclado chico del arqueo (AC-H0-11, "ningún control del sistema en un campo que un
+  panadero real toca a diario"), del lado de listas en vez de números. Se reemplazan por
+  `SelectorUnToque` (`packages/miga`, ya existe — el mismo patrón que ya usan destino de pesaje y
+  medio de pago). Rompe de forma predecible 5 e2e existentes que dependen de la forma actual del
+  DOM (`camino-dorado.spec.ts` con `.fill()` sobre el input de caja, y el helper `teclear()`
+  duplicado en 4 specs que hace `getByRole("button", {name: dígito})` — un segundo teclado de
+  dígitos en la misma pantalla rompería ese locator por *strict mode*); se actualizan en el mismo
+  cambio, con la regla de dos manos.
 - **Apertura de turno** al primer ingreso del día en un equipo: fondo inicial y confirmación, dos
   toques.
 

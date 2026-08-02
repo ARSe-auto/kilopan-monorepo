@@ -237,8 +237,13 @@ test("7 · la caja se cuenta a ciegas: el vendedor no ve lo esperado antes de co
   await expect(page.getByText("¿cuánto contaste?").first()).toBeVisible();
   await expect(page.getByText(/esperado \$/i)).toHaveCount(0);
 
-  const efectivo = page.getByPlaceholder("0").first();
-  await efectivo.fill("5475");
+  // F23 (docs/PROMPT_CORRECTIVO.md §5): el campo de efectivo ya no es un <input> —
+  // es un botón que abre el teclado propio compartido (mismo componente que PIN y
+  // kilos). Tocar el botón, teclear con el mismo `teclear()` de siempre (las teclas
+  // del teclado numérico llevan aria-label = el dígito, igual que las del login).
+  await page.getByRole("button", { name: /^Efectivo:/ }).click();
+  await teclear(page, "5475");
+  await page.getByRole("button", { name: "Listo" }).click();
   await page.getByRole("button", { name: /Cerrar caja/ }).click();
 
   // Recién DESPUÉS de cerrar aparece el contraste, que es cuando ya no se puede alterar.

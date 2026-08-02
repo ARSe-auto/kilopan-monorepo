@@ -278,6 +278,7 @@ verificarlos uno por uno **leyendo el código, no grepeando** —un grep no dist
 pantalla de un comentario que la menciona— 7 ya estaban construidos y 2 estaban a medias.
 Quedan 16 reales. Cada AC cerrado hoy lleva su cita en el archivo que lo implementa.
 
+- [ ] (P1) F23 — sin `<select>` nativo en manos enharinadas: `vender/page.tsx` (cliente al fiar) y `admin/page.tsx` (rol de usuario) usan el `<select>` del sistema; reemplazar por `SelectorUnToque` (packages/miga), el mismo patrón que ya usan destino de pesaje y medio de pago. Actualizar los 5 e2e que dependen del DOM actual — correctivo: `docs/PROMPT_CORRECTIVO.md` §5
 - [x] (P1) Chip con el nombre del operador **siempre visible** en cada pantalla, como exige §5 F5. Hoy el relevo funciona pero el chip no existe: quien pesa no puede confirmar de un vistazo baj… — spec: `specs/kilopan/01-identidad.md` [AC-ID-07]
 - [ ] (P1) Orden de productos **por frecuencia real** de pesaje, no alfabético como hoy. §5 F1 lo exige para que repetir producto cueste 2 toques. Requiere trackear frecuencia. Test: sembrar fr… — spec: `specs/kilopan/02-catalogo-pesaje.md` [AC-PES-07]
 - [ ] (P1) F3 Cargar van: contador N/M en 96 px, escáner de cámara full-screen con linterna (48 px, alcanzable con pulgar — madrugada real), lectura válida = beep + vibración, duplicada = tono … — spec: `specs/kilopan/04-despacho-reparto.md` [AC-DES-04]

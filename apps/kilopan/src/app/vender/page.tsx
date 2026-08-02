@@ -329,19 +329,17 @@ export default function VenderPage() {
               <p style={{ fontSize: 13, fontWeight: 600, color: superficie.textoDim, margin: "0 0 8px" }}>
                 ¿A quién se le anota?
               </p>
-              <select
-                value={clienteFiado}
-                onChange={(e) => setClienteFiado(e.target.value)}
-                style={{ width: "100%", minHeight: 44, borderRadius: 12, border: `1px solid ${superficie.hairline}`, padding: "0 14px", fontSize: 17, background: "#fff" }}
-              >
-                <option value="">Elige un cliente registrado…</option>
-                {clientes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.razon_social}
-                    {c.saldo_pendiente_clp ? ` — debe ${formatearClp(Number(c.saldo_pendiente_clp))}` : ""}
-                  </option>
-                ))}
-              </select>
+              {/* F23 (docs/PROMPT_CORRECTIVO.md §5): sin <select> del sistema — mismo
+                  patrón que destino de pesaje y medio de pago, un toque por opción. */}
+              <SelectorUnToque
+                opciones={clientes.map((c) => ({
+                  valor: c.id,
+                  etiqueta:
+                    c.razon_social + (c.saldo_pendiente_clp ? ` — debe ${formatearClp(Number(c.saldo_pendiente_clp))}` : ""),
+                }))}
+                valor={clienteFiado || null}
+                onCambiar={setClienteFiado}
+              />
               {clientes.length === 0 ? (
                 <p style={{ fontSize: 13, color: semantico.alerta, marginTop: 6 }}>
                   No hay clientes registrados todavía. Agrégalos en Despacho.

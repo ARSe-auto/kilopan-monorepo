@@ -274,14 +274,17 @@ function SeccionPersonal() {
               </button>
             </div>
             <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-              <select
-                value={u.rol}
-                disabled={guardandoId === u.id}
-                onChange={(e) => patch(u.id, { rol: e.target.value })}
-                style={{ minHeight: 44, borderRadius: 10, border: `1px solid ${superficie.hairline}`, padding: "0 10px", fontSize: 14 }}
-              >
-                {ROLES.map((r) => <option key={r.valor} value={r.valor}>{r.etiqueta}</option>)}
-              </select>
+              {/* F23 (docs/PROMPT_CORRECTIVO.md §5): sin <select> del sistema — cuatro
+                  roles fijos, el mismo patrón de un toque que ya usan destino y medio
+                  de pago. `disabled` no es una prop de SelectorUnToque: se envuelve en
+                  un contenedor con pointerEvents apagado mientras guarda. */}
+              <div style={guardandoId === u.id ? { pointerEvents: "none", opacity: 0.6 } : undefined}>
+                <SelectorUnToque
+                  opciones={ROLES.map((r) => ({ valor: r.valor, etiqueta: r.etiqueta }))}
+                  valor={u.rol}
+                  onCambiar={(rol) => patch(u.id, { rol })}
+                />
+              </div>
               {reseteandoId === u.id ? (
                 <>
                   <input

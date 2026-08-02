@@ -2,7 +2,7 @@
 // módulo 3). El vendedor cuenta A CIEGAS: no ve lo esperado antes de declarar.
 "use client";
 import { useEffect, useState } from "react";
-import { BotonPrimario } from "@kilopan/miga/componentes/index.tsx";
+import { BotonPrimario, TecladoNumerico, CifraGrande } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico } from "@kilopan/miga/tokens.ts";
 import { formatearClp, parsearClp } from "@/comun/formato.ts";
 import { compartir, sePuedeCompartir } from "@/comun/compartir.ts";
@@ -24,6 +24,13 @@ export default function CajaPage() {
   const [medios, setMedios] = useState<MedioCaja[]>([]);
   const [declarados, setDeclarados] = useState<Record<string, string>>({});
   const [totalFacturador, setTotalFacturador] = useState("");
+  // F23 (docs/PROMPT_CORRECTIVO.md §5): teclado del sistema fuera del arqueo. Con
+  // hasta 9 campos de plata en esta pantalla (8 medios + el facturador), un
+  // TecladoNumerico POR CAMPO sería una pila de teclados — el patrón correcto es UNO
+  // compartido, enrutado al campo que el vendedor tocó. FACTURADOR es un centinela
+  // de string, no un medio_pago real: nunca choca porque medio_pago sale de la BD.
+  const FACTURADOR = "__facturador__";
+  const [campoActivo, setCampoActivo] = useState<string | null>(null);
   const [resultado, setResultado] = useState<{ filas: FilaResultado[]; difFacturador: number | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   // "cargando"/"errorCarga" separados de "medios vacío": sin esto, un fetch que
@@ -44,6 +51,14 @@ export default function CajaPage() {
       .catch(() => setErrorCarga(true))
       .finally(() => setCargando(false));
   }, []);
+
+  function valorDeCampo(campo: string): string {
+    return campo === FACTURADOR ? totalFacturador : declarados[campo] ?? "";
+  }
+  function fijarValorDeCampo(campo: string, nuevo: string) {
+    if (campo === FACTURADOR) setTotalFacturador(nuevo);
+    else setDeclarados((d) => ({ ...d, [campo]: nuevo }));
+  }
 
   const totalEsperado = medios.reduce((s, m) => s + Number(m.esperado_clp ?? 0), 0);
 
@@ -103,6 +118,7 @@ export default function CajaPage() {
       ) : null}
 
       {medios.map((m) => {
+        const activo = campoActivo === m.medio_pago;
         return (
           <div key={m.medio_pago} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
             <div style={{ flex: 1 }}>
@@ -111,31 +127,78 @@ export default function CajaPage() {
                 {m.esperado_clp != null ? `esperado ${formatearClp(Number(m.esperado_clp))}` : "¿cuánto contaste?"}
               </p>
             </div>
-            <input
-              value={declarados[m.medio_pago] ?? ""}
-              onChange={(e) => setDeclarados({ ...declarados, [m.medio_pago]: e.target.value })}
-              placeholder="0"
-              inputMode="numeric"
-              style={{ width: 130, minHeight: 44, borderRadius: 12, border: `1px solid ${superficie.hairline}`, padding: "0 12px", fontSize: 17, fontVariantNumeric: "tabular-nums", textAlign: "right" }}
-            />
+            {/* F23: sin teclado del sistema — este botón abre el teclado propio
+                compartido de abajo en vez de un <input> editable directo.
+                aria-label con la etiqueta del medio: sin esto, dos medios vacíos
+                compiten por el mismo nombre accesible "0" (y con el teclado abierto,
+                también con la tecla "0" del propio TecladoNumerico) — ambiguo para
+                cualquier lector de pantalla y para un locator de Playwright. */}
+            <button
+              type="button"
+              onClick={() => setCampoActivo(activo ? null : m.medio_pago)}
+              aria-pressed={activo}
+              aria-label={`${m.etiqueta}: ${declarados[m.medio_pago] ? formatearClp(parsearClp(declarados[m.medio_pago]!)) : "sin contar"}`}
+              style={{
+                minWidth: 130,
+                minHeight: 44,
+                borderRadius: 12,
+                border: activo ? "2px solid #C2410C" : `1px solid ${superficie.hairline}`,
+                padding: "0 12px",
+                fontSize: 17,
+                fontVariantNumeric: "tabular-nums",
+                textAlign: "right",
+                background: "#fff",
+                color: declarados[m.medio_pago] ? "#1B1712" : superficie.textoFaint,
+              }}
+            >
+              {declarados[m.medio_pago] ? formatearClp(parsearClp(declarados[m.medio_pago]!)) : "0"}
+            </button>
           </div>
         );
       })}
 
       <div style={{ borderTop: `1px solid ${superficie.hairline}`, paddingTop: 12 }}>
-        <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: superficie.textoDim }}>
-            Total que marcó tu facturador (opcional)
-          </span>
-          <input
-            value={totalFacturador}
-            onChange={(e) => setTotalFacturador(e.target.value)}
-            placeholder="Lo que dice la boleta del día"
-            inputMode="numeric"
-            style={{ minHeight: 44, borderRadius: 12, border: `1px solid ${superficie.hairline}`, padding: "0 14px", fontSize: 17 }}
-          />
-        </label>
+        <p style={{ margin: "0 0 6px", fontSize: 13, fontWeight: 600, color: superficie.textoDim }}>
+          Total que marcó tu facturador (opcional)
+        </p>
+        <button
+          type="button"
+          onClick={() => setCampoActivo(campoActivo === FACTURADOR ? null : FACTURADOR)}
+          aria-pressed={campoActivo === FACTURADOR}
+          style={{
+            width: "100%",
+            minHeight: 44,
+            borderRadius: 12,
+            border: campoActivo === FACTURADOR ? "2px solid #C2410C" : `1px solid ${superficie.hairline}`,
+            padding: "0 14px",
+            fontSize: 17,
+            textAlign: "left",
+            background: "#fff",
+            color: totalFacturador ? "#1B1712" : superficie.textoFaint,
+          }}
+        >
+          {totalFacturador ? formatearClp(parsearClp(totalFacturador)) : "Lo que dice la boleta del día"}
+        </button>
       </div>
+
+      {campoActivo ? (
+        <div style={{ background: superficie.tarjeta, border: `1px solid ${superficie.hairline}`, borderRadius: 14, padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <CifraGrande valor={valorDeCampo(campoActivo) || "0"} />
+            <button
+              type="button"
+              onClick={() => setCampoActivo(null)}
+              style={{ minHeight: 44, padding: "0 16px", borderRadius: 10, border: `1px solid ${superficie.hairline}`, background: "#fff", fontWeight: 700, fontSize: 14 }}
+            >
+              Listo
+            </button>
+          </div>
+          <TecladoNumerico
+            valor={valorDeCampo(campoActivo)}
+            onCambiar={(nuevo) => fijarValorDeCampo(campoActivo, nuevo)}
+          />
+        </div>
+      ) : null}
 
       {error ? <p style={{ color: semantico.error, fontSize: 14 }} role="alert">{error}</p> : null}
 

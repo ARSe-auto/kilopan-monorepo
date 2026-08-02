@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "kilopan-dev",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "kilopan", "run", "dev"],
+      "port": 3300
+    }
+  ]
+}
