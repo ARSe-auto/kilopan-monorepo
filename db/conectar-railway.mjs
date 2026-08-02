@@ -180,7 +180,33 @@ function correr(script, titulo) {
 
 if (!correr("verificar-conexion.mjs", [5, "Diagnóstico de la conexión"])) process.exit(1);
 if (!correr("migrar.mjs", [6, "Migraciones"])) process.exit(1);
-if (!correr("sembrar.mjs", [7, "Semilla"])) process.exit(1);
+
+// P1 (auditoría 1-ago-2026): antes esto corría sembrar.mjs sin preguntar, siempre —
+// incluida la vez en que este script se apunta a un proyecto de Railway que YA tiene
+// datos reales (el propio piloto de Indupan). sembrar.mjs no borra nada (usa
+// select-antes-de-insertar), pero sí AGREGA cuatro usuarios de demo con PIN «1234» —
+// un PIN público, en este mismo archivo, desde hace meses — y un dispositivo con
+// secreto «demo», a una base que un panadero real usa. La condición correcta no es
+// "¿estamos en producción?" (Railway es SIEMPRE remoto acá) sino "¿esta base ya tiene
+// usuarios?" — si los tiene, no es una conexión nueva, es una reconexión a algo que
+// alguien ya está usando, y sembrar no es automático nunca más.
+paso(7, "¿Corresponde sembrar? (esta base, ¿ya tiene usuarios?)");
+const { Client } = await import("pg");
+const clienteDiagnostico = new Client({ connectionString: publica, ssl: { rejectUnauthorized: false } });
+await clienteDiagnostico.connect();
+const yaHayUsuarios = await clienteDiagnostico.query(`select count(*)::int as n from pan.usuarios`);
+await clienteDiagnostico.end();
+
+if (yaHayUsuarios.rows[0].n > 0) {
+  console.log(
+    `    esta base ya tiene ${yaHayUsuarios.rows[0].n} usuario(s) — NO se siembra automáticamente.\n` +
+      "    si de verdad quieres agregar los usuarios de demo (PIN 1234) a esta base,\n" +
+      "    corre a mano: node db/sembrar.mjs"
+  );
+} else {
+  console.log("    base vacía (0 usuarios) — sembrando datos de demo.");
+  if (!correr("sembrar.mjs", [8, "Semilla"])) process.exit(1);
+}
 
 console.log(`
 =========================================================

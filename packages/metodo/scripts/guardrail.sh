@@ -8,15 +8,23 @@ echo "== guardrail: base de datos =="
 # El guardrail original exigía localhost a secas. Con Postgres hospedado eso ya no
 # sirve, pero la razón por la que existía SÍ sigue viva: que nadie apunte el entorno
 # de desarrollo a la BD de una panadería real por accidente.
-if [ -f .env.local ]; then
+#
+# KILOPAN_ENV_FILE (P1, auditoría 1-ago-2026): por defecto es .env.local, el real. Solo
+# existe para que prueba-arnes.sh pueda ejercer este guard contra un archivo DESECHABLE
+# — antes esas pruebas escribían y restauraban el .env.local real, y una interrupción a
+# mitad de camino lo dejaba con el fixture puesto. El propio arreglo del prompt
+# correctivo (docs/PROMPT_CORRECTIVO.md §7) es que el archivo real nunca se toque, ni
+# un instante.
+ENV_FILE="${KILOPAN_ENV_FILE:-.env.local}"
+if [ -f "$ENV_FILE" ]; then
   # ÚLTIMA definición, no la primera: tanto db.ts como migrar.mjs parsean con
   # `env[clave]=valor`, así que gana la última. Con `head -1` este guardrail leía la
   # línea de ejemplo (localhost) y daba por local un .env.local que en realidad
   # apuntaba a una URL remota pegada más abajo — el patrón exacto de copiar la cadena
   # del dashboard al final del archivo.
-  DB_URL="$(grep -E '^DATABASE_URL=' .env.local | tail -1 | cut -d= -f2- | tr -d '\r' || true)"
+  DB_URL="$(grep -E '^DATABASE_URL=' "$ENV_FILE" | tail -1 | cut -d= -f2- | tr -d '\r' || true)"
   if [ -n "$DB_URL" ] && ! echo "$DB_URL" | grep -qE '(localhost|127\.0\.0\.1)'; then
-    if ! grep -qE '^KILOPAN_DB_REMOTA_INTENCIONAL=(1|true)$' .env.local; then
+    if ! grep -qE '^KILOPAN_DB_REMOTA_INTENCIONAL=(1|true)$' "$ENV_FILE"; then
       echo "ABORT: DATABASE_URL es remota pero falta KILOPAN_DB_REMOTA_INTENCIONAL=1"
       echo "       (existe para que apuntar a la BD de una panadería real sea un acto deliberado)"
       FAIL=1
@@ -34,7 +42,36 @@ if [ -f .env.local ]; then
     fi
   fi
 else
-  echo "  (.env.local no existe todavía — copiar desde .env.local.example)"
+  echo "  ($ENV_FILE no existe todavía — copiar desde .env.local.example)"
+fi
+
+echo "== guardrail: sin .env.local de worktree de agente en el árbol =="
+# P1 (auditoría 1-ago-2026): cada worktree de agente (.claude/worktrees/*) es su propio
+# checkout con su propio .env.local — cuatro, verificados, cada uno con su propia
+# cadena de conexión. .dockerignore ya los excluye del contexto de build (doble patrón,
+# ver ese archivo), pero un guard que solo actúa en build time no sirve de nada si nadie
+# corre el build antes de, por ejemplo, empujar una imagen a mano. Esto lo detecta ANTES.
+if find .claude/worktrees -mindepth 2 -maxdepth 2 -name '.env.local' 2>/dev/null | grep -q .; then
+  echo "ABORT: hay .env.local dentro de .claude/worktrees/*/ — cada uno es un secreto"
+  echo "       de conexión propio que no debería sobrevivir fuera de su worktree."
+  FAIL=1
+fi
+
+echo "== guardrail: railway up solo sobre árbol limpio y empujado =="
+# P1 (auditoría 1-ago-2026): `railway up` sube el ÁRBOL DE TRABAJO completo, no HEAD.
+# Un árbol sucio (trabajo de otra sesión, un experimento a medio terminar) se despliega
+# tal cual, y nadie puede saber después qué versión quedó corriendo en producción.
+if [ "${1:-}" = "--antes-de-railway-up" ]; then
+  if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null || [ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+    echo "ABORT: el árbol de trabajo no está limpio — 'railway up' subiría cambios sin commitear."
+    FAIL=1
+  fi
+  AHEAD="$(git rev-list --count '@{u}..HEAD' 2>/dev/null || echo '?')"
+  if [ "$AHEAD" != "0" ]; then
+    echo "ABORT: HEAD tiene commits sin empujar a origin — 'railway up' desplegaría algo"
+    echo "       que no existe en el remoto, y nadie más podría reconstruirlo desde git."
+    FAIL=1
+  fi
 fi
 
 echo "== guardrail: secretos solo en .env.local (gitignored) =="

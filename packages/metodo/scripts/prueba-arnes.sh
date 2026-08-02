@@ -20,10 +20,15 @@ PASA=0; FALLA=0
 ok ()  { printf "  ✅ %s\n" "$1"; PASA=$((PASA+1)); }
 no ()  { printf "  ❌ %s\n" "$1"; FALLA=$((FALLA+1)); }
 
-# Restauración pase lo que pase: estas pruebas mueven .env.local a propósito.
-RESPALDO_ENV=""
+# P1 (auditoría 1-ago-2026): estas pruebas usaban DIRECTAMENTE el .env.local real
+# (respaldo + escritura + restauración) — una interrupción a mitad de camino (Ctrl-C,
+# el propio proceso muerto) dejaba el fixture puesto donde debía estar la conexión real.
+# Ya pasó: "prueba-arnes.sh sobrescribe el .env.local real... y ya destruyó el de tres
+# worktrees". Ahora KILOPAN_ENV_FILE le dice a guardrail.sh que use un archivo
+# DESECHABLE (ver guardrail.sh); el .env.local real no se toca ni un instante.
+ENV_PRUEBA="$(mktemp)"
 limpiar () {
-  [ -n "$RESPALDO_ENV" ] && [ -f "$RESPALDO_ENV" ] && mv -f "$RESPALDO_ENV" "$RAIZ/.env.local"
+  rm -f "$ENV_PRUEBA"
   rm -rf "$RAIZ/.metodo-locks/prueba".* 2>/dev/null
   bash "$M/lock.sh" soltar prueba-arnes >/dev/null 2>&1
 }
@@ -33,25 +38,43 @@ echo "== 1. Candado anti-producción (casilla 10b · AC-H0-04) =="
 # El guard debe ABORTAR con una URL remota sin la marca de intencionalidad, y debe
 # hacerlo leyendo la ÚLTIMA definición: el modo de fallo real fue un .env.local con
 # localhost arriba y la cadena del dashboard pegada al final.
-if [ -f .env.local ]; then RESPALDO_ENV="$RAIZ/.env.local.prueba-arnes.bak"; cp .env.local "$RESPALDO_ENV"; fi
-printf 'DATABASE_URL=postgres://u:p@localhost:5432/x\nDATABASE_URL=postgres://u:p@db.panaderia-real.com:5432/prod\n' > .env.local
-if bash "$M/guardrail.sh" >/dev/null 2>&1; then
+MTIME_ANTES="$(stat -f %m .env.local 2>/dev/null || echo ausente)"
+printf 'DATABASE_URL=postgres://u:p@localhost:5432/x\nDATABASE_URL=postgres://u:p@db.panaderia-real.com:5432/prod\n' > "$ENV_PRUEBA"
+if KILOPAN_ENV_FILE="$ENV_PRUEBA" bash "$M/guardrail.sh" >/dev/null 2>&1; then
   no "guardrail NO aborta con DATABASE_URL remota — el candado no protege nada"
 else
   ok "aborta con DATABASE_URL remota (y lee la ÚLTIMA definición, no la primera)"
 fi
 # Y debe DEJAR PASAR la misma URL remota cuando el dueño la declaró intencional:
 # un guard que siempre aborta tampoco sirve — bloquearía el trabajo legítimo.
-printf 'DATABASE_URL=postgres://u:p@db.panaderia-real.com:5432/prod\nKILOPAN_DB_REMOTA_INTENCIONAL=1\n' > .env.local
-if bash "$M/guardrail.sh" >/dev/null 2>&1; then
+printf 'DATABASE_URL=postgres://u:p@db.panaderia-real.com:5432/prod\nKILOPAN_DB_REMOTA_INTENCIONAL=1\n' > "$ENV_PRUEBA"
+if KILOPAN_ENV_FILE="$ENV_PRUEBA" bash "$M/guardrail.sh" >/dev/null 2>&1; then
   ok "deja pasar la remota cuando KILOPAN_DB_REMOTA_INTENCIONAL=1 (no es un no-op al revés)"
 else
   no "guardrail aborta incluso con la marca intencional — bloquea trabajo legítimo"
 fi
 # sslmode en la URL debe abortar: node-postgres lo trata distinto que libpq y pisa el TLS del código.
-printf 'DATABASE_URL=postgres://u:p@db.x.com:5432/prod?sslmode=require\nKILOPAN_DB_REMOTA_INTENCIONAL=1\n' > .env.local
-bash "$M/guardrail.sh" >/dev/null 2>&1 && no "no aborta con ?sslmode= en la URL" || ok "aborta con ?sslmode= (pisaría politicaTls() del código)"
-limpiar; RESPALDO_ENV=""
+printf 'DATABASE_URL=postgres://u:p@db.x.com:5432/prod?sslmode=require\nKILOPAN_DB_REMOTA_INTENCIONAL=1\n' > "$ENV_PRUEBA"
+KILOPAN_ENV_FILE="$ENV_PRUEBA" bash "$M/guardrail.sh" >/dev/null 2>&1 && no "no aborta con ?sslmode= en la URL" || ok "aborta con ?sslmode= (pisaría politicaTls() del código)"
+# El .env.local REAL no se tocó ni un instante — no "se restauró", NUNCA se escribió.
+MTIME_DESPUES="$(stat -f %m .env.local 2>/dev/null || echo ausente)"
+[ "$MTIME_ANTES" = "$MTIME_DESPUES" ] && ok "el .env.local real no se escribió ni una vez (mtime sin cambios)" || no "el .env.local real SE TOCÓ — la prueba sigue siendo peligrosa"
+
+echo
+echo "== 1b. Sin .env.local de worktree de agente (P1) =="
+mkdir -p .claude/worktrees/canario-prueba-arnes
+echo 'DATABASE_URL=postgres://u:p@db.x.com:5432/prod' > .claude/worktrees/canario-prueba-arnes/.env.local
+bash "$M/guardrail.sh" >/dev/null 2>&1 && no "NO detecta un .env.local dentro de .claude/worktrees/*/" || ok "detecta un .env.local plantado en un worktree de agente"
+rm -rf .claude/worktrees/canario-prueba-arnes
+
+echo
+echo "== 1c. railway up exige árbol limpio y empujado (P1) =="
+# No se puede simular "sin empujar" sin un remoto real; se prueba solo la mitad
+# ejercitable sin red: árbol sucio SIEMPRE debe abortar, sea cual sea el estado del remoto.
+CANARIO_SUCIO="apps/kilopan/.canario-prueba-arnes-sucio"
+echo "canario" > "$CANARIO_SUCIO"
+bash "$M/guardrail.sh" --antes-de-railway-up >/dev/null 2>&1 && no "NO aborta con el árbol sucio antes de railway up" || ok "aborta 'railway up' con el árbol sucio"
+rm -f "$CANARIO_SUCIO"
 
 echo
 echo "== 2. Anti-cáscaras en src/ (AC-H0-04) =="

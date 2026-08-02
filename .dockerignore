@@ -10,6 +10,16 @@ build
 .env.local
 .env*.local
 .env.local.*
+# P1 (auditoría 1-ago-2026): los patrones de arriba, sin `**/`, no se puede confiar en
+# que cubran los .env.local de los worktrees de agente (.claude/worktrees/*/.env.local)
+# — cuatro de ellos, verificados, cada uno con su propia copia de secretos locales. Con
+# doble patrón (igual que node_modules/.next arriba) no queda a criterio de una versión
+# de Docker. .claude/ completo queda fuera del contexto de build: no tiene nada que el
+# build necesite, y sí worktrees enteros con su propio .git y sus propios secretos.
+**/.env.local
+**/.env*.local
+.claude
+**/.claude
 db/data
 packages/metodo/panel/index.html
 packages/metodo/panel/estado.json
