@@ -1623,26 +1623,54 @@ test("Tanda 3: con TimeZone=America/Santiago fijado (igual que comun/db.ts), un 
 // Tanda 4 de la auditoría — atomicidad e idempotencia.
 // =============================================================================
 
-test("Tanda 4: cerrar caja dos veces el mismo día, medio y vendedor rebota (antes duplicaba el cierre)", async () => {
+test("P0-4 (0018): cerrar caja dos veces el MISMO turno rebota; un turno NUEVO del mismo vendedor y día NO", async () => {
   const db = await dbNueva();
   const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "vendedor");
   await crearSesion(db, usuarioId, dispositivoId);
 
-  await db.query(
-    `insert into pan.cierres_caja (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp)
-     values ($1,$2,'efectivo',10000,10000)`,
+  const turno1 = await db.query(
+    `insert into pan.turnos (dispositivo_id, vendedor_id, fondo_inicial_clp)
+     values ($1,$2,0) returning id`,
     [dispositivoId, usuarioId]
+  );
+  const turno1Id = turno1.rows[0].id;
+
+  await db.query(
+    `insert into pan.cierres_caja (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp, turno_id)
+     values ($1,$2,'efectivo',10000,10000,$3)`,
+    [dispositivoId, usuarioId, turno1Id]
   );
   await assert.rejects(
     () =>
       db.query(
-        `insert into pan.cierres_caja (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp)
-         values ($1,$2,'efectivo',5000,5000)`,
-        [dispositivoId, usuarioId]
+        `insert into pan.cierres_caja (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp, turno_id)
+         values ($1,$2,'efectivo',5000,5000,$3)`,
+        [dispositivoId, usuarioId, turno1Id]
       ),
-    /cierres_caja_un_cierre_por_dia|unique|duplicate/i,
-    "un segundo cierre para el mismo (fecha, medio_pago, vendedor) no debe entrar — antes sumaba un cierre fantasma"
+    /cierres_caja_un_cierre_por_turno|unique|duplicate/i,
+    "un segundo cierre del MISMO turno no debe entrar — antes sumaba un cierre fantasma"
   );
+
+  // El punto de P0-4: el MISMO vendedor, el MISMO día, un turno DISTINTO (cambió de
+  // operador en la tablet y volvió) — la llave vieja (fecha, medio_pago, vendedor_id)
+  // habría rechazado esto también, aunque es un cierre legítimo de un turno nuevo.
+  await db.query(`update pan.turnos set cerrado_at = now() where id = $1`, [turno1Id]);
+  const turno2 = await db.query(
+    `insert into pan.turnos (dispositivo_id, vendedor_id, fondo_inicial_clp)
+     values ($1,$2,0) returning id`,
+    [dispositivoId, usuarioId]
+  );
+  const turno2Id = turno2.rows[0].id;
+  await db.query(
+    `insert into pan.cierres_caja (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp, turno_id)
+     values ($1,$2,'efectivo',3000,3000,$3)`,
+    [dispositivoId, usuarioId, turno2Id]
+  );
+  const filasHoy = await db.query(
+    `select count(*)::int as n from pan.cierres_caja where vendedor_id = $1 and not anulado`,
+    [usuarioId]
+  );
+  assert.equal(filasHoy.rows[0].n, 2, "los dos cierres, de dos turnos distintos, quedan como dos filas válidas");
   await db.close();
 });
 
@@ -1737,16 +1765,31 @@ test("Tanda 4: la 0011 anula cierres de caja duplicados en vez de caerse, y no b
   assert.equal(filas.rows[0].anulado, false, "sobrevive el primero, que es el que el vendedor contó");
   assert.equal(filas.rows[1].anulado, true, "el reintento queda marcado como anulado");
 
-  // Y la regla quedó puesta igual: un tercer cierre del mismo día/medio/vendedor rebota.
+  // P0-4 (0018): la unicidad ya NO es (fecha, medio_pago, vendedor_id) — esas dos filas
+  // sin turno_id (sembradas arriba, antes de que la columna existiera) quedan fuera del
+  // índice nuevo a propósito (`where turno_id is not null`): la regla vieja protegía el
+  // sujeto equivocado, y no hay forma de asignarles un turno real sin inventar uno. La
+  // llave correcta hoy es (turno_id, medio_pago) — se prueba con un turno de verdad.
+  const turno = await db.query(
+    `insert into pan.turnos (dispositivo_id, vendedor_id, fondo_inicial_clp)
+     values ($1,$2,0) returning id`,
+    [dispositivoId, usuarioId]
+  );
+  const turnoId = turno.rows[0].id;
+  await db.query(
+    `insert into pan.cierres_caja (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp, turno_id)
+     values ($1,$2,'efectivo',0,0,$3)`,
+    [dispositivoId, usuarioId, turnoId]
+  );
   await assert.rejects(
     () =>
       db.query(
-        `insert into pan.cierres_caja (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp)
-         values ($1,$2,'efectivo',50000,48000)`,
-        [dispositivoId, usuarioId]
+        `insert into pan.cierres_caja (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp, turno_id)
+         values ($1,$2,'efectivo',0,0,$3)`,
+        [dispositivoId, usuarioId, turnoId]
       ),
-    /cierres_caja_un_cierre_por_dia|unique|duplicate/i,
-    "el índice parcial tiene que aplicar la regla igual que el unique que reemplaza"
+    /cierres_caja_un_cierre_por_turno|unique|duplicate/i,
+    "un segundo cierre del MISMO turno y medio de pago debe rebotar"
   );
   await db.close();
 });

@@ -209,6 +209,17 @@ test("7 · la caja se cuenta a ciegas: el vendedor no ve lo esperado antes de co
   // número y se queda con la diferencia. El servidor directamente no se lo manda —
   // esconderlo solo en la pantalla no alcanza, con las herramientas del navegador se lee.
   await ingresar(page, "vendedor");
+  // P0-4: cerrar caja exige un turno abierto (pan.turnos, 0018_turnos_cierre_caja.sql).
+  // La pantalla para abrirlo es Ola 2 (docs/PROMPT_CORRECTIVO.md §5); hasta que exista,
+  // el camino dorado abre el suyo por API, igual que ya hace con el equipo vinculado
+  // vía localStorage en el beforeEach. Se abre acá, DESPUÉS de las ventas de los casos
+  // 5 y 6 —en la operación real se abriría al llegar, antes de vender—, así que lo
+  // esperado de ESTE turno queda en 0 (su ventana empieza ahora): correcto para este
+  // fixture, y no afecta la aserción de abajo (solo comprueba que la cifra se MUESTRE
+  // tras cerrar, no que coincida con un monto). El P0-4 en sí —que la ventana del turno
+  // aísla a dos vendedores en el mismo equipo— tiene su propio caso dedicado en
+  // e2e/seguridad-turnos-caja.spec.ts.
+  await page.request.post("/api/turnos", { data: { fondoInicialClp: 10_000 } });
   await irA(page, /Cierre de caja/);
   await expect(page.getByRole("heading", { name: "Cierre de caja" })).toBeVisible();
 
