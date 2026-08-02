@@ -1,0 +1,25 @@
+diff --git b/apps/kilopan/src/app/api/pesajes/route.ts a/apps/kilopan/src/app/api/pesajes/route.ts
+index 1cdc086..0b6641d 100644
+--- b/apps/kilopan/src/app/api/pesajes/route.ts
++++ a/apps/kilopan/src/app/api/pesajes/route.ts
+@@ -183,8 +183,18 @@ export async function POST(request: NextRequest) {
+   // gramos entraban a la conciliación como "merma tipificada" y el dueño veía merma
+   // sana en vez de un faltante (red-team, ALTA — verificado llegando a -139.000 g).
+   // El camino de venta ya tenía esta guarda; el de pesaje se había quedado sin ella.
+-  // MUTANTE (docs/campana/mutantes/H-merma-sin-test.patch): tope de merma revertido
+-
++  if (destino === "merma") {
++    const disponible = await db.query<{ stock: number }>(`select pan.stock_disponible($1) as stock`, [
++      productoId,
++    ]);
++    const stock = disponible.rows[0]?.stock ?? 0;
++    if ((gramos as number) > stock) {
++      return NextResponse.json(
++        { error: `No puedes mermar más de lo que hay (disponible: ${stock} g)` },
++        { status: 409 }
++      );
++    }
++  }
+ 
+   // AC-PES-03: test centinela "báscula mal tipeada" — outlier >3x mediana exige que
+   // el cliente vuelva a mandar el pesaje con confirmarOutlier=true (ver UI).

@@ -1,0 +1,7 @@
+hallazgo_id	severidad	ola	titulo
+H-enrolar-bloqueo-pin-inefectivo	P0	0	Fuerza bruta del PIN de admin en /api/dispositivos/enrolar
+H-offline-borra-rechazo	P0	0	La cola offline borraba la venta/pesaje que el servidor rechazaba
+H-fiado-mostrador-sin-saldo	P0	0	El fiado del mesón no sumaba al saldo del cliente
+H-caja-esperado-cruza-vendedor	P0	0	El cierre de caja calculaba el esperado por día, no por turno
+H-ruta-dte-tipo-invalido	P0	0	El trigger del art. 55 aceptaba una nota de crédito como respaldo de despacho
+H-merma-sin-test	P1	1	El tope de merma (fix del 26-jul) no tenía ningún test automatizado

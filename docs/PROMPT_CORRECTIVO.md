@@ -490,12 +490,24 @@ informe del 1-ago. Volver a levantarlos gasta ventana y ensucia el HAD.
 
 ## Anexo F — Checklist prevuelo
 
-No se lanza la campaña sin las siete casillas:
+**Cerrado el 2-ago-2026** (retroactivo: la Ola 0 se ejecutó antes de que este aparato
+existiera — hueco encontrado por una sesión hermana auditando en solo lectura, y es
+exactamente el defecto que la campaña vino a matar: un arreglo aceptado porque nada
+podía demostrar que era falso, esta vez del lado del instrumento).
 
-1. Variable norte declarada y calculable por script (`campana.mjs --had` corre y devuelve cifra).
-2. Alcance congelado y commiteado en `docs/campana/ALCANCE.tsv`.
-3. Tag `campana-base` puesto sobre `1bbb140`.
-4. Los falsadores de los cinco P0 escritos y **rojos** sobre ese tag.
-5. Guardrails corregidos y cada uno probado contra el caso que dice impedir.
-6. Los 22 commits empujados a `origin/main`.
-7. `.env.local` de la raíz apuntando a PGlite, y las credenciales de producción fuera del árbol.
+1. ✅ Variable norte calculable: `node packages/metodo/scripts/campana.mjs --had` →
+   **HAD 100 % · 6/6 demostrados**, re-ejecutando cada falsador y regenerando cada
+   mutante en vivo (no leyendo un registro histórico).
+2. ✅ Alcance congelado en `docs/campana/ALCANCE.tsv` — los 5 P0 de Ola 0 más
+   `H-merma-sin-test` (mutante del Anexo B #1, encontrado auditando el arnés).
+3. ✅ Tag `campana-base` sobre `1bbb140` (HEAD antes del primer commit de Ola 0).
+4. ✅ `docs/campana/pruebas.jsonl`: cada hallazgo con su commit de falsador (rojo) y de
+   arreglo (verde), verificados en vivo el 2-ago-2026. `H-merma-sin-test` es un caso
+   distinto — su arreglo es del 26-jul, anterior a la campaña — documentado como tal,
+   con el mutante en un parche estático (`docs/campana/mutantes/`) en vez de derivado
+   de un commit.
+5. ✅ Guardrails corregidos y probados (`prueba-arnes.sh`, 32/32).
+6. ✅ `origin/main` == HEAD (verificado 2-ago; el "22 commits sin empujar" de más
+   arriba es del estado del 1-ago, ya resuelto en Ola 0).
+7. ✅ `.env.local` de la raíz apunta a PGlite; la cadena de producción no vive en el
+   árbol — se re-obtiene con `node db/conectar-railway.mjs` si hace falta.
