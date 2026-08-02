@@ -311,3 +311,87 @@ ninguna de las que fallan.
 
 **Estado al cierre:** `check.sh --full` VERDE — 12 pasos, 0 fallas, 0 saltados.
 Marcador `verde-20260726-153226`. 22 ACs abiertos, el primero `AC-ID-07`.
+
+---
+
+## 2026-08-01/02 · Auditoría de 166 hallazgos y Ola 0 de la campaña correctiva
+
+**Auditoría (1-ago).** 30 agentes en 13 dimensiones (identidad, autorización, entrada,
+dinero, operación, datos, offline, dos de experiencia, accesibilidad, operación técnica,
+calidad, más 3 barridos de un crítico de completitud) auditaron el repo completo contra el
+código, con verificación adversarial de cada hallazgo. **166 confirmados, 15 refutados.**
+Seis P0 que son **cinco defectos distintos** (uno lo encontraron dos lentes por separado).
+`docs/PROMPT_CORRECTIVO.md` es el prompt maestro de la campaña, escrito por un panel de
+5 posturas + 3 jueces + síntesis + un adversario que verificó contra la máquina real y tumbó
+el diseño original del arnés de evidencia (exigía `psql`/`pg_dump`/`docker`/`gh`, que no
+existen acá) y encontró 22 commits sin empujar y el `.env.local` de la raíz apuntando a
+producción.
+
+**Ola 0 cerrada (2-ago).** Los cinco P0, cada uno con la regla de dos manos (falsador
+commiteado en rojo, arreglo en commit aparte que lo pone en verde) y sin regresiones
+(tsc/eslint/invariantes de BD/e2e corridos después de cada uno):
+
+- **P0-1** (`c1df9a6`/`af4afd0`): `/api/dispositivos/enrolar` creaba un dispositivo NUEVO
+  en cada intento, así que el bloqueo de PIN (llavea por par dispositivo+usuario) nunca
+  acumulaba — fuerza bruta de 10.000 PIN sin freno, desde internet, sin credenciales.
+  Se verifica el PIN ANTES de crear el dispositivo, contra un candado nuevo que cuenta
+  solo por usuario (migración 0016).
+- **P0-2** (`4d39f0b`/`20f6712`): la cola offline (`src/pod/outbox.ts`) borraba una venta o
+  pesaje en cuanto el servidor lo rechazaba con 4xx de negocio (409 stock insuficiente al
+  volver la señal), sin dejar rastro — plata cobrada, cero registro. Nuevo almacén
+  IndexedDB `rechazados` (versión 4 del esquema) que persiste el ítem antes de sacarlo de
+  la cola. Trajo `fake-indexeddb` (devDependency) y un hook de resolución de módulos
+  (`scripts/resolver-alias-*.mjs`) para poder testear el código real de `outbox.ts` en
+  Node en vez de reimplementar su lógica en un Map, que es lo que hacía `outbox.test.ts`.
+- **P0-3** (`50c40c3`/`3f3594d`): el fiado del mesón (venta con `medio_pago='fiado'`) no
+  sumaba al saldo de nadie — `pan.saldo_cliente` solo sumaba documentos tributarios vía
+  pedidos. Migración 0017: `pan.ventas.saldado_at` + vista reescrita agregando cada fuente
+  de deuda en su propia subconsulta (evitar el fan-out que 0008 ya había corregido una vez
+  para pedidos/documentos). `PATCH /api/ventas` nuevo para saldar, mismo patrón que
+  `PATCH /api/facturar`.
+- **P0-4** (`39d0730`/`d8be2f3`): el cierre de caja calculaba lo esperado por
+  (dispositivo, DÍA COMPLETO) pero la unicidad era por (fecha, medio_pago, VENDEDOR) — con
+  dos turnos en la misma tablet el mismo día, el segundo cierre heredaba lo del primero.
+  Decisión del dueño (1-ago): "por turno, con apertura explícita". Migración 0018:
+  `pan.turnos` (mismo patrón que `sesiones_operador`/`rutas_una_activa_por_repartidor_dia`
+  — índice único parcial, no la app, impide dos turnos abiertos). No se tocó
+  `pan.ventas`: "esperado" pasa de "hoy" a "desde que se abrió este turno", ventana de
+  tiempo + dispositivo. `POST /api/turnos` y `GET /api/turnos/actual` nuevos; la pantalla
+  de apertura queda para Ola 2. `e2e/camino-dorado.spec.ts` test 7 se actualizó para abrir
+  un turno por API antes de cerrar caja.
+- **P0-5** (`079a821`/`e5eb462`): el trigger del art. 55 DL 825 (sale a ruta) solo miraba
+  `estado='registrado'` en `documento_tributario`, sin mirar `tipo_dte` — una nota de
+  crédito (61, que la spec describe como "anulación") satisfacía la condición igual que
+  una guía. Migración 0019: agrega `tipo_dte in (33,39,52)` al trigger — un
+  `create or replace function` sobre la misma firma, sin tocar tabla ni trigger.
+
+**Aprendizajes de esta ronda:**
+
+1. **Tres de los cinco P0 ya habían sido "arreglados" antes** y el arreglo era
+   funcionalmente nulo (el AC quedó `[x]`): el bloqueo de enrolamiento llamaba a
+   `pan.registrar_intento_pin` pero con un dispositivo virgen en cada intento; la cola
+   offline fue "reportada" en la auditoría del 26-jul sin que `quitar()` se tocara; el
+   comentario de `api/ventas/route.ts` afirmaba que el fiado del mesón sumaba al saldo
+   desde el principio, sin que nadie lo hubiera probado. Los tres comparten la firma: un
+   arreglo se acepta porque nada puede demostrar que es falso. De ahí la regla de dos
+   manos del prompt correctivo.
+2. **Un adversario que verifica contra la máquina real vale más que uno que solo lee el
+   texto.** El primer diseño del arnés de evidencia (ganador del panel de 5 posturas)
+   exigía herramientas que no existen en este Mac; sin correr `command -v psql` nadie lo
+   habría notado hasta intentar ejecutarlo.
+3. **`node --test` no resuelve el alias `@/` de tsconfig** — ningún test podía importar
+   código de producción que lo usara. Se resolvió con un hook de `module.register()` de
+   ~15 líneas en vez de agregar una dependencia (`tsx`/`tsconfig-paths`), consistente con
+   la decisión ya tomada en `identidad/hash.ts` (scrypt en vez de bcrypt: menos superficie
+   de cadena de suministro que auditar).
+4. **Un test puede fallar deterministamente por posición, no por azar.** El e2e completo
+   (16 casos) falló 2/2 veces en el mismo punto exacto (login dentro de
+   `seguridad-turnos-caja.spec.ts`) solo cuando corrían los 6 archivos juntos — coincide
+   con la carrera de cookie/RSC ya documentada arriba (26-jul) bajo `@playwright/test`.
+   Reducir los logins de ese archivo a uno solo lo estabilizó en 3/3 corridas completas;
+   la causa de fondo sigue sin confirmarse, igual que `AC-POD-04`.
+
+**Pendiente, explícitamente fuera de esta ronda:** la higiene de secretos del Anexo F
+(rotar la credencial de Postgres de producción — gesto G1 del dueño —, sacar los
+`.env.local` de los cuatro worktrees, cerrar el panel público de Vercel) y toda la Ola 1
+(reparar el arnés, CI, auditar los ~20 ACs huecos) antes de encender el motor autónomo.
