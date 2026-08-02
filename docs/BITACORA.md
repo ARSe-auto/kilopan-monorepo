@@ -550,3 +550,65 @@ lista original (con test real que la contradice) junto con 10 confirmados y 19 n
 **Pendiente de Ola 1:** los 4 mutantes de control restantes del Anexo B, CI
 (`.github/workflows/gate.yml`) con 3 corridas verdes, y confirmar `check.sh --full` sigue
 en 0 saltados con el árbol de specs ya cambiado. Los dos gestos del dueño siguen abiertos.
+
+---
+
+## 2026-08-02 · Ola 1 cerrada: los 4 mutantes de Anexo B restantes, CI, y tres bugs reales que solo un runner limpio podía mostrar
+
+Continuación de la entrada anterior, misma sesión. Los 4 mutantes de control restantes
+del Anexo B (`trg_ventas_exige_sesion` en `pan.ventas`, normalización de UUID en
+`/api/ventas`, precio siempre del servidor nunca del cliente, cookie de sesión sin
+`Expires`) se escribieron y verificaron uno por uno: mutante aplicado a mano, test
+corrido en rojo, revertido, test corrido en verde. `campana.mjs --had`: **100% · 10/10**
+(el primer intento de registrar los parches estáticos en `docs/campana/mutantes/` tenía
+la polaridad del diff invertida respecto a lo que `campana.mjs` espera de `git apply -R`
+— corregido regenerándolos con `git diff -R`).
+
+**`.github/workflows/gate.yml` nuevo**, corre `check.sh --full` en cada push. Las
+primeras dos corridas fallaron. GitHub exige sesión iniciada para ver logs de Actions
+incluso en este repo, y no hay `gh` ni token en esta máquina — Alexis inició sesión una
+vez en el Browser pane de la sesión para que se pudiera seguir leyendo logs sin
+volver a pedírselo. Aun con sesión, el visor de logs por paso de GitHub resultó ser un
+componente virtualizado que ni clicks ni scroll programáticos (`window.scrollTo`,
+`scrollIntoView`, eventos de `wheel` simulados) lograban expandir de forma confiable —
+varias vueltas perdidas ahí antes de cambiar de estrategia a `$GITHUB_STEP_SUMMARY`
+(página Markdown plana en la vista de la corrida, sin ese visor de por medio), que
+funcionó a la primera.
+
+Con el log real legible, aparecieron **tres bugs reales**, los tres con la misma firma:
+invisibles en este Mac, reales en un runner recién clonado — exactamante el patrón que
+esta campaña existe para cazar.
+
+1. **`guardrail.sh --antes-de-railway-up` no detectaba árbol sucio por archivo nuevo.**
+   `git status --porcelain --untracked-files=no` excluía justo lo que `railway up` sube
+   igual (el working tree tal cual) y justo lo que el test de `prueba-arnes.sh` §1c
+   planta (un archivo sin trackear) para verificar el guard. Pasaba en local porque el
+   árbol de desarrollo casi siempre tiene otro cambio tracked que disparaba el guard por
+   la razón equivocada. Arreglo: quitar `--untracked-files=no`. Confirmado local: 33/33.
+2. **CI instalaba Chromium; `playwright.config.ts` usa `devices["iPhone 13"]`, que corre
+   sobre WebKit** (un iPhone real usa Safari, no Chrome). El comentario original del
+   workflow afirmaba Chromium sin haberlo verificado.
+3. **`launchOptions.args` con dos flags de línea de comando de Chromium**
+   (`--use-fake-ui-for-media-stream`, `--use-fake-device-for-media-stream`) que el
+   WebKit de Linux rechaza con "Cannot parse arguments" y nunca lanza — el WebKit de
+   este Mac los tolera en silencio, así que nunca se notó acá. No hacían falta: el
+   `getUserMedia` falso de Playwright lo activa `permissions: ["camera"]`, sin flags de
+   motor. Verificado en local sin los flags antes de empujar: e2e 20/20 (incluidos los
+   dos casos que exigen cámara real), `check.sh --full` 12/12 · 0 saltados.
+
+**Corrida CI #8 (`e3c0c43`): VERDE** — primera corrida real, tras 7 rojas. `campana.mjs
+--had` y `check.sh --full` locales confirmaron cada arreglo antes de empujarlo; ninguno
+se empujó a ciegas.
+
+**Aprendizaje de esta ronda (dos partes):**
+1. Un ambiente de desarrollo "sucio por costumbre" puede esconder exactamente la misma
+   clase de verde-falso que esta campaña persigue en el código de producto — el propio
+   arnés (`guardrail.sh`) tenía un hueco que ningún corrida local iba a encontrar nunca,
+   porque local nunca estaba genuinamente limpio. CI en un runner recién clonado no es
+   solo "más de lo mismo, en la nube": es una clase de prueba que el Mac de desarrollo
+   no puede hacer, por diseño.
+2. Cuando la herramienta para diagnosticar (leer un log) se vuelve el obstáculo, cambiar
+   de herramienta gana más rápido que insistir. Tres intentos de leer el log por el
+   visor de logs por paso (`::group::` plegado, texto plano con marcador de línea,
+   varios métodos de expandir el fold) perdieron más tiempo que el que tomó darse
+   cuenta de que `$GITHUB_STEP_SUMMARY` evita el problema por completo.
