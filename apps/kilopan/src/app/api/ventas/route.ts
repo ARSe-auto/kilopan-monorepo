@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
-import { exigirRol } from "@/identidad/sesion.ts";
+import { exigirRol, exigirSesion } from "@/identidad/sesion.ts";
 import { roundClp } from "@/comun/round_clp.ts";
 import { esUuid, normalizarUuid } from "@/comun/validacion.ts";
 
@@ -230,4 +230,38 @@ export async function POST(request: NextRequest) {
     console.error("POST /api/ventas:", mensaje);
     return NextResponse.json({ error: "No se pudo registrar la venta" }, { status: 500 });
   }
+}
+
+// P0-3: marcar saldada una venta fiada del mesón — el mismo cierre de ciclo que
+// PATCH /api/facturar ya tiene para el fiado mayorista (documento_tributario.estado_pago).
+// Sin esto, sumar el fiado del mesón al saldo (migración 0017) lo dejaría como deuda
+// eterna: el cliente paga en la vida real y el sistema jamás se entera.
+export async function PATCH(request: NextRequest) {
+  const sesion = await exigirSesion(request);
+  if (sesion instanceof NextResponse) return sesion;
+  if (sesion.rol !== "admin") {
+    return NextResponse.json({ error: "Solo un administrador marca fiado como pagado" }, { status: 403 });
+  }
+
+  let cuerpo: { ventaId?: string };
+  try {
+    cuerpo = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
+  }
+  if (!cuerpo.ventaId || !esUuid(cuerpo.ventaId)) {
+    return NextResponse.json({ error: "Falta ventaId" }, { status: 400 });
+  }
+
+  const db = await obtenerDb();
+  const r = await db.query<{ id: string }>(
+    `update pan.ventas set saldado_at = now()
+      where id = $1 and medio_pago = 'fiado' and saldado_at is null
+      returning id`,
+    [cuerpo.ventaId]
+  );
+  if (r.rows.length === 0) {
+    return NextResponse.json({ error: "Ya estaba saldada, no es fiado o no existe" }, { status: 409 });
+  }
+  return NextResponse.json({ ok: true });
 }
