@@ -25,14 +25,23 @@ bloquea** — el pan no espera (§4).
       que permitiría adjuntar una foto vieja de la galería), JPEG ~400 KB, sha256 sobre
       el blob comprimido, subida a `/api/fotos`; sin señal el binario queda en la cola de
       fotos del outbox [AC-POD-03]
-- [x] (P1) Flujo POD ejercitado de punta a punta con el seed: e2e «8 · el repartidor
+- [ ] (P1) Flujo POD ejercitado de punta a punta con el seed: e2e «8 · el repartidor
       entrega el pedido con foto y GPS» en `camino-dorado.spec.ts:223`. ⚠️ El test es
       INESTABLE: sobre el mismo commit pasó, agotó los 30 s y volvió a pasar.
       Estabilizarlo es prerrequisito para dejar el motor desatendido [AC-POD-04]
-- [x] (P1) Rechazo total y parcial con motivo de catálogo cerrado: `/ruta` define el
+      — **Anexo D (auditoría 2-ago-2026): HUECO confirmado.** El propio texto del AC ya
+      declaraba la inestabilidad; formalizado como hueco porque un test flaky no es
+      evidencia repetible — coincide con `docs/PROMPT_CORRECTIVO.md` §9.2 ("se estabiliza
+      o se saca del gate con su ítem abierto").
+- [ ] (P1) Rechazo total y parcial con motivo de catálogo cerrado: `/ruta` define el
       catálogo (`rechazo`: «Cliente rechazó el pedido»), reporta rechazos por
       `clientUuid` desde el outbox y muestra «Entregada parcial — X de Y» cuando
       `gramos_entregados < gramos_pedidos` [AC-POD-05]
+      — **Anexo D (auditoría 2-ago-2026): HUECO.** Ningún test toca el flujo de rechazo
+      desde `/ruta` ni el texto «Entregada parcial — X de Y». Además el catálogo
+      "cerrado" no se valida en el servidor (`api/sync/route.ts` solo chequea
+      `!!e.motivoRechazo`, cualquier string pasa) — sin test que lo ejercite, no hay
+      evidencia de que la UI real funcione como se describe.
 
 ## Notas de implementación
 

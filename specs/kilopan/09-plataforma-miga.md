@@ -15,19 +15,36 @@ Ningún estado se comunica solo por color.
 - [x] (P0) `packages/miga`: tokens de diseño (color, tipografía, grilla, radios) como
       árbol de constantes TS + hoja CSS de variables; incluye acento `#C2410C` (KiloPan)
       y `#1D4ED8` (KiloRuta, reservado para `apps/flota`) [AC-H0-02]
-- [x] (P0) Test que falla si una cifra de dinero o peso no usa `tabular-nums` /
+- [ ] (P0) Test que falla si una cifra de dinero o peso no usa `tabular-nums` /
       `font-variant-numeric` en los componentes de `packages/miga` [AC-H0-03]
+      — **Anexo D (auditoría 2-ago-2026): HUECO.** `prueba-arnes.sh` solo hace
+      `grep -rq "tabular-nums"` sobre todo `packages/miga/src` — comprueba que la cadena
+      existe UNA VEZ en el árbol, no que CADA componente de cifra la use. Un mutante que
+      la quite de `CifraGrande.tsx` (dejándola en otro componente) sobrevive.
 - [x] (P0) `packages/metodo/scripts/guardrail.sh` ejecutable: aborta si `DATABASE_URL` no
       es localhost/127.0.0.1, aborta si hay secretos fuera de `.env.local`, grep
       bloqueante de tokens vedados en `src/` [AC-H0-04]
-- [x] (P0) `packages/metodo/scripts/check.sh` ejecutable con `--full`: build + lint +
+- [ ] (P0) `packages/metodo/scripts/check.sh` ejecutable con `--full`: build + lint +
       types + unit (+ e2e y axe cuando exista UI) [AC-H0-05]
-- [x] (P0) `packages/metodo/panel/generar.mjs`: genera `panel/index.html` desde estado
+      — **Anexo D (auditoría 2-ago-2026): HUECO.** `prueba-arnes.sh` solo hace
+      `bash -n check.sh` (sintaxis) y `grep -q -- "--full"` (el flag aparece en el
+      texto) — ningún test ejercita que `--full` realmente corra build+lint+types+unit.
+      Un mutante que borre los `run_step` internos sobrevive a ambas comprobaciones.
+- [ ] (P0) `packages/metodo/panel/generar.mjs`: genera `panel/index.html` desde estado
       real del repo — nunca «proceso vivo» como señal de avance [AC-H0-06]
-- [x] (P0) Shells vacíos de `packages/nucleo-{identidad,pod,dte,comun}` con `package.json`
+      — **Anexo D (auditoría 2-ago-2026): HUECO.** El "avance" real se calcula en
+      `generar.mjs` desde el conteo de ACs cerrados, no desde `rev-list --count` como
+      prueba `prueba-arnes.sh` — el grep certifica una cadena que no es la que calcula
+      la métrica auditada, y nada prueba que el pid del loop nunca se use como señal de
+      avance (que es justo lo que este AC prohíbe).
+- [ ] (P0) Shells vacíos de `packages/nucleo-{identidad,pod,dte,comun}` con `package.json`
       y un `README.md` que dice explícitamente: «se puebla en el hito de extracción,
       después del DONE de KiloPan — no escribir lógica de negocio aquí todavía»
       [AC-H0-07]
+      — **Anexo D (auditoría 2-ago-2026): HUECO, y no solo por falta de test.** Verificado
+      en disco: `packages/nucleo-{identidad,pod,dte,comun}/` solo contienen `README.md` —
+      **ninguno tiene `package.json`**, pese a que el AC lo afirma explícitamente. La
+      afirmación es fácticamente falsa hoy, no solo no comprobada.
 - [ ] (P1) TEST que verifique la escala tipográfica completa de Miga. Los tokens ya
       existen (`tokens.ts`: `pesoBascula` 96/700, y `CifraGrande.tsx` la aplica); lo que
       no existe es la prueba que falle si una pantalla se sale de la escala [AC-H0-08]

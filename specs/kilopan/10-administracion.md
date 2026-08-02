@@ -10,15 +10,24 @@ Todo lo de esta spec es **solo rol `admin`** (regla de rol testeada, §5).
 
 ## Criterios de aceptación
 
-- [x] (P1) Dar de alta, desactivar, cambiar de rol o resetear el PIN de una persona desde
+- [ ] (P1) Dar de alta, desactivar, cambiar de rol o resetear el PIN de una persona desde
       la propia app (`/admin` + `POST/PATCH /api/usuarios`). Antes esto solo existía por
       SQL directo contra la BD [AC-ADM-01]
-- [x] (P1) Dar de alta pan nuevo y editar precios desde la app (`/admin` +
+      — **Anexo D (auditoría 2-ago-2026): HUECO.** El endpoint está implementado
+      (`exigirRol(["admin"])`, valida RUT/PIN/rol, candado de auto-desactivación), pero
+      ningún test (unit, e2e o invariante) llama `POST`/`PATCH /api/usuarios` — nadie lo
+      ejercita de forma automatizada.
+- [ ] (P1) Dar de alta pan nuevo y editar precios desde la app (`/admin` +
       `POST/PATCH /api/productos`), respetando la vigencia histórica de `precios`: cambiar
       un precio crea una fila nueva, jamás edita la vigente [AC-ADM-02]
-- [x] (P2) Edición de `pan.parametros` desde `/admin`: la pantalla lee y escribe
+      — **Anexo D (auditoría 2-ago-2026): HUECO.** Ningún test llama
+      `POST`/`PATCH /api/productos`, y en particular ninguno verifica la afirmación
+      central — que cambiar el precio crea fila nueva sin pisar la vigente.
+- [ ] (P2) Edición de `pan.parametros` desde `/admin`: la pantalla lee y escribe
       `/api/parametros`, así que `clp_km_combustible`, `clp_km_ev` y `co2_g_km_evitado`
       se corrigen sin SQL [AC-ADM-03]
+      — **Anexo D (auditoría 2-ago-2026): HUECO.** Cero referencias a `/api/parametros`
+      en `*.test.ts`, `*.spec.ts` o `db/test-invariantes.mjs`.
 
 ## Notas de implementación
 

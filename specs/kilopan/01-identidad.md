@@ -15,11 +15,16 @@ cambio de operador por PIN — el equipo vive en un local, no se elige a mano.
       pasa sin sesión de operador viva. SECURITY DEFINER, probado por el camino HTTP con
       `SET ROLE` real y no por acceso directo. Cableado en `pesajes` y `hornadas`; se
       reusa tal cual en cada tabla de negocio nueva [AC-ID-02]
-- [x] (P0) PIN de 4 dígitos hasheado, nunca en texto plano en logs ni en
+- [ ] (P0) PIN de 4 dígitos hasheado, nunca en texto plano en logs ni en
       `eventos.payload`. Sustitución deliberada: `node:crypto` scrypt en vez de bcrypt
       (memory-hard, sin dependencia nueva que auditar). `POST /api/auth/login` probado
       en vivo: PIN correcto entra, incorrecto rebota, 5º fallido bloquea con 423 y el
       PIN correcto ya no sirve hasta que expire [AC-ID-03]
+      — **Anexo D (auditoría 2-ago-2026): HUECO.** El bloqueo subyacente está probado a
+      nivel BD (`AC-SEC-01`) y `/api/dispositivos/enrolar` tiene su e2e equivalente
+      (`seguridad-enrolamiento.spec.ts`), pero ningún test automatizado golpea
+      específicamente `POST /api/auth/login` para confirmar el 423 en vivo — el propio
+      texto dice "probado en vivo", que fue manual, no un test que quede en el gate.
 - [x] (P0) 1 sesión activa concurrente por usuario: sesión nueva desplaza la anterior y
       escribe fila de auditoría `sesion_desplazada` (`trg_desplazar_sesiones`) [AC-ID-04]
 - [x] (P0) Auto-bloqueo a PIN tras 10 min de inactividad, validado **en el servidor**
@@ -30,12 +35,17 @@ cambio de operador por PIN — el equipo vive en un local, no se elige a mano.
       relevo atómico y auditado (evento `operador_relevado`). Bug real encontrado
       probando el login: el EXCLUDE impedía que el vendedor tomara la tablet que dejó el
       maestro y devolvía 500 [AC-ID-06]
-- [x] (P1) Chip con el nombre del operador **siempre visible** en cada pantalla, como
+- [ ] (P1) Chip con el nombre del operador **siempre visible** en cada pantalla, como
       exige §5 F5. Hoy el relevo funciona pero el chip no existe: quien pesa no puede
       confirmar de un vistazo bajo qué identidad está escribiendo. Test: recorrer las
       rutas de operación con sesión abierta y fallar si alguna no muestra el nombre
       [AC-ID-07] — chip fijo en top-right de todas las pantallas, renderizado por
       Server Component con la sesión actual
+      — **Anexo D (auditoría 2-ago-2026): HUECO.** El componente (`ChipOperador.tsx`)
+      existe y se usa, pero el test descrito en el propio AC ("recorrer las rutas...
+      fallar si alguna no muestra el nombre") no existe en ningún `*.spec.ts` — nadie
+      verifica que el chip aparezca en TODAS las pantallas, solo que el componente
+      compila.
 
 ## Notas de implementación
 

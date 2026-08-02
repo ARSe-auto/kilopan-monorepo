@@ -278,7 +278,7 @@ verificarlos uno por uno **leyendo el código, no grepeando** —un grep no dist
 pantalla de un comentario que la menciona— 7 ya estaban construidos y 2 estaban a medias.
 Quedan 16 reales. Cada AC cerrado hoy lleva su cita en el archivo que lo implementa.
 
-- [ ] (P1) F23 — sin `<select>` nativo en manos enharinadas: `vender/page.tsx` (cliente al fiar) y `admin/page.tsx` (rol de usuario) usan el `<select>` del sistema; reemplazar por `SelectorUnToque` (packages/miga), el mismo patrón que ya usan destino de pesaje y medio de pago. Actualizar los 5 e2e que dependen del DOM actual — correctivo: `docs/PROMPT_CORRECTIVO.md` §5
+- [x] (P1) F23 — sin `<select>` nativo en manos enharinadas: `vender/page.tsx` (cliente al fiar) y `admin/page.tsx` (rol de usuario) usan el `<select>` del sistema; reemplazar por `SelectorUnToque` (packages/miga), el mismo patrón que ya usan destino de pesaje y medio de pago. Actualizar los 5 e2e que dependen del DOM actual — correctivo: `docs/PROMPT_CORRECTIVO.md` §5 — **cerrado**: commit `e9edb29` (/caja, /vender, /admin migrados a SelectorUnToque/TecladoNumerico/CifraGrande), verificado dos veces (navegador real + `check.sh --full` 12/12 antes y después de comitear), marcador de verde `89a39df`. El checkbox de este plan quedó desincronizado del código hasta esta auditoría (2-ago-2026); no hay `<select>` nativo restante en esas tres rutas (quedan en `historial`, `pedidos` y `facturar`, fuera del alcance declarado de F23).
 - [x] (P1) Chip con el nombre del operador **siempre visible** en cada pantalla, como exige §5 F5. Hoy el relevo funciona pero el chip no existe: quien pesa no puede confirmar de un vistazo baj… — spec: `specs/kilopan/01-identidad.md` [AC-ID-07]
 - [ ] (P1) Orden de productos **por frecuencia real** de pesaje, no alfabético como hoy. §5 F1 lo exige para que repetir producto cueste 2 toques. Requiere trackear frecuencia. Test: sembrar fr… — spec: `specs/kilopan/02-catalogo-pesaje.md` [AC-PES-07]
 - [ ] (P1) F3 Cargar van: contador N/M en 96 px, escáner de cámara full-screen con linterna (48 px, alcanzable con pulgar — madrugada real), lectura válida = beep + vibración, duplicada = tono … — spec: `specs/kilopan/04-despacho-reparto.md` [AC-DES-04]
@@ -295,6 +295,50 @@ Quedan 16 reales. Cada AC cerrado hoy lleva su cita en el archivo que lo impleme
 - [ ] (P2) Cablear el POST de ambos CTA (`lead_eauto` y `lead_kiloruta`): las tablas y el consentimiento están probados, pero el botón no envía — spec: `specs/kilopan/07-dashboard-flota.md` [AC-DASH-07]
 - [ ] (P2) Selector de sucursal en el dashboard, para que multisucursal sirva de algo cuando haya más de un local — spec: `specs/kilopan/07-dashboard-flota.md` [AC-SUC-02]
 - [ ] (P2) Botón compartir en el detalle de entrega, no solo en el cierre de caja — spec: `specs/kilopan/07-dashboard-flota.md` [AC-SHARE-02]
+
+## Auditoría Anexo D (Ola 1, 2-ago-2026) — ACs devueltos a abiertos
+
+Procedimiento de `docs/PROMPT_CORRECTIVO.md` Anexo D ejecutado sobre los 62 ACs `[x]` de
+`specs/kilopan/*.md`: 15 ya venían señalados por una auditoría previa (cross-session), los
+otros 47 se auditaron ahora en 4 lotes paralelos, cada uno con evidencia real (test
+encontrado y leído, o su ausencia confirmada) — no por lectura de nombre de archivo. Cada
+ítem tiene su nota completa en el `[ ]` correspondiente de `specs/kilopan/*.md`. **5 ACs de
+la lista original de 15 NO se devolvieron** tras encontrarles test real y vigente que
+contradice la lista previa: `AC-DES-01`, `AC-PES-01`, `AC-MERM-01`, `AC-H0-02` (tests
+directos en `db/test-invariantes.mjs`, verificados en vivo, 0 fail/0 skipped), y
+`AC-PERF-04` (su defecto de fondo —medía cero pantallas— ya fue reparado por el propio Ola
+1 en el commit `43813e8`, anterior a esta auditoría). Documentado para que quede trazable,
+no oculto.
+
+- [ ] (P2) AC-FIA-01 — el "índice único" de consolidación no existe (solo índice no-único); ver nota en `specs/kilopan/06-registro-dte.md`
+- [ ] (P2) AC-FIA-02 — doble facturación 409 sin test — `specs/kilopan/06-registro-dte.md`
+- [ ] (P0-SEC) AC-SEC-05 — secreto de dispositivo vive en localStorage en texto plano, contradice la afirmación del AC — `specs/kilopan/08-seguridad-rendimiento.md`
+- [ ] (P0-SEC) AC-SEC-06 — grep anti-interpolación SQL sigue case-sensitive en `guardrail.sh:96` — `specs/kilopan/08-seguridad-rendimiento.md`
+- [ ] (P2) AC-SUC-01 — sucursal_id probado en BD pero invisible en toda la UI — `specs/kilopan/07-dashboard-flota.md`
+- [ ] (P1-PERF) AC-PERF-03 — endpoint de cursor sin pantalla que lo consuma — `specs/kilopan/08-seguridad-rendimiento.md`
+- [ ] (P1) AC-POD-04 — e2e flaky confirmado, no es evidencia repetible — `specs/kilopan/05-entrega-pod.md`
+- [ ] (P1) AC-DES-03 — depende del mismo e2e flaky que AC-POD-04 — `specs/kilopan/04-despacho-reparto.md`
+- [ ] (P1) AC-ID-07 — chip existe pero el test de cobertura-en-toda-pantalla descrito nunca se escribió — `specs/kilopan/01-identidad.md`
+- [ ] (P1) AC-DASH-02 — chequeo de rol real en código pero sin e2e que lo confirme — `specs/kilopan/07-dashboard-flota.md`
+- [ ] (P2) AC-DASH-04 — comparación con el facturador sin ningún test — `specs/kilopan/07-dashboard-flota.md`
+- [ ] (P2) AC-SHARE-01 — degradación de `navigator.share()` sin test — `specs/kilopan/07-dashboard-flota.md`
+- [ ] (P0-SEC) AC-SEC-04 — cabeceras de seguridad declaradas pero sin test que confirme que el servidor las emite — `specs/kilopan/08-seguridad-rendimiento.md`
+- [ ] (P1-PERF) AC-PERF-02 — compresión de fotos y techo de 1,5 MB sin ningún test — `specs/kilopan/08-seguridad-rendimiento.md`
+- [ ] (P1-PERF) AC-PERF-01 — índices creados sin `EXPLAIN` que confirme que el planner los usa — `specs/kilopan/00-modelo-datos.md`
+- [ ] (P0) AC-ID-03 — el 423 de `/api/auth/login` nunca se probó automatizado (solo su hermano de enrolamiento) — `specs/kilopan/01-identidad.md`
+- [ ] (P2) AC-PES-04 — falta test de que el servidor RECHACE un pesaje sin foto con el toggle activo (mismo patrón que ya falló una vez) — `specs/kilopan/02-catalogo-pesaje.md`
+- [ ] (P2) AC-PES-05 — báscula GATT sin ningún test, ya reconocido por AC-PES-09 — `specs/kilopan/02-catalogo-pesaje.md`
+- [ ] (P2) AC-RED-01 — describe un mecanismo (sessionStorage/15s) que ya no existe en el código (es IndexedDB/30s); ninguna versión tiene test — `specs/kilopan/02-catalogo-pesaje.md`
+- [ ] (P1-SEC) AC-PES-08 — la única evidencia citada es lectura de archivo, no un test — `specs/kilopan/02-catalogo-pesaje.md`
+- [ ] (P0) AC-H0-03 — el grep de tabular-nums solo comprueba que existe UNA VEZ en el árbol, no por componente — `specs/kilopan/09-plataforma-miga.md`
+- [ ] (P0) AC-H0-05 — `prueba-arnes.sh` solo valida sintaxis de `check.sh`, no que `--full` ejecute lo que promete — `specs/kilopan/09-plataforma-miga.md`
+- [ ] (P0) AC-H0-06 — el grep certifica una cadena no relacionada con el cálculo real de "avance" del panel — `specs/kilopan/09-plataforma-miga.md`
+- [ ] (P0) AC-H0-07 — **falso hoy, no solo sin test**: los 4 shells de `packages/nucleo-*` no tienen `package.json` — `specs/kilopan/09-plataforma-miga.md`
+- [ ] (P1) AC-ADM-01 — nadie llama `POST`/`PATCH /api/usuarios` desde una prueba — `specs/kilopan/10-administracion.md`
+- [ ] (P1) AC-ADM-02 — nadie llama `POST`/`PATCH /api/productos` ni prueba la vigencia histórica de precios — `specs/kilopan/10-administracion.md`
+- [ ] (P2) AC-ADM-03 — cero referencias a `/api/parametros` en cualquier test — `specs/kilopan/10-administracion.md`
+- [ ] (P2) AC-PAG-03 — pantalla de admin de medios de pago sin ningún test — `specs/kilopan/03-venta-mostrador.md`
+- [ ] (P1) AC-POD-05 — flujo de rechazo/parcial desde `/ruta` sin test; el catálogo "cerrado" tampoco se valida en el servidor — `specs/kilopan/05-entrega-pod.md`
 
 ## DONE
 

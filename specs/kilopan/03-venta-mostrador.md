@@ -23,9 +23,12 @@ Sin venta en ruta — está explícitamente FUERA del MVP (§3).
 - [x] (P1) Pantalla de cierre de caja: `/caja` (182 líneas) muestra esperado, declarado
       y la diferencia. Ejercitada por el e2e «7 · la caja se cuenta a ciegas: el vendedor
       no ve lo esperado antes de contar» [AC-VEN-03]
-- [x] (P2) Pantalla de admin para togglear medios de pago: `SeccionMediosPago` en
+- [ ] (P2) Pantalla de admin para togglear medios de pago: `SeccionMediosPago` en
       `/admin` lee `/api/medios-pago` y permite prender/apagar sin borrar ni renombrar
       [AC-PAG-03]
+      — **Anexo D (auditoría 2-ago-2026): HUECO.** Cero tests tocan `SeccionMediosPago`
+      ni `PATCH /api/medios-pago` — ni e2e, ni unit, ni HTTP. `AC-PAG-01` cubre el
+      permiso a nivel BD, no esta pantalla ni este endpoint.
 
 ## Notas de implementación
 

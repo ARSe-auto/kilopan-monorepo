@@ -499,3 +499,54 @@ error de "separación de poderes" que esta misma Ola 1 había corregido en
 la auditoría de ~20 ACs huecos (Anexo D) — sin cambios desde la entrada anterior.
 Los dos "gestos del dueño" siguen abiertos y solo Alexis puede hacerlos: rotar la
 credencial de Postgres de producción, y activar branch protection en GitHub.
+
+---
+
+## 2026-08-02 · Ola 1: auditoría Anexo D completa (62 ACs) + decisión de secuencia con Alexis
+
+Antes de auditar: Alexis pidió arrancar la Plataforma FLOTA (prompt aparte,
+`PROMPT_MAESTRO_PLATAFORMA.md`). Al verificar el gate "KiloPan DONE" más simple de ese
+documento contra el estado real, apareció el conflicto con este mismo documento
+(`docs/PROMPT_CORRECTIVO.md`), que declara `apps/flota` explícitamente fuera de alcance
+hasta el DONE de esta campaña. Puesto en conocimiento de Alexis con las tres opciones
+posibles, decidió: **"Honrar PROMPT_CORRECTIVO al pie de la letra"** — terminar Ola 1 y
+luego Olas 2-4 antes de tocar la plataforma. Este documento sigue mandando.
+
+**Auditoría Anexo D ejecutada sobre los 62 ACs `[x]` de `specs/kilopan/*.md`** (77 ACs
+totales con los 15 que ya estaban abiertos). Los 15 que la auditoría cross-session previa
+ya había señalado como huecos se re-verificaron con evidencia propia (no se aceptó la
+lista a ciegas): 10 se confirmaron huecos con evidencia nueva y concreta (test ausente,
+test flaky, o afirmación falsa contra el código real); **4 NO se devolvieron a `[ ]`** tras
+encontrarles test real y vigente que contradice la lista previa (`AC-DES-01`, `AC-PES-01`,
+`AC-MERM-01`, `AC-H0-02` — los tres primeros con tests directos y nombrados en
+`db/test-invariantes.mjs`, corrida en vivo 0 fail/0 skipped; `AC-H0-02` con los tokens
+genuinamente definidos y usados en 5 componentes de `packages/miga`); y **1 ya no aplica**
+(`AC-PERF-04` — su defecto de fondo, medir cero pantallas, ya lo reparó el propio Ola 1 en
+el commit `43813e8`, anterior a esta auditoría).
+
+Los 47 ACs restantes se auditaron en 4 lotes paralelos (agentes independientes, cada uno
+leyendo el test real o confirmando su ausencia — nunca por nombre de archivo). Encontraron
+**19 ACs adicionales huecos**, incluido un caso donde la afirmación es **fácticamente
+falsa hoy, no solo sin prueba**: `AC-H0-07` dice que los 4 shells de `packages/nucleo-*`
+tienen `package.json` — ninguno lo tiene, verificado en disco.
+
+**Total: 29 ACs devueltos de `[x]` a `[ ]`**, cada uno con su nota en el `[ ]`
+correspondiente de `specs/kilopan/*.md` explicando por qué (formato Anexo D). Detalle
+completo en la nueva sección "Auditoría Anexo D" de `IMPLEMENTATION_PLAN.md`.
+`gate_specs.mjs`/`verify-refs.mjs --estricto` verdes después del cambio: 77 ACs · 33
+cerrados · 44 abiertos.
+
+**F23 también se corrigió en el plan** (no en el código, que ya estaba bien): el commit
+`e9edb29` lo cerró funcionalmente el mismo día pero el checkbox de `IMPLEMENTATION_PLAN.md`
+nunca se actualizó — quedó `[ ]` mostrando trabajo pendiente que ya no existía. Ahora dice
+`[x]` con la cita del commit.
+
+**Aprendizaje de esta ronda:** una lista de "ya verificados como huecos" sin la evidencia
+escrita al lado invita a la misma alucinación de progreso que el Anexo D vino a matar, solo
+que del lado contrario — aceptar una acusación sin demostrarla es tan peligroso como
+aceptar un arreglo sin demostrarlo. Re-verificar en vivo encontró 4 falsos positivos en la
+lista original (con test real que la contradice) junto con 10 confirmados y 19 nuevos.
+
+**Pendiente de Ola 1:** los 4 mutantes de control restantes del Anexo B, CI
+(`.github/workflows/gate.yml`) con 3 corridas verdes, y confirmar `check.sh --full` sigue
+en 0 saltados con el árbol de specs ya cambiado. Los dos gestos del dueño siguen abiertos.

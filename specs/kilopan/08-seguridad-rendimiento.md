@@ -20,27 +20,49 @@ puntaje mezcla SEO y PWA con lo que de verdad decide si la pantalla abre.
 - [x] (P0-SEC) `pnpm audit` sin vulnerabilidades altas ni críticas en el gate; falla el
       build si aparecen. Encontró 4 altas + 1 moderada reales (sharp/postcss/
       brace-expansion transitivos) el primer día; corregidas con overrides [AC-SEC-03]
-- [x] (P0-SEC) Cabeceras de seguridad base (`X-Content-Type-Options`, `Referrer-Policy`,
+- [ ] (P0-SEC) Cabeceras de seguridad base (`X-Content-Type-Options`, `Referrer-Policy`,
       `X-Frame-Options`) en `next.config.ts`. CSP completa y HSTS quedan para cuando
       existan orígenes reales que permitir (fotos, mapa estático) — decisión deliberada:
       no declarar una CSP amplia «por si acaso» [AC-SEC-04]
-- [x] (P0-SEC) Cookies de sesión `HttpOnly` + `Secure` (en producción) + `SameSite=Lax`;
+      — **Anexo D (auditoría 2-ago-2026): HUECO.** Las cabeceras están declaradas en
+      `next.config.ts:28-38` pero ningún test hace `fetch()`/`page.goto()` y lee
+      `response.headers()` para confirmar que el servidor las emite de verdad — una
+      entrada borrada por error no la detectaría nada.
+- [ ] (P0-SEC) Cookies de sesión `HttpOnly` + `Secure` (en producción) + `SameSite=Lax`;
       ningún secreto ni token en `localStorage`. Verificado en vivo: `document.cookie` no
       puede leer `kp_sesion` desde JS, pero el navegador la manda sola y
       `/api/auth/logout` la valida [AC-SEC-05]
-- [x] (P0-SEC) Toda query a Postgres parametrizada (cero interpolación de string en SQL)
+      — **Anexo D (auditoría 2-ago-2026): HUECO.** La cookie de sesión sí cumple lo que
+      afirma, pero la cláusula "ningún secreto ni token en localStorage" es falsa:
+      `apps/kilopan/src/identidad/cliente/dispositivo.ts:11,27` guarda el `secreto` del
+      dispositivo en texto plano vía `window.localStorage.setItem`. El propio comentario
+      del archivo lo reconoce como garantía menor aceptada — pero eso hace falsa la
+      afirmación del AC, no la vuelve cierta.
+- [ ] (P0-SEC) Toda query a Postgres parametrizada (cero interpolación de string en SQL)
       — grep en `guardrail.sh` + disciplina en `db/migrar.mjs` y `db/test-invariantes.mjs`
       desde el primer commit [AC-SEC-06]
+      — **Anexo D (auditoría 2-ago-2026): HUECO.** El grep de `guardrail.sh:96`
+      (`grep -RInE '...'`) es case-sensitive — solo detecta `SELECT|INSERT|UPDATE|DELETE`
+      en mayúsculas. `docs/PROMPT_CORRECTIVO.md` §7 ya declaró esta corrección pendiente
+      (pasar a `-Ei`); no aplicada todavía en este archivo.
 - [x] (P0-SEC) Fotos write-once: tabla `pan.fotos` con trigger que rebota UPDATE y
       DELETE, `pan_app` solo con INSERT. El servidor **recalcula** el sha256 y rechaza la
       foto si no coincide con el declarado en el POD. Guardar el binario en la BD es
       decisión consciente para el piloto; si crece, pasa a URL sin cambiar el contrato
       [AC-SEC-07]
-- [x] (P1-PERF) Compresión de fotos en el cliente antes de subir: 1280 px de ancho máximo,
+- [ ] (P1-PERF) Compresión de fotos en el cliente antes de subir: 1280 px de ancho máximo,
       calidad 0.72, objetivo ≈400 KB, con techo duro de 1,5 MB en el servidor [AC-PERF-02]
-- [x] (P1-PERF) Paginación por CURSOR (keyset), no por OFFSET, en el listado de entregas:
+      — **Anexo D (auditoría 2-ago-2026): HUECO.** `camara.ts` (ancho/calidad) y el techo
+      de 1,5 MB en `api/fotos/route.ts` existen, pero ningún test referencia esos valores
+      ni sube una foto pesada esperando 413 — cero prueba automatizada de cualquiera de
+      las dos mitades.
+- [ ] (P1-PERF) Paginación por CURSOR (keyset), no por OFFSET, en el listado de entregas:
       con OFFSET la página 40 obliga a recorrer y descartar 2.000 filas, y el cursor
       además no se corre si entra una entrega nueva mientras el dueño scrollea [AC-PERF-03]
+      — **Anexo D (auditoría 2-ago-2026): HUECO.** El endpoint existe pero ninguna
+      pantalla lo consume (ya reconocido por `AC-PERF-05`, abierto) — sin una pantalla
+      real que scrollee, la afirmación "el cursor no se corre" nunca se ejercita de
+      punta a punta.
 - [x] (P1-PERF) Presupuesto de performance en el gate: peso GZIP del flujo dorado contra
       150 KB. Hoy 104 KB en `/pesar`, `/vender`, `/ruta` — coincide con lo que reporta
       Next, o sea está bien calibrado [AC-PERF-04]

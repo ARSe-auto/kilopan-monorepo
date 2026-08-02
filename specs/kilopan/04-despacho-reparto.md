@@ -13,10 +13,16 @@ retención del vehículo. Sin override, ni en BD ni en UI (§7).
 
 - [x] (P1) Bloqueo real de «Salir a ruta» sin DTE asociado: trigger en BD, sin override.
       Probado en ambos sentidos — sin guía rebota, con guía sale [AC-DES-02]
-- [x] (P1) F2 Armar pedido: `/pedidos` con alta de cliente, pedido con precio de la
+- [ ] (P1) F2 Armar pedido: `/pedidos` con alta de cliente, pedido con precio de la
       lista del cliente, registro de DTE y «Armar ruta y salir». El bloqueo del art. 55
       se ve en pantalla (pedidos sin documento en rojo) y está probado por HTTP: 409 sin
       guía, 200 con guía [AC-DES-03]
+      — **Anexo D (auditoría 2-ago-2026): HUECO.** El único e2e que ejercita «Armar ruta
+      y salir» de punta a punta es `camino-dorado.spec.ts:257` (test 8), el mismo test
+      que `AC-POD-04` ya declara INESTABLE (pasó, agotó 30 s, volvió a pasar sobre el
+      mismo commit). El invariante de BD del art. 55 sí está sólido
+      (`db/test-invariantes.mjs`, etiquetado `AC-DES-02`), pero la afirmación específica
+      de este AC —el flujo de pantalla completo— depende del mismo test flaky.
 - [ ] (P1) F3 Cargar van: contador N/M en 96 px, escáner de cámara full-screen con
       linterna (48 px, alcanzable con pulgar — madrugada real), lectura válida = beep +
       vibración, duplicada = tono distinto + banner ámbar, sin código = checklist 44 px
