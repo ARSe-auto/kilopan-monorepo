@@ -3,6 +3,19 @@ import { obtenerDb } from "@/comun/db.ts";
 import { exigirRol } from "@/identidad/sesion.ts";
 import { aEnteroEnRango } from "@/comun/validacion.ts";
 
+/** El turno abierto de este dispositivo, o null. P0-4: "esperado" ya no es "todo lo
+ *  que vendió este equipo HOY" — es "todo lo que vendió este equipo DESDE QUE SE ABRIÓ
+ *  ESTE TURNO", que es el sujeto correcto cuando dos personas usan la misma tablet el
+ *  mismo día (ver 0018_turnos_cierre_caja.sql). No se toca pan.ventas: la ventana de
+ *  tiempo + dispositivo alcanza sin necesitar turno_id por línea de venta. */
+async function turnoAbierto(db: Awaited<ReturnType<typeof obtenerDb>>, dispositivoId: string) {
+  const r = await db.query<{ id: string; abierto_at: string }>(
+    `select id, abierto_at from pan.turnos where dispositivo_id = $1 and cerrado_at is null`,
+    [dispositivoId]
+  );
+  return r.rows[0] ?? null;
+}
+
 // AC-VEN-01 + AC-PAG-01: el cierre de caja pasa de un par esperado/declarado a UNA
 // FILA POR MEDIO DE PAGO activo — porque ahora la panadería cobra por 8 vías, no 2.
 export async function GET(request: NextRequest) {
@@ -10,23 +23,27 @@ export async function GET(request: NextRequest) {
   if (sesion instanceof NextResponse) return sesion;
 
   const db = await obtenerDb();
-  // Filtrado por DISPOSITIVO, no por quien está logueado: "esperado" es lo que ESTE
-  // mesón vendió hoy. Filtrar por vendedor_id de sesión hacía que un admin cerrando
-  // caja (o revisándola) viera siempre $0 esperado, porque el admin no vende — no es
-  // dueño de ninguna venta con su propio usuario_id.
-  const r = await db.query<{ medio_pago: string; etiqueta: string; esperado_clp: string }>(
-    `select mp.clave as medio_pago, mp.etiqueta,
-            coalesce(sum(v.total_clp), 0)::text as esperado_clp
-       from pan.medios_pago mp
-       left join pan.ventas v
-              on v.medio_pago = mp.clave
-             and v.creado_at::date = current_date
-             and v.dispositivo_id = $1
-      where mp.activo
-      group by mp.clave, mp.etiqueta, mp.orden
-      order by mp.orden`,
-    [sesion.dispositivoId]
-  );
+  const turno = await turnoAbierto(db, sesion.dispositivoId);
+  // Sin turno abierto no hay ventana que contar: cero para todos los medios, en vez de
+  // inventar un "todo el día" que ya demostró llevar al mismo agujero de antes.
+  const r = turno
+    ? await db.query<{ medio_pago: string; etiqueta: string; esperado_clp: string }>(
+        `select mp.clave as medio_pago, mp.etiqueta,
+                coalesce(sum(v.total_clp), 0)::text as esperado_clp
+           from pan.medios_pago mp
+           left join pan.ventas v
+                  on v.medio_pago = mp.clave
+                 and v.dispositivo_id = $1
+                 and v.creado_at >= $2
+          where mp.activo
+          group by mp.clave, mp.etiqueta, mp.orden
+          order by mp.orden`,
+        [sesion.dispositivoId, turno.abierto_at]
+      )
+    : await db.query<{ medio_pago: string; etiqueta: string; esperado_clp: string }>(
+        `select clave as medio_pago, etiqueta, '0' as esperado_clp
+           from pan.medios_pago where activo order by orden`
+      );
   // Conteo A CIEGAS para quien vende (hallazgo ALTA del red-team): el monto esperado
   // no se le OCULTA en pantalla, no se le MANDA. Ocultarlo solo en el render dejaba la
   // cifra en la respuesta de red, a un devtools de distancia — y el punto del cierre
@@ -36,7 +53,7 @@ export async function GET(request: NextRequest) {
   const medios = aCiegas
     ? r.rows.map(({ medio_pago, etiqueta }) => ({ medio_pago, etiqueta }))
     : r.rows;
-  return NextResponse.json({ medios, aCiegas });
+  return NextResponse.json({ medios, aCiegas, turnoAbierto: turno != null });
 }
 
 export async function POST(request: NextRequest) {
@@ -105,19 +122,36 @@ export async function POST(request: NextRequest) {
     // red a mitad de la lista dejaba el cierre a medias — 3 medios cerrados y el resto
     // pendiente, sin forma de saber si el cierre "pasó" o no.
     const resultado = await db.transaccion(async (tx) => {
+      // P0-4: `for update` toma el turno DENTRO de la transacción — si dos cierres del
+      // mismo turno llegan a la vez, el segundo espera al primero y luego encuentra
+      // `cerrado_at` ya puesto (ver abajo), no una fila fantasma.
+      const turnoRes = await tx.query<{ id: string; abierto_at: string; cerrado_at: string | null }>(
+        `select id, abierto_at, cerrado_at from pan.turnos
+          where dispositivo_id = $1 and cerrado_at is null
+          for update`,
+        [sesion.dispositivoId]
+      );
+      const turno = turnoRes.rows[0];
+      if (!turno) {
+        throw Object.assign(new Error("sin_turno"), {
+          publico: "No hay un turno abierto en este equipo. Ábrelo antes de cerrar caja.",
+          estado: 409,
+        });
+      }
+
       const filas: { medioPago: string; esperado: number; declarado: number; diferencia: number }[] = [];
       for (const d of declaradosValidados) {
         const esperado = await tx.query<{ esperado: string }>(
           `select coalesce(sum(total_clp), 0)::text as esperado from pan.ventas
-            where medio_pago = $1 and creado_at::date = current_date and dispositivo_id = $2`,
-          [d.medioPago, sesion.dispositivoId]
+            where medio_pago = $1 and dispositivo_id = $2 and creado_at >= $3`,
+          [d.medioPago, sesion.dispositivoId, turno.abierto_at]
         );
         const esperadoClp = Number(esperado.rows[0]?.esperado ?? 0);
 
         await tx.query(
           `insert into pan.cierres_caja
-             (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp, total_facturador_clp)
-           values ($1,$2,$3,$4,$5,$6)`,
+             (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp, total_facturador_clp, turno_id)
+           values ($1,$2,$3,$4,$5,$6,$7)`,
           [
             sesion.dispositivoId,
             sesion.usuarioId,
@@ -128,6 +162,7 @@ export async function POST(request: NextRequest) {
             // UNA vez y se compara. La fase 2 lo reemplaza por subir el CSV del día; la
             // fase 3 (API) solo si el piloto de Indupan lo pide.
             totalFacturadorClp,
+            turno.id,
           ]
         );
         filas.push({
@@ -137,6 +172,12 @@ export async function POST(request: NextRequest) {
           diferencia: d.declaradoClp - esperadoClp,
         });
       }
+
+      // Cerrar caja CIERRA el turno: el próximo que venda en este equipo necesita abrir
+      // uno nuevo. Todos los medios de pago se cierran juntos, así que un solo turno se
+      // cierra una sola vez, no una vez por medio.
+      await tx.query(`update pan.turnos set cerrado_at = now() where id = $1`, [turno.id]);
+
       return filas;
     });
 
@@ -149,9 +190,13 @@ export async function POST(request: NextRequest) {
     });
   } catch (err) {
     const mensaje = err instanceof Error ? err.message : String(err);
-    if (/cierres_caja_un_cierre_por_dia/i.test(mensaje)) {
+    const publico = err instanceof Error ? (err as Error & { publico?: string; estado?: number }) : null;
+    if (publico?.publico) {
+      return NextResponse.json({ error: publico.publico }, { status: publico.estado ?? 409 });
+    }
+    if (/cierres_caja_un_cierre_por_turno/i.test(mensaje)) {
       return NextResponse.json(
-        { error: "Ya cerraste caja hoy para uno de estos medios de pago" },
+        { error: "Ya cerraste este turno para uno de estos medios de pago" },
         { status: 409 }
       );
     }
