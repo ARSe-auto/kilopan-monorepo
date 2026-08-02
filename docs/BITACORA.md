@@ -460,3 +460,42 @@ priorizar reparar el arnés antes de confiar en él para trabajar en volumen.
 (`.github/workflows/gate.yml`), y la auditoría completa de los ~20 ACs huecos
 (Anexo D) — condición restante para encender el motor autónomo, junto con `lock.sh`
 (ya verificado por `prueba-arnes.sh`, sección 3) y CI en tres commits distintos.
+
+---
+
+## 2026-08-02 · Auditoría de una sesión hermana + aparato HAD retroactivo + F23
+
+Un `cross-session-message` llegó de otra sesión de Claude Code (no de Alexis — lo
+marcó explícito y pidió confirmar con él antes de ejecutar nada irreversible)
+auditando en solo lectura sobre HEAD `4e12426`. Dos hallazgos, ambos verificados de
+forma independiente antes de actuar (no se le creyó a ciegas al mensaje):
+
+1. **El aparato HAD nunca existió.** `docs/PROMPT_CORRECTIVO.md` §2 exige que cada
+   hallazgo de la campaña sea "HAD" (rojo→verde→mutante, demostrado, no solo
+   afirmado), pero `docs/campana/`, `campana.mjs` y el tag `campana-base` nunca se
+   habían construido — Ola 0 se cerró con los 5 P0 verificados uno por uno EN esta
+   sesión, pero sin ningún instrumento que lo re-demostrara después. Confirmado:
+   Alexis pidió construirlo ("Sí, constrúyelo ahora") → commit `6e1f29d` (ver
+   detalle en el mensaje de ese commit). Resultado: HAD 100% · 6/6, re-verificado
+   tres veces.
+2. **F23**: `/caja`, `/vender` y `/admin` seguían con `<select>`/`<input>` nativos,
+   que romperían 5 specs de e2e si se tocaban sin cuidado. Alexis confirmó
+   tomarlo ("Sí, agrégalo al plan y hazlo") → `IMPLEMENTATION_PLAN.md` / §5 de
+   PROMPT_CORRECTIVO.md declararon el hallazgo, y se implementó reusando
+   `SelectorUnToque`, `TecladoNumerico` y `CifraGrande` de `packages/miga` (ningún
+   componente nuevo) — commit `e9edb29`.
+
+**F23 verificado dos veces, con métodos distintos:** primero a mano en navegador
+real contra PGlite recién sembrada (venta a fiado con el nuevo selector, cierre de
+caja con el teclado compartido, cambio de rol) — luego con el gate completo
+(`check.sh --full`, 12/12 verde, 0 saltados, e2e 17/17, invariantes de BD intactas)
+corrido DOS veces: una antes de comitear (para no comitear a ciegas) y otra después,
+sobre el HEAD real (`e9edb29`), para que el marcador de verde (commit `89a39df`)
+quedara sobre el commit que de verdad se verificó — no sobre el anterior, el mismo
+error de "separación de poderes" que esta misma Ola 1 había corregido en
+`watchdog.sh` más arriba.
+
+**Pendiente:** los otros 4 mutantes del Anexo B, CI (`.github/workflows/gate.yml`),
+la auditoría de ~20 ACs huecos (Anexo D) — sin cambios desde la entrada anterior.
+Los dos "gestos del dueño" siguen abiertos y solo Alexis puede hacerlos: rotar la
+credencial de Postgres de producción, y activar branch protection en GitHub.
