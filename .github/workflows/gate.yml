@@ -42,3 +42,20 @@ jobs:
 
       - name: check.sh --full
         run: pnpm check:full
+
+      # check.sh redirige el output DETALLADO de cada paso (prueba-arnes.sh, playwright,
+      # etc.) a packages/metodo/panel/ultimo-check.log — la consola de CI solo ve el
+      # resumen == OK/FALLÓ ==. Sin subir este archivo, un rojo en CI es indiagnosticable
+      # después del hecho (el runner se destruye). if: always() para que suba también
+      # cuando el paso de arriba falla, que es exactamente cuando más se necesita.
+      - name: Subir ultimo-check.log y reporte de Playwright
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-logs-${{ github.sha }}
+          path: |
+            packages/metodo/panel/ultimo-check.log
+            apps/kilopan/playwright-report/
+            apps/kilopan/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
