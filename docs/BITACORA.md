@@ -389,9 +389,74 @@ commiteado en rojo, arreglo en commit aparte que lo pone en verde) y sin regresi
    `seguridad-turnos-caja.spec.ts`) solo cuando corrían los 6 archivos juntos — coincide
    con la carrera de cookie/RSC ya documentada arriba (26-jul) bajo `@playwright/test`.
    Reducir los logins de ese archivo a uno solo lo estabilizó en 3/3 corridas completas;
-   la causa de fondo sigue sin confirmarse, igual que `AC-POD-04`.
+   la causa de fondo sigue sin confirmarse **en ese caso puntual** — pero ver la entrada
+   de Ola 1 más abajo: para el mismo síntoma, en otro archivo, la causa real resultó
+   ser otra, y no una carrera.
 
 **Pendiente, explícitamente fuera de esta ronda:** la higiene de secretos del Anexo F
 (rotar la credencial de Postgres de producción — gesto G1 del dueño —, sacar los
 `.env.local` de los cuatro worktrees, cerrar el panel público de Vercel) y toda la Ola 1
 (reparar el arnés, CI, auditar los ~20 ACs huecos) antes de encender el motor autónomo.
+
+---
+
+## 2026-08-02 · Ola 1 (parcial): el arnés puede ponerse rojo
+
+Gate completo (`check.sh --full`) en **VERDE con 0 pasos saltados por primera vez**
+—12/12—, estable en corridas repetidas, sobre `837ff9e`. Es la primera de las cuatro
+condiciones de `docs/PROMPT_CORRECTIVO.md` §9.4 para encender el motor autónomo.
+Siete commits (`9a4b01e`…`3a39a62`):
+
+- **Higiene de secretos** (`9a4b01e`): `conectar-railway.mjs` ya no siembra sin
+  preguntar si la base ya tiene usuarios (evita agregar demo con PIN 1234 a una base
+  real); `.dockerignore` con patrones recursivos para `.env.local` y `.claude/`
+  completo excluido; `guardrail.sh` con `KILOPAN_ENV_FILE` (testeable sin tocar el
+  real), un guard nuevo contra `.env.local` en worktrees, y un guard nuevo para
+  `railway up` (árbol limpio y empujado); `desplegar.sh` nuevo como única puerta
+  sancionada para desplegar; `prueba-arnes.sh` ya no escribe el `.env.local` real ni
+  un instante. **Limpieza real de la máquina**: se encontraron y borraron los
+  `.env.local` de los cuatro worktrees de agente abandonados (hace más de una
+  semana, árbol limpio, del motor ya detenido) — el guard nuevo existe exactamente
+  para que esto no vuelva a pasar.
+- **Honestidad del gate** (`43813e8`): `presupuesto-perf.mjs` daba "OK" habiendo
+  medido CERO pantallas si el manifiesto no tenía ninguna de las 4 rutas del flujo
+  dorado; ahora eso es FALLÓ. `check.sh` dejó de decir "+ offline emulado" (ningún
+  spec llama `setOffline()`) y de prometer que axe/lighthouse llegan "con --full"
+  (no existen ni ahí).
+- **Separación de poderes** (`9dd5def`): `loop.sh` le pide al agente que corra el
+  gate ANTES de comitear, así que el marcador de verde que ese gate estampa queda
+  con el HEAD de ANTES del commit — el auto-reporte del agente nunca se
+  reconfirmaba. `watchdog.sh` ahora re-corre el gate completo, de forma
+  independiente, DESPUÉS de cada commit nuevo; si no da verde, aborta sin revertir
+  nada (la lección de `camino-dorado.spec.ts:223` es que revertir solo por un
+  veredicto automático es peor que quedar rojo esperando a un humano).
+- **Arnés de pruebas** (`8d1da47`): `"test": "node --test src/**/*.test.ts"` dependía
+  del shell para expandir `**` — bajo `sh -c` (lo que pnpm usa) se comporta como un
+  solo nivel, y funcionaba de pura casualidad. Peor: el descubrimiento real reveló
+  que **el falsador de P0-2 (Ola 0) llevaba desde su commit fallando bajo `pnpm
+  test`**, el comando real que el gate invoca — se había verificado a mano con
+  `--import`, pero nadie había corrido "el comando normal" hasta ahora.
+  `scripts/correr-tests.mjs` nuevo: descubre archivos recorriendo el árbol con Node
+  (no con el shell) y registra siempre el hook de alias.
+- **Mutante del Anexo B #1** (`f22b321`): el tope de merma (fix del 26-jul, incidente
+  real de -139.000 g) llegó a Ola 1 sin ningún test. Reproducido con el mutante real
+  —stock cae a -50.000 g, un 409 que debía rebotar sale 200— antes de escribirle un
+  falsador.
+- **Estabilidad del e2e** (`837ff9e`): agregar dos archivos de specs hizo que el e2e
+  completo empezara a fallar de forma DETERMINISTA, siempre en el login. Parecía la
+  misma carrera de cookie/RSC de la entrada anterior, pero no lo era: **el
+  limitador de intentos (20/min, AC-SEC-02) se comparte entre `/api/auth/login` y
+  `/api/dispositivos/enrolar` por IP, y sin `x-forwarded-for` TODO el e2e cae en la
+  misma IP ("desconocida")** — el conteo real ya estaba en 19 de 20 antes de los
+  archivos nuevos. Cada archivo de e2e ahora declara su propia IP de prueba; no se
+  tocó el límite real de producción. 17/17 en tres corridas consecutivas.
+
+**Aprendizaje de esta ronda:** dos verdes falsos independientes (el test de P0-2 sin
+correr de verdad, el mutante de merma sin ningún falsador) sobrevivieron a Ola 0
+precisamente porque el gate mismo tenía huecos — confirma la decisión del panel de
+priorizar reparar el arnés antes de confiar en él para trabajar en volumen.
+
+**Pendiente de Ola 1:** los otros 4 mutantes del Anexo B, integración continua
+(`.github/workflows/gate.yml`), y la auditoría completa de los ~20 ACs huecos
+(Anexo D) — condición restante para encender el motor autónomo, junto con `lock.sh`
+(ya verificado por `prueba-arnes.sh`, sección 3) y CI en tres commits distintos.
