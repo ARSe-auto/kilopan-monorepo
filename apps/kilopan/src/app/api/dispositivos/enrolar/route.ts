@@ -38,14 +38,32 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Credenciales de administrador inválidas" }, { status: 401 });
   }
 
-  // AC-SEC-01 (Tanda 6 de la auditoría): esta era la única verificación de PIN del
-  // sistema que no pasaba por pan.registrar_intento_pin, así que el bloqueo de 15 min
-  // nunca se disparaba acá — un PIN de 4 dígitos son solo 10.000 combinaciones. La
-  // función exige un dispositivo_id REAL (FK not null), y este endpoint todavía no
-  // tiene uno hasta que el PIN es correcto — problema de orden, no de diseño: se crea
-  // el dispositivo ANTES de verificar el PIN, con su secreto ya hasheado, y si el PIN
-  // falla o el bloqueo ya está activo se revoca al toque. Nunca llega a devolverse un
-  // secreto sin que el PIN haya sido correcto.
+  // P0-1 (auditoría 1-ago-2026): la versión anterior creaba el dispositivo ANTES de
+  // verificar el PIN, con un dispositivo_id NUEVO en cada intento. pan.registrar_intento_pin
+  // bloquea por el PAR (dispositivo_id, usuario_id), así que con un dispositivo virgen
+  // cada vez el contador de fallos siempre valía 1 y la rama 423 de abajo nunca se
+  // alcanzaba — fuerza bruta de 10.000 PIN sin freno, desde internet, sin credenciales.
+  //
+  // El orden correcto: verificar el PIN PRIMERO, contra un candado que cuenta SOLO por
+  // usuario_id (pan.registrar_intento_pin_enrolamiento, migración 0016 — no hay
+  // dispositivo real todavía, así que no hay par que llavear). El dispositivo recién se
+  // crea si el PIN es correcto y el usuario no está bloqueado. Nunca llega a
+  // devolverse un secreto sin que el PIN haya sido correcto, igual que antes.
+  const pinCorrecto = await verificarPin(pinAdmin, admin.pin_hash);
+  const permitido = await db.query<{ permitido: boolean }>(
+    `select pan.registrar_intento_pin_enrolamiento($1,$2) as permitido`,
+    [admin.id, pinCorrecto]
+  );
+  if (!permitido.rows[0]?.permitido) {
+    return NextResponse.json(
+      { error: "Bloqueado por intentos fallidos. Espera 15 minutos." },
+      { status: 423 }
+    );
+  }
+  if (!pinCorrecto) {
+    return NextResponse.json({ error: "Credenciales de administrador inválidas" }, { status: 401 });
+  }
+
   const secreto = randomBytes(24).toString("base64url");
   const secretoHash = await hashearPin(secreto);
   const nuevoDispositivo = await db.query<{ id: string }>(
@@ -55,23 +73,6 @@ export async function POST(request: NextRequest) {
   const dispositivoId = nuevoDispositivo.rows[0]?.id;
   if (!dispositivoId) {
     return NextResponse.json({ error: "No se pudo enrolar el equipo" }, { status: 500 });
-  }
-
-  const pinCorrecto = await verificarPin(pinAdmin, admin.pin_hash);
-  const permitido = await db.query<{ permitido: boolean }>(
-    `select pan.registrar_intento_pin($1,$2,$3) as permitido`,
-    [dispositivoId, admin.id, pinCorrecto]
-  );
-  if (!permitido.rows[0]?.permitido) {
-    await db.query(`update pan.dispositivos set revocado_at = now() where id = $1`, [dispositivoId]);
-    return NextResponse.json(
-      { error: "Bloqueado por intentos fallidos. Espera 15 minutos." },
-      { status: 423 }
-    );
-  }
-  if (!pinCorrecto) {
-    await db.query(`update pan.dispositivos set revocado_at = now() where id = $1`, [dispositivoId]);
-    return NextResponse.json({ error: "Credenciales de administrador inválidas" }, { status: 401 });
   }
 
   // El secreto se devuelve UNA sola vez, acá — igual que un token de API. El cliente
