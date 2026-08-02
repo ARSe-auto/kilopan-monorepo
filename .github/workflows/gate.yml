@@ -45,9 +45,16 @@ jobs:
 
       # check.sh redirige el output DETALLADO de cada paso (prueba-arnes.sh, playwright,
       # etc.) a packages/metodo/panel/ultimo-check.log — la consola de CI solo ve el
-      # resumen == OK/FALLÓ ==. Sin subir este archivo, un rojo en CI es indiagnosticable
-      # después del hecho (el runner se destruye). if: always() para que suba también
-      # cuando el paso de arriba falla, que es exactamente cuando más se necesita.
+      # resumen == OK/FALLÓ ==. Descargar el artefacto de abajo exige sesión web (no API
+      # ni navegador automatizado sin login), así que ademas se vuelca a la CONSOLA del
+      # paso — texto plano, legible sin descargar nada — cuando el gate de arriba falla.
+      - name: Volcar ultimo-check.log a la consola (solo si el gate falló)
+        if: failure()
+        run: |
+          echo "::group::packages/metodo/panel/ultimo-check.log"
+          cat packages/metodo/panel/ultimo-check.log || echo "(no existe el log)"
+          echo "::endgroup::"
+
       - name: Subir ultimo-check.log y reporte de Playwright
         if: always()
         uses: actions/upload-artifact@v4
