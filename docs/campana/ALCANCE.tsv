@@ -5,3 +5,7 @@ H-fiado-mostrador-sin-saldo	P0	0	El fiado del mesón no sumaba al saldo del clie
 H-caja-esperado-cruza-vendedor	P0	0	El cierre de caja calculaba el esperado por día, no por turno
 H-ruta-dte-tipo-invalido	P0	0	El trigger del art. 55 aceptaba una nota de crédito como respaldo de despacho
 H-merma-sin-test	P1	1	El tope de merma (fix del 26-jul) no tenía ningún test automatizado
+H-ventas-sin-test-sesion	P1	1	trg_ventas_exige_sesion en pan.ventas no tenía ningún test automatizado
+H-venta-uuid-sin-normalizar	P1	1	La normalización de UUID en /api/ventas (defecto red-team ALTA) no tenía ningún test automatizado
+H-venta-precio-del-cliente	P1	1	Que el precio cobrado sea siempre el del servidor, nunca el del cliente, no tenía ningún test automatizado
+H-cookie-con-expires	P1	1	Que la cookie de sesión no lleve Expires (fix del 26-jul) no tenía ningún test automatizado

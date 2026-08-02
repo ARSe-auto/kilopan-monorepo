@@ -335,6 +335,26 @@ test("AC-ID-02: una hornada sin sesión de operador viva también rebota", async
   await db.close();
 });
 
+test("Anexo B #2 (docs/PROMPT_CORRECTIVO.md): una venta sin sesión de operador viva rebota (trg_ventas_exige_sesion en pan.ventas, 0003_venta_mostrador.sql)", async () => {
+  // Mutante de control del arnés: si alguien quita este trigger de pan.ventas (o lo
+  // deja sin cablear como pasó una vez con cierres_caja, ver 0014), este test es la
+  // única línea que se entera — check.sh --full pasaba en verde sin ejercitar esto
+  // ni una vez hasta esta auditoría (Ola 1, Anexo D).
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  // OJO: sin crearSesion() — a propósito.
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into pan.ventas (client_uuid, vendedor_id, dispositivo_id, medio_pago, total_clp)
+         values (gen_random_uuid(), $1, $2, 'efectivo', 1000)`,
+        [usuarioId, dispositivoId]
+      ),
+    /sin sesión/i
+  );
+  await db.close();
+});
+
 test("pesajes: client_uuid duplicado rebota (idempotencia)", async () => {
   const db = await dbNueva();
   const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");

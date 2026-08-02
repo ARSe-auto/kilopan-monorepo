@@ -1,0 +1,13 @@
+diff --git b/apps/kilopan/src/app/api/ventas/route.ts a/apps/kilopan/src/app/api/ventas/route.ts
+index ec88d31..d89f4aa 100644
+--- b/apps/kilopan/src/app/api/ventas/route.ts
++++ a/apps/kilopan/src/app/api/ventas/route.ts
+@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
+     if (!esUuid(linea.productoId) || !Number.isInteger(linea.gramos) || linea.gramos < 1) {
+       return NextResponse.json({ error: "Línea de venta inválida" }, { status: 400 });
+     }
+-    const clave = linea.productoId; // MUTANTE: normalización removida a propósito
++    const clave = normalizarUuid(linea.productoId);
+     gramosPorProducto.set(clave, (gramosPorProducto.get(clave) ?? 0) + linea.gramos);
+   }
+   const calculadas: { productoId: string; gramos: number; precioClp: number }[] = [];

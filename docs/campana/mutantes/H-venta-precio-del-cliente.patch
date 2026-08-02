@@ -1,0 +1,21 @@
+diff --git b/apps/kilopan/src/app/api/ventas/route.ts a/apps/kilopan/src/app/api/ventas/route.ts
+index 868fca8..d89f4aa 100644
+--- b/apps/kilopan/src/app/api/ventas/route.ts
++++ a/apps/kilopan/src/app/api/ventas/route.ts
+@@ -158,8 +158,14 @@ export async function POST(request: NextRequest) {
+ 
+         // Divergencia: la lista cambió entre que se armó el carro y se cobró. Se avisa
+         // en vez de cobrar callado un número distinto al que vio el cliente al frente.
+-        // MUTANTE: chequeo de divergencia removido, y se cobra el precio del cliente
+-        calculadas.push({ productoId: linea.productoId, gramos: linea.gramos, precioClp: linea.precioClp ?? precioLinea });
++        if (linea.precioClp != null && linea.precioClp !== precioLinea) {
++          throw Object.assign(new Error("precio_cambio"), {
++            publico: "El precio cambió desde que armaste la venta. Revisa el total y vuelve a cobrar.",
++            estado: 409,
++          });
++        }
++
++        calculadas.push({ productoId: linea.productoId, gramos: linea.gramos, precioClp: precioLinea });
+       }
+ 
+       totalClp = calculadas.reduce((suma, l) => suma + l.precioClp, 0);

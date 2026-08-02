@@ -1,0 +1,14 @@
+diff --git b/apps/kilopan/src/identidad/sesion.ts a/apps/kilopan/src/identidad/sesion.ts
+index 274905c..f49c0a8 100644
+--- b/apps/kilopan/src/identidad/sesion.ts
++++ a/apps/kilopan/src/identidad/sesion.ts
+@@ -28,8 +28,7 @@ const MAX_EDAD_COOKIE_S = 60 * 60 * 12;
+  *
+  *  `Max-Age` por sí solo expresa el mismo tope y no contiene comas. */
+ export function cabeceraCookieSesion(sesionId: string, request: NextRequest): string {
+-  const vence = new Date(Date.now() + MAX_EDAD_COOKIE_S * 1000).toUTCString();
+-  return armarCookie(`${NOMBRE_COOKIE}=${sesionId}`, `Expires=${vence}`, request); // MUTANTE
++  return armarCookie(`${NOMBRE_COOKIE}=${sesionId}`, `Max-Age=${MAX_EDAD_COOKIE_S}`, request);
+ }
+ 
+ /** El borrado de la sesión tiene el MISMO problema: `cookies.delete()` de Next emite

@@ -1,0 +1,15 @@
+diff --git b/db/migraciones/0003_venta_mostrador.sql a/db/migraciones/0003_venta_mostrador.sql
+index b5696c8..3ecc1f3 100644
+--- b/db/migraciones/0003_venta_mostrador.sql
++++ a/db/migraciones/0003_venta_mostrador.sql
+@@ -89,7 +89,9 @@ begin
+ end;
+ $$;
+ 
+--- MUTANTE: trigger removido a propósito para probar el arnés
++create trigger trg_ventas_exige_sesion
++  before insert on pan.ventas
++  for each row execute function pan.trg_exige_sesion('vendedor_id');
+ 
+ -- AC-VEN-02: "venta contra el stock ya pesado" — disponible = pesado a mostrador
+ -- menos ya vendido, SIEMPRE derivado de eventos (pesajes/venta_lineas), nunca un
