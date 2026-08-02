@@ -1,0 +1,44 @@
+name: gate
+
+# Ola 1 (docs/PROMPT_CORRECTIVO.md §9.3): el gate único corre en cada push. No hace falta
+# `gh` para esto — el archivo se escribe y se empuja con git, como el propio documento
+# indica. Sin servicios de BD: DB_MODE por defecto es pglite (embebido, cero instalación),
+# así que check.sh --full corre sin secretos ni contenedores.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm ANTES que setup-node: la acción de node necesita saber qué gestor cachear.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.17.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Instalar dependencias (lockfile congelado)
+        run: pnpm install --frozen-lockfile
+
+      # Solo Chromium: playwright.config.ts usa devices["iPhone 13"], que es Chromium.
+      # --with-deps trae las librerías de sistema que el runner de Ubuntu no trae de serie.
+      - name: Instalar navegador de Playwright (Chromium)
+        run: pnpm --filter kilopan exec playwright install --with-deps chromium
+
+      - name: check.sh --full
+        run: pnpm check:full
