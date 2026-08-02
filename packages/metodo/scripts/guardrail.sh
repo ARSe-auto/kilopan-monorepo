@@ -93,7 +93,11 @@ if grep -RInE "TODO|FIXME|PLACEHOLDER|not implemented|lorem ipsum" \
 fi
 
 echo "== guardrail: cero interpolación directa de string en SQL (AC-SEC-06) =="
-if grep -RInE '(query|sql)\(\s*[`"'"'"']?\s*(SELECT|INSERT|UPDATE|DELETE)[^,)]*\$\{' \
+# docs/PROMPT_CORRECTIVO.md §7 (Ola 1): este grep era case-sensitive y no podía
+# disparar contra `select`/`insert`/`update`/`delete` en minúsculas — que es como se
+# escribe SQL en TODO este repo (ver db/migraciones/*.sql, db/test-invariantes.mjs).
+# `-Ei` en vez de `-E` a secas.
+if grep -RInEi '(query|sql)\(\s*[`"'"'"']?\s*(SELECT|INSERT|UPDATE|DELETE)[^,)]*\$\{' \
     --include='*.ts' --include='*.tsx' \
     --exclude-dir=node_modules --exclude-dir=.next \
     apps/*/src 2>/dev/null; then

@@ -308,12 +308,13 @@ contradice la lista previa: `AC-DES-01`, `AC-PES-01`, `AC-MERM-01`, `AC-H0-02` (
 directos en `db/test-invariantes.mjs`, verificados en vivo, 0 fail/0 skipped), y
 `AC-PERF-04` (su defecto de fondo —medía cero pantallas— ya fue reparado por el propio Ola
 1 en el commit `43813e8`, anterior a esta auditoría). Documentado para que quede trazable,
-no oculto.
+no oculto. **`AC-SEC-06` volvió a cerrarse el mismo día**: el hueco (grep case-sensitive en
+`guardrail.sh`) se corrigió y se le agregó prueba en `prueba-arnes.sh` §2b horas después de
+esta misma auditoría — no queda como ítem abierto de la lista de abajo.
 
 - [ ] (P2) AC-FIA-01 — el "índice único" de consolidación no existe (solo índice no-único); ver nota en `specs/kilopan/06-registro-dte.md`
 - [ ] (P2) AC-FIA-02 — doble facturación 409 sin test — `specs/kilopan/06-registro-dte.md`
 - [ ] (P0-SEC) AC-SEC-05 — secreto de dispositivo vive en localStorage en texto plano, contradice la afirmación del AC — `specs/kilopan/08-seguridad-rendimiento.md`
-- [ ] (P0-SEC) AC-SEC-06 — grep anti-interpolación SQL sigue case-sensitive en `guardrail.sh:96` — `specs/kilopan/08-seguridad-rendimiento.md`
 - [ ] (P2) AC-SUC-01 — sucursal_id probado en BD pero invisible en toda la UI — `specs/kilopan/07-dashboard-flota.md`
 - [ ] (P1-PERF) AC-PERF-03 — endpoint de cursor sin pantalla que lo consuma — `specs/kilopan/08-seguridad-rendimiento.md`
 - [ ] (P1) AC-POD-04 — e2e flaky confirmado, no es evidencia repetible — `specs/kilopan/05-entrega-pod.md`

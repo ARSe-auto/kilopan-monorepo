@@ -84,6 +84,17 @@ bash "$M/guardrail.sh" >/dev/null 2>&1 && no "el grep anti-cáscaras NO detecta 
 rm -f "$CANARIO"
 
 echo
+echo "== 2b. Interpolación de SQL en minúsculas (AC-SEC-06, docs/PROMPT_CORRECTIVO.md §7) =="
+# El grep era case-sensitive y por eso nunca podía disparar en ESTE repo: todo el SQL
+# real de db/migraciones/*.sql y db/test-invariantes.mjs se escribe en minúsculas. Una
+# línea real con `${` dentro de `db.query(` en minúsculas es el caso que debía atrapar
+# desde el día uno y nunca atrapó.
+CANARIO_SQL="apps/kilopan/src/.canario-prueba-arnes-sql.ts"
+printf 'export function f(id: string) {\n  return db.query(`select * from pan.usuarios where id = ${id}`);\n}\n' > "$CANARIO_SQL"
+bash "$M/guardrail.sh" >/dev/null 2>&1 && no "el grep anti-interpolación NO detecta SQL en minúsculas" || ok "detecta interpolación de SQL en minúsculas (select/insert/update/delete)"
+rm -f "$CANARIO_SQL"
+
+echo
 echo "== 3. Lock de un solo builder (casilla 15) =="
 bash "$M/lock.sh" soltar prueba-arnes >/dev/null 2>&1
 bash "$M/lock.sh" tomar prueba-arnes >/dev/null 2>&1 && ok "toma el lock cuando está libre" || no "no pudo tomar un lock libre"

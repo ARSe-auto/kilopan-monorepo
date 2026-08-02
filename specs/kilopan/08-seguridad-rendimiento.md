@@ -38,13 +38,14 @@ puntaje mezcla SEO y PWA con lo que de verdad decide si la pantalla abre.
       dispositivo en texto plano vía `window.localStorage.setItem`. El propio comentario
       del archivo lo reconoce como garantía menor aceptada — pero eso hace falsa la
       afirmación del AC, no la vuelve cierta.
-- [ ] (P0-SEC) Toda query a Postgres parametrizada (cero interpolación de string en SQL)
+- [x] (P0-SEC) Toda query a Postgres parametrizada (cero interpolación de string en SQL)
       — grep en `guardrail.sh` + disciplina en `db/migrar.mjs` y `db/test-invariantes.mjs`
       desde el primer commit [AC-SEC-06]
-      — **Anexo D (auditoría 2-ago-2026): HUECO.** El grep de `guardrail.sh:96`
-      (`grep -RInE '...'`) es case-sensitive — solo detecta `SELECT|INSERT|UPDATE|DELETE`
-      en mayúsculas. `docs/PROMPT_CORRECTIVO.md` §7 ya declaró esta corrección pendiente
-      (pasar a `-Ei`); no aplicada todavía en este archivo.
+      — **Cerrado 2-ago-2026 (Ola 1):** la auditoría Anexo D lo encontró hueco (el grep
+      de `guardrail.sh` era case-sensitive y nunca podía disparar contra SQL en
+      minúsculas, que es como se escribe TODO el SQL real de este repo). Corregido a
+      `grep -RInEi` y probado en `prueba-arnes.sh` §2b con un canario real
+      (`db.query(\`select ... \${id}\`)`) que el guard ahora detecta.
 - [x] (P0-SEC) Fotos write-once: tabla `pan.fotos` con trigger que rebota UPDATE y
       DELETE, `pan_app` solo con INSERT. El servidor **recalcula** el sha256 y rechaza la
       foto si no coincide con el declarado en el POD. Guardar el binario en la BD es
