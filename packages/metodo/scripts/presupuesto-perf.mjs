@@ -45,18 +45,29 @@ function pesoKb(archivos) {
 function main() {
   const manifiesto = leerManifiesto();
   if (!manifiesto) {
-    console.log(`presupuesto-perf: SALTADO — no hay build (correr \`pnpm --filter ${APP} build\` primero)`);
-    return;
+    // check.sh decide si este paso se corre o se salta ANTES de invocar el script
+    // (comprueba que el manifiesto exista); si de todos modos se llega hasta acá sin
+    // manifiesto, decir "OK" o salir en 0 sería el mismo verde-sin-medir-nada que este
+    // script existe para impedir. Sale en 1: quien lo invoque decide si eso es rojo o
+    // una condición de saltado en SU propio nivel, pero nunca en silencio.
+    console.error(
+      `presupuesto-perf: FALLÓ — no hay build (correr \`pnpm --filter ${APP} build\` primero)`
+    );
+    process.exit(1);
   }
 
   let excedidas = 0;
+  let medidas = 0;
+  const faltantes = [];
   for (const ruta of RUTAS_CRITICAS) {
     const clave = `/${ruta.replace(/^\//, "")}/page`;
     const archivos = manifiesto.pages?.[clave];
     if (!archivos) {
-      console.log(`  —     ${ruta} (no está en el manifiesto todavía)`);
+      console.log(`  FALTA  ${ruta} (no está en el manifiesto — ¿build incompleto o de \`next dev\`?)`);
+      faltantes.push(ruta);
       continue;
     }
+    medidas++;
     const kb = pesoKb(archivos);
     const ok = kb <= PRESUPUESTO_KB;
     if (!ok) excedidas++;
@@ -65,13 +76,26 @@ function main() {
     console.log(`  ${ok ? "OK    " : "EXCEDE"} ${ruta}: ${kb} KB (presupuesto ${PRESUPUESTO_KB} KB)`);
   }
 
+  // P2 (auditoría 1-ago-2026): si NINGUNA ruta aparece en el manifiesto (por ejemplo un
+  // manifiesto de `next dev` que solo registra lo que el navegador visitó, o un build a
+  // medias), `excedidas` se queda en 0 y el script imprimía "OK" habiendo medido CERO
+  // pantallas — un verde que no verificó nada. Ahora se exige que las 4 rutas del flujo
+  // dorado estén, sin excepción: si falta una, es FALLO, no "saltado".
+  if (faltantes.length > 0) {
+    console.error(
+      `presupuesto-perf: FALLÓ — ${faltantes.length}/${RUTAS_CRITICAS.length} rutas del flujo dorado ` +
+        `no están en el manifiesto (${faltantes.join(", ")}). Un build de \`next dev\` no sirve para esto: ` +
+        `correr \`pnpm --filter kilopan build\` (producción) antes de este paso.`
+    );
+    process.exit(1);
+  }
   if (excedidas > 0) {
     console.error(
       `presupuesto-perf: FALLÓ — ${excedidas} pantalla(s) del flujo dorado se pasan del presupuesto.`
     );
     process.exit(1);
   }
-  console.log("presupuesto-perf: OK");
+  console.log(`presupuesto-perf: OK (${medidas}/${RUTAS_CRITICAS.length} rutas medidas)`);
 }
 
 main();

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Gate único (PROMPT_MAESTRO.md §9). `--full` agrega e2e/axe/perf; sin flag corre lo rápido.
+# Gate único (PROMPT_MAESTRO.md §9). `--full` agrega e2e/perf/invariantes de BD; sin
+# flag corre lo rápido. axe/lighthouse NO son pasos todavía, ni con --full (AC-H0-10).
 # Nunca reporta OK por omisión: cada paso que no corre queda listado en "SALTADOS",
 # y el resumen final es explícito sobre qué se verificó de verdad (ver docs/LECCION_RALPH.md).
 set -uo pipefail
@@ -105,7 +106,12 @@ if [ "$FULL" -eq 1 ]; then
   fi
 
   if [ -f "apps/$APP/playwright.config.ts" ]; then
-    run_step "e2e móvil 390x844 + offline emulado" pnpm --filter "$APP" run e2e
+    # P2 (auditoría 1-ago-2026): esta etiqueta decía "+ offline emulado" sin que ningún
+    # spec llamara jamás a context.setOffline() — un paso rotulado y no corrido es peor
+    # que uno ausente (mismo principio que "PASA"/"EXCEDE" en presupuesto-perf.mjs).
+    # Offline real queda para Ola 4 (docs/PROMPT_CORRECTIVO.md §3); hasta entonces la
+    # etiqueta dice solo lo que este paso de verdad ejercita.
+    run_step "e2e móvil 390x844" pnpm --filter "$APP" run e2e
   else
     skip_step "e2e Playwright" "apps/$APP aún no tiene playwright.config.ts"
   fi
@@ -116,7 +122,13 @@ if [ "$FULL" -eq 1 ]; then
     skip_step "invariantes de BD" "migraciones aún no existen"
   fi
 else
-  skip_step "e2e / axe / invariantes de BD / lighthouse" "correr con --full"
+  # P2 (auditoría 1-ago-2026): "correr con --full" es engañoso para axe/lighthouse —
+  # NI CON --full existe ese paso en este archivo (grep -n "axe\|lighthouse" no
+  # encuentra ningún run_step). No es que estén detrás de una bandera: no están
+  # implementados, punto — AC-H0-10 (specs/kilopan/09-plataforma-miga.md) sigue
+  # abierto por esto, honestamente, y así lo dice el mensaje.
+  skip_step "e2e / invariantes de BD" "correr con --full"
+  skip_step "axe / lighthouse" "no implementado todavía — AC-H0-10 sigue abierto"
 fi
 
 echo
