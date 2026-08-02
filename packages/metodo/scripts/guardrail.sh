@@ -62,7 +62,14 @@ echo "== guardrail: railway up solo sobre árbol limpio y empujado =="
 # Un árbol sucio (trabajo de otra sesión, un experimento a medio terminar) se despliega
 # tal cual, y nadie puede saber después qué versión quedó corriendo en producción.
 if [ "${1:-}" = "--antes-de-railway-up" ]; then
-  if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null || [ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+  # SIN --untracked-files=no (bug encontrado en CI, Ola 1 2-ago-2026): `railway up`
+  # sube el árbol de trabajo tal cual lo ve el filesystem, así que un archivo nuevo
+  # sin trackear se despliega igual que uno commiteado — excluirlo de este chequeo
+  # dejaba pasar exactamente lo que el guard existe para bloquear. Pasó inadvertido en
+  # local porque el árbol de desarrollo casi siempre tiene OTRO cambio tracked que
+  # disparaba el guard por la razón equivocada; un runner de CI recién clonado (sin
+  # ningún cambio tracked) lo expuso.
+  if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null || [ -n "$(git status --porcelain 2>/dev/null)" ]; then
     echo "ABORT: el árbol de trabajo no está limpio — 'railway up' subiría cambios sin commitear."
     FAIL=1
   fi

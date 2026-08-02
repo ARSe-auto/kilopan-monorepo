@@ -45,26 +45,25 @@ jobs:
 
       # check.sh redirige el output DETALLADO de cada paso (prueba-arnes.sh, playwright,
       # etc.) a packages/metodo/panel/ultimo-check.log — la consola de CI solo ve el
-      # resumen == OK/FALLÓ ==. Descargar el artefacto de abajo exige sesión web (no API
-      # ni navegador automatizado sin login), así que ademas se vuelca a la CONSOLA del
-      # paso — texto plano, legible sin descargar nada — cuando el gate de arriba falla.
-      - name: Volcar ultimo-check.log a la consola (solo si el gate falló)
+      # resumen == OK/FALLÓ ==. Dos intentos anteriores fallaron: el artefacto exige
+      # sesión web, y el visor de logs por paso pliega/virtualiza el contenido de forma
+      # que ni un lector automatizado ni varios intentos de scroll programático lo leen
+      # completo de forma confiable. $GITHUB_STEP_SUMMARY es una página Markdown plana
+      # en la vista general de la corrida — nada de eso aplica ahí.
+      - name: Volcar ultimo-check.log al resumen de la corrida (solo si el gate falló)
         if: failure()
-        # SIN ::group:: — GitHub lo pliega en un fold que un lector automatizado (sin
-        # sesión interactiva) no puede expandir de forma confiable. Texto plano con
-        # marcador de línea y conteo, para que "no hay output" sea indistinguible de
-        # "hay output pero no se ve" — LOGLINE| en cada línea también evita que una
-        # línea del propio log que empiece con "::" se interprete como comando de
-        # workflow.
         run: |
-          if [ -f packages/metodo/panel/ultimo-check.log ]; then
-            echo "GATE-LOG-INICIO archivo existe, $(wc -l < packages/metodo/panel/ultimo-check.log) lineas"
-            sed 's/^/LOGLINE| /' packages/metodo/panel/ultimo-check.log
-            echo "GATE-LOG-FIN"
-          else
-            echo "GATE-LOG-INICIO no existe el archivo"
-            echo "GATE-LOG-FIN"
-          fi
+          {
+            echo "## packages/metodo/panel/ultimo-check.log"
+            if [ -f packages/metodo/panel/ultimo-check.log ]; then
+              echo "archivo existe, $(wc -l < packages/metodo/panel/ultimo-check.log) lineas"
+              echo '```text'
+              cat packages/metodo/panel/ultimo-check.log
+              echo '```'
+            else
+              echo "no existe el archivo"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Subir ultimo-check.log y reporte de Playwright
         if: always()
