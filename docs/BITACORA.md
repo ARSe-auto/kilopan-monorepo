@@ -612,3 +612,73 @@ se empujó a ciegas.
    visor de logs por paso (`::group::` plegado, texto plano con marcador de línea,
    varios métodos de expandir el fold) perdieron más tiempo que el que tomó darse
    cuenta de que `$GITHUB_STEP_SUMMARY` evita el problema por completo.
+
+---
+
+## 2026-08-02 · Ola 1 CERRADA — motor autónomo encendido, Olas 2-4 en marcha
+
+Corridas CI #9 (`a4388bc`) y #10 (`25d2f18`) también dieron VERDE — **3 de 3 corridas
+verdes en 3 commits distintos**, cumpliendo la última de las cuatro condiciones de
+`docs/PROMPT_CORRECTIVO.md` §9.4. Las cuatro:
+
+1. ✅ `check.sh --full` sin pasos saltados (verificado local, múltiples corridas)
+2. ✅ Los 5 mutantes de control del Anexo B ponen el gate en rojo (`campana.mjs --had` 100%)
+3. ✅ CI verde en 3 commits distintos (corridas #8, #9, #10)
+4. ✅ `lock.sh` rebota con exit 7 (cubierto por `prueba-arnes.sh` §3)
+
+**Bloqueo de credencial compartida con eauto, resuelto por Alexis.** Antes de encender
+el motor se encontró `com.eauto.ralph-loop` corriendo en vivo — mismo OAuth, mismo
+maestro exige un solo motor a la vez. Se investigó su actividad real (sin tocar nada)
+antes de preguntar: llevaba corriendo desde el 1-ago 09:33, con commit real el 1-ago
+21:07 (`AC-21-11`), así que no era un proceso olvidado. Presentadas las implicaciones a
+Alexis, decidió detener eauto para priorizar KiloPan. Se usó el mecanismo de pausa
+propio de eauto (marker `~/.eauto-ralph/PAUSED-FOR-REVIEW`, no un `kill -9`) —
+`watchdog.sh` de eauto lo respetó, `launchctl` no lo revivió (`KeepAlive.SuccessfulExit:
+false` + salida limpia tras ver el marker). Verificado con `launchctl list` que
+`com.eauto.ralph-loop` quedó con pid `-` de forma estable, no solo un instante.
+
+**Encender `com.kilopan.ralph-loop` reveló dos bugs reales, nunca antes probados de
+verdad** — el propio `packages/metodo/launchd/README.md` decía "escrito y con sintaxis
+probada" pero nunca se había cargado con éxito hasta hoy:
+
+1. **`launchctl bootstrap` fallaba con "5: Input/output error"** sin señalar causa. Dos
+   causas combinadas: (a) al plist le faltaba `<!DOCTYPE plist ...>` —
+   `plutil -lint` lo daba por válido porque es permisivo, pero el parser real de
+   `launchctl` no; comparado contra un plist de eauto que sí carga para encontrarlo. (b)
+   el label había quedado `disabled` a nivel de dominio launchd de un intento anterior
+   (independiente del archivo plist) — `launchctl print-disabled` lo mostró,
+   `launchctl enable` lo liberó.
+2. **El motor arrancó y el primer AC que tomó salió "sin-id".** Los 28 ítems que esta
+   sesión agregó a `IMPLEMENTATION_PLAN.md` (auditoría Anexo D) citaban su AC como texto
+   plano (`AC-SEC-05`) en vez de `[AC-SEC-05]` — `loop.sh` extrae el id con
+   `grep -oE '\[AC-[A-Z0-9-]+\]'`, así que sin corchetes el prompt al agente quedaba con
+   "CITÁ el id del AC ()" vacío. Es exactamente el modo de falla que el propio prompt de
+   `loop.sh` advierte por escrito ("sin esa cita, verify-refs --estricto ve un [x] sin
+   respaldo... el motor queda girando en falso"). Corregido con un script que envuelve
+   el id en corchetes en las 28 líneas, verificado con `gate_specs`/`verify-refs
+   --estricto` (77 ACs · 34 cerrados · 43 abiertos, ambos VERDE), motor reiniciado —
+   segunda corrida tomó `AC-SEC-05` con id correcto.
+
+**Estado al cierre de esta sesión:** `com.kilopan.ralph-loop` corriendo (pid verificado
+con `launchctl list`), trabajando `AC-SEC-05` como primer AC de su primera iteración
+real. Repo principal (`~/kilopan-monorepo`, rama `main`) adelantado a `origin/main`
+(`12eca7d`) antes de encender el motor.
+
+**Hueco real para la sesión siguiente, no resuelto hoy:** `loop.sh` comitea
+**localmente, nunca empuja**. Sin un paso que revise y empuje lo acumulado, el trabajo
+del motor no llega a CI ni a `origin/main` por sí solo — alguien tiene que supervisarlo
+periódicamente. Además, el backlog actual de 43 ACs abiertos es trabajo real de KiloPan
+(muchos ya corresponden a alcance de Ola 3/4 — p. ej. `AC-DASH-06` es literalmente la
+pantalla de auditoría que pide Ola 3, `AC-H0-10` es el AA/axe que pide Ola 4), pero **la
+Ola 2 (pantalla "Arreglar", reparación de datos históricos) todavía no tiene ningún AC
+escrito en el plan ni en las specs** — se buscó explícitamente (`grep -i "arreglar"`) y
+no hay nada. Antes de que el motor pueda tocar Ola 2 de verdad, alguien tiene que
+traducir `docs/PROMPT_CORRECTIVO.md` §4/§5 en ACs concretos — el motor construye, no
+planifica.
+
+**Aprendizaje de esta ronda:** el mismo patrón se repitió una tercera vez el mismo día,
+ahora en infraestructura en vez de en código: "sintaxis probada" (`plutil -lint`,
+`bash -n`) no es lo mismo que "funciona de verdad" — cada capa de este sistema que
+nunca se ejecutó de punta a punta tenía al menos un defecto esperando a un primer
+arranque real para aparecer. La lección de Ola 1 completa, en una frase: no hay verde
+que valga sin haberlo corrido de verdad, ni una vez.
