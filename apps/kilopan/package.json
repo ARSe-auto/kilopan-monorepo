@@ -9,7 +9,7 @@
     "start": "next start --port 3300",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/**/*.test.ts",
+    "test": "node scripts/correr-tests.mjs",
     "e2e": "playwright test"
   },
   "dependencies": {
