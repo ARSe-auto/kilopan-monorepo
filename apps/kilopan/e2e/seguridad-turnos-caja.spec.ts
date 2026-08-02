@@ -68,6 +68,9 @@ async function cerrarCaja(page: Page, declaradoClp: number) {
 }
 
 test.describe.configure({ mode: "serial" });
+// P1 (auditoría 1-ago-2026): IP de prueba propia — ver camino-dorado.spec.ts para el
+// detalle completo de por qué (limitador de intentos compartido, AC-SEC-02).
+test.use({ extraHTTPHeaders: { "x-forwarded-for": "203.0.113.40" } });
 
 test("P0-4: el esperado del cierre no cruza turnos, y los controles de apertura/cierre", async ({
   page,

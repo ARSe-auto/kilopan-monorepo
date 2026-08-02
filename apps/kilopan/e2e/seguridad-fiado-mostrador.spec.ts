@@ -51,6 +51,9 @@ async function saldoDe(page: Page, clienteId: string): Promise<number> {
 }
 
 test.describe.configure({ mode: "serial" });
+// P1 (auditoría 1-ago-2026): IP de prueba propia — ver camino-dorado.spec.ts para el
+// detalle completo de por qué (limitador de intentos compartido, AC-SEC-02).
+test.use({ extraHTTPHeaders: { "x-forwarded-for": "203.0.113.30" } });
 
 test("P0-3: una venta fiada del mesón SUMA al saldo del cliente, y saldarla la descuenta", async ({
   page,

@@ -17,6 +17,12 @@ const datos = JSON.parse(
   readFileSync(join(dirname(fileURLToPath(import.meta.url)), "datos-semilla.json"), "utf8")
 ) as { usuarios: Record<string, { rut: string; id: string }> };
 
+// P1 (auditoría 1-ago-2026): IP de prueba propia para este archivo — comparte el
+// limitador de intentos (20/min, AC-SEC-02) con /api/auth/login, y este archivo por sí
+// solo ya hace 7 requests a /api/dispositivos/enrolar. Sin IP propia, compite por el
+// mismo cupo que el resto del e2e (ver camino-dorado.spec.ts para el detalle completo).
+test.use({ extraHTTPHeaders: { "x-forwarded-for": "203.0.113.20" } });
+
 test.describe("seguridad · enrolamiento de dispositivos", () => {
   test("P0-1: 5 PIN de administrador fallidos bloquean el enrolamiento — sin dispositivo real de por medio", async ({
     request,

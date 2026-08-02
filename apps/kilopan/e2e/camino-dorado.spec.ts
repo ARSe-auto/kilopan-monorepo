@@ -29,6 +29,17 @@ const datos = JSON.parse(
 // cerrar caja antes de vender, no es un test que falla — es un test que miente.
 test.describe.configure({ mode: "serial" });
 
+// P1 (auditoría 1-ago-2026, encontrado estabilizando el e2e para Ola 1): sin esto,
+// TODO archivo de e2e comparte la misma "IP" (ipDelCliente() devuelve "desconocida"
+// cuando no hay x-forwarded-for) y por lo tanto el MISMO cupo del limitador de
+// intentos (20/min, AC-SEC-02) — login y enrolar usan el mismo limitador. Con el
+// suite completo ya en 19 de 20 solicitudes antes de este archivo, agregar CUALQUIER
+// spec nuevo con más de un login lo hace reventar: el síntoma es "se queda pegado en
+// /ingresar" porque el login real devuelve 429, no porque haya una carrera de
+// verdad. Cada archivo con su propia IP de prueba aísla su cupo del de los demás —
+// más fiel, además, a que cada tablet real tiene su propia IP.
+test.use({ extraHTTPHeaders: { "x-forwarded-for": "203.0.113.10" } });
+
 /** Teclea en el teclado en pantalla, que es el único que existe en estas pantallas. */
 async function teclear(page: Page, texto: string) {
   for (const caracter of texto) {
