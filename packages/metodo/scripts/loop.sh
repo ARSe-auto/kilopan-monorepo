@@ -143,7 +143,26 @@ echo "loop: siguiente = ${AC_ID:-sin-id} :: $AC_LINEA"
 
 COMMITS_ANTES=$(git rev-list --count HEAD 2>/dev/null || echo 0)
 
+# SOS EL BUILDER, NO SU RIVAL (bug real, 2-ago-2026 — la razón por la que este motor
+# nunca cerró un solo AC, ni una vez). AGENTS.md y CLAUDE.md mandan verificar que no haya
+# otro builder con `ps aux | grep loop.sh` antes de construir. El agente obedecía... y
+# encontraba SIEMPRE al `loop.sh` que acababa de lanzarlo a él. Concluía que había un
+# motor rival, se negaba a tocar nada por regla dura, y encima preguntaba cuál de tres
+# caminos tomar — corriendo bajo `claude -p`, donde no hay nadie que conteste. Cada
+# iteración terminaba en 68 s, US$0,50, cero líneas escritas, y un «SIN AVANCE» que
+# parecía culpa del AC. Deadlock determinista al 100%: la regla estaba bien escrita, pero
+# nadie la había leído nunca desde adentro del proceso que la regla describe.
 PROMPT="Estudiá AGENTS.md antes de tocar nada. Estás construyendo ${APP} en este monorepo.
+
+CONTEXTO DE EJECUCIÓN — leelo antes que nada:
+- A vos te lanzó el motor (packages/metodo/scripts/loop.sh, pid $$). Ese loop.sh que vas a
+  ver en 'ps aux' SOS VOS: es tu proceso padre, y ya tomó el lock de builder a tu favor
+  (.metodo-locks/builder-${APP}.lock). NO lo cuentes como un builder rival, no lo mates y
+  no te frenes por él. Es el único caso en que ver un loop.sh vivo no te detiene.
+- Corrés NO INTERACTIVO: no hay nadie del otro lado. Preguntar equivale a no hacer nada y
+  perder la iteración. Si algo te bloquea de verdad, dejá dicho qué y por qué en tu
+  respuesta final, no marques nada como hecho, y terminá.
+
 Implementá EXACTAMENTE este ítem, nada más:
 
 ${AC_LINEA}

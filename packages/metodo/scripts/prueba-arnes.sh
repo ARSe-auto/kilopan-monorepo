@@ -144,6 +144,14 @@ grep -qE "git (checkout|clean|reset) --?[a-z]* *\." "$M/loop.sh" && no "loop.sh 
 #     Antes solo lo tocaba esta misma suite: la escalación no podía dispararse jamás.
 grep -q "build-fails" "$M/loop.sh" && ok "loop.sh escribe .ralph/build-fails (la escalación a Opus ya puede dispararse)" || no "nadie incrementa build-fails: la escalación de model-selector.sh es código muerto"
 
+# (c2) El prompt le dice al agente que el loop.sh que verá en `ps` es su propio padre.
+#      Sin esto el agente aplica «UN builder por worktree» contra el proceso que lo lanzó,
+#      se niega a construir y pregunta qué hacer — bajo `claude -p`, donde nadie contesta.
+#      Deadlock determinista: es la razón por la que el motor nunca cerró un solo AC.
+grep -q "SOS VOS" "$M/loop.sh" && ok "el prompt aclara que el loop.sh de 'ps' es el propio padre del agente" || no "el agente se detectará a sí mismo como builder rival y no construirá NUNCA"
+grep -q "NO INTERACTIVO" "$M/loop.sh" && ok "el prompt avisa que nadie va a responder preguntas" || no "el agente puede gastar la iteración preguntando al vacío"
+grep -q "ESE proceso sos vos" AGENTS.md && ok "AGENTS.md desambigua la regla en su fuente durable" || no "AGENTS.md manda matar al propio motor: la regla vuelve a morder desde el contrato"
+
 # (d) watchdog.sh sale con 0 al pausar, para que KeepAlive del plist NO lo resucite.
 grep -q "PAUSA-REVISION" "$M/watchdog.sh" && ok "watchdog.sh usa un marcador de pausa que launchd no puede pisar" || no "watchdog.sh sin marcador: launchd lo relanza tras cada abort, en bucle infinito"
 grep -qE "^\s*exit 1$" "$M/watchdog.sh" && no "watchdog.sh todavía sale con 1 en algún abort — KeepAlive lo relanzaría" || ok "ningún abort sale con 1 (KeepAlive/SuccessfulExit=false no lo revive)"
@@ -213,6 +221,14 @@ SEL="$M/model-selector.sh"
 [ "$(bash "$SEL" juez)"   = "claude-opus-4-8"   ] && ok "juez → Opus (mandato de refutar)" || no "juez no rutea a Opus"
 
 TMPP="$(mktemp -d)"; cp IMPLEMENTATION_PLAN.md "$TMPP/plan.bak"
+# HERMETICIDAD (2-ago-2026): estas pruebas de ruteo dan por sentado que el contador de
+# strikes está en cero, y pasaban sólo porque `.ralph/build-fails` NUNCA existía — nadie
+# lo escribía. Al arreglar eso (loop.sh ya lo incrementa), el contador quedó en 1 tras un
+# fallo real del motor y «ítem de UI» empezó a rutear a Sonnet en vez de Haiku: el
+# selector hacía lo correcto (un fallo ⇒ piso Sonnet) y era la PRUEBA la que mentía, por
+# depender de estado ambiente. Se guarda y se limpia; se restaura al final.
+[ -f .ralph/build-fails ] && cp .ralph/build-fails "$TMPP/build-fails.bak"
+mkdir -p .ralph; rm -f .ralph/build-fails
 FX="AC-$(printf X)$(printf X)"   # id de fixture armado en runtime: escrito literal, este
                                   # archivo citaría ACs que ninguna spec define y verify-refs
                                   # pondría el gate en rojo por el andamio de su propia suite.
@@ -229,7 +245,11 @@ probar_ruteo '- [ ] (P1) cola con reintento automático [${FX}-97]'      "claude
 # Escalación de dos strikes sobre un ítem NO-duro
 mkdir -p .ralph; echo 2 > .ralph/build-fails
 probar_ruteo '- [ ] (P1) cola con reintento automático [${FX}-96]'      "claude-opus-4-8"  "2 strikes escala a"
+# Se restaura el contador REAL del motor: borrarlo sin más le regalaría al motor un
+# «cero strikes» cada vez que corre el gate, y la escalación —que recién ahora existe—
+# no llegaría nunca a dispararse en producción.
 rm -f .ralph/build-fails
+[ -f "$TMPP/build-fails.bak" ] && cp "$TMPP/build-fails.bak" .ralph/build-fails
 cp "$TMPP/plan.bak" IMPLEMENTATION_PLAN.md; rm -rf "$TMPP"
 # El anti-no-op: los cuatro casos de arriba deben haber dado al menos 3 modelos distintos.
 distintos=$(printf '%s\n' "claude-opus-4-8" "claude-haiku-4-5" "claude-sonnet-5" | sort -u | wc -l | tr -d ' ')

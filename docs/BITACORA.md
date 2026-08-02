@@ -748,3 +748,55 @@ iteraciones se reseteaba con cada relanzamiento de launchd; el corte por falta d
 pedía un humano que la máquina ignoraba; la escalación leía un contador que nadie
 escribía. Un guard que jamás dispara es indistinguible de uno roto — y tres guards que
 jamás disparan se ven, desde afuera, exactamente igual que un motor sano.
+
+---
+
+## 2026-08-02 (noche, cont.) · La causa raíz: el agente se detectaba a sí mismo como builder rival
+
+Con los cuatro defectos anteriores arreglados, primera iteración de prueba controlada
+(`KILOPAN_MAX_ITERACIONES=1`, a mano, no bajo launchd). Resultado: **SIN AVANCE otra vez**,
+68 s, US$0,50, cero líneas escritas. Pero ahora el log servía para algo, y el
+`ultimo-resultado.json` traía la respuesta textual del agente:
+
+> «Encontré un conflicto duro con la regla de AGENTS.md ("UN builder por worktree"): ya hay
+> un `loop.sh` corriendo ahora mismo en este mismo directorio (PID 71055) […] Por regla dura
+> no debo construir aquí mientras ese motor esté vivo. […] ¿Cuál preferís?»
+
+El `loop.sh` que encontró **era el que lo había lanzado a él**. `AGENTS.md` manda —con toda
+razón— verificar `ps aux | grep loop.sh` antes de construir, para no repetir el 26-jul-2026
+en que dos sesiones construyeron a la vez. El agente obedeció la regla al pie de la letra
+contra su propio proceso padre. Y encima preguntó cuál de tres caminos tomar, corriendo bajo
+`claude -p`, donde no hay nadie del otro lado: la iteración se consumía en una pregunta que
+nadie iba a leer.
+
+**Deadlock determinista al 100%. Esto —y no la dificultad de ningún AC— es la razón por la
+que este motor nunca cerró un solo AC desde que existe.** Todo lo que hay en `main` lo
+escribieron sesiones supervisadas. La regla estaba bien redactada; lo que nunca ocurrió es
+que alguien la leyera desde adentro del proceso que la regla describe.
+
+Arreglado en los dos lugares: `AGENTS.md` (fuente durable) aclara que si a vos te lanzó
+`loop.sh`, ESE proceso sos vos y no te frena; y el prompt de `loop.sh` abre con un bloque
+CONTEXTO DE EJECUCIÓN que lo dice explícito —con el pid del padre— y avisa que corre no
+interactivo, que preguntar equivale a perder la iteración.
+
+**Un séptimo defecto salió al arreglar el cuarto.** Las pruebas de ruteo del selector de
+modelo no eran herméticas: pasaban sólo porque `.ralph/build-fails` NUNCA existía. Con el
+contador ya vivo, un fallo real lo dejó en 1 y «ítem de UI» pasó a rutear a Sonnet en vez de
+Haiku — el selector hacía lo correcto (un fallo ⇒ piso Sonnet) y era la prueba la que
+mentía. Peor: la suite **borraba** el contador al terminar, así que con la escalación por fin
+viva, cada corrida del gate le habría regalado al motor un «cero strikes» y la escalación no
+se habría disparado nunca en producción. El mismo bug entrando por la puerta de atrás. Ahora
+se guarda y se restaura.
+
+**Error de operación propio, vale anotarlo:** se lanzó el motor con las correcciones aún sin
+comitear en el árbol. Su primera acción fue —por el guard recién escrito— stashear el árbol
+sucio, incluido el arreglo, y correr con el prompt viejo. Nada se perdió (el guard stashea,
+jamás borra: se recuperó con `git stash pop`), pero la secuencia correcta es comitear primero
+y encender después. Con el motor activo, el repo principal no se edita: eso es ahora una
+consecuencia mecánica del diseño, no una convención.
+
+**Aprendizaje:** de siete defectos encontrados en una tarde, seis eran molestos y uno era
+mortal — y los seis molestos disfrazaban al mortal de «AC difícil». La señal que lo delató no
+fue ninguna métrica del panel ni el código de salida: fue leer lo que el agente **dijo** en
+`ultimo-resultado.json`. Un motor que reporta «SIN AVANCE» sin que nadie lea su respuesta en
+prosa es un motor que puede estar bloqueado por una razón trivial durante días.

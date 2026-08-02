@@ -47,7 +47,7 @@ node db/test-invariantes.mjs   # intenta violar cada invariante con SET ROLE pan
 - **Jamás migración destructiva** ni `db:reset` sobre datos con evidencia (fotos de POD).
 - **Motor OAuth-only.** Ventana agotada ⇒ ESPERA. Jamás API de pago, jamás recarga
   automática de créditos.
-- **UN builder por worktree.** Antes de construir: `ps aux | grep loop.sh` y mtimes.
+- **UN builder por worktree.** Antes de construir: `ps aux | grep loop.sh` y mtimes. Si a vos te lanzó `loop.sh`, ESE proceso sos vos: es tu padre y ya tiene el lock a tu favor — no te cuentes como rival tuyo ni lo mates. Es el único caso en que ver un `loop.sh` vivo no te frena.
 
 ## Proceso
 - Loop plan → build → verify sobre `IMPLEMENTATION_PLAN_<app>.md` (vivo, desechable).
