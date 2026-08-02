@@ -682,3 +682,69 @@ ahora en infraestructura en vez de en código: "sintaxis probada" (`plutil -lint
 nunca se ejecutó de punta a punta tenía al menos un defecto esperando a un primer
 arranque real para aparecer. La lección de Ola 1 completa, en una frase: no hay verde
 que valga sin haberlo corrido de verdad, ni una vez.
+
+---
+
+## 2026-08-02 (noche) · El motor giró media hora sin avanzar: cuatro bugs, no uno
+
+Primera sesión de supervisión del motor autónomo tras encenderlo. El HANDOFF decía
+«debería estar corriendo trabajando el backlog de 43 ACs». Estaba corriendo, sí — y no
+había cerrado ni un solo AC. `launchctl list` mostraba un PID vivo, que es exactamente la
+señal que `docs/LECCION_RALPH.md` prohíbe leer como avance.
+
+**Lo que se veía:** desde las 18:49 hasta las 19:18, seis iteraciones idénticas eligiendo
+`AC-SEC-05`, todas «SIN AVANCE», y tres reinicios completos del watchdog en el medio. Con
+`--max-budget-usd 3` y hasta 3 invocaciones por ciclo, media hora de eso cuesta dinero
+real sin producir una línea de código.
+
+**El primer diagnóstico era el equivocado.** El log del watchdog decía que el gate
+independiente había dado ROJO sobre `69c6eb9` — el commit que cerró la Ola 1, ya empujado
+a `origin/main`. Parecía que `main` estaba roto. Corrido `check.sh --full` sobre ese mismo
+HEAD con el árbol **limpio**: VERDE, 0 fallas, 0 pasos saltados. `main` nunca estuvo roto.
+El rojo lo producía el árbol sucio que el propio motor dejaba, y el gate no distingue
+entre «el commit está mal» y «hay basura sin comitear encima».
+
+**Los cuatro defectos, que solos son molestos y juntos hacen un bucle infinito:**
+
+1. **`loop.sh` no limpiaba el árbol entre iteraciones.** Cuando el agente no logra verde
+   NO comitea —así se le pide, y hace bien—, pero su trabajo a medias queda puesto. La
+   iteración siguiente lo hereda y su gate arranca rojo por código que ella no escribió:
+   no puede dar verde jamás, por mucho que trabaje. Cada intento envenenaba al siguiente.
+2. **`watchdog.sh` salía con `exit 1` en todos sus ABORT**, incluidos los que dicen
+   literalmente «NO reintentar solo» — y el plist tiene `KeepAlive/SuccessfulExit=false`,
+   que interpreta cualquier salida no-exitosa como «relanzalo». launchd resucitaba el
+   motor a los 120 s. El pedido de intervención humana lo pisaba la máquina.
+3. **`siguiente_ac()` usaba `grep -m1`**: devuelve SIEMPRE el primer AC abierto. Un AC que
+   el motor no puede cerrar tapa a todos los que vienen detrás, para siempre. `AC-SEC-05`
+   —que exige migrar el secreto de dispositivo a IndexedDB, volviendo asíncrona una API que
+   consumen 3 páginas y 6 specs e2e— bloqueaba a los otros 41.
+4. **`.ralph/build-fails` no lo escribía nadie.** `model-selector.sh:64` lo lee para
+   escalar a Opus tras 2 strikes; el único que lo tocaba era su propio test en
+   `prueba-arnes.sh`. La escalación existía en el selector y no podía dispararse nunca.
+   De haber funcionado, `AC-SEC-05` habría escalado a Opus en el tercer intento.
+
+**Lo que se arregló, cada guard con la prueba que demuestra que dispara** (§3b nueva de
+`prueba-arnes.sh`, 43 verdes / 0 rojos): el árbol sucio se guarda en `git stash` —jamás se
+borra, «no revertir solo» vale también para el trabajo que el motor no alcanzó a
+terminar—, excluyendo lo que está sucio por construcción (`panel/`, y `next-env.d.ts` que
+Next reescribe en cada build alternando `.next`/`.next-e2e`); todo ABORT escribe
+`panel/PAUSA-REVISION` y sale con 0, marcador que launchd no puede pisar y que frena
+también los arranques futuros hasta que una persona lo borre; un AC que falla 3 veces se
+anota en `panel/acs-atascados.txt` y el motor sigue con el siguiente, sin marcarlo `[x]` ni
+tocar su spec —queda abierto, solo deja de ser el tapón—; y `loop.sh` ya escribe los
+contadores de strikes.
+
+Se agregó `KILOPAN_DRY_RUN=1` a `loop.sh` (elegir el AC y parar, sin tocar el árbol ni
+correr el gate ni invocar al agente) porque la prueba del salteo necesitaba ejercer la
+función de verdad: una suite que gasta US$3 de `claude -p` cada vez que corre el gate no
+se corre nunca, y un guard que nadie ejercita es indistinguible de uno roto.
+
+**Aprendizaje:** los cuatro son la misma falla de fondo que la Ola 1 ya había documentado
+dos veces —«sintaxis probada» no es «funciona de verdad»— pero en su forma más cara: el
+motor tenía tres mecanismos de seguridad correctamente escritos (tope de iteraciones,
+corte por falta de avance, escalación de modelo) y **ninguno de los tres podía cumplir su
+función**, porque nada los había ejercido nunca contra el caso real. El tope de
+iteraciones se reseteaba con cada relanzamiento de launchd; el corte por falta de avance
+pedía un humano que la máquina ignoraba; la escalación leía un contador que nadie
+escribía. Un guard que jamás dispara es indistinguible de uno roto — y tres guards que
+jamás disparan se ven, desde afuera, exactamente igual que un motor sano.

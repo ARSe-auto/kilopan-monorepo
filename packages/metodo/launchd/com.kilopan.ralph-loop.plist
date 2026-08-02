@@ -62,7 +62,17 @@
   </dict>
 
   <!-- KeepAlive solo ante fallo: si el watchdog termina limpio (DONE, o tope de
-       iteraciones alcanzado) NO se relanza. «Nunca desatendido indefinidamente». -->
+       iteraciones alcanzado) NO se relanza. «Nunca desatendido indefinidamente».
+
+       BUG REAL (2-ago-2026, primera corrida de verdad): esto y los ABORT del watchdog se
+       peleaban. Todos los ABORT decían «NO reintentar solo» y salían con exit 1 — que es
+       exactamente lo que SuccessfulExit=false interpreta como «relanzalo». launchd lo
+       resucitaba a los 120 s, volvía a abortar, y así indefinidamente: el motor giró media
+       hora sobre el mismo AC quemando hasta 3 × US$3 de `claude -p` por vuelta. El pedido
+       de intervención humana se perdía porque nadie lo leía y la máquina lo pisaba.
+       Ahora todo ABORT escribe packages/metodo/panel/PAUSA-REVISION y sale con 0: la
+       salida limpia impide el relanzamiento, y el marcador —que launchd no puede pisar—
+       frena también cualquier arranque futuro hasta que una persona lo borre. -->
   <key>KeepAlive</key>
   <dict>
     <key>SuccessfulExit</key>

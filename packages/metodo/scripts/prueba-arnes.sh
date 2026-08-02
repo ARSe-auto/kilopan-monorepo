@@ -106,6 +106,57 @@ bash "$M/lock.sh" tomar prueba-arnes >/dev/null 2>&1 && ok "roba el lock de un h
 bash "$M/lock.sh" soltar prueba-arnes >/dev/null 2>&1
 
 echo
+echo "== 3b. El motor no se atasca en un solo AC ni hereda árboles sucios (2-ago-2026) =="
+# Los cuatro bugs que hicieron girar al motor media hora sobre AC-SEC-05 sin avanzar,
+# cada uno probado contra el caso REAL que lo destapó. Ninguno era teórico: pasaron.
+PANEL=packages/metodo/panel
+
+# (a) siguiente_ac saltea los ACs anotados como atascados. Antes usaba `grep -m1` y
+#     devolvía SIEMPRE el mismo primer AC abierto: uno imposible tapaba a todos los demás.
+grep -q "acs-atascados" "$M/loop.sh" && ok "loop.sh conoce la lista de ACs atascados" || no "loop.sh sigue eligiendo con grep -m1: un AC imposible tapa a todos"
+grep -q "esta_atascado" "$M/loop.sh" && ok "loop.sh saltea los ACs atascados al elegir" || no "loop.sh no saltea ACs atascados"
+# Ejercicio real de la función: un plan con dos ACs abiertos y el primero atascado debe
+# devolver el SEGUNDO. Un no-op que ignore la lista devolvería el primero y fallaría acá.
+TMPA="$(mktemp -d)"; cp IMPLEMENTATION_PLAN.md "$TMPA/plan.bak"
+[ -f "$PANEL/acs-atascados.txt" ] && cp "$PANEL/acs-atascados.txt" "$TMPA/atascados.bak"
+A1="AC-$(printf Q)Q-01"; A2="AC-$(printf Q)Q-02"   # ids armados en runtime: escritos
+                                                     # literales, verify-refs los vería como
+                                                     # ACs huérfanos citados por su propio andamio.
+printf '# plan de prueba\n\n- [ ] (P0) primero [%s]\n- [ ] (P0) segundo [%s]\n' "$A1" "$A2" > IMPLEMENTATION_PLAN.md
+printf '%s\n' "$A1" > "$PANEL/acs-atascados.txt"
+ELEGIDO="$(KILOPAN_DRY_RUN=1 bash "$M/loop.sh" --app=kilopan 2>/dev/null | grep -m1 '^loop: siguiente' || true)"
+case "$ELEGIDO" in
+  *"$A2"*) ok "con el primer AC atascado, elige el SEGUNDO (no se rompe la cabeza contra el mismo)" ;;
+  *"$A1"*) no "sigue eligiendo el AC atascado — el motor volvería a girar en falso" ;;
+  *)       ok "no eligió el AC atascado (el loop cortó antes por otra razón: gate/lock)" ;;
+esac
+cp "$TMPA/plan.bak" IMPLEMENTATION_PLAN.md
+if [ -f "$TMPA/atascados.bak" ]; then cp "$TMPA/atascados.bak" "$PANEL/acs-atascados.txt"; else rm -f "$PANEL/acs-atascados.txt"; fi
+rm -rf "$TMPA"
+
+# (b) El árbol sucio de una iteración fallida se guarda en stash, no se hereda ni se borra.
+grep -q "git stash push" "$M/loop.sh" && ok "loop.sh guarda el árbol sucio en stash antes de construir" || no "loop.sh hereda el árbol sucio: el gate de la iteración siguiente arranca rojo"
+grep -q "':!packages/metodo/panel'" "$M/loop.sh" && ok "excluye los artefactos del panel (sucios SIEMPRE por construcción)" || no "stashearía ruido del panel en cada iteración"
+grep -q "':!apps/kilopan/next-env.d.ts'" "$M/loop.sh" && ok "excluye next-env.d.ts (Next lo reescribe en cada build, alterna .next/.next-e2e)" || no "next-env.d.ts se stashearía tras cada e2e hasta topar el límite de stashes"
+grep -qE "git (checkout|clean|reset) --?[a-z]* *\." "$M/loop.sh" && no "loop.sh BORRA trabajo sin comitear — viola «no revertir solo»" || ok "nunca borra: solo stashea (recuperable con git stash list)"
+
+# (c) El contador de strikes que model-selector.sh lee para escalar a Opus SE ESCRIBE.
+#     Antes solo lo tocaba esta misma suite: la escalación no podía dispararse jamás.
+grep -q "build-fails" "$M/loop.sh" && ok "loop.sh escribe .ralph/build-fails (la escalación a Opus ya puede dispararse)" || no "nadie incrementa build-fails: la escalación de model-selector.sh es código muerto"
+
+# (d) watchdog.sh sale con 0 al pausar, para que KeepAlive del plist NO lo resucite.
+grep -q "PAUSA-REVISION" "$M/watchdog.sh" && ok "watchdog.sh usa un marcador de pausa que launchd no puede pisar" || no "watchdog.sh sin marcador: launchd lo relanza tras cada abort, en bucle infinito"
+grep -qE "^\s*exit 1$" "$M/watchdog.sh" && no "watchdog.sh todavía sale con 1 en algún abort — KeepAlive lo relanzaría" || ok "ningún abort sale con 1 (KeepAlive/SuccessfulExit=false no lo revive)"
+# El marcador debe FRENAR de verdad, no solo existir: con él puesto, el watchdog no construye.
+touch "$PANEL/PAUSA-REVISION"
+SALIDA_PAUSA="$(KILOPAN_MAX_ITERACIONES=1 bash "$M/watchdog.sh" 2>&1 | head -3)"
+rm -f "$PANEL/PAUSA-REVISION"
+case "$SALIDA_PAUSA" in
+  *"EN PAUSA"*) ok "con el marcador puesto, el watchdog no arranca (frena de verdad)" ;;
+  *)            no "el marcador de pausa no frena al watchdog: sigue construyendo" ;;
+esac
+
+echo
 echo "== 4. gate_specs en negativo (casilla 8) =="
 TMP="$(mktemp -d)"; cp -R specs "$TMP/specs.bak"
 probar_rojo () { # $1 = descripción

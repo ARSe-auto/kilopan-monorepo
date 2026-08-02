@@ -13,21 +13,49 @@ cd "$(dirname "$0")/../../.."
 LOG_DIR="packages/metodo/panel"
 PIDFILE="$LOG_DIR/loop.pid"
 LOG="$LOG_DIR/watchdog.log"
+PAUSA="$LOG_DIR/PAUSA-REVISION"
 MAX_SIN_AVANCE="${KILOPAN_MAX_SIN_AVANCE:-3}"
 MAX_ITERACIONES="${KILOPAN_MAX_ITERACIONES:-20}"
 
 mkdir -p "$LOG_DIR"
+
+# PAUSA PARA REVISIÓN (bug real, 2-ago-2026). Todos los ABORT de abajo dicen «NO
+# reintentar solo» y salían con exit 1 — pero el plist tiene KeepAlive/SuccessfulExit=false,
+# que relanza ante CUALQUIER salida no-exitosa, incluida ésa. launchd resucitaba el motor
+# al instante, éste volvía a abortar, y así indefinidamente: el mensaje pedía intervención
+# humana y la máquina lo ignoraba a los 120 s. El motor giró media hora sobre AC-SEC-05.
+#
+# El marcador es la señal que launchd NO puede pisar: mientras exista, el watchdog sale
+# con 0 (salida limpia ⇒ KeepAlive no relanza) y no construye nada. Lo borra una persona
+# cuando ya miró el log. Mismo mecanismo que usa com.eauto.ralph-loop.
+if [ -f "$PAUSA" ]; then
+  echo "watchdog: EN PAUSA para revisión humana — no arranco. Motivo registrado:" | tee -a "$LOG"
+  sed 's/^/  /' "$PAUSA" | tee -a "$LOG"
+  echo "watchdog: para reanudar, revisar el log y borrar $PAUSA" | tee -a "$LOG"
+  exit 0
+fi
+
+# Se llama en todo abort que exige que mire una persona. Sale con 0 A PROPÓSITO: el
+# veredicto vive en el marcador y en el log, no en el código de salida — con exit 1
+# launchd relanzaría y el pedido de intervención humana se perdería.
+pausar () { # $1 = motivo
+  { echo "$(date -Iseconds) — $1"; } > "$PAUSA"
+  echo "watchdog: PAUSA — $1" | tee -a "$LOG"
+  echo "watchdog: motor detenido hasta que una persona borre $PAUSA" | tee -a "$LOG"
+  exit 0
+}
+
 echo $$ > "$PIDFILE"
 trap 'rm -f "$PIDFILE"' EXIT
 
+# Estos dos también pausan en vez de salir con 1: un PATH mal armado no se arregla
+# reintentando, y con KeepAlive launchd relanzaría cada 120 s para siempre escribiendo la
+# misma línea en el log. Así se perdieron ~15 h en eauto-crm-next — el motor «corría».
 if ! command -v claude >/dev/null 2>&1; then
-  echo "watchdog: ABORT — 'claude' no resuelve en el PATH de este proceso ($PATH)." | tee -a "$LOG"
-  echo "watchdog: esto NO es un chequeo cosmético — así se perdieron ~15h en eauto-crm-next." | tee -a "$LOG"
-  exit 1
+  pausar "'claude' no resuelve en el PATH de este proceso ($PATH). NO es un chequeo cosmético: así se perdieron ~15h en eauto-crm-next."
 fi
 if ! command -v pnpm >/dev/null 2>&1; then
-  echo "watchdog: ABORT — 'pnpm' no resuelve en el PATH de este proceso." | tee -a "$LOG"
-  exit 1
+  pausar "'pnpm' no resuelve en el PATH de este proceso ($PATH)."
 fi
 
 echo "watchdog: arrancando — PATH ok, claude=$(command -v claude), tope ${MAX_ITERACIONES} iteraciones, ${MAX_SIN_AVANCE} sin avance seguidas aborta" | tee -a "$LOG"
@@ -59,8 +87,7 @@ while [ "$i" -lt "$MAX_ITERACIONES" ]; do
       # veredicto malo revirtiendo un commit sano es peor que uno rojo esperando).
       echo "watchdog: commit nuevo — re-verificando el gate completo de forma independiente sobre HEAD" | tee -a "$LOG"
       if ! bash packages/metodo/scripts/check.sh --full 2>&1 | tee -a "$LOG"; then
-        echo "watchdog: ABORT — el gate independiente NO dio verde sobre el HEAD que el agente acaba de comitear ($(git rev-parse --short HEAD)). El auto-reporte del agente no es evidencia; revisar a mano, NO reintentar solo." | tee -a "$LOG"
-        exit 1
+        pausar "el gate independiente NO dio verde sobre el HEAD que el agente acaba de comitear ($(git rev-parse --short HEAD)). El auto-reporte del agente no es evidencia; revisar a mano."
       fi
       ;;
     3)
@@ -82,15 +109,18 @@ while [ "$i" -lt "$MAX_ITERACIONES" ]; do
       ;;
     2)
       # Contrato roto: specs inválidas o AC huérfano. Reintentar no lo arregla.
-      echo "watchdog: ABORT — el contrato está roto (rc 2). Corregir specs/ antes de relanzar." | tee -a "$LOG"
-      exit 1
+      pausar "el contrato está roto (rc 2). Corregir specs/ antes de relanzar."
+      ;;
+    8)
+      # Árbol que el loop no controla, o stashes acumulados en serie. Tampoco se arregla
+      # girando: el loop ya guardó lo que había, pero alguien tiene que mirar por qué.
+      pausar "el loop no pudo dejar el árbol limpio, o hay demasiados stashes acumulados (rc 8). Revisar 'git stash list'."
       ;;
     *)
       sin_avance=$((sin_avance + 1))
       echo "watchdog: sin avance consecutivo #$sin_avance/$MAX_SIN_AVANCE (rc $rc)" | tee -a "$LOG"
       if [ "$sin_avance" -ge "$MAX_SIN_AVANCE" ]; then
-        echo "watchdog: ABORT — $MAX_SIN_AVANCE iteraciones sin commit nuevo. Revisar $LOG_DIR/ultimo-loop.log a mano, NO reintentar solo." | tee -a "$LOG"
-        exit 1
+        pausar "$MAX_SIN_AVANCE iteraciones sin commit nuevo. Revisar $LOG_DIR/ultimo-loop.log a mano."
       fi
       ;;
   esac

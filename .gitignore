@@ -14,6 +14,11 @@ build/
 db/data/
 packages/metodo/panel/index.html
 packages/metodo/panel/estado.json
+# Estado de runtime del motor: qué ACs quedaron atascados y si está en pausa esperando
+# que una persona lo revise. Es operativo, no contrato — versionarlo haría que el árbol
+# quede sucio en cada iteración y el propio loop lo stashearía.
+packages/metodo/panel/acs-atascados.txt
+packages/metodo/panel/PAUSA-REVISION
 .ralph/
 *.tsbuildinfo
 apps/kilopan/playwright-report/
