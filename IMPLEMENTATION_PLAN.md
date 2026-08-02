@@ -312,34 +312,34 @@ no oculto. **`AC-SEC-06` volvió a cerrarse el mismo día**: el hueco (grep case
 `guardrail.sh`) se corrigió y se le agregó prueba en `prueba-arnes.sh` §2b horas después de
 esta misma auditoría — no queda como ítem abierto de la lista de abajo.
 
-- [ ] (P2) AC-FIA-01 — el "índice único" de consolidación no existe (solo índice no-único); ver nota en `specs/kilopan/06-registro-dte.md`
-- [ ] (P2) AC-FIA-02 — doble facturación 409 sin test — `specs/kilopan/06-registro-dte.md`
-- [ ] (P0-SEC) AC-SEC-05 — secreto de dispositivo vive en localStorage en texto plano, contradice la afirmación del AC — `specs/kilopan/08-seguridad-rendimiento.md`
-- [ ] (P2) AC-SUC-01 — sucursal_id probado en BD pero invisible en toda la UI — `specs/kilopan/07-dashboard-flota.md`
-- [ ] (P1-PERF) AC-PERF-03 — endpoint de cursor sin pantalla que lo consuma — `specs/kilopan/08-seguridad-rendimiento.md`
-- [ ] (P1) AC-POD-04 — e2e flaky confirmado, no es evidencia repetible — `specs/kilopan/05-entrega-pod.md`
-- [ ] (P1) AC-DES-03 — depende del mismo e2e flaky que AC-POD-04 — `specs/kilopan/04-despacho-reparto.md`
-- [ ] (P1) AC-ID-07 — chip existe pero el test de cobertura-en-toda-pantalla descrito nunca se escribió — `specs/kilopan/01-identidad.md`
-- [ ] (P1) AC-DASH-02 — chequeo de rol real en código pero sin e2e que lo confirme — `specs/kilopan/07-dashboard-flota.md`
-- [ ] (P2) AC-DASH-04 — comparación con el facturador sin ningún test — `specs/kilopan/07-dashboard-flota.md`
-- [ ] (P2) AC-SHARE-01 — degradación de `navigator.share()` sin test — `specs/kilopan/07-dashboard-flota.md`
-- [ ] (P0-SEC) AC-SEC-04 — cabeceras de seguridad declaradas pero sin test que confirme que el servidor las emite — `specs/kilopan/08-seguridad-rendimiento.md`
-- [ ] (P1-PERF) AC-PERF-02 — compresión de fotos y techo de 1,5 MB sin ningún test — `specs/kilopan/08-seguridad-rendimiento.md`
-- [ ] (P1-PERF) AC-PERF-01 — índices creados sin `EXPLAIN` que confirme que el planner los usa — `specs/kilopan/00-modelo-datos.md`
-- [ ] (P0) AC-ID-03 — el 423 de `/api/auth/login` nunca se probó automatizado (solo su hermano de enrolamiento) — `specs/kilopan/01-identidad.md`
-- [ ] (P2) AC-PES-04 — falta test de que el servidor RECHACE un pesaje sin foto con el toggle activo (mismo patrón que ya falló una vez) — `specs/kilopan/02-catalogo-pesaje.md`
-- [ ] (P2) AC-PES-05 — báscula GATT sin ningún test, ya reconocido por AC-PES-09 — `specs/kilopan/02-catalogo-pesaje.md`
-- [ ] (P2) AC-RED-01 — describe un mecanismo (sessionStorage/15s) que ya no existe en el código (es IndexedDB/30s); ninguna versión tiene test — `specs/kilopan/02-catalogo-pesaje.md`
-- [ ] (P1-SEC) AC-PES-08 — la única evidencia citada es lectura de archivo, no un test — `specs/kilopan/02-catalogo-pesaje.md`
-- [ ] (P0) AC-H0-03 — el grep de tabular-nums solo comprueba que existe UNA VEZ en el árbol, no por componente — `specs/kilopan/09-plataforma-miga.md`
-- [ ] (P0) AC-H0-05 — `prueba-arnes.sh` solo valida sintaxis de `check.sh`, no que `--full` ejecute lo que promete — `specs/kilopan/09-plataforma-miga.md`
-- [ ] (P0) AC-H0-06 — el grep certifica una cadena no relacionada con el cálculo real de "avance" del panel — `specs/kilopan/09-plataforma-miga.md`
-- [ ] (P0) AC-H0-07 — **falso hoy, no solo sin test**: los 4 shells de `packages/nucleo-*` no tienen `package.json` — `specs/kilopan/09-plataforma-miga.md`
-- [ ] (P1) AC-ADM-01 — nadie llama `POST`/`PATCH /api/usuarios` desde una prueba — `specs/kilopan/10-administracion.md`
-- [ ] (P1) AC-ADM-02 — nadie llama `POST`/`PATCH /api/productos` ni prueba la vigencia histórica de precios — `specs/kilopan/10-administracion.md`
-- [ ] (P2) AC-ADM-03 — cero referencias a `/api/parametros` en cualquier test — `specs/kilopan/10-administracion.md`
-- [ ] (P2) AC-PAG-03 — pantalla de admin de medios de pago sin ningún test — `specs/kilopan/03-venta-mostrador.md`
-- [ ] (P1) AC-POD-05 — flujo de rechazo/parcial desde `/ruta` sin test; el catálogo "cerrado" tampoco se valida en el servidor — `specs/kilopan/05-entrega-pod.md`
+- [ ] (P2) [AC-FIA-01] — el "índice único" de consolidación no existe (solo índice no-único); ver nota en `specs/kilopan/06-registro-dte.md`
+- [ ] (P2) [AC-FIA-02] — doble facturación 409 sin test — `specs/kilopan/06-registro-dte.md`
+- [ ] (P0-SEC) [AC-SEC-05] — secreto de dispositivo vive en localStorage en texto plano, contradice la afirmación del AC — `specs/kilopan/08-seguridad-rendimiento.md`
+- [ ] (P2) [AC-SUC-01] — sucursal_id probado en BD pero invisible en toda la UI — `specs/kilopan/07-dashboard-flota.md`
+- [ ] (P1-PERF) [AC-PERF-03] — endpoint de cursor sin pantalla que lo consuma — `specs/kilopan/08-seguridad-rendimiento.md`
+- [ ] (P1) [AC-POD-04] — e2e flaky confirmado, no es evidencia repetible — `specs/kilopan/05-entrega-pod.md`
+- [ ] (P1) [AC-DES-03] — depende del mismo e2e flaky que AC-POD-04 — `specs/kilopan/04-despacho-reparto.md`
+- [ ] (P1) [AC-ID-07] — chip existe pero el test de cobertura-en-toda-pantalla descrito nunca se escribió — `specs/kilopan/01-identidad.md`
+- [ ] (P1) [AC-DASH-02] — chequeo de rol real en código pero sin e2e que lo confirme — `specs/kilopan/07-dashboard-flota.md`
+- [ ] (P2) [AC-DASH-04] — comparación con el facturador sin ningún test — `specs/kilopan/07-dashboard-flota.md`
+- [ ] (P2) [AC-SHARE-01] — degradación de `navigator.share()` sin test — `specs/kilopan/07-dashboard-flota.md`
+- [ ] (P0-SEC) [AC-SEC-04] — cabeceras de seguridad declaradas pero sin test que confirme que el servidor las emite — `specs/kilopan/08-seguridad-rendimiento.md`
+- [ ] (P1-PERF) [AC-PERF-02] — compresión de fotos y techo de 1,5 MB sin ningún test — `specs/kilopan/08-seguridad-rendimiento.md`
+- [ ] (P1-PERF) [AC-PERF-01] — índices creados sin `EXPLAIN` que confirme que el planner los usa — `specs/kilopan/00-modelo-datos.md`
+- [ ] (P0) [AC-ID-03] — el 423 de `/api/auth/login` nunca se probó automatizado (solo su hermano de enrolamiento) — `specs/kilopan/01-identidad.md`
+- [ ] (P2) [AC-PES-04] — falta test de que el servidor RECHACE un pesaje sin foto con el toggle activo (mismo patrón que ya falló una vez) — `specs/kilopan/02-catalogo-pesaje.md`
+- [ ] (P2) [AC-PES-05] — báscula GATT sin ningún test, ya reconocido por AC-PES-09 — `specs/kilopan/02-catalogo-pesaje.md`
+- [ ] (P2) [AC-RED-01] — describe un mecanismo (sessionStorage/15s) que ya no existe en el código (es IndexedDB/30s); ninguna versión tiene test — `specs/kilopan/02-catalogo-pesaje.md`
+- [ ] (P1-SEC) [AC-PES-08] — la única evidencia citada es lectura de archivo, no un test — `specs/kilopan/02-catalogo-pesaje.md`
+- [ ] (P0) [AC-H0-03] — el grep de tabular-nums solo comprueba que existe UNA VEZ en el árbol, no por componente — `specs/kilopan/09-plataforma-miga.md`
+- [ ] (P0) [AC-H0-05] — `prueba-arnes.sh` solo valida sintaxis de `check.sh`, no que `--full` ejecute lo que promete — `specs/kilopan/09-plataforma-miga.md`
+- [ ] (P0) [AC-H0-06] — el grep certifica una cadena no relacionada con el cálculo real de "avance" del panel — `specs/kilopan/09-plataforma-miga.md`
+- [ ] (P0) [AC-H0-07] — **falso hoy, no solo sin test**: los 4 shells de `packages/nucleo-*` no tienen `package.json` — `specs/kilopan/09-plataforma-miga.md`
+- [ ] (P1) [AC-ADM-01] — nadie llama `POST`/`PATCH /api/usuarios` desde una prueba — `specs/kilopan/10-administracion.md`
+- [ ] (P1) [AC-ADM-02] — nadie llama `POST`/`PATCH /api/productos` ni prueba la vigencia histórica de precios — `specs/kilopan/10-administracion.md`
+- [ ] (P2) [AC-ADM-03] — cero referencias a `/api/parametros` en cualquier test — `specs/kilopan/10-administracion.md`
+- [ ] (P2) [AC-PAG-03] — pantalla de admin de medios de pago sin ningún test — `specs/kilopan/03-venta-mostrador.md`
+- [ ] (P1) [AC-POD-05] — flujo de rechazo/parcial desde `/ruta` sin test; el catálogo "cerrado" tampoco se valida en el servidor — `specs/kilopan/05-entrega-pod.md`
 
 ## DONE
 

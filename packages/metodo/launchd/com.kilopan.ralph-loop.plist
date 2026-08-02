@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
   com.kilopan.ralph-loop — el motor sobrevive a la sesión, la terminal y el reinicio
   (casilla 14 del prevuelo). Sin esto, cerrar el portátil mata la construcción.
@@ -9,6 +10,13 @@
   Instalar:  cp packages/metodo/launchd/*.plist ~/Library/LaunchAgents/
              launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.kilopan.ralph-loop.plist
   Detener:   launchctl bootout gui/$(id -u)/com.kilopan.ralph-loop
+
+  BUG REAL encontrado al cargar por primera vez (2-ago-2026): faltaba este DOCTYPE.
+  `plutil -lint` lo daba por válido (es permisivo), pero `launchctl bootstrap` fallaba
+  con "5: Input/output error" — sin DOCTYPE, launchd rechaza el plist en silencio, sin
+  señalar la línea. Comparado contra un plist de eauto que sí carga para encontrarlo.
+  Este motor nunca se había cargado de verdad hasta ahora — "escrito y con sintaxis
+  probada" (plutil) no es lo mismo que "probado cargando".
 -->
 <plist version="1.0">
 <dict>
