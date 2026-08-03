@@ -1,0 +1,97 @@
+{
+  "_comentario": [
+    "SOBRE DE PERMISOS DEL MOTOR AUTÓNOMO (2-ago-2026). Es parte del contrato del arnés,",
+    "por eso va versionado y no en settings.local.json (que además está gitignored).",
+    "",
+    "POR QUÉ EXISTE: loop.sh invoca `claude -p ... --permission-mode acceptEdits`, y",
+    "acceptEdits auto-aprueba ediciones de archivo pero NO comandos Bash. El agente escribía",
+    "el test del AC y después no podía correr `check.sh` para verificarlo: cada comando",
+    "moría con «This command requires approval» y, corriendo no interactivo, no había nadie",
+    "que aprobara. Obedecía su regla dura —no comitear sin verde— y terminaba en SIN AVANCE",
+    "habiendo hecho el trabajo. Era el octavo defecto de la tanda, escondido detrás del",
+    "deadlock del builder: aun sin ese deadlock, el motor tampoco habría podido cerrar nada.",
+    "",
+    "CRITERIO: lista blanca acotada, no bypassPermissions (decisión de Alexis, 2-ago-2026).",
+    "El motor puede construir y verificar; no puede publicar, desplegar, borrar en masa ni",
+    "tocar procesos. `deny` gana siempre sobre `allow`, en cualquier nivel de settings.",
+    "",
+    "OJO: `.claude/settings.local.json` PISA a este archivo. Si el motor se vuelve a bloquear",
+    "por permisos, mirar ahí primero."
+  ],
+
+  "permissions": {
+    "allow": [
+      "Bash(bash packages/metodo/scripts/*)",
+      "Bash(pnpm *)",
+      "Bash(pnpm)",
+      "Bash(pnpm exec *)",
+      "Bash(node *)",
+      "Bash(npx playwright *)",
+
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git rev-parse*)",
+      "Bash(git rev-list*)",
+      "Bash(git stash list)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git checkout *)",
+
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(grep *)",
+      "Bash(rg *)",
+      "Bash(find *)",
+      "Bash(wc *)",
+      "Bash(sed *)",
+      "Bash(awk *)",
+      "Bash(sort *)",
+      "Bash(uniq *)",
+      "Bash(diff *)",
+      "Bash(echo *)",
+      "Bash(printf *)",
+      "Bash(mkdir *)",
+      "Bash(touch *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(date*)",
+      "Bash(which *)",
+      "Bash(command -v *)"
+    ],
+
+    "deny": [
+      "Bash(git push*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean*)",
+      "Bash(git rebase*)",
+      "Bash(git stash drop*)",
+      "Bash(git stash clear*)",
+
+      "Bash(rm -rf *)",
+      "Bash(rm -fr *)",
+
+      "Bash(railway *)",
+      "Bash(vercel *)",
+      "Bash(pnpm db:reset*)",
+      "Bash(pnpm publish*)",
+      "Bash(npm publish*)",
+
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(ssh *)",
+      "Bash(scp *)",
+
+      "Bash(sudo *)",
+      "Bash(launchctl *)",
+      "Bash(kill *)",
+      "Bash(pkill *)",
+      "Bash(killall *)",
+
+      "Bash(gh *)"
+    ]
+  }
+}

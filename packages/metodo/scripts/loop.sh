@@ -217,6 +217,18 @@ if [ "$COMMITS_DESPUES" -gt "$COMMITS_ANTES" ]; then
   rm -f "$CONT_AC"
   exit 0
 else
+  # BLOQUEO POR PERMISOS (bug real, 2-ago-2026). `--permission-mode acceptEdits` auto-aprueba
+  # ediciones de archivo pero NO comandos Bash: el agente escribía el test del AC y después
+  # no podía correr check.sh —«This command requires approval»— y, corriendo no interactivo,
+  # no había nadie que aprobara. Obedecía su regla dura (no comitear sin verde) y terminaba
+  # en SIN AVANCE HABIENDO HECHO EL TRABAJO — indistinguible, desde afuera, de un AC difícil.
+  # Reintentar no lo arregla nunca: hay que tocar .claude/settings.json. Se pausa y se avisa.
+  if grep -qiE "requires approval|permission denied|requiere aprobaci" "$LOG_DIR/ultimo-resultado.json" 2>/dev/null; then
+    echo "loop: BLOQUEADO POR PERMISOS — el agente necesitó aprobar un comando y corre sin nadie que apruebe."
+    echo "loop: revisar la lista blanca de .claude/settings.json (ojo: settings.local.json la PISA)."
+    echo "loop: reintentar no lo arregla — pauso para revisión (exit 8)."
+    exit 8
+  fi
   fallos_ac=$(( $(leer_num "$CONT_AC") + 1 ))
   echo "$fallos_ac" > "$CONT_AC"
   echo $(( $(leer_num .ralph/build-fails) + 1 )) > .ralph/build-fails
