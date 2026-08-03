@@ -82,6 +82,22 @@
   <key>RunAtLoad</key>
   <true/>
 
+  <!-- QUE LAS OLAS NO SE DETENGAN (3-ago-2026). El watchdog termina LIMPIO al llegar a su
+       tope de iteraciones («nunca desatendido indefinidamente») y al terminar el trabajo
+       (rc 6 = DONE). Con KeepAlive/SuccessfulExit=false eso significaba que se apagaba y
+       quedaba esperando a que una persona lo levantara: el backlog se detenía cada 20
+       iteraciones. StartInterval lo vuelve a levantar solo cada 30 min si no está
+       corriendo, así que retoma el backlog sin intervención y sigue hasta agotarlo.
+
+       Esto NO desarma ningún freno, y es la diferencia importante: los ABORT de verdad
+       escriben packages/metodo/panel/PAUSA-REVISION, y ese marcador hace que CADA arranque
+       posterior —incluidos los de StartInterval— salga inmediatamente sin construir. O sea:
+       sigue solo mientras todo va bien, y se queda quieto de verdad cuando algo se rompió,
+       hasta que una persona lo mire. Un DONE con el plan vacío sale en segundos y no gasta
+       nada. -->
+  <key>StartInterval</key>
+  <integer>1800</integer>
+
   <key>ThrottleInterval</key>
   <integer>120</integer>
 

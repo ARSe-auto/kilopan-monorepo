@@ -10,7 +10,13 @@ set -uo pipefail
 export PATH="$HOME/.local/lib/nodejs/current/bin:$PATH"
 cd "$(dirname "$0")/../../.."
 
-LOG_DIR="packages/metodo/panel"
+# KILOPAN_PANEL_DIR existe para que prueba-arnes.sh pueda ejercer el marcador de pausa
+# SIN tocar el panel vivo. Sin esto, la propia suite creaba PAUSA-REVISION en el panel real
+# y corría este watchdog contra él: ensuciaba watchdog.log con «EN PAUSA» falsos —que ya me
+# hicieron creer que el motor estaba detenido cuando no lo estaba— y, si el gate coincidía
+# con el arranque de una iteración, podía pausar el motor de PRODUCCIÓN. Un test que puede
+# apagar el sistema que vigila no es un test, es una avería con permiso.
+LOG_DIR="${KILOPAN_PANEL_DIR:-packages/metodo/panel}"
 PIDFILE="$LOG_DIR/loop.pid"
 LOG="$LOG_DIR/watchdog.log"
 PAUSA="$LOG_DIR/PAUSA-REVISION"
@@ -89,6 +95,15 @@ while [ "$i" -lt "$MAX_ITERACIONES" ]; do
       if ! bash packages/metodo/scripts/check.sh --full 2>&1 | tee -a "$LOG"; then
         pausar "el gate independiente NO dio verde sobre el HEAD que el agente acaba de comitear ($(git rev-parse --short HEAD)). El auto-reporte del agente no es evidencia; revisar a mano."
       fi
+      # Publicar lo ya verificado. `loop.sh` comitea local y el agente no tiene permiso de
+      # `git push` (.claude/settings.json) — sin este paso el trabajo del motor no llegaba
+      # nunca a origin/main ni a CI, y alguien tenía que empujarlo a mano todas las noches:
+      # ahí se cortaba la autonomía. Quien publica es este supervisor, no el agente, y sólo
+      # el HEAD que el gate independiente acaba de declarar verde (ver empujar-si-verde.sh).
+      # Un push fallido (red caída, remoto adelantado) se registra y NO frena el motor:
+      # es infraestructura, no un veredicto sobre el código.
+      bash packages/metodo/scripts/empujar-si-verde.sh 2>&1 | tee -a "$LOG" || \
+        echo "watchdog: el push no salió; sigo construyendo, queda para la próxima vuelta." | tee -a "$LOG"
       ;;
     3)
       # INFRA caída (casilla 5): NO es árbol rojo y NO cuenta como falta de avance.
@@ -106,6 +121,13 @@ while [ "$i" -lt "$MAX_ITERACIONES" ]; do
       sleep 300
       i=$((i - 1))
       continue
+      ;;
+    6)
+      # No queda trabajo. Termina LIMPIO (exit 0) para que KeepAlive no lo relance en
+      # bucle: el trabajo se acabó, no falló. Si aparecen ACs nuevos, el StartInterval del
+      # plist lo vuelve a levantar solo.
+      echo "watchdog: DONE — no quedan ACs P0/P1/P2 abiertos. Nada que construir." | tee -a "$LOG"
+      exit 0
       ;;
     2)
       # Contrato roto: specs inválidas o AC huérfano. Reintentar no lo arregla.

@@ -95,6 +95,34 @@ bash "$M/guardrail.sh" >/dev/null 2>&1 && no "el grep anti-interpolación NO det
 rm -f "$CANARIO_SQL"
 
 echo
+echo "== 2c. Migraciones y semilla en la MISMA zona horaria que la app (3-ago-2026) =="
+# `apps/kilopan/src/comun/db.ts` fija America/Santiago en SU conexión; `db/migrar.mjs` —que
+# corre las migraciones y, vía sembrar.mjs, la semilla— heredaba la del proceso. En un Mac
+# chileno coincide por casualidad y todo se ve bien; en el runner de CI (UTC) no, y entre
+# las 20:00 y las 24:00 de Chile la semilla escribía `pan.precios.vigente_desde` con el día
+# de MAÑANA: producto sin precio y tres tests de venta en rojo, SOLO en esa franja.
+# Se ejerce con TZ=UTC a propósito — con la zona del Mac esta prueba pasaría siempre sin
+# probar nada, que es la definición de un guard que no existe.
+TZTMP="$(mktemp -d)"
+{
+  echo "process.chdir('$RAIZ');"
+  echo "const { conectar } = await import('file://$RAIZ/db/migrar.mjs');"
+  echo "const { db, cerrar } = await conectar();"
+  echo "const r = await db.query(\"select current_setting('TimeZone') as tz, current_date::text as hoy\");"
+  echo "const f = (r.rows ?? r)[0];"
+  echo "console.log(f.tz + '|' + f.hoy);"
+  echo "await cerrar();"
+} > "$TZTMP/canario.mjs"
+SALIDA_TZ="$(TZ=UTC DB_MODE=pglite KILOPAN_PGLITE_DIR="$TZTMP/pg" node "$TZTMP/canario.mjs" 2>/dev/null | tail -1)"
+HOY_CL="$(TZ=America/Santiago date +%F)"
+rm -rf "$TZTMP"
+case "$SALIDA_TZ" in
+  "America/Santiago|$HOY_CL") ok "conectar() fuerza America/Santiago: con TZ=UTC current_date sigue siendo el día de Chile ($HOY_CL)" ;;
+  "")                         no "no se pudo ejercer conectar() con TZ=UTC — la prueba no probó nada" ;;
+  *)                          no "conectar() con TZ=UTC dio '$SALIDA_TZ', esperaba America/Santiago|$HOY_CL — el día se parte a las 20:00" ;;
+esac
+
+echo
 echo "== 3. Lock de un solo builder (casilla 15) =="
 bash "$M/lock.sh" soltar prueba-arnes >/dev/null 2>&1
 bash "$M/lock.sh" tomar prueba-arnes >/dev/null 2>&1 && ok "toma el lock cuando está libre" || no "no pudo tomar un lock libre"
@@ -109,7 +137,17 @@ echo
 echo "== 3b. El motor no se atasca en un solo AC ni hereda árboles sucios (2-ago-2026) =="
 # Los cuatro bugs que hicieron girar al motor media hora sobre AC-SEC-05 sin avanzar,
 # cada uno probado contra el caso REAL que lo destapó. Ninguno era teórico: pasaron.
-PANEL=packages/metodo/panel
+# PANEL DESECHABLE, NUNCA EL VIVO (bug propio, 3-ago-2026). Estas pruebas escriben
+# `acs-atascados.txt` y `PAUSA-REVISION` y corren el watchdog de verdad. Apuntando al panel
+# real, ensuciaban `watchdog.log` con «EN PAUSA» falsos —que ya me hicieron dar por detenido
+# a un motor que estaba trabajando— y podían PAUSAR el motor de producción si el gate
+# coincidía con el arranque de una iteración. `KILOPAN_PANEL_DIR` (ver watchdog.sh y
+# loop.sh) redirige el panel; el vivo no se toca ni un instante. Mismo criterio que
+# `KILOPAN_ENV_FILE` con el `.env.local` real, y por la misma razón: ya pasó una vez.
+PANEL="$(mktemp -d)/panel"; mkdir -p "$PANEL"
+export KILOPAN_PANEL_DIR="$PANEL"
+PANEL_VIVO=packages/metodo/panel
+MTIME_PANEL_ANTES="$(stat -f %m "$PANEL_VIVO/watchdog.log" 2>/dev/null || echo ausente)"
 
 # (a) siguiente_ac saltea los ACs anotados como atascados. Antes usaba `grep -m1` y
 #     devolvía SIEMPRE el mismo primer AC abierto: uno imposible tapaba a todos los demás.
@@ -159,9 +197,33 @@ grep -qE "^\s*exit 1$" "$M/watchdog.sh" && no "watchdog.sh todavía sale con 1 e
 touch "$PANEL/PAUSA-REVISION"
 SALIDA_PAUSA="$(KILOPAN_MAX_ITERACIONES=1 bash "$M/watchdog.sh" 2>&1 | head -3)"
 rm -f "$PANEL/PAUSA-REVISION"
+# El panel VIVO no se tocó ni una vez — no «se restauró», NUNCA se escribió. Si esta
+# aserción se pone roja, la suite volvió a poder pausar el motor de producción.
+MTIME_PANEL_DESPUES="$(stat -f %m "$PANEL_VIVO/watchdog.log" 2>/dev/null || echo ausente)"
+[ "$MTIME_PANEL_ANTES" = "$MTIME_PANEL_DESPUES" ] && ok "el panel vivo no se escribió (la suite no puede pausar el motor de producción)" || no "la suite ESCRIBIÓ en el panel vivo — puede pausar el motor real y ensuciar su log"
+[ -f "$PANEL_VIVO/PAUSA-REVISION" ] && no "quedó un PAUSA-REVISION en el panel VIVO — el motor no volvería a arrancar" || ok "no dejó marcador de pausa en el panel vivo"
 case "$SALIDA_PAUSA" in
   *"EN PAUSA"*) ok "con el marcador puesto, el watchdog no arranca (frena de verdad)" ;;
   *)            no "el marcador de pausa no frena al watchdog: sigue construyendo" ;;
+esac
+
+echo
+echo "== 3c. La cadena autónoma se publica sola y no se apaga sola (3-ago-2026) =="
+# Sin esto la autonomía se cortaba en dos puntos: nadie empujaba lo que el motor comiteaba
+# (CI no veía nada) y el watchdog se apagaba al llegar a su tope sin que nada lo levantara.
+grep -q "empujar-si-verde" "$M/watchdog.sh" && ok "el watchdog publica lo verificado (el motor deja de depender de un push a mano)" || no "nadie empuja: el trabajo del motor no llega a origin/main ni a CI"
+grep -q "StartInterval" packages/metodo/launchd/com.kilopan.ralph-loop.plist && ok "el plist relanza el motor tras el tope de iteraciones (las Olas no se detienen)" || no "al llegar al tope el motor se apaga y espera a una persona"
+grep -q "PAUSA-REVISION" "$M/watchdog.sh" && ok "y el marcador de pausa sigue frenando TODO arranque posterior, incluido el de StartInterval" || no "StartInterval sin marcador de pausa = bucle infinito con otro nombre"
+# El empujador debe NEGARSE cuando el marcador de verde no apunta al HEAD: es su única
+# regla, y si no dispara publicaría código que el gate independiente nunca verificó.
+VTMP="$(mktemp -d)"; cp "$PANEL_VIVO/last-green.sha" "$VTMP/lg.bak" 2>/dev/null
+echo "0000000000000000000000000000000000000000" > "$PANEL_VIVO/last-green.sha"
+SAL_EMP="$(bash "$M/empujar-si-verde.sh" 2>&1)"
+if [ -f "$VTMP/lg.bak" ]; then cp "$VTMP/lg.bak" "$PANEL_VIVO/last-green.sha"; fi
+rm -rf "$VTMP"
+case "$SAL_EMP" in
+  *"NO empujo"*|*"nada pendiente"*) ok "el empujador se niega si el marcador de verde no es el HEAD (jamás publica sin verificar)" ;;
+  *)                                no "el empujador NO se negó con un marcador de verde falso: publicaría código sin verificar" ;;
 esac
 
 echo

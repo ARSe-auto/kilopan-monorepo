@@ -29,6 +29,7 @@ function leerEnvLocal() {
 export async function conectar() {
   const env = { ...leerEnvLocal(), ...process.env };
   const modo = env.DB_MODE || "pglite";
+  // (la definición de fijarZonaHoraria está abajo del archivo; se usa en ambas ramas)
   if (modo === "pglite") {
     const { PGlite } = await import("@electric-sql/pglite");
     const { pgcrypto } = await import("@electric-sql/pglite/contrib/pgcrypto");
@@ -37,6 +38,7 @@ export async function conectar() {
     // propia base para no pisar la de desarrollo ni pelearse el lock del proceso.
     const dataDir = env.KILOPAN_PGLITE_DIR || join(ROOT, "data", "pglite");
     const db = new PGlite(dataDir, { extensions: { pgcrypto, btree_gist } });
+    await fijarZonaHoraria(db);
     return { db, modo, cerrar: () => db.close() };
   }
   if (modo === "postgres") {
@@ -80,13 +82,44 @@ export async function conectar() {
       connectionTimeoutMillis: 15_000, // sin esto, un host mal escrito cuelga sin decir nada
     });
     await client.connect();
-    return {
-      db: { exec: (sql) => client.query(sql), query: (sql, p) => client.query(sql, p) },
-      modo,
-      cerrar: () => client.end(),
-    };
+    const db = { exec: (sql) => client.query(sql), query: (sql, p) => client.query(sql, p) };
+    await fijarZonaHoraria(db);
+    return { db, modo, cerrar: () => client.end() };
   }
   throw new Error(`DB_MODE desconocido: ${modo}`);
+}
+
+// LA MISMA ZONA QUE LA APP, O EL DÍA SE PARTE EN DOS (bug real, 3-ago-2026).
+//
+// `apps/kilopan/src/comun/db.ts` fija `timezone=America/Santiago` en SU conexión, con
+// guard incluido. Este archivo —que corre las migraciones y, vía sembrar.mjs, la semilla—
+// no lo hacía: heredaba la zona del proceso. En un Mac chileno eso da Santiago por
+// casualidad y todo se ve bien; en el runner de CI (UTC) no.
+//
+// Comprobado, no deducido, el 3-ago-2026 a las 00:33 UTC / 20:33 en Chile:
+//     TZ=(sistema) -> PGlite TimeZone=Etc/GMT+4  current_date=2026-08-02   ← correcto
+//     TZ=UTC       -> PGlite TimeZone=Etc/GMT0   current_date=2026-08-03   ← un día más
+//
+// `pan.precios.vigente_desde` tiene `default current_date` (0002_catalogo_pesaje.sql), así
+// que la semilla escribía el precio con fecha de MAÑANA, y la app —que sí usa Santiago—
+// consulta `vigente_desde <= current_date`: falso, producto sin precio. Caían los tres
+// tests de venta del gate (camino dorado #5, fiado de mesón, Anexo B #4) todas las noches
+// entre las 20:00 y las 24:00 de Chile, y solo en esa franja: por eso CI pasaba a las
+// 23:57 UTC y fallaba a las 00:09.
+//
+// No es cosa de tests: sembrar o migrar de verdad en esa franja escribe el día equivocado.
+async function fijarZonaHoraria(db) {
+  await db.exec("set timezone = 'America/Santiago'");
+  // Un `set` que no toma efecto es indistinguible de uno que sí (cap. 14): se verifica.
+  const r = await db.query("select current_setting('TimeZone') as tz");
+  const tz = (r.rows ?? r)[0]?.tz;
+  if (!/Santiago|GMT\+4/.test(String(tz))) {
+    throw new Error(
+      `migrar/sembrar quedó con TimeZone="${tz}" y no America/Santiago: los ` +
+        "`current_date` de las migraciones y la semilla escribirían el día equivocado " +
+        "entre las 20:00 y las 24:00 de Chile. Ver el comentario de fijarZonaHoraria()."
+    );
+  }
 }
 
 export async function migrar(db) {

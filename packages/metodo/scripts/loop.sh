@@ -21,7 +21,7 @@ if [ ! -f "$PLAN" ] && [ "$APP" = "kilopan" ] && [ -f "IMPLEMENTATION_PLAN.md" ]
   PLAN="IMPLEMENTATION_PLAN.md"   # nombre histórico, previo a la separación por app
 fi
 [ -f "$PLAN" ] || { echo "loop: falta $PLAN"; exit 2; }
-LOG_DIR="packages/metodo/panel"
+LOG_DIR="${KILOPAN_PANEL_DIR:-packages/metodo/panel}"   # ver watchdog.sh: la suite lo redirige
 MAX_BUDGET_USD="${KILOPAN_MAX_BUDGET_USD:-3}"
 
 # UN SOLO BUILDER POR WORKTREE (casilla 15). Se toma ANTES de mirar el plan: dos loops
@@ -135,8 +135,12 @@ fi
 
 AC_LINEA="$(siguiente_ac)"
 if [ -z "${AC_LINEA:-}" ]; then
-  echo "loop: no quedan ACs P0/P1/P2 abiertos — ver criterio DONE en $PLAN"
-  exit 0
+  # Exit 6, NO 0: para el watchdog, 0 significa «hubo commit nuevo» y dispara el gate
+  # completo de verificación independiente. Sin trabajo que hacer eso son ~6 minutos de
+  # gate sobre un árbol que nadie tocó, en cada vuelta. 6 = «no queda trabajo» y el
+  # watchdog termina limpio.
+  echo "loop: no quedan ACs P0/P1/P2 abiertos (ni atascados pendientes) — ver criterio DONE en $PLAN"
+  exit 6
 fi
 AC_ID=$(echo "$AC_LINEA" | grep -oE '\[AC-[A-Z0-9-]+\]' | tr -d '[]')
 echo "loop: siguiente = ${AC_ID:-sin-id} :: $AC_LINEA"
