@@ -10,6 +10,53 @@ el aprendizaje contradice lo que creíamos. **Qué NO va:** el estado del plan (
 
 ---
 
+## 2026-08-03 · La columna hermana: `saldado_at` tenía los mismos huecos, y dos más
+
+La lección de la `0021` era «agregar una columna de estado a `pan.ventas` sin revisar a
+TODOS sus consumidores deja huecos». `saldado_at` (`0017`) tiene exactamente la misma
+forma —NULL = pendiente, timestamp = saldado, `grant update (saldado_at) to pan_app`— y
+nunca se había auditado igual. Se auditó. Medido bajo `set role pan_app` sobre las
+migraciones reales, jamás razonado leyendo el SQL:
+
+```
+venta fiada $12.000 → deuda: 12000
+marcar SALDADA      → deuda:     0
+¿pan_app puede DES-saldar? SÍ  → deuda: 12000  ← hueco 1: la deuda pagada revive
+¿puede re-fechar el pago?  SÍ  → saldado_at = 2020-01-01 en una venta de 2026  ← hueco 2
+¿puede saldar una venta ANULADA? SÍ (con la sentencia exacta del endpoint)     ← hueco 3
+¿puede saldar una venta en EFECTIVO? SÍ                                        ← hueco 4
+¿puede BORRAR la venta? NO — permission denied
+```
+
+El hueco 1 es **peor que su equivalente en la anulación**, y por una razón que sólo se ve
+mirando las dos columnas juntas: la anulación escribe su `venta_anulada` en `pan.eventos`,
+así que des-anular dejaba un evento huérfano que delataba la maniobra. Marcar saldada **no
+escribe ningún evento** (medido: 0 filas), o sea `saldado_at` es el único registro de que
+el cliente pagó. Devolverlo a NULL borraba el pago sin dejar rastro y le volvía a cobrar al
+cliente algo que ya había pagado. El hueco 3 es el mismo falso registro que la cabecera de
+la `0021` había cerrado como camino de limpieza, y que seguía abierto como camino del
+endpoint.
+
+Arreglado en `0022` (`trg_ventas_saldado_inmutable` + CHECK `ventas_saldado_solo_fiado`),
+un invariante por hueco, los cuatro rojos contra el árbol sin la migración (68 pasan,
+4 fallan) y verdes con ella. `pnpm check:full` 12/12, 0 saltados.
+
+**Lo que NO se tocó, y por qué importa:** `pan.conciliacion_diaria` no filtra `anulada_at`
+y sigue sin filtrarlo. Parecía el quinto hueco —mismo patrón, mismo consumidor olvidado—
+hasta que apareció escrito en `specs/kilopan/10-administracion.md` como decisión
+deliberada: el arqueo mide plata y la conciliación mide kilos físicos, y en el caso
+dominante el pan igual salió del local. Una decisión escrita en la spec le ahorró a esta
+sesión «arreglar» algo que estaba bien. Por eso la `03-venta-mostrador.md` queda ahora con
+la enumeración COMPLETA de consumidores de `pan.ventas` y la decisión escrita para cada
+uno, incluidos los siete que NO deben filtrar `saldado_at`.
+
+**Hallazgo abierto, sin decisión:** cobrar un fiado no entra a ningún arqueo. El pago no
+crea fila en `pan.ventas`, así que la plata llega a la caja sin que ningún `esperado_clp`
+la espere y el turno cierra con sobrante todas las veces. No es un hueco de `saldado_at`
+—es que el pago no está modelado como movimiento de caja— y necesita decisión de producto.
+
+---
+
 ## 2026-08-03 · La migración que escribió el motor: el SQL estaba bien, lo que faltaba no
 
 Alexis revisó la `0020_anular_venta.sql` —la que el motor autónomo escribió violando

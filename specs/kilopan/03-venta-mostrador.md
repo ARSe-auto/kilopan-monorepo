@@ -20,6 +20,44 @@ Sin venta en ruta — está explícitamente FUERA del MVP (§3).
 - [x] (P2) Fiado en mostrador reutiliza el MISMO cliente y saldo que el del reparto —
       cero segundo sistema de crédito. Probado por HTTP: sin cliente rebota con mensaje
       claro, con cliente entra y suma al saldo [AC-PAG-02]
+      — **Auditoría de `saldado_at` (3-ago-2026), `0022`.** `saldado_at` (`0017`) tiene la
+      misma forma que `anulada_at` —NULL/timestamp con `grant update` column-level a
+      `pan_app`— y nunca se había revisado como la `0021` revisó a su hermana. Se revisó
+      ahora, consumidor por consumidor, midiendo cada caso bajo `set role pan_app` sobre las
+      migraciones reales. **Cuatro huecos, los cuatro con su invariante:**
+      (1) **el pago era reversible** — `set saldado_at = null` pasaba y la deuda pagada
+      revivía ($0 → $12.000). Peor que en la anulación: marcar saldada no escribe ningún
+      evento, así que la columna es el ÚNICO registro del pago y devolverla a NULL lo
+      borraba sin rastro. (2) **la fecha del pago era reescribible** — se podía fechar el
+      pago en 2020 sobre una venta de 2026. (3) **se podía marcar pagada una venta
+      ANULADA**, con la sentencia exacta de `PATCH /api/ventas`: la fila quedaba afirmando
+      «no existe» y «la pagaron» a la vez — el falso registro contra el que advierte la
+      cabecera de la `0021`. (4) **se podía saldar una venta en efectivo**, que nunca fue
+      deuda; no rompía ningún saldo sólo porque `pan.saldo_cliente` filtra además
+      `medio_pago`, o sea la única defensa era que el consumidor se acordara de filtrar.
+      Se arreglan con `trg_ventas_saldado_inmutable` (mismo patrón que
+      `trg_anulacion_inmutable`, `0021`) y el CHECK `ventas_saldado_solo_fiado`.
+      — **Al revés SÍ se permite, a propósito:** anular una venta que el cliente ya pagó es
+      la devolución con reembolso, y prohibirlo dejaría a la dueña sin deshacer una venta
+      mal registrada sin entrar por SQL (`AC-ADM-05`). Por eso la regla es un trigger y no
+      un CHECK de exclusión mutua: depende de la DIRECCIÓN del cambio, que un CHECK no ve.
+      — **Decisiones, no olvidos** (escritas para que nadie vuelva a auditar lo mismo). Los
+      consumidores de `pan.ventas` son exactamente estos, y ninguno de los que siguen debe
+      filtrar `saldado_at`: `pan.conciliacion_diaria` (`0005`, CTE `vendido`) mide kilos
+      físicos y el pan salió del local se haya pagado o no — filtrarlo rompería la TCK;
+      `GET`/`POST /api/cierre-caja` miden la plata del turno en que se vendió, y un fiado
+      cobrado la semana siguiente no cambia lo que pasó ese turno; las dos consultas de
+      idempotencia por `client_uuid` en `/api/ventas` sólo resuelven «¿ya existe esta
+      venta?»; `POST /api/ventas/anular` no lo filtra porque anular una venta pagada es
+      válido (ver arriba). Sí lo filtra, y debe, `pan.saldo_cliente` (`0017`). Heredan de
+      esas dos vistas `GET /api/clientes` y `/dashboard`, y están bien. El único escritor es
+      `PATCH /api/ventas`, que desde la `0022` filtra además `anulada_at is null` para
+      devolver 409 en vez del 500 del trigger.
+      — **Hallazgo abierto, sin decisión tomada:** cobrar un fiado no entra a NINGÚN arqueo.
+      El pago no crea fila en `pan.ventas`, así que la plata del fiado cobrado hoy llega a
+      la caja sin que ningún `esperado_clp` la espere, y el turno cierra con sobrante todas
+      las veces. No es un hueco de `saldado_at` —es que el pago no está modelado como
+      movimiento de caja— y por eso no se arregló acá: necesita decisión de producto.
 - [x] (P1) Pantalla de cierre de caja: `/caja` (182 líneas) muestra esperado, declarado
       y la diferencia. Ejercitada por el e2e «7 · la caja se cuenta a ciegas: el vendedor
       no ve lo esperado antes de contar» [AC-VEN-03]
