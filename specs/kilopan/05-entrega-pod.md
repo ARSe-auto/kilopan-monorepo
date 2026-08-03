@@ -48,6 +48,20 @@ bloquea** — el pan no espera (§4).
       sin una decisión del operador: hoy un rechazo se pierde de vista y la venta se
       evapora sin que nadie se entere (`docs/PROMPT_CORRECTIVO.md` §5, Ola 2) [AC-POD-06]
 
+## Ola 4 — Robustez: offline honesto (`docs/PROMPT_CORRECTIVO.md` §3, R5)
+
+- [ ] (P0) **`/ruta` sabe si está offline — hoy no lo sabe.** `comun/useEnLinea.ts` existe
+      y su propio comentario dice «cada pantalla con cola offline llama este hook»; lo
+      llaman `pesar/page.tsx` y `vender/page.tsx`, que por regla (`AGENTS.md`: «Offline es
+      SOLO el módulo de reparto») exigen red local y NO deberían necesitarlo. `/ruta` —el
+      único módulo con cola offline de verdad— tiene cero referencias al hook. Un
+      repartidor sin señal en `/ruta` no tiene ninguna indicación de que está offline: un
+      POD puede quedar en cola sin que la pantalla lo diga distinto de uno que subió.
+      Cerrar exige: `/ruta` (y la confirmación de POD dentro de ella) usa `useEnLinea()`
+      y muestra el estado real; retirar el hook de `pesar`/`vender` o dejarlo si algún AC
+      futuro lo justifica, pero no como está — sin uso donde se necesita y con uso donde
+      la regla dice que no debería offline nunca [AC-POD-07]
+
 ## Notas de implementación
 
 - **La foto era falsa hasta el 25-jul-2026**: `capturarFoto()` calculaba el sha256 de un

@@ -67,6 +67,31 @@ repartidor muestra solo km y kg (§5).
 - [ ] (P2) Botón compartir en el detalle de entrega, no solo en el cierre de caja
       [AC-SHARE-02]
 
+## Ola 3 — «Que la dueña vea» (`docs/PROMPT_CORRECTIVO.md` §3, causas raíz R3/R4)
+
+Salida de la ola: dado un faltante de caja sembrado en datos de prueba, la dueña
+reconstruye sola quién, cuándo y en qué equipo, sin ayuda técnica. Dos piezas de esto
+YA estaban escritas antes de esta planificación — se citan para no duplicar:
+
+- **Eventos obligatorios en toda operación de plata** → `AC-ADM-10`
+  (`specs/kilopan/10-administracion.md`). Prerrequisito de datos para esta ola entera:
+  sin eso escrito, no hay nada que la pantalla de auditoría pueda mostrar.
+- **Pantalla de auditoría por usuario y dispositivo sobre `pan.eventos`** → `AC-DASH-06`,
+  arriba en esta misma spec. Ya es exactamente "la pantalla que los lee" que pide §3.
+
+Lo que falta, verificado en el código, no supuesto:
+
+- [ ] (P0) **Cola de entregas por revisar**, cableada a una pantalla del dashboard. Hoy
+      el repartidor marca rechazo/parcial en `/ruta` (`AC-POD-05`) y ahí muere: ninguna
+      pantalla de `/dashboard` lista esas entregas para que la dueña las revise y
+      decida qué hacer con cada una. Sin esto, R3/R4 no se cumplen aunque el evento
+      exista — el dato está, nadie lo ve [AC-DASH-08]
+- [ ] (P1) **Histórico y exportación** de la conciliación diaria: hoy `/dashboard`
+      (`AC-DASH-01`) solo muestra el día en curso desde `pan.conciliacion_diaria`. Sin
+      rango de fechas ni exportar (CSV como mínimo), la dueña no puede reconstruir un
+      faltante de una semana atrás sin pedirle el dato a alguien con acceso a la BD —
+      exactamente lo que esta ola existe para evitar [AC-DASH-09]
+
 ## Notas de implementación
 
 - «Tu flota» es descartable y **jamás** aparece en el teléfono del repartidor.

@@ -71,6 +71,11 @@ Ningún estado se comunica solo por color.
       — **Partido el 3-ago-2026 (Ola 2):** este AC traía además el «undo de 8 s», que es
       otro trabajo y en otras pantallas. Un AC que empaqueta dos cosas no se puede cerrar
       sin mentir a medias, así que el deshacer salió a `AC-H0-12`.
+      — **Nota de archivo (3-ago-2026):** por texto de `docs/PROMPT_CORRECTIVO.md` §3
+      "los cuatro estados obligatorios de listado" es alcance de Ola 4 (R5), no de
+      Ola 2 — a diferencia de `AC-H0-12` (deshacer de 8 s), que §3 sí lista
+      explícitamente dentro de Ola 2. Quedó filed junto a `AC-H0-12` por historia, no
+      por scope; no se movió de sección para no generar churn en un AC sin construir.
 - [ ] (P0) Deshacer de 8 s en pesaje, venta, agregar al carro y armar ruta, **en vez de
       modales de confirmación**. Un panadero con las manos ocupadas y enharinadas despacha
       un modal sin leerlo: confirmar no protege de nada, deshacer sí. Especificado desde el

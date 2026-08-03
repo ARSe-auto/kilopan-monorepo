@@ -10,6 +10,123 @@ el aprendizaje contradice lo que creíamos. **Qué NO va:** el estado del plan (
 
 ---
 
+## 2026-08-03 · La columna hermana: `saldado_at` tenía los mismos huecos, y dos más
+
+La lección de la `0021` era «agregar una columna de estado a `pan.ventas` sin revisar a
+TODOS sus consumidores deja huecos». `saldado_at` (`0017`) tiene exactamente la misma
+forma —NULL = pendiente, timestamp = saldado, `grant update (saldado_at) to pan_app`— y
+nunca se había auditado igual. Se auditó. Medido bajo `set role pan_app` sobre las
+migraciones reales, jamás razonado leyendo el SQL:
+
+```
+venta fiada $12.000 → deuda: 12000
+marcar SALDADA      → deuda:     0
+¿pan_app puede DES-saldar? SÍ  → deuda: 12000  ← hueco 1: la deuda pagada revive
+¿puede re-fechar el pago?  SÍ  → saldado_at = 2020-01-01 en una venta de 2026  ← hueco 2
+¿puede saldar una venta ANULADA? SÍ (con la sentencia exacta del endpoint)     ← hueco 3
+¿puede saldar una venta en EFECTIVO? SÍ                                        ← hueco 4
+¿puede BORRAR la venta? NO — permission denied
+```
+
+El hueco 1 es **peor que su equivalente en la anulación**, y por una razón que sólo se ve
+mirando las dos columnas juntas: la anulación escribe su `venta_anulada` en `pan.eventos`,
+así que des-anular dejaba un evento huérfano que delataba la maniobra. Marcar saldada **no
+escribe ningún evento** (medido: 0 filas), o sea `saldado_at` es el único registro de que
+el cliente pagó. Devolverlo a NULL borraba el pago sin dejar rastro y le volvía a cobrar al
+cliente algo que ya había pagado. El hueco 3 es el mismo falso registro que la cabecera de
+la `0021` había cerrado como camino de limpieza, y que seguía abierto como camino del
+endpoint.
+
+Arreglado en `0022` (`trg_ventas_saldado_inmutable` + CHECK `ventas_saldado_solo_fiado`),
+un invariante por hueco, los cuatro rojos contra el árbol sin la migración (68 pasan,
+4 fallan) y verdes con ella. `pnpm check:full` 12/12, 0 saltados.
+
+**Lo que NO se tocó, y por qué importa:** `pan.conciliacion_diaria` no filtra `anulada_at`
+y sigue sin filtrarlo. Parecía el quinto hueco —mismo patrón, mismo consumidor olvidado—
+hasta que apareció escrito en `specs/kilopan/10-administracion.md` como decisión
+deliberada: el arqueo mide plata y la conciliación mide kilos físicos, y en el caso
+dominante el pan igual salió del local. Una decisión escrita en la spec le ahorró a esta
+sesión «arreglar» algo que estaba bien. Por eso la `03-venta-mostrador.md` queda ahora con
+la enumeración COMPLETA de consumidores de `pan.ventas` y la decisión escrita para cada
+uno, incluidos los siete que NO deben filtrar `saldado_at`.
+
+**Hallazgo abierto, sin decisión:** cobrar un fiado no entra a ningún arqueo. El pago no
+crea fila en `pan.ventas`, así que la plata llega a la caja sin que ningún `esperado_clp`
+la espere y el turno cierra con sobrante todas las veces. No es un hueco de `saldado_at`
+—es que el pago no está modelado como movimiento de caja— y necesita decisión de producto.
+
+---
+
+## 2026-08-03 · La migración que escribió el motor: el SQL estaba bien, lo que faltaba no
+
+Alexis revisó la `0020_anular_venta.sql` —la que el motor autónomo escribió violando
+`docs/PROMPT_CORRECTIVO.md` §7— y eligió «se ajusta». Al buscar QUÉ ajustar aparecieron dos
+huecos reales, ninguno visible leyendo la migración sola: los dos vivían en la distancia
+entre lo que el AC prometía y lo que nadie fue a comprobar. Medidos corriendo las
+migraciones bajo `set role pan_app`, no razonados:
+
+```
+ANTES DE ANULAR   → arqueo: 12000 | deuda del cliente: 12000
+DESPUÉS DE ANULAR → arqueo:     0 | deuda del cliente: 12000   ← hueco 1
+¿pan_app puede DES-anular? SÍ                                  ← hueco 2
+TRAS DES-ANULAR   → arqueo: 12000 | deuda del cliente: 12000
+```
+
+1. **Anular una venta fiada no bajaba la deuda del cliente.** `pan.saldo_cliente` (`0017`)
+   nunca filtró `anulada_at`. La venta salía del arqueo y el cliente seguía debiéndola, y
+   la única forma de limpiarlo era marcarla `saldado_at` — registrar en falso que pagó, o
+   sea corromper la auditoría para tapar un bug.
+2. **La anulación era reversible**, justo lo contrario de lo que la `0020` declara en su
+   propia cabecera («append-only, como el POD con supersede_id»). El `grant update`
+   column-level dejaba devolver `anulada_at` a NULL: la venta revivía y quedaba un
+   `venta_anulada` huérfano en `pan.eventos`, la auditoría afirmando lo contrario del dato.
+
+Arreglado en `0021` (vista reescrita + `trg_ventas_anulacion_inmutable`, mismo patrón que
+`trg_entregas_inmutable` de `0004`), un invariante nuevo por hueco, los dos rojos contra la
+`0020` sola. `pnpm check:full` 12/12, 0 saltados.
+
+**Lo que se aprendió, que contradice lo que creíamos:** el guardrail nuevo (`rc 10`) impide
+que el motor ESCRIBA migraciones, y eso estaba bien pensado, pero el daño real de la `0020`
+no fue el SQL —era correcto, aditivo y con reversión—, fue que **agregar una columna de
+estado a `pan.ventas` obliga a revisar a TODO consumidor de esa tabla**, y nadie lo hizo.
+`saldado_at` (`0017`) tiene exactamente la misma forma y muy probablemente el mismo hueco
+sin auditar. Un AC que dice «deja de sumar al arqueo» se cierra mirando el arqueo; las otras
+tres vistas que también suman esa tabla no las mira nadie.
+
+**Dos sesiones escribiendo el mismo árbol, y una conclusión mía que estuvo mal:** a mitad de
+la sesión aparecieron archivos modificados que yo no había tocado. Investigué y concluí
+«falsa alarma»: `prueba-arnes.sh` (líneas 506-536) sobrescribe `IMPLEMENTATION_PLAN.md` y
+`.ralph/build-fails` en el repo REAL y los restaura desde `/tmp`, así que el mtime se mueve
+dentro del propio gate sin que cambie el contenido (mismo sha antes y después — probado).
+Eso es cierto y vale saberlo, porque hace ruido en cualquier auditoría de «quién tocó el
+árbol».
+
+**Pero la conclusión de que no había nadie más escribiendo era falsa.** Sí lo había: una
+sesión hermana, planificando Ola 3/4, avisó después por mensaje entre sesiones. Le habían
+dicho que trabajara en su worktree y usó rutas absolutas al repo principal; a mí el prompt
+me mandó explícitamente al repo principal. Resultado: los dos trabajos mezclados sin
+comitear en el mismo árbol, y yo comiteé el suyo sin saber que era suyo (`8a9edd1`,
+`72904d6`, y 6 líneas dentro de `17c39ca`). No se perdió nada, pero fue suerte.
+
+Lo que falló no fue la investigación —el `prueba-arnes.sh` explicaba de verdad lo que yo
+estaba mirando— sino haber cerrado con «descartado» cuando el mtime de
+`specs/kilopan/09-plataforma-miga.md` (07:19:53) seguía sin explicación y yo lo sabía. Una
+anomalía parcialmente explicada no es una anomalía descartada. Y el `check:full` que corrí
+para dar verde corrió MIENTRAS la otra sesión escribía: ese verde se sacó sobre un árbol en
+movimiento y no valía. Se repitió después sobre árbol limpio y comiteado
+(`verde-20260803-074157`, HEAD `3abd0e9`) — verde 12/12 igual, pero eso se comprueba, no se
+supone.
+
+**Regla operativa que sale de esto:** «un builder por worktree» (CLAUDE.md) no se cumple
+solo abriendo un worktree — se cumple si las ediciones usan rutas de ESE worktree. Un
+prompt que dice «trabajá en el repo principal» anula el aislamiento aunque la plataforma
+haya asignado uno. Y ninguna sesión corre el gate mientras otra escribe el mismo árbol.
+
+**Encontrado de paso:** el freno `packages/metodo/panel/PAUSA-REVISION` que el HANDOFF daba
+por puesto NO existía — el motor estaba detenido solo por `launchctl bootout`, que un
+reinicio deshace. Puesto a mano. Y el HANDOFF afirmaba que `origin/main` estaba al día: no
+lo estaba, había specs de Ola 3/4 y el plan sin comitear (`8a9edd1`, `72904d6`).
+
 ## 2026-07-27 · Navegación rediseñada de punta a punta: secuencial, no un árbol de menús
 
 Alexis, entrando como Pedro Maestro (rol `maestro`, que solo ve Pesaje): «la navegacion

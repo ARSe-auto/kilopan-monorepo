@@ -659,6 +659,229 @@ test("AC-ADM-05: anular una venta exige motivo escrito (CHECK), la saca del arqu
   await db.close();
 });
 
+test("AC-ADM-05 (0021): anular una venta FIADA baja la deuda del cliente, no solo el arqueo", async () => {
+  // Hueco encontrado revisando a mano la migración que escribió el motor: 0020 sacó la
+  // venta anulada del arqueo pero nadie tocó pan.saldo_cliente, así que el cliente seguía
+  // debiendo una venta anulada. Y la única forma de limpiarlo era marcarla saldado_at —
+  // registrar en falso que pagó. Se prueba por el saldo, que es lo que ve la dueña.
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "admin");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const clienteId = await crearCliente(db);
+  const venta = await db.query(
+    `insert into pan.ventas (client_uuid, vendedor_id, dispositivo_id, medio_pago, total_clp, cliente_id)
+     values (gen_random_uuid(),$1,$2,'fiado',12000,$3) returning id`,
+    [usuarioId, dispositivoId, clienteId]
+  );
+  const saldo = async () =>
+    (await db.query(`select saldo_pendiente_clp from pan.saldo_cliente where cliente_id = $1`, [clienteId]))
+      .rows[0].saldo_pendiente_clp;
+
+  assert.equal(await saldo(), 12000, "el fiado del mesón debe sumar al saldo (0017)");
+  await db.query(
+    `update pan.ventas set anulada_at = now(), anulada_motivo = $2 where id = $1`,
+    [venta.rows[0].id, "se registró a nombre del cliente equivocado"]
+  );
+  assert.equal(await saldo(), 0, "anular la venta debe bajar la deuda del cliente");
+  // Y sin haber inventado un pago: saldado_at sigue en NULL, la venta se anuló, no se saldó.
+  const s = await db.query(`select saldado_at from pan.ventas where id = $1`, [venta.rows[0].id]);
+  assert.equal(s.rows[0].saldado_at, null, "la deuda baja por anulación, jamás fingiendo un pago");
+  await db.close();
+});
+
+test("AC-ADM-05 (0021): la anulación es irreversible — nadie des-anula una venta", async () => {
+  // 0020 se declaraba append-only «como el POD con supersede_id» y no lo era: su grant
+  // column-level dejaba devolver anulada_at a NULL, reviviendo la venta en el arqueo y
+  // dejando en pan.eventos un venta_anulada huérfano — la auditoría afirmando lo contrario
+  // del dato. El grant no alcanza porque la misma columna debe escribirse UNA vez y nunca
+  // más: eso es un trigger (mismo patrón que trg_entregas_inmutable, 0004).
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "admin");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const venta = await db.query(
+    `insert into pan.ventas (client_uuid, vendedor_id, dispositivo_id, medio_pago, total_clp) values (gen_random_uuid(),$1,$2,'efectivo',1000) returning id`,
+    [usuarioId, dispositivoId]
+  );
+  const ventaId = venta.rows[0].id;
+  await db.query(`update pan.ventas set anulada_at = now(), anulada_motivo = $2 where id = $1`, [
+    ventaId,
+    "el cliente devolvió el pan",
+  ]);
+
+  await assert.rejects(
+    () => db.query(`update pan.ventas set anulada_at = null, anulada_motivo = null where id = $1`, [ventaId]),
+    /inmutable/i,
+    "des-anular debe rebotar"
+  );
+  await assert.rejects(
+    () => db.query(`update pan.ventas set anulada_motivo = 'otro motivo' where id = $1`, [ventaId]),
+    /inmutable/i,
+    "reescribir el motivo de una anulación debe rebotar"
+  );
+  await assert.rejects(
+    () => db.query(`update pan.ventas set anulada_at = now() where id = $1`, [ventaId]),
+    /inmutable/i,
+    "correr la fecha de una anulación debe rebotar"
+  );
+
+  const v = await db.query(`select anulada_at, anulada_motivo from pan.ventas where id = $1`, [ventaId]);
+  assert.ok(v.rows[0].anulada_at, "la venta sigue anulada");
+  assert.equal(v.rows[0].anulada_motivo, "el cliente devolvió el pan", "con su motivo original");
+
+  // El trigger NO puede estorbar al resto de la tabla: una venta vigente se sigue saldando.
+  const clienteId = await crearCliente(db);
+  const vigente = await db.query(
+    `insert into pan.ventas (client_uuid, vendedor_id, dispositivo_id, medio_pago, total_clp, cliente_id)
+     values (gen_random_uuid(),$1,$2,'fiado',500,$3) returning id`,
+    [usuarioId, dispositivoId, clienteId]
+  );
+  const ok = await db.query(`update pan.ventas set saldado_at = now() where id = $1 returning id`, [
+    vigente.rows[0].id,
+  ]);
+  assert.equal(ok.rows.length, 1, "saldar una venta vigente sigue funcionando (0017)");
+  await db.close();
+});
+
+// ---------------------------------------------------------------------------
+// AC-PAG-02 (0022) — auditoría de `saldado_at`, la columna hermana de `anulada_at`.
+// La 0021 arregló `anulada_at`; `saldado_at` (0017) tiene la misma forma (NULL/timestamp
+// + grant column-level a pan_app) y nunca se había auditado igual. Un test por hueco.
+// ---------------------------------------------------------------------------
+
+/** Venta fiada de $12.000 a un cliente nuevo, lista para saldar. Devuelve ids + el saldo.
+ *  Los RUTs se parametrizan porque pan.usuarios.rut es UNIQUE: dos ventas en la misma base
+ *  necesitan vendedores distintos. */
+async function ventaFiadaSaldable(
+  db,
+  rutUsuario = "12.345.678-5",
+  rutCliente = "76.192.083-9",
+  monto = 12000
+) {
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, rutUsuario, "admin");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const clienteId = await crearCliente(db, rutCliente);
+  const v = await db.query(
+    `insert into pan.ventas (client_uuid, vendedor_id, dispositivo_id, medio_pago, total_clp, cliente_id)
+     values (gen_random_uuid(),$1,$2,'fiado',$3,$4) returning id`,
+    [usuarioId, dispositivoId, monto, clienteId]
+  );
+  const saldo = async () =>
+    (await db.query(`select saldo_pendiente_clp from pan.saldo_cliente where cliente_id = $1`, [clienteId]))
+      .rows[0].saldo_pendiente_clp;
+  return { usuarioId, dispositivoId, clienteId, ventaId: v.rows[0].id, saldo };
+}
+
+test("AC-PAG-02 (0022) HUECO 1: des-saldar rebota — no se resucita una deuda ya pagada", async () => {
+  // Medido antes del arreglo: el update pasaba y el saldo volvía de $0 a $12.000. Y a
+  // diferencia de la anulación —que deja su evento en pan.eventos y por eso des-anular
+  // dejaba un huérfano delator— marcar saldada NO escribe ningún evento: saldado_at es el
+  // ÚNICO registro de que el cliente pagó. Devolverlo a NULL borraba el pago sin rastro.
+  const db = await dbNueva();
+  const { ventaId, saldo } = await ventaFiadaSaldable(db);
+  assert.equal(await saldo(), 12000, "el fiado del mesón suma al saldo (0017)");
+  await db.query(`update pan.ventas set saldado_at = now() where id = $1`, [ventaId]);
+  assert.equal(await saldo(), 0, "marcar saldada baja la deuda (0017)");
+
+  await assert.rejects(
+    () => db.query(`update pan.ventas set saldado_at = null where id = $1`, [ventaId]),
+    /inmutable/i,
+    "des-saldar debe rebotar"
+  );
+  assert.equal(await saldo(), 0, "la deuda pagada NO revive");
+  // El pago no deja evento propio todavía (eso es AC-ADM-10, abierto): razón de más para
+  // que la columna sea la evidencia y no se pueda borrar.
+  const ev = await db.query(`select count(*)::int as n from pan.eventos where entidad_id = $1`, [ventaId]);
+  assert.equal(ev.rows[0].n, 0, "hoy el pago no deja evento — la columna ES el registro");
+  await db.close();
+});
+
+test("AC-PAG-02 (0022) HUECO 2: re-fechar un pago rebota — cuándo pagó el cliente no se reescribe", async () => {
+  // Medido antes del arreglo: saldado_at se podía mover a 2020-01-01 en una venta creada
+  // en 2026, o sea el pago fechado seis años antes de que la venta existiera.
+  const db = await dbNueva();
+  const { ventaId } = await ventaFiadaSaldable(db);
+  await db.query(`update pan.ventas set saldado_at = now() where id = $1`, [ventaId]);
+  const original = (await db.query(`select saldado_at from pan.ventas where id = $1`, [ventaId])).rows[0]
+    .saldado_at;
+
+  await assert.rejects(
+    () =>
+      db.query(`update pan.ventas set saldado_at = timestamptz '2020-01-01 10:00:00-03' where id = $1`, [
+        ventaId,
+      ]),
+    /inmutable/i,
+    "correr la fecha de un pago hacia atrás debe rebotar"
+  );
+  await assert.rejects(
+    () => db.query(`update pan.ventas set saldado_at = now() where id = $1`, [ventaId]),
+    /inmutable/i,
+    "re-marcar un pago ya registrado debe rebotar"
+  );
+  const desp = (await db.query(`select saldado_at from pan.ventas where id = $1`, [ventaId])).rows[0].saldado_at;
+  assert.deepEqual(desp, original, "la fecha del pago queda como se registró");
+  await db.close();
+});
+
+test("AC-PAG-02 (0022) HUECO 3: no se le registra un pago a una venta ANULADA", async () => {
+  // Medido antes del arreglo con la sentencia EXACTA de PATCH /api/ventas (route.ts:258),
+  // que filtra medio_pago y saldado_at pero no anulada_at: pasaba, y la fila quedaba
+  // anulada_at Y saldado_at a la vez — «esta venta no existe» y «el cliente la pagó» en la
+  // misma fila. Es el falso registro contra el que advierte la cabecera de la 0021.
+  const db = await dbNueva();
+  const { ventaId, saldo } = await ventaFiadaSaldable(db);
+  await db.query(`update pan.ventas set anulada_at = now(), anulada_motivo = $2 where id = $1`, [
+    ventaId,
+    "se registró a nombre del cliente equivocado",
+  ]);
+  assert.equal(await saldo(), 0, "anular ya bajó la deuda (0021)");
+
+  await assert.rejects(
+    () =>
+      db.query(
+        `update pan.ventas set saldado_at = now()
+          where id = $1 and medio_pago = 'fiado' and saldado_at is null`,
+        [ventaId]
+      ),
+    /anulada/i,
+    "saldar una venta anulada debe rebotar"
+  );
+  const v = await db.query(`select saldado_at from pan.ventas where id = $1`, [ventaId]);
+  assert.equal(v.rows[0].saldado_at, null, "la venta anulada queda sin pago inventado");
+
+  // El orden INVERSO sí se permite, a propósito: anular una venta que el cliente ya pagó es
+  // la devolución con reembolso, y prohibirla dejaría a la dueña sin deshacer una venta mal
+  // registrada sin entrar por SQL (AC-ADM-05). Por eso es trigger y no CHECK de exclusión.
+  const otra = await ventaFiadaSaldable(db, "11.111.111-1", "10.000.013-K", 5000);
+  await db.query(`update pan.ventas set saldado_at = now() where id = $1`, [otra.ventaId]);
+  const anulada = await db.query(
+    `update pan.ventas set anulada_at = now(), anulada_motivo = $2 where id = $1 returning id`,
+    [otra.ventaId, "el cliente devolvió el pan y se le reembolsó"]
+  );
+  assert.equal(anulada.rows.length, 1, "anular una venta YA pagada sigue permitido");
+  await db.close();
+});
+
+test("AC-PAG-02 (0022) HUECO 4: sólo lo que se fió se salda — una venta en efectivo no", async () => {
+  // Medido antes del arreglo: el update pasaba sobre una venta en 'efectivo', que ya se
+  // cobró en el mesón y nunca fue deuda. No corrompía ningún saldo sólo porque
+  // pan.saldo_cliente filtra además medio_pago='fiado' — o sea, la única defensa era que el
+  // consumidor se acordara de filtrar, la misma suposición que produjo los huecos de 0020.
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "admin");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const v = await db.query(
+    `insert into pan.ventas (client_uuid, vendedor_id, dispositivo_id, medio_pago, total_clp)
+     values (gen_random_uuid(),$1,$2,'efectivo',5000) returning id`,
+    [usuarioId, dispositivoId]
+  );
+  await assert.rejects(
+    () => db.query(`update pan.ventas set saldado_at = now() where id = $1`, [v.rows[0].id]),
+    /constraint|check/i,
+    "saldar una venta en efectivo debe rebotar"
+  );
+  await db.close();
+});
+
 test("medios_pago: pan_app puede desactivar uno (activo) pero no borrarlo ni cambiar su etiqueta", async () => {
   const db = await dbNueva();
   const r = await db.query(`update pan.medios_pago set activo = false where clave = 'otro' returning activo`);
