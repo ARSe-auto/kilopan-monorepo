@@ -16,6 +16,15 @@
 # real después de cada commit. Si el marcador apunta al HEAD, ese HEAD pasó el gate
 # entero de forma independiente. Si no, no se empuja y se dice por qué.
 #
+# OJO al usar esto a mano (3-ago-2026, me confundió media hora): last-green.sha se lee
+# DEL DISCO, no de git — NO hace falta comitearlo para que la comparación funcione. El
+# orden correcto es: comitear el cambio real → correr check.sh --full (deja el marcador
+# apuntando a ESE HEAD, sin comitear) → correr este script. Si en cambio se comitea el
+# marcador como un commit aparte, HEAD avanza un paso más allá de lo que el marcador dice
+# y este script se niega — correctamente, pero por una razón que no es un gate roto, es
+# solo el ciclo de "el marcador de un commit no puede apuntar a sí mismo". No perseguir
+# ese ciclo comiteando el marcador de nuevo: dejarlo estampado y sin comitear está bien.
+#
 # Uso: bash packages/metodo/scripts/empujar-si-verde.sh
 # Exit: 0 empujado o nada que empujar · 1 hay algo que empujar pero NO está verificado.
 set -uo pipefail
