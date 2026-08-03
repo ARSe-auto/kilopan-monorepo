@@ -273,6 +273,71 @@ node --check packages/metodo/panel/generar.mjs 2>/dev/null && ok "panel/generar.
 grep -q "rev-list --count" packages/metodo/panel/generar.mjs && ok "el panel mide avance por commits, jamás por «proceso vivo»" || no "el panel no calcula desde git"
 
 echo
+echo "== 8b. check.sh --full EJERCE de verdad build+lint+types+unit (+e2e) (AC-H0-05) =="
+# Anexo D (auditoría 2-ago-2026): la sección 8 solo mira SINTAXIS (`bash -n`) y que el texto
+# contenga `--full` (grep). Un mutante que borre los `run_step` internos de lint/types/unit/
+# build sobrevive a ambas: `check.sh` seguiría parseando y el flag seguiría en el archivo,
+# pero no correría nada. Aquí se EJECUTA `check.sh --full` en un repo-sandbox hermético
+# —toolchain estubada que registra cada invocación de `pnpm`— y se exige que de verdad
+# dispare `pnpm ... run {lint,typecheck,test,build}` y el e2e. Y al final se planta el
+# mutante del Anexo D y se exige que esta misma prueba lo MATE: un test que no muere ante el
+# defecto que dice cazar es un no-op. Se ejercita una COPIA de `check.sh` en un árbol de
+# usar y tirar (no el real) para no recursar en prueba-arnes ni pisar el panel de producción.
+ARNES_TMP="$(mktemp -d)"
+armar_sandbox () { # $1 = raíz del sandbox — árbol mínimo con TODO estubado
+  local raiz="$1"
+  rm -rf "$raiz"
+  mkdir -p "$raiz/node_modules" "$raiz/apps/kilopan" "$raiz/packages/metodo/scripts" "$raiz/bin"
+  printf '{}\n' > "$raiz/package.json"
+  # check.sh invoca guardrail y prueba-arnes por ruta literal: estubados a exit 0 ⇒ ni
+  # recursión ni red. (La prueba-arnes estubada es lo que corta el bucle infinito.)
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$raiz/packages/metodo/scripts/guardrail.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$raiz/packages/metodo/scripts/prueba-arnes.sh"
+  # con un playwright.config presente, `--full` debe disparar el e2e (rama "cuando exista UI").
+  printf 'export default {}\n' > "$raiz/apps/kilopan/playwright.config.ts"
+  # pnpm estubado: NO hace el trabajo, solo registra cada llamada ⇒ se prueba que check.sh
+  # EJECUTA los pasos, no que los imprime. node estubado a exit 0 (gate_specs/verify-refs).
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "$PNPM_LOG"\nexit 0\n' > "$raiz/bin/pnpm"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$raiz/bin/node"
+  chmod +x "$raiz/packages/metodo/scripts/"*.sh "$raiz/bin/"*
+}
+ejercer () { # $1 = check.sh a ejercitar · $2 = flags · imprime el registro de llamadas a pnpm
+  local base="$ARNES_TMP/run"
+  armar_sandbox "$base"
+  cp "$1" "$base/packages/metodo/scripts/check.sh"
+  local plog="$ARNES_TMP/pnpm.log"; : > "$plog"
+  PATH="$base/bin:$PATH" PNPM_LOG="$plog" bash "$base/packages/metodo/scripts/check.sh" $2 >/dev/null 2>&1
+  cat "$plog"
+}
+
+# (a) --full corre de verdad los cuatro pasos de workspace + el e2e.
+LOG_FULL="$(ejercer "$M/check.sh" "--full --app=kilopan")"
+falta=""
+for paso in "run lint" "run typecheck" "run test" "run build" "run e2e"; do
+  printf '%s\n' "$LOG_FULL" | grep -q -- "$paso" || falta="$falta $paso"
+done
+[ -z "$falta" ] && ok "check.sh --full invoca de verdad pnpm run {lint,typecheck,test,build,e2e}" \
+                 || no "check.sh --full NO ejecutó:$falta — un run_step de workspace no corre"
+
+# (b) el e2e es --full-específico: sin el flag NO debe dispararse (check.sh DIFERENCIA los modos).
+LOG_RAPIDO="$(ejercer "$M/check.sh" "--app=kilopan")"
+printf '%s\n' "$LOG_RAPIDO" | grep -q -- "run e2e" \
+  && no "check.sh corre e2e SIN --full — el flag no gatea nada, los modos no difieren" \
+  || ok "sin --full el e2e no corre (el flag sí gatea los pasos pesados, no es cosmético)"
+
+# (c) EL MUTANTE del Anexo D: borrar los run_step internos. La aserción (a) DEBE morir con él.
+MUTANTE="$ARNES_TMP/check-mutante.sh"
+grep -vE 'run_step "(lint|typecheck|unit|build) \(workspace\)"' "$M/check.sh" > "$MUTANTE"
+LOG_MUT="$(ejercer "$MUTANTE" "--full --app=kilopan")"
+sobrevive=""
+for paso in "run lint" "run typecheck" "run test" "run build"; do
+  printf '%s\n' "$LOG_MUT" | grep -q -- "$paso" && sobrevive="$sobrevive $paso"
+done
+[ -z "$sobrevive" ] && ok "MATA al mutante que borra los run_step (la prueba ejerce algo, no es un no-op)" \
+                     || no "el mutante sin run_step sobrevive:$sobrevive — la prueba no ejercita nada real"
+rm -rf "$ARNES_TMP"
+
+echo
 echo "== 9. Selector de modelo (casilla 12) =="
 # §8 del maestro: «se testea contra el caso normal — un selector no-op que todo lo manda
 # a Opus quema la ventana en silencio». La prueba central no es que devuelva un id, es

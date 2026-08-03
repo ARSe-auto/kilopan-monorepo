@@ -24,12 +24,14 @@ Ningún estado se comunica solo por color.
 - [x] (P0) `packages/metodo/scripts/guardrail.sh` ejecutable: aborta si `DATABASE_URL` no
       es localhost/127.0.0.1, aborta si hay secretos fuera de `.env.local`, grep
       bloqueante de tokens vedados en `src/` [AC-H0-04]
-- [ ] (P0) `packages/metodo/scripts/check.sh` ejecutable con `--full`: build + lint +
+- [x] (P0) `packages/metodo/scripts/check.sh` ejecutable con `--full`: build + lint +
       types + unit (+ e2e y axe cuando exista UI) [AC-H0-05]
-      — **Anexo D (auditoría 2-ago-2026): HUECO.** `prueba-arnes.sh` solo hace
-      `bash -n check.sh` (sintaxis) y `grep -q -- "--full"` (el flag aparece en el
-      texto) — ningún test ejercita que `--full` realmente corra build+lint+types+unit.
-      Un mutante que borre los `run_step` internos sobrevive a ambas comprobaciones.
+      — **Cerrado 2-ago-2026.** `prueba-arnes.sh` §8b EJECUTA `check.sh --full` en un
+      repo-sandbox hermético (toolchain estubada que registra cada llamada a `pnpm`) y
+      exige que dispare de verdad `pnpm run {lint,typecheck,test,build,e2e}`; que sin
+      `--full` el e2e NO corra (los modos difieren); y planta el mutante del Anexo D
+      —borrar los `run_step` internos— exigiendo que la prueba lo MATE. axe sigue fuera
+      (AC-H0-10).
 - [ ] (P0) `packages/metodo/panel/generar.mjs`: genera `panel/index.html` desde estado
       real del repo — nunca «proceso vivo» como señal de avance [AC-H0-06]
       — **Anexo D (auditoría 2-ago-2026): HUECO.** El "avance" real se calcula en

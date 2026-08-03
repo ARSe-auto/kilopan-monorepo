@@ -332,7 +332,7 @@ esta misma auditoría — no queda como ítem abierto de la lista de abajo.
 - [ ] (P2) [AC-RED-01] — describe un mecanismo (sessionStorage/15s) que ya no existe en el código (es IndexedDB/30s); ninguna versión tiene test — `specs/kilopan/02-catalogo-pesaje.md`
 - [ ] (P1-SEC) [AC-PES-08] — la única evidencia citada es lectura de archivo, no un test — `specs/kilopan/02-catalogo-pesaje.md`
 - [ ] (P0) [AC-H0-03] — el grep de tabular-nums solo comprueba que existe UNA VEZ en el árbol, no por componente — `specs/kilopan/09-plataforma-miga.md`
-- [ ] (P0) [AC-H0-05] — `prueba-arnes.sh` solo valida sintaxis de `check.sh`, no que `--full` ejecute lo que promete — `specs/kilopan/09-plataforma-miga.md`
+- [x] (P0) [AC-H0-05] — `prueba-arnes.sh` §8b ejecuta `check.sh --full` en sandbox hermético y exige que dispare pnpm run {lint,typecheck,test,build,e2e}; mata al mutante que borra los run_step — `specs/kilopan/09-plataforma-miga.md`
 - [ ] (P0) [AC-H0-06] — el grep certifica una cadena no relacionada con el cálculo real de "avance" del panel — `specs/kilopan/09-plataforma-miga.md`
 - [ ] (P0) [AC-H0-07] — **falso hoy, no solo sin test**: los 4 shells de `packages/nucleo-*` no tienen `package.json` — `specs/kilopan/09-plataforma-miga.md`
 - [ ] (P1) [AC-ADM-01] — nadie llama `POST`/`PATCH /api/usuarios` desde una prueba — `specs/kilopan/10-administracion.md`
