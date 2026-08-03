@@ -194,6 +194,17 @@ grep -q "build-fails" "$M/loop.sh" && ok "loop.sh escribe .ralph/build-fails (la
 grep -q "SOS VOS" "$M/loop.sh" && ok "el prompt aclara que el loop.sh de 'ps' es el propio padre del agente" || no "el agente se detectará a sí mismo como builder rival y no construirá NUNCA"
 grep -q "NO INTERACTIVO" "$M/loop.sh" && ok "el prompt avisa que nadie va a responder preguntas" || no "el agente puede gastar la iteración preguntando al vacío"
 grep -q "ESE proceso sos vos" AGENTS.md && ok "AGENTS.md desambigua la regla en su fuente durable" || no "AGENTS.md manda matar al propio motor: la regla vuelve a morder desde el contrato"
+# El `rc 10` de loop.sh DETECTA que el motor escribió una migración —después del commit— y
+# pausa TODO. Pero detectar no es prevenir: la prohibición vivía SOLO en
+# docs/PROMPT_CORRECTIVO.md §7, que el motor no lee. Su prompt (loop.sh) le manda estudiar
+# AGENTS.md y nada más, y AGENTS.md solo decía que db/migraciones/ «son la verdad» y que no
+# se tocan las YA APLICADAS — ninguna de las dos le prohíbe CREAR una. Verificado en vivo el
+# 3-ago-2026: el motor tomó AC-ADM-06, llegó a la conclusión CORRECTA (el patrón append-only
+# con supersede_id que le enseña la 0004) y escribió db/migraciones/0023. Trabajo bien hecho
+# que iba a frenar la noche entera por una regla que nadie le dijo. Mismo patrón que la
+# aserción de arriba: la regla tiene que estar donde el motor SÍ mira, y con un guard que
+# impida que se caiga sin que nadie se entere.
+grep -q "NUNCA crea ni edita" AGENTS.md && ok "AGENTS.md le prohíbe al motor CREAR migraciones, donde el motor sí lo lee" || no "la prohibición de migraciones vive solo en el correctivo: el motor la va a violar y rc 10 pausará TODO"
 
 # (d) watchdog.sh sale con 0 al pausar, para que KeepAlive del plist NO lo resucite.
 grep -q "PAUSA-REVISION" "$M/watchdog.sh" && ok "watchdog.sh usa un marcador de pausa que launchd no puede pisar" || no "watchdog.sh sin marcador: launchd lo relanza tras cada abort, en bucle infinito"
