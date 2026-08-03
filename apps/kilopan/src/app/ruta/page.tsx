@@ -11,6 +11,7 @@ import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
 import { formatearKg } from "@/comun/formato.ts";
 import { kgTextoAGramos, pesoValido, gramosAKgTexto } from "@/comun/peso.ts";
 import { encolar, encolarFoto, iniciarSyncAutomatico, contarPendientes } from "@/pod/outbox.ts";
+import { useEnLinea } from "@/comun/useEnLinea.ts";
 import { abrirCamara, capturar, cerrarCamara, subirFoto } from "@/comun/camara.ts";
 import { Pantalla } from "../Pantalla.tsx";
 
@@ -41,6 +42,11 @@ export default function RutaPage() {
   const [paradas, setParadas] = useState<Parada[]>([]);
   const [activa, setActiva] = useState<string | null>(null);
   const [pendientes, setPendientes] = useState(0);
+  // AC-POD-07. Sin esto, `ChipEstadoConexion` caía en su default `online = true` y, con la
+  // cola vacía, /ruta mostraba «Sincronizado» en verde SIEMPRE — con señal y sin señal.
+  // Justo en la única pantalla que se usa lejos del local: el repartidor sin cobertura no
+  // tenía ninguna forma de distinguir un POD que subió de uno que quedó en la cola.
+  const enLinea = useEnLinea();
   const [paso, setPaso] = useState<"lista" | "foto" | "receptor">("lista");
   const [receptor, setReceptor] = useState("");
   // Precargados con el total del pedido (camino rápido, cero toques extra); editables
@@ -485,8 +491,13 @@ export default function RutaPage() {
 
   const pendientesDeRuta = paradas.filter((p) => !entregadasLocal.has(p.parada_id) && p.estado === "pendiente");
 
+  // A diferencia de /pesar y /vender, que montan el chip solo si hay algo que decir
+  // (`pendientes > 0 || !enLinea`), acá va SIEMPRE y es a propósito: /ruta es el módulo
+  // offline del maestro («offline es SOLO el módulo de reparto»), se usa en la calle, y el
+  // estado de la conexión es información permanente para el repartidor, no una alarma
+  // ocasional. Ahora que `online` va cableado, el verde «Sincronizado» dice la verdad.
   return (
-    <Pantalla titulo="Mi ruta" accesorio={<ChipEstadoConexion pendientes={pendientes} />}>
+    <Pantalla titulo="Mi ruta" accesorio={<ChipEstadoConexion pendientes={pendientes} online={enLinea} />}>
       {mensaje ? (
         <p role="status" style={{ color: semantico.ok, fontSize: 14, margin: 0 }}>{mensaje}</p>
       ) : null}

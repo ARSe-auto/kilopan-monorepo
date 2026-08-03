@@ -61,6 +61,27 @@ bloquea** — el pan no espera (§4).
       y muestra el estado real; retirar el hook de `pesar`/`vender` o dejarlo si algún AC
       futuro lo justifica, pero no como está — sin uso donde se necesita y con uso donde
       la regla dice que no debería offline nunca [AC-POD-07]
+      — **Mitad hecha, mitad bloqueada (3-ago-2026). NO cerrado, a propósito.**
+      **HECHO:** `/ruta` usa `useEnLinea()` y el chip dice la verdad. El defecto medido era
+      peor que «no sabe»: `ruta/page.tsx` montaba `<ChipEstadoConexion pendientes={…} />`
+      sin la prop `online`, y el componente tiene `online = true` por defecto, así que con
+      la cola vacía la pantalla afirmaba «Sincronizado» en VERDE con y sin señal — y sin
+      condición de montaje, al revés que `/pesar` y `/vender`. Evidencia:
+      `e2e/pod-offline.spec.ts` pierde la señal con la ruta ya cargada y exige «Sin
+      conexión»; contra el código sin la prop el caso se pone ROJO con el mensaje exacto
+      del defecto (`Received string: "Sincronizado"` estando offline), y también exige que
+      el chip VUELVA al recuperar señal. Se pierde la señal con la pantalla abierta y no
+      navegando porque `public/sw.js:84-100` responde `caches.match("/ingresar")` a toda
+      página autenticada pedida sin red: un caso que navegue offline aterriza en el login y
+      pasa en verde sin ejercer nada. Es además el escenario real del furgón.
+      **BLOQUEADO:** la segunda mitad («retirar el hook de `pesar`/`vender`») parte de que
+      esas pantallas no son offline, y el código dice lo contrario: `pesar/page.tsx:298` y
+      `vender/page.tsx:146` llaman `enviarOEncolar`, cuyo comentario en `pesar:295` declara
+      «Offline-first DE VERDAD … si no hay red, encola en IndexedDB». Eso contradice al
+      maestro, que lo pone **explícitamente fuera del MVP** (`PROMPT_MAESTRO.md:94`, y `:66`
+      «Requiere red local … no es offline»). Quitarles el hook las dejaría mintiendo igual
+      que `/ruta` antes de este arreglo, así que no se tocó. Cuál de los dos manda —el
+      maestro o el código— es decisión de Alexis, no de una sesión de construcción.
 
 ## Notas de implementación
 

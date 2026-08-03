@@ -390,7 +390,7 @@ Causa raíz R5. `AC-H0-11` (cuatro estados) y `AC-H0-10` (axe/AA) ya estaban en 
 el primero bajo el encabezado de Ola 2 por historia (ver nota de archivo en su spec), el
 segundo escrito antes de esta sesión. Ninguno se duplicó.
 
-- [ ] (P0) [AC-POD-07] — `/ruta` no sabe si está offline; `useEnLinea()` está en `pesar`/`vender` (que exigen red) y no en `/ruta` (el único módulo offline de verdad) — `specs/kilopan/05-entrega-pod.md`
+- [ ] (P0) [AC-POD-07] — `/ruta` no sabe si está offline; `useEnLinea()` está en `pesar`/`vender` (que exigen red) y no en `/ruta` (el único módulo offline de verdad) — `specs/kilopan/05-entrega-pod.md` — **mitad hecha:** `/ruta` ya usa `useEnLinea()` y el chip dice la verdad (`e2e/pod-offline.spec.ts`, mutante muerto). Sigue abierto porque la otra mitad —quitarle el hook a `pesar`/`vender`— choca con que esas pantallas SÍ encolan offline (`enviarOEncolar`), contra lo que el maestro pone fuera del MVP: decisión de Alexis, no de una sesión de construcción
 
 ## DONE
 
