@@ -37,6 +37,8 @@ export const DESTINOS_POR_ROL: Record<Rol, Destino[]> = {
     { href: "/facturar", etiqueta: "Consolidar y facturar", detalle: "Juntar las guías de un cliente para cobrarle" },
     { href: "/dashboard", etiqueta: "Panel del dueño", detalle: "Cómo va el día: kilos, ventas y pérdidas" },
     { href: "/admin", etiqueta: "Ajustes", detalle: "Personal, productos, precios y medios de pago" },
+    // AC-ADM-04: el enlace es solo comodidad — la puerta la cierra el servidor con 403.
+    { href: "/arreglar", etiqueta: "Arreglar", detalle: "Deshacer un error de operación sin entrar a la base" },
   ],
   maestro: [
     { href: "/pesar", etiqueta: "Pesaje", detalle: "Anotar las bandejas que salen del horno" },
@@ -134,6 +136,7 @@ const TITULOS: Record<string, string> = {
   "/dashboard": "Panel del dueño",
   "/ruta": "Mi ruta",
   "/admin": "Ajustes",
+  "/arreglar": "Arreglar",
 };
 
 export function tituloDeRuta(pathname: string): string {

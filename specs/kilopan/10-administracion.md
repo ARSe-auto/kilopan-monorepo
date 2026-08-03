@@ -40,9 +40,15 @@ motivo, jamás marcando una casilla** — una casilla se marca sin leer; escribi
 obliga a detenerse y deja el porqué en la auditoría. Y ninguna corrección pisa el dato
 original: se registra encima (append-only), como ya hace el POD con `supersede_id`.
 
-- [ ] (P0) Pantalla `/arreglar`, **solo rol admin**: existe, lista sus seis acciones, y el
+- [x] (P0) Pantalla `/arreglar`, **solo rol admin**: existe, lista sus seis acciones, y el
       SERVIDOR rechaza a quien no es admin con 403 — no basta con esconder el enlace, que
       es teatro de cliente (misma lección que `pesaje_foto_obligatoria`) [AC-ADM-04]
+      — **Cerrado 3-ago-2026:** Server Component (`app/arreglar/page.tsx`) valida sesión y
+      rol en el servidor; no-admin cae en `forbidden()` (`next.config.ts`:
+      `experimental.authInterrupts`), nunca un 200 con la pantalla oculta. Repartidor y
+      vendedor rebotan con 403 real por HTTP (`e2e/seguridad-arreglar.spec.ts`), admin ve
+      las seis acciones. Cada acción cita su AC (AC-ADM-05..09): esta pantalla es su
+      índice, las de detalle llegan con sus propios ACs.
 - [ ] (P0) Anular una venta desde `/arreglar`: exige un motivo escrito y no vacío, escribe
       su evento en `pan.eventos` con quién, cuándo y en qué equipo, y la venta anulada deja
       de sumar al arqueo de su turno [AC-ADM-05]

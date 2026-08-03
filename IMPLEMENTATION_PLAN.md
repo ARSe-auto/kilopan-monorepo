@@ -352,7 +352,7 @@ fiado de mesón y la tabla `pan.turnos`. La numeración del documento (0016/0017
 con la real porque en el medio entró `0016_bloqueo_pin_enrolamiento.sql`. **Ola 2 no
 necesita migraciones nuevas**, así que el motor puede construirla casi entera solo.
 
-- [ ] (P0) [AC-ADM-04] — pantalla `/arreglar` solo admin, con 403 desde el SERVIDOR — `specs/kilopan/10-administracion.md`
+- [x] (P0) [AC-ADM-04] — pantalla `/arreglar` solo admin, con 403 desde el SERVIDOR — `specs/kilopan/10-administracion.md` — cerrado con `app/arreglar/page.tsx` + `e2e/seguridad-arreglar.spec.ts`
 - [ ] (P0) [AC-ADM-05] — anular una venta con motivo escrito, su evento, y que deje de sumar al arqueo — `specs/kilopan/10-administracion.md`
 - [ ] (P0) [AC-ADM-06] — corregir un cierre de turno sin pisar el original (append-only) — `specs/kilopan/10-administracion.md`
 - [ ] (P0) [AC-ADM-10] — `pan.eventos` obligatoria en toda operación de plata y configuración, un test por operación — `specs/kilopan/10-administracion.md`

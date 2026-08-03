@@ -2,6 +2,11 @@ import { join } from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // AC-ADM-04: habilita `forbidden()` de next/navigation. Es lo que deja que un Server
+  // Component conteste HTTP 403 de verdad (no un 200 con el enlace escondido, que es
+  // teatro de cliente — misma lección que pesaje_foto_obligatoria). Sin este flag,
+  // `forbidden()` lanza en vez de renderizar `forbidden.tsx`.
+  experimental: { authInterrupts: true },
   // distDir configurable: el e2e hace su PROPIO `next build` (contra Postgres en
   // pglite, nunca contra producción) y necesita un directorio de salida separado del
   // `.next` que el gate ya usó para el chequeo standalone y el presupuesto de
