@@ -32,13 +32,16 @@ Ningún estado se comunica solo por color.
       `--full` el e2e NO corra (los modos difieren); y planta el mutante del Anexo D
       —borrar los `run_step` internos— exigiendo que la prueba lo MATE. axe sigue fuera
       (AC-H0-10).
-- [ ] (P0) `packages/metodo/panel/generar.mjs`: genera `panel/index.html` desde estado
+- [x] (P0) `packages/metodo/panel/generar.mjs`: genera `panel/index.html` desde estado
       real del repo — nunca «proceso vivo» como señal de avance [AC-H0-06]
-      — **Anexo D (auditoría 2-ago-2026): HUECO.** El "avance" real se calcula en
-      `generar.mjs` desde el conteo de ACs cerrados, no desde `rev-list --count` como
-      prueba `prueba-arnes.sh` — el grep certifica una cadena que no es la que calcula
-      la métrica auditada, y nada prueba que el pid del loop nunca se use como señal de
-      avance (que es justo lo que este AC prohíbe).
+      — **Cerrado 2-ago-2026.** El grep `rev-list --count` (que sólo alimentaba el
+      contador cosmético «Commits totales» y rotulaba mal el avance) se reemplazó por
+      `prueba-arnes.sh` §8c, que EJERCE `generar.mjs` en un sandbox hermético —specs y
+      `loop.pid` controlados, copia del script, jamás el panel vivo— y exige: prender el
+      loop no mueve el avance (50% con y sin proceso vivo); el avance sube al subir los
+      ACs cerrados (2/2 → 100%) con los commits en 0; y el mutant-kill del AC — con el
+      loop VIVO pero 0 ACs cerrados el avance es 0, probando que el pid nunca es señal de
+      avance.
 - [ ] (P0) Shells vacíos de `packages/nucleo-{identidad,pod,dte,comun}` con `package.json`
       y un `README.md` que dice explícitamente: «se puebla en el hito de extracción,
       después del DONE de KiloPan — no escribir lógica de negocio aquí todavía»

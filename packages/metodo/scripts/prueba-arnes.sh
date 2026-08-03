@@ -270,7 +270,6 @@ echo "== 8. Gate y panel ejecutables (AC-H0-05 · AC-H0-06) =="
 bash -n "$M/check.sh" 2>/dev/null && ok "check.sh es sintácticamente válido y ejecutable" || no "check.sh no parsea"
 grep -q -- "--full" "$M/check.sh" && ok "check.sh acepta --full" || no "check.sh sin modo --full"
 node --check packages/metodo/panel/generar.mjs 2>/dev/null && ok "panel/generar.mjs parsea" || no "panel/generar.mjs no parsea"
-grep -q "rev-list --count" packages/metodo/panel/generar.mjs && ok "el panel mide avance por commits, jamás por «proceso vivo»" || no "el panel no calcula desde git"
 
 echo
 echo "== 8b. check.sh --full EJERCE de verdad build+lint+types+unit (+e2e) (AC-H0-05) =="
@@ -336,6 +335,72 @@ done
 [ -z "$sobrevive" ] && ok "MATA al mutante que borra los run_step (la prueba ejerce algo, no es un no-op)" \
                      || no "el mutante sin run_step sobrevive:$sobrevive — la prueba no ejercita nada real"
 rm -rf "$ARNES_TMP"
+
+echo
+echo "== 8c. El «avance» del panel sale de los ACs CERRADOS, jamás del proceso vivo (AC-H0-06) =="
+# Anexo D (auditoría 2-ago-2026): la sección 8 sólo hacía `grep -q "rev-list --count"` sobre
+# generar.mjs y lo rotulaba «el panel mide avance por commits» — una cadena que NO calcula la
+# métrica auditada: el avance real es `pct(plan.cerrados, total)`, y `rev-list --count` sólo
+# alimenta el contador cosmético «Commits totales». Ese grep sobrevive intacto a un mutante que
+# ate el avance al pid del loop (justo lo que este AC prohíbe), y nada probaba que el proceso
+# vivo nunca sea señal de avance. Aquí se EJERCE generar.mjs en un sandbox hermético —specs y
+# loop.pid controlados, copia del script, jamás el panel vivo— y se exige: (1) prender el loop
+# NO mueve el avance; (2) el avance sube al subir los ACs cerrados (y con los commits en 0);
+# (3) mutant-kill directo del AC: con el loop VIVO pero cero ACs cerrados, el avance es 0.
+SB="$(mktemp -d)/sandbox"
+mkdir -p "$SB/packages/metodo/panel" "$SB/specs/kilopan"
+cp packages/metodo/panel/generar.mjs "$SB/packages/metodo/panel/generar.mjs"
+# ids de fixture armados en runtime: escritos literales, este .sh sería una cita de ACs que
+# ninguna spec define y verify-refs pondría el gate en rojo por el andamio de su propia suite.
+F1="AC-$(printf 'PP')-01"; F2="AC-$(printf 'PP')-02"
+sembrar_specs () { # $1 = nº cerrados · $2 = nº abiertos
+  { echo "# 99 — prueba de avance del panel"
+    local i=0
+    while [ "$i" -lt "$1" ]; do echo "- [x] (P0) cerrado $i [${F1}$i]"; i=$((i+1)); done
+    i=0
+    while [ "$i" -lt "$2" ]; do echo "- [ ] (P0) abierto $i [${F2}$i]"; i=$((i+1)); done
+  } > "$SB/specs/kilopan/99-avance.md"
+}
+correr_panel () { # $1 = contenido de loop.pid ("" = sin archivo) · imprime "AVANCE|CORRIENDO"
+  if [ -n "$1" ]; then printf '%s\n' "$1" > "$SB/packages/metodo/panel/loop.pid"
+  else rm -f "$SB/packages/metodo/panel/loop.pid"; fi
+  node "$SB/packages/metodo/panel/generar.mjs" --app=kilopan >/dev/null 2>&1
+  node -e '
+    const fs = require("fs");
+    const est = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    const html = fs.readFileSync(process.argv[2], "utf8");
+    const m = html.match(/Avance del plan<\/div><div class="v">(\d+)%/);
+    process.stdout.write((m ? m[1] : "?") + "|" + est.loop.corriendo);
+  ' "$SB/packages/metodo/panel/estado.json" "$SB/packages/metodo/panel/index.html"
+}
+
+# (1) 1 cerrado / 1 abierto: loop APAGADO vs loop VIVO (este mismo shell, pid $$) ⇒ mismo avance.
+sembrar_specs 1 1
+R_APAGADO="$(correr_panel "")"
+R_VIVO="$(correr_panel "$$")"
+AV_APAGADO="${R_APAGADO%%|*}"; CORR_APAGADO="${R_APAGADO##*|}"
+AV_VIVO="${R_VIVO%%|*}";       CORR_VIVO="${R_VIVO##*|}"
+if [ "$CORR_APAGADO" = "false" ] && [ "$CORR_VIVO" = "true" ]; then
+  ok "el sandbox ejerce de verdad ambos estados del loop (apagado→vivo), no es un no-op"
+else
+  no "el sandbox no diferenció loop apagado/vivo ($R_APAGADO vs $R_VIVO) — la prueba no probó nada"
+fi
+if [ "$AV_APAGADO" = "50" ] && [ "$AV_VIVO" = "50" ]; then
+  ok "prender el loop NO mueve el avance (50% con y sin proceso vivo)"
+else
+  no "el avance cambió al prender el loop ($AV_APAGADO→$AV_VIVO): el proceso vivo se cuela como señal de avance"
+fi
+# (2) sube a 2 cerrados / 0 abiertos ⇒ el avance DEBE subir a 100 (sale del conteo de ACs, no de commits).
+sembrar_specs 2 0
+AV_MAS="$(correr_panel "$$")"; AV_MAS="${AV_MAS%%|*}"
+[ "$AV_MAS" = "100" ] && ok "el avance sube con los ACs cerrados (2/2 → 100%), con los commits en 0 en el sandbox" \
+                      || no "más ACs cerrados no subieron el avance (dio $AV_MAS, esperaba 100): no sale del conteo de ACs"
+# (3) mutant-kill directo del AC: cero cerrados con el loop VIVO ⇒ avance 0 (el pid jamás es señal de avance).
+sembrar_specs 0 2
+AV_CERO="$(correr_panel "$$")"; AV_CERO="${AV_CERO%%|*}"
+[ "$AV_CERO" = "0" ] && ok "con el loop VIVO pero 0 ACs cerrados el avance es 0 (el «proceso vivo» no cuenta)" \
+                     || no "el loop vivo con 0 ACs cerrados dio avance $AV_CERO — «proceso vivo» cuenta como avance, lo que el AC prohíbe"
+rm -rf "$(dirname "$SB")"
 
 echo
 echo "== 9. Selector de modelo (casilla 12) =="
