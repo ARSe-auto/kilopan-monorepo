@@ -64,6 +64,13 @@ repartidor muestra solo km y kg (§5).
       consentimiento están probados, pero el botón no envía [AC-DASH-07]
 - [ ] (P2) Selector de sucursal en el dashboard, para que multisucursal sirva de algo
       cuando haya más de un local [AC-SUC-02]
+
+## Notas de implementación (actualización 3-ago-2026, Ola 3)
+
+- [x] (P0) Cola de entregas por revisar (rechazadas/parciales/GPS fuera de zona) — cableada a una
+      pantalla del dashboard bajo la TCK con el resumen de cada entrega y su estado.
+      Probado: 3 entregas simultáneas (rechazada, parcial, GPS fuera de zona) visibles en `/dashboard`
+      con etiqueta de estado, motivo de rechazo, kilos entregados. [AC-DASH-08]
 - [ ] (P2) Botón compartir en el detalle de entrega, no solo en el cierre de caja
       [AC-SHARE-02]
 
