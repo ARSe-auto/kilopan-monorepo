@@ -257,6 +257,20 @@ done
 [ -d packages/nucleo-dte ] && ok "los 6 paquetes del Anexo C existen"
 
 echo
+echo "== 5b. Shells de nucleo-* con package.json real, no solo README (AC-H0-07) =="
+# Anexo D (auditoría 2-ago-2026): el AC afirmaba «con package.json» pero en disco los 4
+# shells solo tenían README.md — la sección 5 nunca miró package.json, solo el directorio.
+for p in nucleo-comun nucleo-identidad nucleo-pod nucleo-dte; do
+  [ -f "packages/$p/package.json" ] || { no "packages/$p sin package.json"; continue; }
+  node -e "JSON.parse(require('fs').readFileSync('packages/$p/package.json','utf8'))" 2>/dev/null \
+    && ok "packages/$p/package.json existe y parsea" \
+    || no "packages/$p/package.json no es JSON válido"
+  [ -f "packages/$p/README.md" ] && grep -qi "no escribir lógica de negocio aquí todavía" "packages/$p/README.md" \
+    && ok "packages/$p/README.md advierte que sigue vacío" \
+    || no "packages/$p/README.md no advierte que sigue vacío"
+done
+
+echo
 echo "== 6. Tokens de diseño Miga (AC-H0-02) =="
 grep -rq "C2410C" packages/miga/src 2>/dev/null && ok "acento KiloPan #C2410C definido en packages/miga" || no "falta el token de acento #C2410C"
 grep -rq "1D4ED8" packages/miga/src 2>/dev/null && ok "acento KiloRuta #1D4ED8 reservado (Anexo C)" || no "falta el token #1D4ED8 de apps/flota"

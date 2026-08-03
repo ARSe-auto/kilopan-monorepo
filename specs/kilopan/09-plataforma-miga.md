@@ -42,14 +42,16 @@ Ningún estado se comunica solo por color.
       ACs cerrados (2/2 → 100%) con los commits en 0; y el mutant-kill del AC — con el
       loop VIVO pero 0 ACs cerrados el avance es 0, probando que el pid nunca es señal de
       avance.
-- [ ] (P0) Shells vacíos de `packages/nucleo-{identidad,pod,dte,comun}` con `package.json`
+- [x] (P0) Shells vacíos de `packages/nucleo-{identidad,pod,dte,comun}` con `package.json`
       y un `README.md` que dice explícitamente: «se puebla en el hito de extracción,
       después del DONE de KiloPan — no escribir lógica de negocio aquí todavía»
       [AC-H0-07]
-      — **Anexo D (auditoría 2-ago-2026): HUECO, y no solo por falta de test.** Verificado
-      en disco: `packages/nucleo-{identidad,pod,dte,comun}/` solo contienen `README.md` —
-      **ninguno tiene `package.json`**, pese a que el AC lo afirma explícitamente. La
-      afirmación es fácticamente falsa hoy, no solo no comprobada.
+      — **Cerrado 2-ago-2026.** Los 4 shells tienen ahora `package.json` real
+      (`@kilopan/nucleo-*`, recogido por el glob `packages/*` de `pnpm-workspace.yaml`,
+      sin dependencias). `prueba-arnes.sh` §5b (Anexo D) verifica en disco que cada
+      `package.json` existe y parsea, y que cada `README.md` sigue advirtiendo que el
+      paquete está vacío a propósito — mata el hueco anterior, donde el AC afirmaba algo
+      fácticamente falso.
 - [ ] (P1) TEST que verifique la escala tipográfica completa de Miga. Los tokens ya
       existen (`tokens.ts`: `pesoBascula` 96/700, y `CifraGrande.tsx` la aplica); lo que
       no existe es la prueba que falle si una pantalla se sale de la escala [AC-H0-08]

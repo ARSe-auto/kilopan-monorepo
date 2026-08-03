@@ -72,6 +72,14 @@ importers:
         specifier: ^19.1.0
         version: 19.2.8
 
+  packages/nucleo-comun: {}
+
+  packages/nucleo-dte: {}
+
+  packages/nucleo-identidad: {}
+
+  packages/nucleo-pod: {}
+
 packages:
 
   '@electric-sql/pglite@0.5.4':

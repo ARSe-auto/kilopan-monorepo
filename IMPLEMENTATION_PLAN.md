@@ -334,7 +334,7 @@ esta misma auditoría — no queda como ítem abierto de la lista de abajo.
 - [ ] (P0) [AC-H0-03] — el grep de tabular-nums solo comprueba que existe UNA VEZ en el árbol, no por componente — `specs/kilopan/09-plataforma-miga.md`
 - [x] (P0) [AC-H0-05] — `prueba-arnes.sh` §8b ejecuta `check.sh --full` en sandbox hermético y exige que dispare pnpm run {lint,typecheck,test,build,e2e}; mata al mutante que borra los run_step — `specs/kilopan/09-plataforma-miga.md`
 - [x] (P0) [AC-H0-06] — `prueba-arnes.sh` §8c ejerce `generar.mjs` en sandbox hermético (specs y loop.pid controlados) y exige: prender el loop no mueve el avance, el avance sube con los ACs cerrados (no con commits), y con el loop VIVO pero 0 cerrados el avance es 0 (el pid jamás es señal de avance) — `specs/kilopan/09-plataforma-miga.md`
-- [ ] (P0) [AC-H0-07] — **falso hoy, no solo sin test**: los 4 shells de `packages/nucleo-*` no tienen `package.json` — `specs/kilopan/09-plataforma-miga.md`
+- [x] (P0) [AC-H0-07] — los 4 shells de `packages/nucleo-*` ahora tienen `package.json` real; `prueba-arnes.sh` §5b verifica en disco que cada uno existe y parsea, y que el README sigue advirtiendo que está vacío a propósito — `specs/kilopan/09-plataforma-miga.md`
 - [ ] (P1) [AC-ADM-01] — nadie llama `POST`/`PATCH /api/usuarios` desde una prueba — `specs/kilopan/10-administracion.md`
 - [ ] (P1) [AC-ADM-02] — nadie llama `POST`/`PATCH /api/productos` ni prueba la vigencia histórica de precios — `specs/kilopan/10-administracion.md`
 - [ ] (P2) [AC-ADM-03] — cero referencias a `/api/parametros` en cualquier test — `specs/kilopan/10-administracion.md`
