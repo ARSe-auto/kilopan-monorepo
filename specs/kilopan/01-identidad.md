@@ -15,16 +15,17 @@ cambio de operador por PIN — el equipo vive en un local, no se elige a mano.
       pasa sin sesión de operador viva. SECURITY DEFINER, probado por el camino HTTP con
       `SET ROLE` real y no por acceso directo. Cableado en `pesajes` y `hornadas`; se
       reusa tal cual en cada tabla de negocio nueva [AC-ID-02]
-- [ ] (P0) PIN de 4 dígitos hasheado, nunca en texto plano en logs ni en
+- [x] (P0) PIN de 4 dígitos hasheado, nunca en texto plano en logs ni en
       `eventos.payload`. Sustitución deliberada: `node:crypto` scrypt en vez de bcrypt
       (memory-hard, sin dependencia nueva que auditar). `POST /api/auth/login` probado
       en vivo: PIN correcto entra, incorrecto rebota, 5º fallido bloquea con 423 y el
       PIN correcto ya no sirve hasta que expire [AC-ID-03]
-      — **Anexo D (auditoría 2-ago-2026): HUECO.** El bloqueo subyacente está probado a
-      nivel BD (`AC-SEC-01`) y `/api/dispositivos/enrolar` tiene su e2e equivalente
-      (`seguridad-enrolamiento.spec.ts`), pero ningún test automatizado golpea
-      específicamente `POST /api/auth/login` para confirmar el 423 en vivo — el propio
-      texto dice "probado en vivo", que fue manual, no un test que quede en el gate.
+      — Cerrado 2-ago-2026: `e2e/seguridad-login.spec.ts` golpea la RUTA por HTTP
+      (no la función SQL en aislamiento) con `repartidor` como usuario dedicado para no
+      contaminar el contador de `pan.registrar_intento_pin` con otros specs — 4
+      incorrectos en 401, el 5º en 423, y un 6º intento con el PIN CORRECTO que sigue en
+      423 sin cookie de sesión. Control aparte con `maestro`: PIN correcto sin intentos
+      previos entra en 200 con `Set-Cookie: kp_sesion=`.
 - [x] (P0) 1 sesión activa concurrente por usuario: sesión nueva desplaza la anterior y
       escribe fila de auditoría `sesion_desplazada` (`trg_desplazar_sesiones`) [AC-ID-04]
 - [x] (P0) Auto-bloqueo a PIN tras 10 min de inactividad, validado **en el servidor**
