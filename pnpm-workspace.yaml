@@ -13,4 +13,10 @@ overrides:
   # dependencias directas del proyecto, así que no basta con "actualizar el paquete".
   sharp: ">=0.35.0"
   postcss: ">=8.5.18"
-  brace-expansion: ">=5.0.8"
+  # 3-ago-2026: sube de >=5.0.8 a >=5.0.9 por GHSA-rgw5-rvv9-x895 (DoS por arrays
+  # intermedios sin cota, que además evade la mitigación de CVE-2026-14257). El advisory
+  # salió con el override ya puesto: una versión de diferencia bastó para poner `audit` en
+  # rojo y, con él, TODO el gate. No es cosmético para el motor — el agente obedece «no
+  # comitear sin verde», así que un rojo ajeno a su AC lo deja en «sin avance» habiendo
+  # hecho el trabajo, y a los tres intentos el AC queda marcado atascado por nada.
+  brace-expansion: ">=5.0.9"

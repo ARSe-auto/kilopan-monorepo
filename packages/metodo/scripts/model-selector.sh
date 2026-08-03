@@ -21,6 +21,9 @@ HAIKU="claude-haiku-4-5"   # alias estable: inmune al retiro del snapshot fechad
 
 FASE="${1:-build}"
 APP="${2:-kilopan}"
+# $3 = el AC que el builder REALMENTE va a construir. Opcional y retrocompatible: sin él
+# este script vuelve a adivinarlo leyendo el plan, que es lo que hacía —y hacía mal—.
+AC_ID="${3:-}"
 
 case "$FASE" in
   plan|verify) echo "${PLAN_MODEL:-$SONNET}"; exit 0 ;;   # leen mucho, deciden poco
@@ -37,7 +40,21 @@ PLAN="IMPLEMENTATION_PLAN_${APP}.md"
 # Ítem de cabeza: el primero SIN marcar, que es el que el builder va a tomar. Clasificar
 # por cualquier otro rutea el modelo del ítem equivocado (bug real de e-auto: un ítem
 # bloqueado vivía primero en el plan y mandó 14/14 builds a Opus en vano).
-item="$(grep -E '^- \[ \] \(P[0-9]' "$PLAN" 2>/dev/null | grep -v -E '\[HUMANO\]|\[VIVO\]' | head -1)"
+#
+# EL MISMO BUG VOLVIÓ POR OTRA PUERTA (3-ago-2026). `loop.sh` saltea los ACs anotados en
+# `panel/acs-atascados.txt`; este script no los conocía, así que con 8 atascados en la
+# lista clasificaba un AC que el builder no iba a tocar. Se arregla por los dos lados:
+# `loop.sh` ahora pasa el AC_ID que eligió —fuente de verdad, sin adivinar—, y el
+# fallback saltea los atascados igual que él.
+item=""
+if [ -n "$AC_ID" ]; then
+  item="$(grep -E "^- \[ \].*\[${AC_ID}\]" "$PLAN" 2>/dev/null | head -1)"
+fi
+if [ -z "$item" ]; then
+  ATASCADOS="packages/metodo/panel/acs-atascados.txt"
+  item="$(grep -E '^- \[ \] \(P[0-9]' "$PLAN" 2>/dev/null | grep -v -E '\[HUMANO\]|\[VIVO\]' \
+    | { if [ -s "$ATASCADOS" ]; then grep -v -F -f "$ATASCADOS"; else cat; fi; } | head -1)"
+fi
 
 # Fail-safe: sin ítem legible no arriesgamos una regla dura ⇒ Opus.
 if [ -z "$item" ]; then
@@ -61,7 +78,26 @@ printf '%s' "$item" | grep -qiE "$DURO"                                && { echo
 
 # (2) ESCALACIÓN DE DOS STRIKES (§8): 2 fallos del gate en el mismo AC ⇒ subir un nivel.
 #     Solo aplica a ítems no-duros; los duros ya están en Opus, que es el techo.
-fallos="$(cat .ralph/build-fails 2>/dev/null | tr -dc 0-9)"; fallos="${fallos:-0}"
+#
+# BUCLE DE MUERTE (bug real, 3-ago-2026 — el motor quemó ~2 h y 9 iteraciones en él).
+# Esta regla dice «en el MISMO AC» pero leía `.ralph/build-fails`, que es GLOBAL y sólo
+# vuelve a cero cuando ALGÚN commit entra (`loop.sh`). Sin commits nunca baja: llegó a 14.
+# Con `>= 2 ⇒ Opus`, TODO build salía a Opus para siempre, Opus agotaba el presupuesto de
+# la iteración (`budget_exhausted` a los ~18 min) antes de poder comitear, y no comitear
+# subía el contador otra vez. Ciclo cerrado: el motor no podía salir solo, y cada vuelta
+# dejaba un stash más hasta pausarse por `rc 8`. `loop.sh` ya lleva el contador POR AC en
+# `.ralph/fallos/<AC_ID>` —y lo borra al cerrarlo—: ese es el que esta regla siempre quiso
+# leer. El global queda como fallback para cuando nadie nos dice qué AC es.
+# Con AC_ID el contador es SIEMPRE el de ese AC, exista el archivo o no: que no exista
+# significa CERO fallos propios (nunca se intentó), no «preguntale al global». Caer al
+# global ahí reintroduce el mismo bucle por la puerta de atrás — pasó al escribir este
+# arreglo y sólo se vio ejecutándolo contra un AC sin fallos.
+if [ -n "$AC_ID" ]; then
+  fallos="$(cat ".ralph/fallos/$AC_ID" 2>/dev/null | tr -dc 0-9)"
+else
+  fallos="$(cat .ralph/build-fails 2>/dev/null | tr -dc 0-9)"
+fi
+fallos="${fallos:-0}"
 [ "$fallos" -ge 2 ] && { echo "$OPUS";   exit 0; }
 [ "$fallos" -ge 1 ] && { echo "$SONNET"; exit 0; }   # un fallo ⇒ piso Sonnet, no re-bajar
 

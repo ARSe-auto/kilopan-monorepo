@@ -187,6 +187,28 @@ grep -qE "git (checkout|clean|reset) --?[a-z]* *\." "$M/loop.sh" && no "loop.sh 
 #     Antes solo lo tocaba esta misma suite: la escalación no podía dispararse jamás.
 grep -q "build-fails" "$M/loop.sh" && ok "loop.sh escribe .ralph/build-fails (la escalación a Opus ya puede dispararse)" || no "nadie incrementa build-fails: la escalación de model-selector.sh es código muerto"
 
+# (c2) ARTEFACTOS HUÉRFANOS (bug real, 3-ago-2026): el stash se lleva el fuente pero NO
+# los tipos que Next generó de él (gitignored, invisibles a `git stash -u`), y el
+# typecheck siguiente falla por un módulo que ya no existe — con build, standalone y
+# audit cayendo detrás. Cuatro rojos ajenos al AC en curso, que el motor gastaría sus
+# tres intentos persiguiendo. Se ejerce de verdad: se fabrica el huérfano en un sandbox
+# y se exige que el comando de limpieza de loop.sh lo borre.
+HTMP="$(mktemp -d)"; mkdir -p "$HTMP/apps/kilopan/.next/types/app/turno" "$HTMP/apps/kilopan/.next-e2e/types"
+echo "import x from '../../../../src/app/turno/page.js'" > "$HTMP/apps/kilopan/.next/types/app/turno/page.ts"
+echo "huerfano" > "$HTMP/apps/kilopan/.next-e2e/types/validator.ts"
+LIMPIEZA="$(grep -oE 'rm -rf apps/\*/\.next/types[^|]*' "$M/loop.sh" | head -1)"
+if [ -n "$LIMPIEZA" ]; then
+  ( cd "$HTMP" && eval "$LIMPIEZA" ) 2>/dev/null
+  if [ ! -d "$HTMP/apps/kilopan/.next/types" ] && [ ! -d "$HTMP/apps/kilopan/.next-e2e/types" ]; then
+    ok "loop.sh borra los tipos generados al stashear (el typecheck no hereda huérfanos del AC anterior)"
+  else
+    no "el comando de limpieza de loop.sh NO borra los tipos generados: el próximo typecheck falla por un módulo que el stash se llevó"
+  fi
+else
+  no "loop.sh no limpia .next/types al stashear: un fuente stasheado deja sus tipos apuntando al vacío y tumba 4 pasos del gate"
+fi
+rm -rf "$HTMP"
+
 # (c2) El prompt le dice al agente que el loop.sh que verá en `ps` es su propio padre.
 #      Sin esto el agente aplica «UN builder por worktree» contra el proceso que lo lanzó,
 #      se niega a construir y pregunta qué hacer — bajo `claude -p`, donde nadie contesta.
@@ -640,6 +662,42 @@ probar_ruteo '- [ ] (P1) cola con reintento automático [${FX}-97]'      "claude
 # Escalación de dos strikes sobre un ítem NO-duro
 mkdir -p .ralph; echo 2 > .ralph/build-fails
 probar_ruteo '- [ ] (P1) cola con reintento automático [${FX}-96]'      "claude-opus-4-8"  "2 strikes escala a"
+
+# EL BUCLE DE MUERTE (bug real, 3-ago-2026): la regla de arriba dice «2 fallos en el MISMO
+# AC» pero leía `.ralph/build-fails`, que es GLOBAL y sólo vuelve a cero con un commit.
+# Sin commits nunca bajaba —llegó a 14—, así que TODO build salía a Opus, Opus agotaba el
+# presupuesto antes de comitear, y no comitear subía el contador: ciclo cerrado, 2 h y 9
+# iteraciones quemadas hasta pausar por rc 8. El caso que lo atrapa es exactamente el que
+# el bug no podía dar: global ALTO + ese AC sin fallos propios ⇒ NO debe escalar.
+FXP="AC-$(printf P)ES"
+printf '# plan de prueba\n\n- [ ] (P1) cola con reintento automático [%s-95]\n' "$FXP" > IMPLEMENTATION_PLAN.md
+mkdir -p .ralph/fallos; echo 9 > .ralph/build-fails; rm -f ".ralph/fallos/${FXP}-95"
+got_sano="$(bash "$SEL" build kilopan "${FXP}-95")"
+[ "$got_sano" = "claude-sonnet-5" ] \
+  && ok "un AC SIN fallos propios no hereda el contador global (el bucle de muerte no puede volver)" \
+  || no "model-selector volvió a leer el contador GLOBAL: con global=9 y 0 fallos propios ruteó a $got_sano — es el bucle que quemó 9 iteraciones"
+# Y el control en negativo: el mismo AC, ahora CON sus propios strikes, sí debe escalar.
+echo 2 > ".ralph/fallos/${FXP}-95"
+got_malo="$(bash "$SEL" build kilopan "${FXP}-95")"
+[ "$got_malo" = "claude-opus-4-8" ] \
+  && ok "y con 2 fallos PROPIOS sí escala a Opus (la escalación sigue viva, no se desactivó)" \
+  || no "la escalación por AC no dispara: 2 fallos propios rutearon a $got_malo"
+rm -f ".ralph/fallos/${FXP}-95"
+
+# El selector debe saltear los ACs que loop.sh saltea. Sin esto clasificaba el primer
+# ítem del plan aunque estuviera atascado — el mismo bug que su cabecera dice haber
+# arreglado en e-auto, entrando por otra puerta.
+ATMP="$(mktemp -d)"; ATAS="packages/metodo/panel/acs-atascados.txt"
+[ -f "$ATAS" ] && cp "$ATAS" "$ATMP/atascados.bak"
+printf '# plan\n\n- [ ] (P0-SEC) item atascado que el motor NO va a tomar [%s-94]\n- [ ] (P1) cola con reintento automático [%s-93]\n' "$FXS" "$FXP" > IMPLEMENTATION_PLAN.md
+printf '%s-94\n' "$FXS" > "$ATAS"
+rm -f .ralph/build-fails
+got_sal="$(bash "$SEL" build)"
+[ "$got_sal" = "claude-sonnet-5" ] \
+  && ok "el selector saltea los ACs atascados igual que loop.sh (clasifica el que se va a construir)" \
+  || no "el selector clasificó un AC ATASCADO que loop.sh no va a tomar: ruteó a $got_sal"
+if [ -f "$ATMP/atascados.bak" ]; then cp "$ATMP/atascados.bak" "$ATAS"; else rm -f "$ATAS"; fi
+rm -rf "$ATMP"
 # Se restaura el contador REAL del motor: borrarlo sin más le regalaría al motor un
 # «cero strikes» cada vez que corre el gate, y la escalación —que recién ahora existe—
 # no llegaría nunca a dispararse en producción.

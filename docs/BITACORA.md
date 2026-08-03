@@ -10,6 +10,57 @@ el aprendizaje contradice lo que creíamos. **Qué NO va:** el estado del plan (
 
 ---
 
+## 2026-08-03 (tarde) · El bucle de muerte: el motor se condenó a Opus y no podía salir solo
+
+El motor pasó ~2 h y 9 iteraciones sin cerrar un solo AC, dejando un stash por vuelta
+hasta pausarse por `rc 8`. No era que los ACs fueran difíciles: era un **ciclo cerrado de
+retroalimentación** entre dos archivos que nadie había mirado juntos.
+
+`model-selector.sh` implementa la escalación de §8 —«2 fallos del gate **en el mismo AC**
+⇒ subir un nivel»— pero leía `.ralph/build-fails`, que es **global** y sólo vuelve a cero
+cuando **algún** commit entra. Sin commits nunca baja. Medido al diagnosticar: **14**.
+
+```
+build-fails = 14  ⇒  regla «>= 2 ⇒ Opus»  ⇒  TODO build sale a Opus
+   ⇒ Opus agota los $3 de la iteración (`budget_exhausted`, ~18 min) ANTES de comitear
+   ⇒ no hay commit  ⇒  build-fails = 15  ⇒  vuelve a empezar
+```
+
+El motor no podía salir por su cuenta: cada vuelta reforzaba la condición que la causaba.
+Y `loop.sh` ya llevaba el contador correcto —`.ralph/fallos/<AC_ID>`, por AC, que borra al
+cerrarlo—; el selector simplemente leía el otro. Dos contadores, y la regla consultaba el
+que no era.
+
+**Segundo bug, entrelazado:** el selector clasificaba el **primer** ítem abierto del plan
+(`head -1`), pero `loop.sh` saltea los ACs de `panel/acs-atascados.txt`. Con 8 atascados,
+ruteaba según un AC que el builder no iba a tocar. Es —literalmente— el bug que la
+cabecera del propio script dice haber arreglado en e-auto («un ítem bloqueado vivía
+primero en el plan y mandó 14/14 builds a Opus en vano»), entrando por otra puerta.
+Arreglado por los dos lados: `loop.sh` ahora **pasa el `AC_ID` que eligió** —fuente de
+verdad, sin adivinar— y el fallback saltea los atascados igual que él.
+
+**Autocorrección que vale contarla:** el primer arreglo tenía el mismo vicio que el bug.
+Escribí «si existe `.ralph/fallos/<AC_ID>` usalo, si no, el global» — y que el archivo no
+exista significa **cero fallos**, no «preguntale al global». Con eso, un AC que nunca
+falló seguía heredando los 14 y saliendo a Opus. Sólo se vio **ejecutándolo** contra un AC
+sin fallos; leyéndolo parecía correcto.
+
+**Aprendizaje, y contradice cómo veníamos midiendo:** los tres frenos que existen
+(`rc 8`, `rc 9`, `rc 10`) funcionaron perfecto — detectaron, contuvieron y pausaron sin
+perder trabajo. Y aun así el motor estuvo dos horas sin producir nada, porque **ninguno
+mira la economía de la iteración**. Un freno que detiene el daño no es un freno que
+detecta el desperdicio: `budget_exhausted` nueve veces seguidas era la señal, estaba
+escrita en `ultimo-resultado.json` en cada vuelta, y ningún guard la leía.
+
+Evidencia: con el contador global forzado a 0 y `AC-H0-11` con 3 fallos propios, el
+selector sigue devolviendo Opus — prueba de que lee el per-AC y no el global. Tres
+aserciones nuevas en `prueba-arnes.sh` cubren el caso que el bug no podía dar (global alto
++ AC sin fallos propios ⇒ no escala), su control en negativo, y el salteo de atascados.
+Los 11 stashes se preservaron como ramas `motor/stash-*` antes de limpiarlos: nada se
+perdió y todo sigue alcanzable. `prueba-arnes`: 86 verdes / 0 rojos.
+
+---
+
 ## 2026-08-03 · `/ruta` decía «Sincronizado» en verde sin señal — y el maestro se contradice con el código
 
 Buscando el alcance de tres ACs de Ola 2 apareció un defecto ya en producción que valía

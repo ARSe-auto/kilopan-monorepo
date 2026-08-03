@@ -107,6 +107,16 @@ if [ -n "$SUCIO" ]; then
   echo "$SUCIO" | sed 's/^/  /'
   if git stash push -u -m "$MARCA (guardado por loop.sh — NO borrado)" -- "${EXCLUIR_SUCIO[@]}" >/dev/null 2>&1; then
     echo "loop: guardado en stash '$MARCA' — recuperable con 'git stash list'. Sigo con árbol limpio."
+    # ARTEFACTOS HUÉRFANOS (bug real, 3-ago-2026 — costó 4 rojos en cascada). El stash se
+    # lleva el FUENTE, pero los tipos que Next generó a partir de él NO: están gitignored,
+    # así que `git stash -u` ni los ve. Una iteración que creó `src/app/turno/page.tsx`
+    # dejó `.next/types/app/turno/page.ts` importándolo, el stash se llevó la página, y el
+    # typecheck de la vuelta siguiente falló con «Cannot find module .../turno/page.js» —
+    # y detrás cayeron build, standalone y audit. Cuatro rojos que no tenían NADA que ver
+    # con el AC en curso: el motor los habría leído como «este AC no compila» y gastado
+    # sus tres intentos en un fantasma. Los tipos se regeneran solos en el próximo build.
+    rm -rf apps/*/.next/types apps/*/.next-e2e/types 2>/dev/null || true
+    echo "loop: tipos generados de Next descartados — se regeneran en el build y, si no, apuntan a fuentes que el stash se llevó."
   else
     echo "loop: NO pude guardar el árbol sucio — no construyo sobre un árbol que no controlo (exit 8)"
     exit 8
@@ -198,7 +208,7 @@ claude -p "$PROMPT" \
   --output-format json \
   --max-budget-usd "$MAX_BUDGET_USD" \
   --permission-mode acceptEdits \
-  --model "$(bash packages/metodo/scripts/model-selector.sh build "$APP")" \
+  --model "$(bash packages/metodo/scripts/model-selector.sh build "$APP" "$AC_ID")" \
   --fallback-model sonnet \
   > "$LOG_DIR/ultimo-resultado.json" 2>>"$LOG_DIR/ultimo-loop.log"
 
