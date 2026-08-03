@@ -293,14 +293,50 @@ grep -q "StartInterval" packages/metodo/launchd/com.kilopan.ralph-loop.plist && 
 grep -q "PAUSA-REVISION" "$M/watchdog.sh" && ok "y el marcador de pausa sigue frenando TODO arranque posterior, incluido el de StartInterval" || no "StartInterval sin marcador de pausa = bucle infinito con otro nombre"
 # El empujador debe NEGARSE cuando el marcador de verde no apunta al HEAD: es su única
 # regla, y si no dispara publicaría código que el gate independiente nunca verificó.
-VTMP="$(mktemp -d)"; cp "$PANEL_VIVO/last-green.sha" "$VTMP/lg.bak" 2>/dev/null
+#
+# BUG REAL (3-ago-2026): esta prueba comparaba el TEXTO de salida contra dos frases
+# fijas — y `empujar-si-verde.sh` tiene un tercer camino de rechazo (rama distinta de
+# main) con una frase que no calzaba con ninguna de las dos. Corriendo desde un
+# worktree (rama `claude/<algo>`, nunca `main`) esa rama-check dispara ANTES de llegar
+# al chequeo del marcador, y la prueba se ponía roja sin que nada estuviera mal —
+# `check.sh --full` corre en CADA push de CUALQUIER rama (`.github/workflows/gate.yml:
+# branches: ["**"]`), así que esto habría puesto CI en rojo en el primer PR real que
+# alguien abriera. Se verifica el EFECTO (¿se empujó algo?), no el texto: eso es
+# correcto sin importar cuál de los cuatro caminos de rechazo disparó.
+VTMP="$(mktemp -d)"
+if [ -f "$PANEL_VIVO/last-green.sha" ]; then cp "$PANEL_VIVO/last-green.sha" "$VTMP/lg.bak"; fi
+PENDIENTES_ANTES="$(git log origin/main..HEAD --oneline 2>/dev/null | wc -l | tr -d ' ')"
 echo "0000000000000000000000000000000000000000" > "$PANEL_VIVO/last-green.sha"
 SAL_EMP="$(bash "$M/empujar-si-verde.sh" 2>&1)"
-if [ -f "$VTMP/lg.bak" ]; then cp "$VTMP/lg.bak" "$PANEL_VIVO/last-green.sha"; fi
+PENDIENTES_DESPUES="$(git log origin/main..HEAD --oneline 2>/dev/null | wc -l | tr -d ' ')"
+# Restaurar SIEMPRE: si NO había marcador, se borra el fixture en vez de dejarlo puesto.
+# Antes el `cp` de respaldo se tragaba su error con 2>/dev/null y la restauración estaba
+# guardada por `[ -f ]`, así que un panel sin marcador se quedaba con el sha falso de
+# ceros — el empujador dejaba de publicar y nadie sabía por qué.
+if [ -f "$VTMP/lg.bak" ]; then cp "$VTMP/lg.bak" "$PANEL_VIVO/last-green.sha"; else rm -f "$PANEL_VIVO/last-green.sha"; fi
 rm -rf "$VTMP"
+if [ "$PENDIENTES_ANTES" = "$PENDIENTES_DESPUES" ]; then
+  ok "el empujador se niega con un marcador de verde falso (jamás publica sin verificar) — nada se empujó"
+else
+  no "el empujador NO se negó con un marcador de verde falso: publicó código sin verificar ($SAL_EMP)"
+fi
+# Y POR QUÉ se negó. La aserción de efecto de arriba es correcta en las cuatro salidas, pero
+# solo UNA ejercita la regla que da nombre a esta prueba; en las otras tres el script sale
+# antes de mirar el marcador y el verde estaría diciendo más de lo que probó. Se enumeran las
+# cuatro y se reporta «no ejercitado» —nunca fallo— cuando toca otra. El `*)` final NO es
+# decorativo: escribiendo esto enumeré tres y el cuarto (árbol sucio) apareció en la primera
+# corrida. Si empujar-si-verde.sh gana un camino nuevo, esto lo dice en vez de fingir que pasó.
 case "$SAL_EMP" in
-  *"NO empujo"*|*"nada pendiente"*) ok "el empujador se niega si el marcador de verde no es el HEAD (jamás publica sin verificar)" ;;
-  *)                                no "el empujador NO se negó con un marcador de verde falso: publicaría código sin verificar" ;;
+  *"marcador de verde"*)
+    ok "y se negó POR el marcador, que es la regla que esta prueba cubre" ;;
+  *"no main"*)
+    printf "  ⚠️  fuera de main (%s): sale por la rama antes de mirar el marcador — ese camino NO quedó ejercitado acá\n" "$(git rev-parse --abbrev-ref HEAD)" ;;
+  *"nada pendiente"*)
+    printf "  ⚠️  origin/main al día: sale por «nada pendiente» antes de mirar el marcador — ese camino NO quedó ejercitado acá\n" ;;
+  *"cambios sin comitear"*)
+    printf "  ⚠️  árbol sucio: sale por los cambios sin comitear antes de mirar el marcador — ese camino NO quedó ejercitado acá\n" ;;
+  *)
+    no "el empujador se negó por una razón desconocida ($SAL_EMP): revisar si empujar-si-verde.sh ganó un camino nuevo" ;;
 esac
 
 echo
