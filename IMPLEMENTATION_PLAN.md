@@ -246,7 +246,8 @@ para ese AC — no antes.
 - [x] (P0-SEC) Cookies de sesión `HttpOnly` + `Secure` (en producción) + `SameSite=Lax`;
       ningún secreto ni token en `localStorage` — verificado en vivo: `document.cookie`
       no puede leer `kp_sesion` desde JS, pero el navegador la manda sola y
-      `/api/auth/logout` la valida [AC-SEC-05]
+      `/api/auth/logout` la valida. Cerrado 2-ago-2026: el secreto de dispositivo, que
+      vivía en `localStorage` en texto plano, se migró a IndexedDB [AC-SEC-05]
 - [x] (P0-SEC) Toda query a Postgres parametrizada (cero interpolación de string en
       SQL) — grep en `guardrail.sh` + disciplina en `db/migrar.mjs` y
       `db/test-invariantes.mjs` desde el primer commit [AC-SEC-06]
@@ -314,7 +315,6 @@ esta misma auditoría — no queda como ítem abierto de la lista de abajo.
 
 - [ ] (P2) [AC-FIA-01] — el "índice único" de consolidación no existe (solo índice no-único); ver nota en `specs/kilopan/06-registro-dte.md`
 - [ ] (P2) [AC-FIA-02] — doble facturación 409 sin test — `specs/kilopan/06-registro-dte.md`
-- [ ] (P0-SEC) [AC-SEC-05] — secreto de dispositivo vive en localStorage en texto plano, contradice la afirmación del AC — `specs/kilopan/08-seguridad-rendimiento.md`
 - [ ] (P2) [AC-SUC-01] — sucursal_id probado en BD pero invisible en toda la UI — `specs/kilopan/07-dashboard-flota.md`
 - [ ] (P1-PERF) [AC-PERF-03] — endpoint de cursor sin pantalla que lo consuma — `specs/kilopan/08-seguridad-rendimiento.md`
 - [ ] (P1) [AC-POD-04] — e2e flaky confirmado, no es evidencia repetible — `specs/kilopan/05-entrega-pod.md`

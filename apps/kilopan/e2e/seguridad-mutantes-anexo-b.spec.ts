@@ -2,6 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { sembrarDispositivo } from "./sembrar-dispositivo.ts";
 
 // Anexo B del prompt correctivo (docs/PROMPT_CORRECTIVO.md): mutantes de control #3, #4
 // y #5 — reversiones mecánicas de protecciones ya existentes que DEBEN poner el gate en
@@ -23,9 +24,7 @@ async function teclear(page: Page, texto: string) {
 }
 
 async function ingresar(page: Page, rol: keyof typeof datos.usuarios) {
-  await page.addInitScript((d) => {
-    window.localStorage.setItem("kp_dispositivo", JSON.stringify(d));
-  }, datos.dispositivo);
+  await sembrarDispositivo(page, datos.dispositivo);
   await page.goto("/ingresar");
   const campoRut = page.getByPlaceholder("12.345.678-5");
   await expect(async () => {

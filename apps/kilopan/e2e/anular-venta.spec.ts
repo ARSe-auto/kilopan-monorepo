@@ -2,6 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { sembrarDispositivo } from "./sembrar-dispositivo.ts";
 
 // AC-ADM-05 (Ola 2 «Marcha atrás», specs/kilopan/10-administracion.md): anular una venta
 // desde /arreglar exige un motivo escrito y no vacío, y la venta anulada DEJA DE SUMAR al
@@ -26,9 +27,7 @@ async function teclear(page: Page, texto: string) {
 }
 
 async function ingresar(page: Page, rol: keyof typeof datos.usuarios) {
-  await page.addInitScript((d) => {
-    window.localStorage.setItem("kp_dispositivo", JSON.stringify(d));
-  }, datos.dispositivo);
+  await sembrarDispositivo(page, datos.dispositivo);
   await page.goto("/ingresar");
   const campoRut = page.getByPlaceholder("12.345.678-5");
   await expect(async () => {

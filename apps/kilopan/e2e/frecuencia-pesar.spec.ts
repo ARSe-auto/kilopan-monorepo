@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { sembrarDispositivo } from "./sembrar-dispositivo.ts";
 
 // AC-PES-07 (§5 F1): "repetir producto: 2 toques" solo es cierto si el producto que se
 // repite está arriba de la grilla. Antes de este AC, /pesar ordenaba `p.nombre` — el
@@ -18,9 +19,7 @@ const datos = JSON.parse(
 };
 
 test("la grilla de /pesar ordena por frecuencia real de pesaje, no alfabético", async ({ page }) => {
-  await page.addInitScript((d) => {
-    window.localStorage.setItem("kp_dispositivo", JSON.stringify(d));
-  }, datos.dispositivo);
+  await sembrarDispositivo(page, datos.dispositivo);
 
   await page.goto("/ingresar");
   const campoRut = page.getByPlaceholder("12.345.678-5");
