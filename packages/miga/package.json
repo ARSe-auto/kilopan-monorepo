@@ -11,5 +11,8 @@
   },
   "peerDependencies": {
     "react": "^19.1.0"
+  },
+  "scripts": {
+    "test": "node scripts/correr-tests.mjs"
   }
 }

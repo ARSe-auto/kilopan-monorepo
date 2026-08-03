@@ -354,7 +354,16 @@ grep -rq "1D4ED8" packages/miga/src 2>/dev/null && ok "acento KiloRuta #1D4ED8 r
 
 echo
 echo "== 7. Test de tabular-nums (AC-H0-03) =="
-grep -rqE "tabular-nums|font-variant-numeric" packages/miga/src 2>/dev/null && ok "los componentes de cifras usan tabular-nums" || no "ninguna cifra usa tabular-nums"
+# BUG REAL (Anexo D, 2-ago-2026): esto era un grep sobre TODO packages/miga/src — pasaba
+# con la propiedad viva en un solo componente, sin decir nada de los demás. Un mutante
+# que la borre de CifraGrande.tsx mientras sigue en TecladoNumerico.tsx sobrevivía.
+# Ahora hay un test por componente (packages/miga/src/componentes/cifras.test.ts) y
+# packages/miga tiene su propio `pnpm test`, que `unit (workspace)` ya corre vía
+# `pnpm -r --if-present run test` — no hace falta tocar check.sh.
+[ -f packages/miga/src/componentes/cifras.test.ts ] && ok "existe un test por componente, no un grep sobre todo el árbol" || no "AC-H0-03 sigue siendo un grep global — un componente sin la propiedad no se detecta"
+grep -q '"test"' packages/miga/package.json && ok "packages/miga tiene su propio 'pnpm test' (unit (workspace) ya lo corre con --if-present)" || no "sin script de test, unit (workspace) nunca ejecuta cifras.test.ts"
+# Ejercicio real: el test debe EXISTIR como archivo Y su corrida debe pasar de verdad.
+(cd packages/miga && node scripts/correr-tests.mjs >/dev/null 2>&1) && ok "cifras.test.ts corre y pasa contra el código real" || no "cifras.test.ts existe pero NO pasa — revisar packages/miga/src/componentes/"
 
 echo
 echo "== 8. Gate y panel ejecutables (AC-H0-05 · AC-H0-06) =="
