@@ -34,12 +34,17 @@ puntaje mezcla SEO y PWA con lo que de verdad decide si la pantalla abre.
       ningún secreto ni token en `localStorage`. Verificado en vivo: `document.cookie` no
       puede leer `kp_sesion` desde JS, pero el navegador la manda sola y
       `/api/auth/logout` la valida [AC-SEC-05]
-      — **Anexo D (auditoría 2-ago-2026): HUECO.** La cookie de sesión sí cumple lo que
-      afirma, pero la cláusula "ningún secreto ni token en localStorage" es falsa:
-      `apps/kilopan/src/identidad/cliente/dispositivo.ts:11,27` guarda el `secreto` del
-      dispositivo en texto plano vía `window.localStorage.setItem`. El propio comentario
-      del archivo lo reconoce como garantía menor aceptada — pero eso hace falsa la
-      afirmación del AC, no la vuelve cierta.
+      — **Anexo D (auditoría 2-ago-2026): HUECO, en proceso de cierre 3-ago-2026 (sesión
+      supervisada, no el motor).** El hueco era real — el `secreto` del
+      dispositivo vivía en `localStorage` en texto plano
+      (`apps/kilopan/src/identidad/cliente/dispositivo.ts`), legible con
+      `localStorage.getItem(...)` desde cualquier script del origen. Migrado a IndexedDB
+      (`kilopan_dispositivo`/`identidad`), que cierra esa lectura trivial de un paso —
+      la garantía que el maestro declara y que este AC afirma. `dispositivo.test.ts`
+      prueba que el módulo no vuelve a referenciar `localStorage` y que
+      `leerDispositivo()` no lanza sin `window` (SSR/Node); los e2e que simulaban el
+      equipo vinculado vía `localStorage.setItem` ahora siembran IndexedDB
+      (`e2e/sembrar-dispositivo.ts`).
 - [x] (P0-SEC) Toda query a Postgres parametrizada (cero interpolación de string en SQL)
       — grep en `guardrail.sh` + disciplina en `db/migrar.mjs` y `db/test-invariantes.mjs`
       desde el primer commit [AC-SEC-06]

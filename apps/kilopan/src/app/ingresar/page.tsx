@@ -43,7 +43,7 @@ export default function IngresarPage() {
   }, []);
 
   async function ingresar() {
-    const dispositivo = leerDispositivo();
+    const dispositivo = await leerDispositivo();
     if (!dispositivo) {
       router.push("/vincular");
       return;
@@ -93,8 +93,8 @@ export default function IngresarPage() {
     }
   }
 
-  function vincularDeNuevo() {
-    olvidarDispositivo();
+  async function vincularDeNuevo() {
+    await olvidarDispositivo();
     router.push("/vincular");
   }
 

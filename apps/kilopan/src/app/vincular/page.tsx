@@ -32,7 +32,7 @@ export default function VincularPage() {
         setEnviando(false);
         return;
       }
-      guardarDispositivo({ id: cuerpo.dispositivoId, secreto: cuerpo.secreto, nombre: cuerpo.nombre });
+      await guardarDispositivo({ id: cuerpo.dispositivoId, secreto: cuerpo.secreto, nombre: cuerpo.nombre });
       router.push("/ingresar");
     } catch {
       setError("Sin conexión con el servidor");

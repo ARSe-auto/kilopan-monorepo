@@ -2,6 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { sembrarDispositivo } from "./sembrar-dispositivo.ts";
 
 // El día completo de la panadería, contra el servidor y la base de verdad: vincular el
 // equipo, entrar con PIN, pesar la hornada, venderla en el mesón, cerrar la caja a ciegas
@@ -91,9 +92,7 @@ async function irA(page: Page, etiqueta: RegExp) {
 test.beforeEach(async ({ page }) => {
   // El equipo ya está vinculado: es el estado normal de una tablet en el mesón, que se
   // enrola una vez y queda así por meses. El enrolamiento se prueba aparte, más abajo.
-  await page.addInitScript((d) => {
-    window.localStorage.setItem("kp_dispositivo", JSON.stringify(d));
-  }, datos.dispositivo);
+  await sembrarDispositivo(page, datos.dispositivo);
 });
 
 test("1 · el equipo se vincula con las credenciales de un administrador", async ({ page }) => {
@@ -223,7 +222,7 @@ test("7 · la caja se cuenta a ciegas: el vendedor no ve lo esperado antes de co
   // P0-4: cerrar caja exige un turno abierto (pan.turnos, 0018_turnos_cierre_caja.sql).
   // La pantalla para abrirlo es Ola 2 (docs/PROMPT_CORRECTIVO.md §5); hasta que exista,
   // el camino dorado abre el suyo por API, igual que ya hace con el equipo vinculado
-  // vía localStorage en el beforeEach. Se abre acá, DESPUÉS de las ventas de los casos
+  // vía IndexedDB en el beforeEach. Se abre acá, DESPUÉS de las ventas de los casos
   // 5 y 6 —en la operación real se abriría al llegar, antes de vender—, así que lo
   // esperado de ESTE turno queda en 0 (su ventana empieza ahora): correcto para este
   // fixture, y no afecta la aserción de abajo (solo comprueba que la cifra se MUESTRE
