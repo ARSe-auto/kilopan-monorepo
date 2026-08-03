@@ -35,7 +35,7 @@ PANEL="packages/metodo/panel"
 RAMA="$(git rev-parse --abbrev-ref HEAD)"
 
 if [ "$RAMA" != "main" ]; then
-  echo "empujar: la rama es '$RAMA', no main — no empujo."
+  echo "empujar: la rama es '$RAMA', no main — NO empujo."
   exit 0
 fi
 
