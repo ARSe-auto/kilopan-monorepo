@@ -10,6 +10,58 @@ el aprendizaje contradice lo que creíamos. **Qué NO va:** el estado del plan (
 
 ---
 
+## 2026-08-03 · `/ruta` decía «Sincronizado» en verde sin señal — y el maestro se contradice con el código
+
+Buscando el alcance de tres ACs de Ola 2 apareció un defecto ya en producción que valía
+más que los tres. `ruta/page.tsx` montaba `<ChipEstadoConexion pendientes={pendientes} />`
+**sin la prop `online`**, y el componente tiene `online = true` por defecto: con la cola
+vacía la pantalla afirmaba «Sincronizado» en VERDE con señal y sin señal. Y sin condición
+de montaje, al revés que `/pesar` y `/vender`, que solo lo muestran si hay algo que decir.
+El único verde mentiroso de la app estaba en la única pantalla que se usa lejos del local.
+
+Medido, no razonado — el mismo caso corrido contra el código sin la prop:
+
+```
+Expected pattern: /Sin conexión/
+Received string:  "Sincronizado"      ← estando offline
+```
+
+**El hallazgo que obliga a una decisión de Alexis, y que es lo que hace valer esta
+entrada:** el AC pedía además «retirar el hook de `pesar`/`vender`», partiendo de que esas
+pantallas no son offline. El código dice lo contrario. `pesar/page.tsx:298` y
+`vender/page.tsx:146` llaman `enviarOEncolar`, y el comentario de `pesar:295` lo declara
+sin ambigüedad: «Offline-first DE VERDAD … si no hay red, encola en IndexedDB … el maestro
+nunca ve un error por señal». El maestro pone eso **explícitamente fuera del MVP**
+(`PROMPT_MAESTRO.md:94` «pesaje/mostrador offline (offline es SOLO el módulo de reparto)»,
+y `:66` «Requiere red local … no es offline»), y `AGENTS.md:38` lo repite.
+
+No es cosmético ni es deuda de documentación: si la regla del maestro es la correcta, hoy
+un maestro pesa sin red creyendo que quedó registrado, cuando esa estación debería
+mostrarle el error. Si el código es el correcto, el maestro está desactualizado en un punto
+que él mismo marca como explícito. **No se resolvió**: quitarles el hook las dejaría
+mintiendo igual que `/ruta` antes de este arreglo, y cuál de los dos manda no es decisión
+de una sesión de construcción. El AC quedó **abierto a propósito, con la mitad hecha
+declarada como tal** — el precedente del Anexo D es que un AC que afirma más de lo que
+verifica se reabre, así que es más barato no cerrarlo.
+
+**Lo que se aprendió, y contradice cómo se venía buscando trabajo:** el defecto no salió de
+mirar la lista de ACs abiertos, salió de mapear el alcance de OTROS tres ACs. El inventario
+del plan dice qué falta construir; no dice qué está construido y miente. Un `[x]` viejo no
+es evidencia de nada, y `/ruta` llevaba meses así en la pantalla del repartidor.
+
+**Trampa que casi hace inútil la prueba del mutante:** el primer instinto fue emular
+offline y NAVEGAR a `/ruta`. No sirve: `public/sw.js:84-100` responde
+`caches.match("/ingresar")` a toda página autenticada pedida sin red, así que un caso
+escrito así aterriza en el login y pasa en verde sin ejercer nada. Hay que perder la señal
+con la pantalla YA abierta — que además es el escenario real del furgón entrando a una zona
+sin cobertura. Vale saberlo antes de construir `AC-H0-11`, cuyo 4º estado es hoy
+inalcanzable navegando por esta misma razón.
+
+Evidencia: `e2e/pod-offline.spec.ts` (mutante muerto con el mensaje de arriba; exige además
+que el chip VUELVA al recuperar señal). `check.sh --full`: VERDE 12/12, 0 saltados.
+
+---
+
 ## 2026-08-03 · AC-H0-03: el reemplazo de un chequeo débil venía con el mismo defecto adentro
 
 `prueba-arnes.sh` comprobaba `tabular-nums` con un `grep -rq` sobre todo
