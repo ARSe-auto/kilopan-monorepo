@@ -659,6 +659,89 @@ test("AC-ADM-05: anular una venta exige motivo escrito (CHECK), la saca del arqu
   await db.close();
 });
 
+test("AC-ADM-05 (0021): anular una venta FIADA baja la deuda del cliente, no solo el arqueo", async () => {
+  // Hueco encontrado revisando a mano la migración que escribió el motor: 0020 sacó la
+  // venta anulada del arqueo pero nadie tocó pan.saldo_cliente, así que el cliente seguía
+  // debiendo una venta anulada. Y la única forma de limpiarlo era marcarla saldado_at —
+  // registrar en falso que pagó. Se prueba por el saldo, que es lo que ve la dueña.
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "admin");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const clienteId = await crearCliente(db);
+  const venta = await db.query(
+    `insert into pan.ventas (client_uuid, vendedor_id, dispositivo_id, medio_pago, total_clp, cliente_id)
+     values (gen_random_uuid(),$1,$2,'fiado',12000,$3) returning id`,
+    [usuarioId, dispositivoId, clienteId]
+  );
+  const saldo = async () =>
+    (await db.query(`select saldo_pendiente_clp from pan.saldo_cliente where cliente_id = $1`, [clienteId]))
+      .rows[0].saldo_pendiente_clp;
+
+  assert.equal(await saldo(), 12000, "el fiado del mesón debe sumar al saldo (0017)");
+  await db.query(
+    `update pan.ventas set anulada_at = now(), anulada_motivo = $2 where id = $1`,
+    [venta.rows[0].id, "se registró a nombre del cliente equivocado"]
+  );
+  assert.equal(await saldo(), 0, "anular la venta debe bajar la deuda del cliente");
+  // Y sin haber inventado un pago: saldado_at sigue en NULL, la venta se anuló, no se saldó.
+  const s = await db.query(`select saldado_at from pan.ventas where id = $1`, [venta.rows[0].id]);
+  assert.equal(s.rows[0].saldado_at, null, "la deuda baja por anulación, jamás fingiendo un pago");
+  await db.close();
+});
+
+test("AC-ADM-05 (0021): la anulación es irreversible — nadie des-anula una venta", async () => {
+  // 0020 se declaraba append-only «como el POD con supersede_id» y no lo era: su grant
+  // column-level dejaba devolver anulada_at a NULL, reviviendo la venta en el arqueo y
+  // dejando en pan.eventos un venta_anulada huérfano — la auditoría afirmando lo contrario
+  // del dato. El grant no alcanza porque la misma columna debe escribirse UNA vez y nunca
+  // más: eso es un trigger (mismo patrón que trg_entregas_inmutable, 0004).
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "admin");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const venta = await db.query(
+    `insert into pan.ventas (client_uuid, vendedor_id, dispositivo_id, medio_pago, total_clp) values (gen_random_uuid(),$1,$2,'efectivo',1000) returning id`,
+    [usuarioId, dispositivoId]
+  );
+  const ventaId = venta.rows[0].id;
+  await db.query(`update pan.ventas set anulada_at = now(), anulada_motivo = $2 where id = $1`, [
+    ventaId,
+    "el cliente devolvió el pan",
+  ]);
+
+  await assert.rejects(
+    () => db.query(`update pan.ventas set anulada_at = null, anulada_motivo = null where id = $1`, [ventaId]),
+    /inmutable/i,
+    "des-anular debe rebotar"
+  );
+  await assert.rejects(
+    () => db.query(`update pan.ventas set anulada_motivo = 'otro motivo' where id = $1`, [ventaId]),
+    /inmutable/i,
+    "reescribir el motivo de una anulación debe rebotar"
+  );
+  await assert.rejects(
+    () => db.query(`update pan.ventas set anulada_at = now() where id = $1`, [ventaId]),
+    /inmutable/i,
+    "correr la fecha de una anulación debe rebotar"
+  );
+
+  const v = await db.query(`select anulada_at, anulada_motivo from pan.ventas where id = $1`, [ventaId]);
+  assert.ok(v.rows[0].anulada_at, "la venta sigue anulada");
+  assert.equal(v.rows[0].anulada_motivo, "el cliente devolvió el pan", "con su motivo original");
+
+  // El trigger NO puede estorbar al resto de la tabla: una venta vigente se sigue saldando.
+  const clienteId = await crearCliente(db);
+  const vigente = await db.query(
+    `insert into pan.ventas (client_uuid, vendedor_id, dispositivo_id, medio_pago, total_clp, cliente_id)
+     values (gen_random_uuid(),$1,$2,'fiado',500,$3) returning id`,
+    [usuarioId, dispositivoId, clienteId]
+  );
+  const ok = await db.query(`update pan.ventas set saldado_at = now() where id = $1 returning id`, [
+    vigente.rows[0].id,
+  ]);
+  assert.equal(ok.rows.length, 1, "saldar una venta vigente sigue funcionando (0017)");
+  await db.close();
+});
+
 test("medios_pago: pan_app puede desactivar uno (activo) pero no borrarlo ni cambiar su etiqueta", async () => {
   const db = await dbNueva();
   const r = await db.query(`update pan.medios_pago set activo = false where clave = 'otro' returning activo`);

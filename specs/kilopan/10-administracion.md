@@ -61,6 +61,23 @@ original: se registra encima (append-only), como ya hace el POD con `supersede_i
       exigencia en la BD. Probado de verdad: `e2e/anular-venta.spec.ts` (anula por HTTP y el
       esperado del cierre baja exactamente lo anulado; doble-tap → 409; vendedor → 403) e
       invariante que verifica el CHECK, el evento con quién/cuándo/equipo y su inmutabilidad.
+      — **Corregido en sesión supervisada (3-ago-2026), `0021`.** La `0020` la escribió el
+      motor autónomo violando `docs/PROMPT_CORRECTIVO.md` §7; al revisarla a mano
+      aparecieron dos huecos que este AC daba por cubiertos, ambos medidos corriendo las
+      migraciones bajo `pan_app`, no leyendo el SQL:
+      (1) **anular una venta fiada no bajaba la deuda del cliente** — `pan.saldo_cliente`
+      (`0017`) nunca filtró `anulada_at`, así que el arqueo bajaba a 0 y el cliente seguía
+      debiendo; la única forma de limpiarlo era marcarla `saldado_at`, o sea registrar en
+      falso que pagó. (2) **la anulación era reversible** pese a que la `0020` se declara
+      append-only: su `grant` column-level dejaba devolver `anulada_at` a NULL, reviviendo
+      la venta y dejando un `venta_anulada` huérfano en `pan.eventos`. Se arregla con la
+      vista reescrita y `trg_ventas_anulacion_inmutable` (mismo patrón que
+      `trg_entregas_inmutable`, `0004`), con un invariante nuevo por hueco.
+      — **Decisión, no olvido:** `pan.conciliacion_diaria` (`0005`) **sí** sigue contando
+      los gramos de una venta anulada. El arqueo mide plata y la conciliación mide kilos
+      físicos: en el caso dominante («se registró mal») el pan igual salió del local, y
+      descontarlo inflaría la merma con pan que nadie perdió. Si algún día se anula
+      mayoritariamente por devolución, se revisa acá.
 - [ ] (P0) Corregir un cierre de turno desde `/arreglar`, con motivo escrito y su evento.
       El cierre original NO se sobrescribe: la corrección se registra encima y ambos quedan
       legibles, porque un arqueo que cambia sin dejar rastro es indistinguible de un
@@ -76,6 +93,12 @@ original: se registra encima (append-only), como ya hace el POD con `supersede_i
       reseteo de PIN, revocación de equipo, merma, anulación de DTE, cierre de ruta— con un
       test por operación. Hoy solo la escriben identidad y parámetros. La tabla ya es
       append-only por `revoke` [AC-ADM-10]
+      — **Nota de archivo (3-ago-2026):** por texto de `docs/PROMPT_CORRECTIVO.md` §3
+      esto es alcance de Ola 3 ("eventos de auditoría en toda operación de plata"), no
+      de Ola 2 — quedó filed acá por ser el prerrequisito de datos de la pantalla de
+      auditoría (`AC-DASH-06`) y de la ola entera. No se movió de sección para no
+      generar churn en un AC todavía sin construir; el motor lo elige por prioridad
+      (P0), no por qué encabezado lo agrupa.
 - [ ] (P0) Reparación de los datos que YA están mal contados en producción: el fiado de
       mesón que nunca sumó a ningún saldo y los arqueos firmados por quien no vendió. Se
       produce primero un informe que la dueña **lee y firma**; recién después se corrigen
