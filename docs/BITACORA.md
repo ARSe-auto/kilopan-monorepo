@@ -46,12 +46,34 @@ estado a `pan.ventas` obliga a revisar a TODO consumidor de esa tabla**, y nadie
 sin auditar. Un AC que dice «deja de sumar al arqueo» se cierra mirando el arqueo; las otras
 tres vistas que también suman esa tabla no las mira nadie.
 
-**Falsa alarma investigada y descartada, para que no se vuelva a perseguir:** durante la
-sesión `IMPLEMENTATION_PLAN.md` y `.ralph/build-fails` cambiaron de mtime en medio del gate,
-lo que parecía un motor fantasma escribiendo. Es `prueba-arnes.sh` (líneas 506-536), que los
-sobrescribe en el repo REAL y los restaura desde `/tmp`: mismo sha antes y después, solo el
-mtime se mueve. Vale la pena saberlo porque hace ruido en cualquier auditoría de «quién tocó
-el árbol».
+**Dos sesiones escribiendo el mismo árbol, y una conclusión mía que estuvo mal:** a mitad de
+la sesión aparecieron archivos modificados que yo no había tocado. Investigué y concluí
+«falsa alarma»: `prueba-arnes.sh` (líneas 506-536) sobrescribe `IMPLEMENTATION_PLAN.md` y
+`.ralph/build-fails` en el repo REAL y los restaura desde `/tmp`, así que el mtime se mueve
+dentro del propio gate sin que cambie el contenido (mismo sha antes y después — probado).
+Eso es cierto y vale saberlo, porque hace ruido en cualquier auditoría de «quién tocó el
+árbol».
+
+**Pero la conclusión de que no había nadie más escribiendo era falsa.** Sí lo había: una
+sesión hermana, planificando Ola 3/4, avisó después por mensaje entre sesiones. Le habían
+dicho que trabajara en su worktree y usó rutas absolutas al repo principal; a mí el prompt
+me mandó explícitamente al repo principal. Resultado: los dos trabajos mezclados sin
+comitear en el mismo árbol, y yo comiteé el suyo sin saber que era suyo (`8a9edd1`,
+`72904d6`, y 6 líneas dentro de `17c39ca`). No se perdió nada, pero fue suerte.
+
+Lo que falló no fue la investigación —el `prueba-arnes.sh` explicaba de verdad lo que yo
+estaba mirando— sino haber cerrado con «descartado» cuando el mtime de
+`specs/kilopan/09-plataforma-miga.md` (07:19:53) seguía sin explicación y yo lo sabía. Una
+anomalía parcialmente explicada no es una anomalía descartada. Y el `check:full` que corrí
+para dar verde corrió MIENTRAS la otra sesión escribía: ese verde se sacó sobre un árbol en
+movimiento y no valía. Se repitió después sobre árbol limpio y comiteado
+(`verde-20260803-074157`, HEAD `3abd0e9`) — verde 12/12 igual, pero eso se comprueba, no se
+supone.
+
+**Regla operativa que sale de esto:** «un builder por worktree» (CLAUDE.md) no se cumple
+solo abriendo un worktree — se cumple si las ediciones usan rutas de ESE worktree. Un
+prompt que dice «trabajá en el repo principal» anula el aislamiento aunque la plataforma
+haya asignado uno. Y ninguna sesión corre el gate mientras otra escribe el mismo árbol.
 
 **Encontrado de paso:** el freno `packages/metodo/panel/PAUSA-REVISION` que el HANDOFF daba
 por puesto NO existía — el motor estaba detenido solo por `launchctl bootout`, que un
