@@ -60,6 +60,38 @@ export default async function DashboardPage() {
   const tckPct = hoy?.tck != null ? Math.round(Number(hoy.tck) * 100) : null;
   const colorTck = tckPct == null ? superficie.textoFaint : tckPct >= 95 ? semantico.ok : semantico.alerta;
 
+  // AC-DASH-08: cola de entregas por revisar (rechazadas/parciales/GPS fuera de zona).
+  const colaEntregas = await db.query<{
+    entrega_id: string;
+    cliente_razon_social: string;
+    cliente_rut: string;
+    gramos_entregados: string;
+    gramos_pedidos: string;
+    motivo_rechazo: string | null;
+    gps_fuera_de_zona: boolean;
+    recibido_at: string;
+  }>(
+    `select e.id as entrega_id,
+            c.razon_social as cliente_razon_social,
+            c.rut as cliente_rut,
+            e.gramos_entregados::text,
+            sum(pl.gramos_pedidos)::text as gramos_pedidos,
+            e.motivo_rechazo,
+            e.gps_fuera_de_zona,
+            e.recibido_at
+       from pan.entregas e
+       join pan.pedidos p on p.id = e.pedido_id
+       join pan.clientes c on c.id = p.cliente_id
+       join pan.pedido_lineas pl on pl.pedido_id = p.id
+      where e.cerrada
+        and e.supersede_id is null
+      group by e.id, c.razon_social, c.rut, e.gramos_entregados, e.motivo_rechazo, e.gps_fuera_de_zona, e.recibido_at
+      having e.motivo_rechazo is not null
+          or e.gps_fuera_de_zona
+          or (e.gramos_entregados > 0 and e.gramos_entregados < sum(pl.gramos_pedidos))
+      order by e.recibido_at desc`
+  );
+
   return (
     <Pantalla titulo={usuario.nombre} bajada="Panel del dueño · hoy" ancho={900}>
       <section
@@ -115,6 +147,79 @@ export default async function DashboardPage() {
           </div>
         ))}
       </section>
+
+      {/* AC-DASH-08 */}
+      {colaEntregas.rows.length > 0 && (
+        <section style={{ background: superficie.tarjeta, border: `1px solid ${superficie.hairline}`, borderRadius: 16, padding: 24 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 4px" }}>Entregas por revisar</h2>
+          <p style={{ fontSize: 14, color: superficie.textoDim, margin: "0 0 16px" }}>
+            {colaEntregas.rows.length} {colaEntregas.rows.length === 1 ? "entrega" : "entregas"} rechazadas, parciales o con GPS fuera de zona.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {colaEntregas.rows.map((e) => {
+              const esRechazada = !!e.motivo_rechazo;
+              const esParcial = Number(e.gramos_entregados) > 0 && Number(e.gramos_entregados) < Number(e.gramos_pedidos);
+              const colorEstado = esRechazada ? semantico.error : esParcial ? semantico.alerta : semantico.alerta;
+              const etiqueta = esRechazada ? "Rechazada" : esParcial ? "Parcial" : "GPS fuera de zona";
+
+              return (
+                <div
+                  key={e.entrega_id}
+                  style={{
+                    background: superficie.fondo,
+                    border: `1px solid ${superficie.hairline}`,
+                    borderRadius: 12,
+                    padding: 12,
+                    display: "grid",
+                    gridTemplateColumns: "1fr auto",
+                    gap: 12,
+                    alignItems: "center",
+                  }}
+                >
+                  <div>
+                    <p style={{ fontSize: 14, fontWeight: 600, color: superficie.texto, margin: 0 }}>
+                      {e.cliente_razon_social}
+                    </p>
+                    <p style={{ fontSize: 12, color: superficie.textoFaint, margin: "4px 0 0" }}>
+                      {e.cliente_rut}
+                    </p>
+                    {esRechazada && (
+                      <p style={{ fontSize: 12, color: semantico.error, margin: "4px 0 0", fontWeight: 500 }}>
+                        {e.motivo_rechazo}
+                      </p>
+                    )}
+                    {esParcial && (
+                      <p style={{ fontSize: 12, color: superficie.textoDim, margin: "4px 0 0" }}>
+                        Entregados: {formatearKg(Number(e.gramos_entregados))} de {formatearKg(Number(e.gramos_pedidos))}
+                      </p>
+                    )}
+                    {!esRechazada && !esParcial && e.gps_fuera_de_zona && (
+                      <p style={{ fontSize: 12, color: superficie.textoDim, margin: "4px 0 0" }}>
+                        Ubicación a más de 300 m del cliente
+                      </p>
+                    )}
+                  </div>
+                  <div style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                    <p
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: colorEstado,
+                        margin: 0,
+                        padding: "4px 8px",
+                        background: `${colorEstado}22`,
+                        borderRadius: 8,
+                      }}
+                    >
+                      {etiqueta}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {mostrarFlota ? (
         <TarjetaFlota />
