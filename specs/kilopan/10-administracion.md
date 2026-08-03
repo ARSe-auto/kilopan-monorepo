@@ -49,9 +49,18 @@ original: se registra encima (append-only), como ya hace el POD con `supersede_i
       vendedor rebotan con 403 real por HTTP (`e2e/seguridad-arreglar.spec.ts`), admin ve
       las seis acciones. Cada acción cita su AC (AC-ADM-05..09): esta pantalla es su
       índice, las de detalle llegan con sus propios ACs.
-- [ ] (P0) Anular una venta desde `/arreglar`: exige un motivo escrito y no vacío, escribe
+- [x] (P0) Anular una venta desde `/arreglar`: exige un motivo escrito y no vacío, escribe
       su evento en `pan.eventos` con quién, cuándo y en qué equipo, y la venta anulada deja
       de sumar al arqueo de su turno [AC-ADM-05]
+      — **Cerrado 2-ago-2026:** `POST /api/ventas/anular` (solo admin, 403 al resto por
+      HTTP) marca `anulada_at`/`anulada_motivo` sin borrar la venta ni reescribir su monto
+      (append-only) y escribe el evento `venta_anulada` con `usuario_id`, `dispositivo_id` y
+      `at`, todo en una transacción; motivo en blanco → 400. `/api/cierre-caja` (GET y POST)
+      suma solo `anulada_at is null`, así que la venta anulada sale del arqueo de su turno.
+      Migración `0020_anular_venta.sql`: CHECK `ventas_anulada_exige_motivo` respalda la
+      exigencia en la BD. Probado de verdad: `e2e/anular-venta.spec.ts` (anula por HTTP y el
+      esperado del cierre baja exactamente lo anulado; doble-tap → 409; vendedor → 403) e
+      invariante que verifica el CHECK, el evento con quién/cuándo/equipo y su inmutabilidad.
 - [ ] (P0) Corregir un cierre de turno desde `/arreglar`, con motivo escrito y su evento.
       El cierre original NO se sobrescribe: la corrección se registra encima y ambos quedan
       legibles, porque un arqueo que cambia sin dejar rastro es indistinguible de un

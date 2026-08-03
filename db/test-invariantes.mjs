@@ -599,6 +599,66 @@ test("venta_lineas: exige gramos O unidades, nunca ambos ni ninguno", async () =
   await db.close();
 });
 
+test("AC-ADM-05: anular una venta exige motivo escrito (CHECK), la saca del arqueo y deja su evento — todo bajo pan_app", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "admin");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const venta = await db.query(
+    `insert into pan.ventas (client_uuid, vendedor_id, dispositivo_id, medio_pago, total_clp) values (gen_random_uuid(),$1,$2,'efectivo',1000) returning id`,
+    [usuarioId, dispositivoId]
+  );
+  const ventaId = venta.rows[0].id;
+
+  // El CHECK ventas_anulada_exige_motivo (0020) respalda al endpoint: anular sin motivo —o
+  // con uno en blanco— rebota EN LA BD, no solo en la pantalla. La confirmación es escribir
+  // el porqué, jamás marcar una casilla (regla transversal de la Ola 2 «Marcha atrás»).
+  await assert.rejects(
+    () => db.query(`update pan.ventas set anulada_at = now() where id = $1`, [ventaId]),
+    /constraint|check/i,
+    "anular sin motivo debe rebotar"
+  );
+  await assert.rejects(
+    () => db.query(`update pan.ventas set anulada_at = now(), anulada_motivo = '   ' where id = $1`, [ventaId]),
+    /constraint|check/i,
+    "anular con motivo en blanco debe rebotar"
+  );
+
+  // Con motivo, pan_app puede anular (grant column-level) y dejar su evento con quién,
+  // cuándo y en qué equipo — el par exacto de sentencias que corre /api/ventas/anular.
+  const upd = await db.query(
+    `update pan.ventas set anulada_at = now(), anulada_motivo = $2 where id = $1 and anulada_at is null returning id`,
+    [ventaId, "el cliente devolvió el pan"]
+  );
+  assert.equal(upd.rows.length, 1, "anular con motivo debe entrar");
+  await db.query(
+    `insert into pan.eventos (tipo, entidad, entidad_id, payload, usuario_id, dispositivo_id)
+     values ('venta_anulada','ventas',$1,$2,$3,$4)`,
+    [ventaId, JSON.stringify({ motivo: "el cliente devolvió el pan" }), usuarioId, dispositivoId]
+  );
+  const ev = await db.query(
+    `select entidad_id, usuario_id, dispositivo_id, at from pan.eventos where tipo = 'venta_anulada'`
+  );
+  assert.equal(ev.rows.length, 1, "la anulación deja exactamente un evento");
+  assert.equal(ev.rows[0].entidad_id, ventaId);
+  assert.equal(ev.rows[0].usuario_id, usuarioId); // quién
+  assert.equal(ev.rows[0].dispositivo_id, dispositivoId); // en qué equipo
+  assert.ok(ev.rows[0].at, "cuándo");
+
+  // Ese evento es inmutable: pan.eventos jamás recibe update/delete (append-only, §4).
+  await assert.rejects(
+    () => db.query(`update pan.eventos set payload = '{}'::jsonb where tipo = 'venta_anulada'`),
+    /permission|denied/i
+  );
+
+  // El arqueo la excluye: sumar SOLO las no anuladas del dispositivo da 0 tras anular la única.
+  const esperado = await db.query(
+    `select coalesce(sum(total_clp),0)::int as e from pan.ventas where dispositivo_id = $1 and anulada_at is null`,
+    [dispositivoId]
+  );
+  assert.equal(esperado.rows[0].e, 0, "la venta anulada deja de sumar al arqueo");
+  await db.close();
+});
+
 test("medios_pago: pan_app puede desactivar uno (activo) pero no borrarlo ni cambiar su etiqueta", async () => {
   const db = await dbNueva();
   const r = await db.query(`update pan.medios_pago set activo = false where clave = 'otro' returning activo`);

@@ -1,0 +1,69 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { obtenerDb } from "@/comun/db.ts";
+import { exigirSesion } from "@/identidad/sesion.ts";
+import { esUuid } from "@/comun/validacion.ts";
+
+// AC-ADM-05 (Ola 2 «Marcha atrás», specs/kilopan/10-administracion.md): anular una venta
+// desde /arreglar. SOLO admin —toda la superficie de /arreglar lo es (§5)— y el rechazo lo
+// decide el SERVIDOR, no un enlace escondido (misma lección que pesaje_foto_obligatoria).
+//
+// Exige un motivo escrito y no vacío: la regla transversal de la sección es que toda acción
+// destructiva se confirma ESCRIBIENDO el porqué —jamás marcando una casilla que se marca sin
+// leer—. Marca la venta anulada (deja de sumar al arqueo de su turno; ver /api/cierre-caja)
+// SIN borrarla ni reescribir su monto (append-only), y deja su evento en pan.eventos con
+// quién, cuándo y en qué equipo se hizo la anulación.
+export async function POST(request: NextRequest) {
+  const sesion = await exigirSesion(request);
+  if (sesion instanceof NextResponse) return sesion;
+  if (sesion.rol !== "admin") {
+    return NextResponse.json({ error: "Solo un administrador anula una venta" }, { status: 403 });
+  }
+
+  let cuerpo: { ventaId?: string; motivo?: string };
+  try {
+    cuerpo = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
+  }
+  if (!cuerpo.ventaId || !esUuid(cuerpo.ventaId)) {
+    return NextResponse.json({ error: "Falta ventaId" }, { status: 400 });
+  }
+  // El motivo se valida en el SERVIDOR: pedirlo solo en la pantalla es teatro de cliente.
+  // El CHECK ventas_anulada_exige_motivo (0020) lo respalda por si alguien entra por otra vía.
+  const motivo = typeof cuerpo.motivo === "string" ? cuerpo.motivo.trim() : "";
+  if (!motivo) {
+    return NextResponse.json({ error: "Escribe el motivo de la anulación" }, { status: 400 });
+  }
+
+  const db = await obtenerDb();
+  try {
+    // La marca en la venta y el evento entran JUNTOS: una anulación sin su evento —o un
+    // evento sin la anulación efectiva— rompe justo la auditoría que este AC existe para
+    // garantizar. El `where anulada_at is null` hace idempotente el doble-tap: la segunda
+    // no actualiza fila y no dispara un segundo evento.
+    const resultado = await db.transaccion(async (tx) => {
+      const upd = await tx.query<{ id: string }>(
+        `update pan.ventas
+            set anulada_at = now(), anulada_motivo = $2
+          where id = $1 and anulada_at is null
+          returning id`,
+        [cuerpo.ventaId, motivo]
+      );
+      const venta = upd.rows[0];
+      if (!venta) return null; // no existe o ya estaba anulada
+      await tx.query(
+        `insert into pan.eventos (tipo, entidad, entidad_id, payload, usuario_id, dispositivo_id)
+         values ('venta_anulada', 'ventas', $1, $2, $3, $4)`,
+        [venta.id, JSON.stringify({ motivo }), sesion.usuarioId, sesion.dispositivoId]
+      );
+      return venta;
+    });
+    if (!resultado) {
+      return NextResponse.json({ error: "La venta no existe o ya estaba anulada" }, { status: 409 });
+    }
+    return NextResponse.json({ ok: true, id: resultado.id });
+  } catch (err) {
+    console.error("POST /api/ventas/anular:", err instanceof Error ? err.message : String(err));
+    return NextResponse.json({ error: "No se pudo anular la venta" }, { status: 500 });
+  }
+}

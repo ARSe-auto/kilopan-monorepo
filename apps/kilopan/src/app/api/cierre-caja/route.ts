@@ -28,6 +28,8 @@ export async function GET(request: NextRequest) {
   // inventar un "todo el día" que ya demostró llevar al mismo agujero de antes.
   const r = turno
     ? await db.query<{ medio_pago: string; etiqueta: string; esperado_clp: string }>(
+        // AC-ADM-05: una venta anulada (anulada_at not null) deja de sumar al arqueo de su
+        // turno — se excluye del esperado igual acá que en el POST del cierre.
         `select mp.clave as medio_pago, mp.etiqueta,
                 coalesce(sum(v.total_clp), 0)::text as esperado_clp
            from pan.medios_pago mp
@@ -35,6 +37,7 @@ export async function GET(request: NextRequest) {
                   on v.medio_pago = mp.clave
                  and v.dispositivo_id = $1
                  and v.creado_at >= $2
+                 and v.anulada_at is null
           where mp.activo
           group by mp.clave, mp.etiqueta, mp.orden
           order by mp.orden`,
@@ -142,8 +145,10 @@ export async function POST(request: NextRequest) {
       const filas: { medioPago: string; esperado: number; declarado: number; diferencia: number }[] = [];
       for (const d of declaradosValidados) {
         const esperado = await tx.query<{ esperado: string }>(
+          // AC-ADM-05: la venta anulada no cuenta en lo esperado del cierre.
           `select coalesce(sum(total_clp), 0)::text as esperado from pan.ventas
-            where medio_pago = $1 and dispositivo_id = $2 and creado_at >= $3`,
+            where medio_pago = $1 and dispositivo_id = $2 and creado_at >= $3
+              and anulada_at is null`,
           [d.medioPago, sesion.dispositivoId, turno.abierto_at]
         );
         const esperadoClp = Number(esperado.rows[0]?.esperado ?? 0);
