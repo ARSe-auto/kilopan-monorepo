@@ -108,6 +108,14 @@ while [ "$i" -lt "$MAX_ITERACIONES" ]; do
       bash packages/metodo/scripts/empujar-si-verde.sh 2>&1 | tee -a "$LOG" || \
         echo "watchdog: el push no salió; sigo construyendo, queda para la próxima vuelta." | tee -a "$LOG"
       ;;
+    10)
+      # CONTRATO ROTO: el motor escribió en db/migraciones/ (bug real, 3-ago-2026,
+      # AC-ADM-05). §7 del maestro lo prohíbe en letra grande y nada lo comprobaba nunca.
+      # A diferencia de rc 9 (un AC atascado, el motor sigue con el próximo sin drama),
+      # esto pausa TODO: ya hay una migración real, sin supervisión, comiteada — alguien
+      # con autoridad tiene que mirarla antes de que el motor construya nada más encima.
+      pausar "el commit que acaba de landear toca db/migraciones/ — el motor nunca debe escribir ahí (docs/PROMPT_CORRECTIVO.md §7). Revisar qué migración es y decidir si queda, sin relanzar hasta entonces."
+      ;;
     9)
       # ATASCADO RECIÉN MARCADO (bug real, 3-ago-2026 — primer AC de Ola 2 que el motor
       # tocó). loop.sh usa rc 9 exactamente UNA vez por AC, en la iteración donde cruza su

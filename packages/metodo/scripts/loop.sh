@@ -205,6 +205,31 @@ claude -p "$PROMPT" \
 COMMITS_DESPUES=$(git rev-list --count HEAD 2>/dev/null || echo 0)
 node "$LOG_DIR/generar.mjs" >/dev/null 2>&1 || true
 
+# EL MOTOR JAMÁS ESCRIBE EN db/migraciones/ (bug real, 3-ago-2026 — AC-ADM-05, el
+# segundo AC de Ola 2). Regla explícita de docs/PROMPT_CORRECTIVO.md §7: «El motor
+# autónomo jamás escribe en db/migraciones/... Migraciones y despliegue son de sesión
+# supervisada, siempre. Si un ítem del plan exige una migración, el motor lo deja marcado
+# requiere-dueño y toma el siguiente.» Existía SOLO como prosa en el maestro — ningún
+# guardrail lo comprobaba nunca — y AC-ADM-05 la cruzó de largo: escribió
+# db/migraciones/0020_anular_venta.sql, el gate independiente pasó verde (la migración
+# en sí estaba bien escrita, aditiva, con reversión), y el commit se publicó a
+# origin/main solo. La migración no era el problema; que nadie con autoridad la hubiera
+# mirado antes de existir, sí.
+#
+# Esto NO es "SIN AVANCE" (el AC podría estar perfectamente resuelto) ni "ATASCADO" (no
+# es que este AC en particular sea difícil — CUALQUIER AC que toque el esquema pisa esta
+# regla). Es una violación de contrato: se pausa TODO, no solo se saltea este AC, porque
+# ya hay un commit real con una migración sin supervisión y alguien tiene que decidir qué
+# hacer con él antes de que el motor construya nada más encima.
+if [ "$COMMITS_DESPUES" -gt "$COMMITS_ANTES" ] && git diff --name-only HEAD~1 HEAD -- db/migraciones/ 2>/dev/null | grep -q .; then
+  echo "loop: CONTRATO ROTO — el commit que acaba de landear toca db/migraciones/:"
+  git diff --name-only HEAD~1 HEAD -- db/migraciones/ | sed 's/^/  /'
+  echo "loop: el motor NUNCA debe escribir migraciones (docs/PROMPT_CORRECTIVO.md §7)."
+  echo "loop: pauso TODO el motor, no solo este AC — hay una migración sin supervisión ya"
+  echo "loop: comiteada. Revisar a mano antes de relanzar (exit 10)."
+  exit 10
+fi
+
 # CONTADOR DE STRIKES (bug real, 2-ago-2026). `model-selector.sh:64` lee
 # `.ralph/build-fails` para escalar a Opus tras 2 intentos fallidos — y NADIE lo escribía
 # nunca en producción: el único que lo tocaba era su propio test en prueba-arnes.sh. La

@@ -259,6 +259,32 @@ PVIVO_DESPUES="$(stat -f %m "$PANEL_VIVO/watchdog.log" 2>/dev/null || echo ausen
 [ "$PVIVO_ANTES" = "$PVIVO_DESPUES" ] && ok "estas pruebas tampoco tocaron el panel vivo" || no "esta sección SÍ tocó el panel vivo — revisar KILOPAN_PANEL_DIR"
 
 echo
+echo "== 3f. El motor jamás escribe en db/migraciones/ (3-ago-2026) =="
+# BUG REAL: docs/PROMPT_CORRECTIVO.md §7 lo prohíbe en letra grande — «El motor autónomo
+# JAMÁS escribe en db/migraciones/... migraciones son de sesión supervisada, siempre» —
+# pero existía SOLO como prosa: ningún guardrail lo comprobaba. AC-ADM-05 la cruzó de
+# largo, escribió db/migraciones/0020_anular_venta.sql, el gate independiente dio verde
+# (la migración en sí estaba bien escrita) y el commit se publicó a origin/main solo.
+grep -q "COMMITS_DESPUES.*-gt.*COMMITS_ANTES.*db/migraciones" "$M/loop.sh" && ok "loop.sh detecta cuando su propio commit toca db/migraciones/" || no "loop.sh no vigila sus propios commits — puede volver a escribir migraciones sin que nadie lo vea"
+grep -q "exit 10" "$M/loop.sh" && ok "loop.sh sale con un código propio (10) para esta violación, distinto de atascado/sin-avance" || no "sin código propio, watchdog.sh no puede distinguir esto de un fallo cualquiera"
+grep -q "^    10)" "$M/watchdog.sh" && ok "watchdog.sh reconoce rc 10 explícitamente" || no "watchdog.sh no maneja rc 10 — caería en el default genérico"
+
+# Ejercicio real, no solo grep: el comando exacto que usa loop.sh, contra un commit real
+# fabricado en un clon descartable (nunca contra el historial real de este repo).
+CLON="$(mktemp -d)/clon"
+git clone -q "file://$RAIZ" "$CLON" 2>/dev/null
+(
+  cd "$CLON" || exit 1
+  mkdir -p db/migraciones
+  echo "-- canario de prueba, nunca aplicada" > db/migraciones/9999_canario_prueba.sql
+  git add db/migraciones/9999_canario_prueba.sql
+  git -c user.email=arnes@local -c user.name=arnes commit -q -m "canario: simula un commit del motor tocando migraciones"
+)
+TOCA_MIGRACIONES="$(cd "$CLON" && git diff --name-only HEAD~1 HEAD -- db/migraciones/ 2>/dev/null)"
+rm -rf "$(dirname "$CLON")"
+[ -n "$TOCA_MIGRACIONES" ] && ok "el comando de detección de loop.sh SÍ marca un commit real que toca db/migraciones/ (ejercido en clon descartable)" || no "el comando de detección no disparó contra un commit real — el guard es cosmético"
+
+echo
 echo "== 3c. La cadena autónoma se publica sola y no se apaga sola (3-ago-2026) =="
 # Sin esto la autonomía se cortaba en dos puntos: nadie empujaba lo que el motor comiteaba
 # (CI no veía nada) y el watchdog se apagaba al llegar a su tope sin que nada lo levantara.
