@@ -10,6 +10,54 @@ el aprendizaje contradice lo que creíamos. **Qué NO va:** el estado del plan (
 
 ---
 
+## 2026-08-03 · La migración que escribió el motor: el SQL estaba bien, lo que faltaba no
+
+Alexis revisó la `0020_anular_venta.sql` —la que el motor autónomo escribió violando
+`docs/PROMPT_CORRECTIVO.md` §7— y eligió «se ajusta». Al buscar QUÉ ajustar aparecieron dos
+huecos reales, ninguno visible leyendo la migración sola: los dos vivían en la distancia
+entre lo que el AC prometía y lo que nadie fue a comprobar. Medidos corriendo las
+migraciones bajo `set role pan_app`, no razonados:
+
+```
+ANTES DE ANULAR   → arqueo: 12000 | deuda del cliente: 12000
+DESPUÉS DE ANULAR → arqueo:     0 | deuda del cliente: 12000   ← hueco 1
+¿pan_app puede DES-anular? SÍ                                  ← hueco 2
+TRAS DES-ANULAR   → arqueo: 12000 | deuda del cliente: 12000
+```
+
+1. **Anular una venta fiada no bajaba la deuda del cliente.** `pan.saldo_cliente` (`0017`)
+   nunca filtró `anulada_at`. La venta salía del arqueo y el cliente seguía debiéndola, y
+   la única forma de limpiarlo era marcarla `saldado_at` — registrar en falso que pagó, o
+   sea corromper la auditoría para tapar un bug.
+2. **La anulación era reversible**, justo lo contrario de lo que la `0020` declara en su
+   propia cabecera («append-only, como el POD con supersede_id»). El `grant update`
+   column-level dejaba devolver `anulada_at` a NULL: la venta revivía y quedaba un
+   `venta_anulada` huérfano en `pan.eventos`, la auditoría afirmando lo contrario del dato.
+
+Arreglado en `0021` (vista reescrita + `trg_ventas_anulacion_inmutable`, mismo patrón que
+`trg_entregas_inmutable` de `0004`), un invariante nuevo por hueco, los dos rojos contra la
+`0020` sola. `pnpm check:full` 12/12, 0 saltados.
+
+**Lo que se aprendió, que contradice lo que creíamos:** el guardrail nuevo (`rc 10`) impide
+que el motor ESCRIBA migraciones, y eso estaba bien pensado, pero el daño real de la `0020`
+no fue el SQL —era correcto, aditivo y con reversión—, fue que **agregar una columna de
+estado a `pan.ventas` obliga a revisar a TODO consumidor de esa tabla**, y nadie lo hizo.
+`saldado_at` (`0017`) tiene exactamente la misma forma y muy probablemente el mismo hueco
+sin auditar. Un AC que dice «deja de sumar al arqueo» se cierra mirando el arqueo; las otras
+tres vistas que también suman esa tabla no las mira nadie.
+
+**Falsa alarma investigada y descartada, para que no se vuelva a perseguir:** durante la
+sesión `IMPLEMENTATION_PLAN.md` y `.ralph/build-fails` cambiaron de mtime en medio del gate,
+lo que parecía un motor fantasma escribiendo. Es `prueba-arnes.sh` (líneas 506-536), que los
+sobrescribe en el repo REAL y los restaura desde `/tmp`: mismo sha antes y después, solo el
+mtime se mueve. Vale la pena saberlo porque hace ruido en cualquier auditoría de «quién tocó
+el árbol».
+
+**Encontrado de paso:** el freno `packages/metodo/panel/PAUSA-REVISION` que el HANDOFF daba
+por puesto NO existía — el motor estaba detenido solo por `launchctl bootout`, que un
+reinicio deshace. Puesto a mano. Y el HANDOFF afirmaba que `origin/main` estaba al día: no
+lo estaba, había specs de Ola 3/4 y el plan sin comitear (`8a9edd1`, `72904d6`).
+
 ## 2026-07-27 · Navegación rediseñada de punta a punta: secuencial, no un árbol de menús
 
 Alexis, entrando como Pedro Maestro (rol `maestro`, que solo ve Pesaje): «la navegacion
