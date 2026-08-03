@@ -78,10 +78,38 @@ original: se registra encima (append-only), como ya hace el POD con `supersede_i
       físicos: en el caso dominante («se registró mal») el pan igual salió del local, y
       descontarlo inflaría la merma con pan que nadie perdió. Si algún día se anula
       mayoritariamente por devolución, se revisa acá.
-- [ ] (P0) Corregir un cierre de turno desde `/arreglar`, con motivo escrito y su evento.
+- [x] (P0) Corregir un cierre de turno desde `/arreglar`, con motivo escrito y su evento.
       El cierre original NO se sobrescribe: la corrección se registra encima y ambos quedan
       legibles, porque un arqueo que cambia sin dejar rastro es indistinguible de un
       faltante tapado [AC-ADM-06]
+      — **Cerrado 3-ago-2026:** mismo patrón que `pan.entregas`/POD (0004): `pan.cierres_caja`
+      gana `supersede_id` + `correccion_motivo` (`0023_corregir_cierre_turno.sql`), con CHECK
+      `cierres_caja_correccion_exige_motivo` (motivo no vacío o nada), `trg_cierres_caja_inmutable`
+      (ningún UPDATE/DELETE pasa nunca, ni siquiera del cierre original) e índice único
+      `cierres_caja_una_correccion_por_original` (doble-tap sobre una misma corrección rebota).
+      `cierres_caja_un_cierre_por_turno` (0018) se ajusta con `and supersede_id is null` para que
+      la corrección conviva con el original que corrige sin chocar contra esa unicidad.
+      `POST /api/cierre-caja/corregir` (solo admin, 403 al resto por HTTP; motivo en blanco → 400;
+      cierre inexistente → 404) inserta la fila de corrección y su evento `cierre_caja_corregido`
+      en la misma transacción. Probado de verdad: seis tests en `db/test-invariantes.mjs` bajo
+      `pan_app` (inmutabilidad, motivo exigido por CHECK, doble-tap, evento con quién/cuándo/
+      equipo, y que original+corrección conviven pese a la unicidad por turno) y
+      `e2e/corregir-cierre-turno.spec.ts` (403 a vendedor, 400 sin motivo, 404 a id inexistente
+      — no hay GET que exponga el id del cierre por HTTP, así que el camino feliz completo se
+      prueba contra la BD real).
+      — **Corregido en revisión de sesión supervisada (3-ago-2026):** el motor escribió esto
+      completo (migración, endpoint, e2e, invariantes) pero nunca comiteó — quedó como trabajo
+      sin publicar, preservado en la rama `motor/AC-ADM-06-sin-revisar`. Al revisarlo, uno de
+      sus propios seis tests medía el mensaje equivocado: esperaba que editar `declarado_clp`
+      o borrar la fila rebotaran con el texto del TRIGGER (`trg_cierres_caja_inmutable`), pero
+      `pan_app` nunca tuvo `grant` para ninguno de los dos —`cierres_caja` solo concede
+      `insert` (0003) y `update (turno_id)` (0018)— así que ambos rebotan por PERMISO, antes
+      de que el trigger llegue a correr. El test medía "permission denied" contra un regex que
+      esperaba "inmutable"/"jamás se borra" y fallaba. Corregido para probar lo que de verdad
+      pasa: los dos caminos sin grant rebotan por permiso (la garantía más fuerte), y `turno_id`
+      —el único con grant, y por eso el único que puede llegar al trigger— rebota por el
+      trigger nuevo. Sin ese tercer caso el trigger podía ser código muerto sin que nadie se
+      enterara. El esquema y el endpoint en sí no tenían defectos: se verificaron sin cambios.
 - [ ] (P1) Cerrar una ruta con odómetro desde `/arreglar`, con motivo escrito y su evento
       [AC-ADM-07]
 - [ ] (P1) Revocar un equipo enrolado y desbloquear un PIN desde `/arreglar`, cada uno con

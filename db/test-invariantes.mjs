@@ -743,6 +743,217 @@ test("AC-ADM-05 (0021): la anulación es irreversible — nadie des-anula una ve
 });
 
 // ---------------------------------------------------------------------------
+// AC-ADM-06 (0023) — corregir un cierre de turno sin pisar el original (append-only,
+// mismo patrón que pan.entregas/POD: fila nueva con supersede_id, jamás UPDATE).
+// ---------------------------------------------------------------------------
+
+async function sembrarCierreCaja(db, declaradoClp = 10000) {
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "admin");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const turno = await db.query(
+    `insert into pan.turnos (dispositivo_id, vendedor_id, fondo_inicial_clp) values ($1,$2,0) returning id`,
+    [dispositivoId, usuarioId]
+  );
+  const turnoId = turno.rows[0].id;
+  const cierre = await db.query(
+    `insert into pan.cierres_caja (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp, turno_id)
+     values ($1,$2,'efectivo',10000,$3,$4) returning id`,
+    [dispositivoId, usuarioId, declaradoClp, turnoId]
+  );
+  return { usuarioId, dispositivoId, turnoId, cierreId: cierre.rows[0].id };
+}
+
+test("AC-ADM-06: un cierre de caja ya insertado es inmutable — no se edita ni se borra", async () => {
+  // BUG REAL encontrado revisando esta migración a mano (3-ago-2026): la versión original
+  // de este test esperaba que declarado_clp y el DELETE rebotaran con el mensaje del
+  // TRIGGER (/inmutable|ya existe/i, /jamás se borra/i) — pero pan_app NUNCA tuvo permiso
+  // para ninguno de los dos: cierres_caja solo concede `insert` (0003) y
+  // `update (turno_id)` (0018). Ambos rebotan por GRANT, antes de que el trigger llegue a
+  // correr — "permission denied for table cierres_caja", no el texto del trigger. El test
+  // pasaba por casualidad si algún día se ampliaba el grant; hoy medía el mensaje
+  // equivocado y fallaba.
+  //
+  // Se prueba lo que de verdad es cierto: los dos caminos que pan_app NO puede tocar
+  // rebotan por permiso (la garantía más fuerte — ni siquiera llegan a la fila), y el
+  // ÚNICO camino que sí tiene grant (turno_id, 0018) rebota por el TRIGGER — que es la
+  // pieza que esta migración agrega y la única que este AC necesita probar de verdad.
+  const db = await dbNueva();
+  const { cierreId } = await sembrarCierreCaja(db);
+
+  await assert.rejects(
+    () => db.query(`update pan.cierres_caja set declarado_clp = 1 where id = $1`, [cierreId]),
+    /permission denied/i,
+    "editar el declarado de un cierre ya insertado debe rebotar (pan_app nunca tuvo ese grant)"
+  );
+  await assert.rejects(
+    () => db.query(`delete from pan.cierres_caja where id = $1`, [cierreId]),
+    /permission denied/i,
+    "un cierre de caja jamás se borra: pan_app no tiene grant delete (es evidencia contable)"
+  );
+  // turno_id SÍ tiene grant (0018) — este es el camino que trg_cierres_caja_inmutable (0023)
+  // existe para cubrir. Sin este caso, el trigger nuevo podía ser código muerto y nadie se
+  // enteraba: los otros dos ya estaban protegidos por permisos desde antes de esta migración.
+  await assert.rejects(
+    () => db.query(`update pan.cierres_caja set turno_id = gen_random_uuid() where id = $1`, [cierreId]),
+    /ya existe.*corregir es insertar/i,
+    "turno_id SÍ tiene grant — acá es donde el trigger nuevo tiene que rebotar de verdad"
+  );
+  await db.close();
+});
+
+test("AC-ADM-06: corregir es insertar una fila nueva con supersede_id — el original queda intacto y legible", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId, turnoId, cierreId } = await sembrarCierreCaja(db, 10000);
+
+  const correccion = await db.query(
+    `insert into pan.cierres_caja
+       (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp, turno_id, supersede_id, correccion_motivo)
+     values ($1,$2,'efectivo',10000,12000,$3,$4,'el vendedor contó mal, faltaban dos billetes de $1.000')
+     returning id`,
+    [dispositivoId, usuarioId, turnoId, cierreId]
+  );
+  assert.equal(correccion.rows.length, 1, "la corrección debe entrar como fila nueva");
+
+  // Ambas quedan legibles — ninguna se pisa ni desaparece.
+  const filas = await db.query(
+    `select id, declarado_clp, supersede_id, correccion_motivo from pan.cierres_caja order by cerrado_at`
+  );
+  assert.equal(filas.rows.length, 2, "el original y la corrección conviven como dos filas");
+  assert.equal(filas.rows[0].id, cierreId);
+  assert.equal(filas.rows[0].declarado_clp, 10000, "el original no se pisa");
+  assert.equal(filas.rows[0].supersede_id, null);
+  assert.equal(filas.rows[1].declarado_clp, 12000, "la corrección trae el monto correcto");
+  assert.equal(filas.rows[1].supersede_id, cierreId, "la corrección apunta al original");
+  await db.close();
+});
+
+test("AC-ADM-06: la corrección exige motivo escrito y no vacío (CHECK)", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId, turnoId, cierreId } = await sembrarCierreCaja(db);
+
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into pan.cierres_caja
+           (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp, turno_id, supersede_id)
+         values ($1,$2,'efectivo',10000,12000,$3,$4)`,
+        [dispositivoId, usuarioId, turnoId, cierreId]
+      ),
+    /constraint|check/i,
+    "corregir sin motivo debe rebotar"
+  );
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into pan.cierres_caja
+           (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp, turno_id, supersede_id, correccion_motivo)
+         values ($1,$2,'efectivo',10000,12000,$3,$4,'   ')`,
+        [dispositivoId, usuarioId, turnoId, cierreId]
+      ),
+    /constraint|check/i,
+    "corregir con motivo en blanco debe rebotar"
+  );
+  await db.close();
+});
+
+test("AC-ADM-06: un cierre admite UNA sola corrección encima (doble-tap rebota)", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId, turnoId, cierreId } = await sembrarCierreCaja(db);
+
+  await db.query(
+    `insert into pan.cierres_caja
+       (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp, turno_id, supersede_id, correccion_motivo)
+     values ($1,$2,'efectivo',10000,12000,$3,$4,'primera corrección')`,
+    [dispositivoId, usuarioId, turnoId, cierreId]
+  );
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into pan.cierres_caja
+           (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp, turno_id, supersede_id, correccion_motivo)
+         values ($1,$2,'efectivo',10000,13000,$3,$4,'segunda corrección del mismo original')`,
+        [dispositivoId, usuarioId, turnoId, cierreId]
+      ),
+    /cierres_caja_una_correccion_por_original|unique|duplicate/i,
+    "una segunda corrección del MISMO original debe rebotar"
+  );
+  await db.close();
+});
+
+test("AC-ADM-06: la corrección deja su evento en pan.eventos con quién, cuándo y en qué equipo", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId, turnoId, cierreId } = await sembrarCierreCaja(db);
+
+  const correccion = await db.query(
+    `insert into pan.cierres_caja
+       (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp, turno_id, supersede_id, correccion_motivo)
+     values ($1,$2,'efectivo',10000,12000,$3,$4,'faltaban dos billetes de $1.000')
+     returning id`,
+    [dispositivoId, usuarioId, turnoId, cierreId]
+  );
+  await db.query(
+    `insert into pan.eventos (tipo, entidad, entidad_id, payload, usuario_id, dispositivo_id)
+     values ('cierre_caja_corregido', 'cierres_caja', $1, $2, $3, $4)`,
+    [
+      cierreId,
+      JSON.stringify({
+        motivo: "faltaban dos billetes de $1.000",
+        correccionId: correccion.rows[0].id,
+        declaradoClpAnterior: 10000,
+        declaradoClpNuevo: 12000,
+      }),
+      usuarioId,
+      dispositivoId,
+    ]
+  );
+  const ev = await db.query(
+    `select entidad_id, usuario_id, dispositivo_id, at from pan.eventos where tipo = 'cierre_caja_corregido'`
+  );
+  assert.equal(ev.rows.length, 1, "la corrección deja exactamente un evento");
+  assert.equal(ev.rows[0].entidad_id, cierreId, "el evento cita el cierre original que se corrigió");
+  assert.equal(ev.rows[0].usuario_id, usuarioId);
+  assert.equal(ev.rows[0].dispositivo_id, dispositivoId);
+  assert.ok(ev.rows[0].at);
+  await assert.rejects(
+    () => db.query(`update pan.eventos set payload = '{}'::jsonb where tipo = 'cierre_caja_corregido'`),
+    /permission|denied/i,
+    "pan.eventos jamás recibe update (append-only, §4)"
+  );
+  await db.close();
+});
+
+test("AC-ADM-06: original y corrección conviven pese a cierres_caja_un_cierre_por_turno (0018)", async () => {
+  // El índice de 0018 exige una fila por (turno, medio_pago); sin el ajuste de 0023
+  // (agregar "and supersede_id is null") una corrección legítima chocaría contra su
+  // propio original y AC-ADM-06 sería imposible de cumplir.
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId, turnoId, cierreId } = await sembrarCierreCaja(db);
+
+  const correccion = await db.query(
+    `insert into pan.cierres_caja
+       (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp, turno_id, supersede_id, correccion_motivo)
+     values ($1,$2,'efectivo',10000,12000,$3,$4,'corrección legítima')
+     returning id`,
+    [dispositivoId, usuarioId, turnoId, cierreId]
+  );
+  assert.ok(correccion.rows[0].id, "la corrección entra sin chocar con la unicidad por turno");
+
+  // Pero un segundo cierre ORIGINAL (sin supersede_id) del mismo turno y medio sigue
+  // rebotando: eso sigue siendo un cierre duplicado, no una corrección.
+  await assert.rejects(
+    () =>
+      db.query(
+        `insert into pan.cierres_caja (dispositivo_id, vendedor_id, medio_pago, esperado_clp, declarado_clp, turno_id)
+         values ($1,$2,'efectivo',10000,10000,$3)`,
+        [dispositivoId, usuarioId, turnoId]
+      ),
+    /cierres_caja_un_cierre_por_turno|unique|duplicate/i,
+    "un segundo cierre ORIGINAL del mismo turno y medio debe seguir rebotando"
+  );
+  await db.close();
+});
+
+// ---------------------------------------------------------------------------
 // AC-PAG-02 (0022) — auditoría de `saldado_at`, la columna hermana de `anulada_at`.
 // La 0021 arregló `anulada_at`; `saldado_at` (0017) tiene la misma forma (NULL/timestamp
 // + grant column-level a pan_app) y nunca se había auditado igual. Un test por hueco.
