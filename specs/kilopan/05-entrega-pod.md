@@ -50,7 +50,7 @@ bloquea** — el pan no espera (§4).
 
 ## Ola 4 — Robustez: offline honesto (`docs/PROMPT_CORRECTIVO.md` §3, R5)
 
-- [ ] (P0) **`/ruta` sabe si está offline — hoy no lo sabe.** `comun/useEnLinea.ts` existe
+- [x] (P0) **`/ruta` sabe si está offline — hoy no lo sabe.** `comun/useEnLinea.ts` existe
       y su propio comentario dice «cada pantalla con cola offline llama este hook»; lo
       llaman `pesar/page.tsx` y `vender/page.tsx`, que por regla (`AGENTS.md`: «Offline es
       SOLO el módulo de reparto») exigen red local y NO deberían necesitarlo. `/ruta` —el
@@ -74,14 +74,16 @@ bloquea** — el pan no espera (§4).
       navegando porque `public/sw.js:84-100` responde `caches.match("/ingresar")` a toda
       página autenticada pedida sin red: un caso que navegue offline aterriza en el login y
       pasa en verde sin ejercer nada. Es además el escenario real del furgón.
-      **BLOQUEADO:** la segunda mitad («retirar el hook de `pesar`/`vender`») parte de que
-      esas pantallas no son offline, y el código dice lo contrario: `pesar/page.tsx:298` y
-      `vender/page.tsx:146` llaman `enviarOEncolar`, cuyo comentario en `pesar:295` declara
-      «Offline-first DE VERDAD … si no hay red, encola en IndexedDB». Eso contradice al
-      maestro, que lo pone **explícitamente fuera del MVP** (`PROMPT_MAESTRO.md:94`, y `:66`
-      «Requiere red local … no es offline»). Quitarles el hook las dejaría mintiendo igual
-      que `/ruta` antes de este arreglo, así que no se tocó. Cuál de los dos manda —el
-      maestro o el código— es decisión de Alexis, no de una sesión de construcción.
+      **Segunda mitad, decidida por Alexis (3-ago-2026):** la contradicción era real —el
+      código en `pesar/page.tsx:298`/`vender/page.tsx:146` ya llama `enviarOEncolar` (cola
+      real ante un corte de WiFi), y el maestro decía que eso estaba fuera del MVP
+      (`PROMPT_MAESTRO.md:94`, `:66`). Se resolvió a favor del código, que ya funciona en
+      producción sin incidentes reportados: cambiarlo habría sido el riesgo más caro para
+      corregir un texto. El hook queda en `pesar`/`vender` —es robustez ante un corte
+      momentáneo, no una estación offline diseñada como `/ruta`— y el maestro y
+      `AGENTS.md` se actualizaron para decir la verdad (`PROMPT_MAESTRO.md` §2/FUERA-DEL-MVP,
+      `AGENTS.md`: «la UX de offline es solo reparto», distinto de «offline es solo
+      reparto»). AC cerrado con las dos mitades hechas: ninguna pantalla miente ya.
 
 ## Notas de implementación
 

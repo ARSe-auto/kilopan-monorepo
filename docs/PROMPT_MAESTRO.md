@@ -63,7 +63,10 @@ Siete módulos, ninguno más:
 2. **Catálogo y pesaje.** Productos por kilo o unidad, dos listas de precios (mostrador /
    mayorista) con vigencia histórica. Estación de pesaje táctil: cifra en 96 px, teclado
    numérico propio, destino en un toque (**Mostrador / Reparto / Merma** — merma exige
-   motivo tipificado). Requiere red local de la panadería (no es offline).
+   motivo tipificado). Requiere red local de la panadería: no está diseñada como estación
+   offline (sin pantalla ni estado propio de «sin conexión», a diferencia de reparto) —
+   pero un corte momentáneo de WiFi no pierde el dato: encola y reintenta solo, igual que
+   la venta de mostrador (`enviarOEncolar`, mismo mecanismo que POD, sin su UX dedicada).
 3. **Venta mostrador.** Venta táctil en ≤3 toques contra el stock pesado; medio de pago
    efectivo/débito; cierre de caja (esperado vs declarado). La boleta la emite el
    facturador que la panadería ya usa; la app registra la venta interna. Sin venta en ruta.
@@ -91,8 +94,10 @@ ruta («ventas por efectuar») · inventario de insumos, recetas y costeo · opt
 rutas (VRP) y torre de control en vivo · e-commerce o app del cliente final · generación
 de etiquetas/códigos propios con apariencia tributaria · integración con balanzas
 (bluetooth/serial) · multi-sucursal · notificaciones push/WhatsApp · turnos y
-remuneraciones · pesaje/mostrador offline (offline es SOLO el módulo de reparto) ·
-correo saliente (no hay outbox de correo en este MVP).
+remuneraciones · pesaje/mostrador **diseñados** como estación offline, con su propia UX
+de estado de conexión (offline como EXPERIENCIA DE PANTALLA es solo el módulo de
+reparto; la cola de reintento ante un corte momentáneo de WiFi ya la comparten los tres,
+ver §3) · correo saliente (no hay outbox de correo en este MVP).
 
 ## 4. MODELO DE DATOS (Postgres, schema `pan` — canónico, resuelve el panel)
 

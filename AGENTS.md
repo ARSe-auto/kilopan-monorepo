@@ -35,10 +35,10 @@ node db/test-invariantes.mjs   # intenta violar cada invariante con SET ROLE pan
   UPDATE. El servidor recalcula el sha256 y rechaza la foto que no coincide.
 - **GPS:** permiso denegado bloquea la confirmación y lo dice; precisión mala **nunca**
   bloquea (el pan no espera). `(0,0)` rebota en la BD.
-- **Offline es SOLO el módulo de reparto.** Pesaje y mostrador exigen red local.
+- **La UX de offline (pantalla/estado) es SOLO reparto** — pesaje/mostrador exigen red
+  local, pero un corte momentáneo ya encola y reintenta solo (`enviarOEncolar`), sin UX propia.
 - **El repartidor jamás ve CLP** — regla de rol, testeada. $/km vive solo en el dashboard.
-- TypeScript strict; sin `any`, sin `@ts-ignore`, sin `eslint-disable` sin cita de spec.
-- Toda query parametrizada. Cero interpolación de string en SQL.
+- TypeScript strict; sin `any`, sin `@ts-ignore`, sin `eslint-disable` sin cita de spec. Toda query parametrizada, cero interpolación de string en SQL.
 - **TOKENS VEDADOS en `src/`** (grep bloqueante, comentarios incluidos): `TODO`, `FIXME`,
   `PLACEHOLDER`, `not implemented`, `lorem ipsum`. Escribir código real o achicar el corte.
 - **Nunca modificar para poner en verde:** strictness de tsconfig, reglas de eslint,
