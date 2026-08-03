@@ -83,8 +83,21 @@ async function pasoDelDiaAdmin(): Promise<PasoDelDia> {
   };
 }
 
-async function pasoDelDiaVendedor(): Promise<PasoDelDia> {
+async function pasoDelDiaVendedor(dispositivoId: string): Promise<PasoDelDia> {
   const db = await obtenerDb();
+  // AC-VEN-05: sin turno abierto no hay a quién cargarle el arqueo (0018_turnos_
+  // cierre_caja.sql) — abrirlo es lo primero que toca al llegar, antes que vender.
+  const turnoAbierto = await db.query<{ n: number }>(
+    `select count(*)::int as n from pan.turnos where dispositivo_id = $1 and cerrado_at is null`,
+    [dispositivoId]
+  );
+  if ((turnoAbierto.rows[0]?.n ?? 0) === 0) {
+    return {
+      texto: "Falta abrir el turno",
+      detalle: "Anota el fondo con el que partes la caja antes de vender.",
+      acciones: [{ etiqueta: "Abrir turno", href: "/apertura-turno" }],
+    };
+  }
   const cajaCerrada = await db.query<{ n: number }>(
     `select count(*)::int as n from pan.cierres_caja where fecha = ${HOY_CHILE} and not anulado`
   );
@@ -105,7 +118,11 @@ export default async function InicioPage() {
 
   const destinos = destinosDe(sesion.rol);
   const paso =
-    sesion.rol === "admin" ? await pasoDelDiaAdmin() : sesion.rol === "vendedor" ? await pasoDelDiaVendedor() : null;
+    sesion.rol === "admin"
+      ? await pasoDelDiaAdmin()
+      : sesion.rol === "vendedor"
+        ? await pasoDelDiaVendedor(sesion.dispositivoId)
+        : null;
 
   return (
     <Pantalla titulo="Hoy" bajada={`Hola, ${sesion.nombre} · ${ETIQUETA_ROL[sesion.rol]}`}>

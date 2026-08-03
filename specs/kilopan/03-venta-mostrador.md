@@ -68,11 +68,20 @@ Sin venta en ruta — está explícitamente FUERA del MVP (§3).
       ni `PATCH /api/medios-pago` — ni e2e, ni unit, ni HTTP. `AC-PAG-01` cubre el
       permiso a nivel BD, no esta pantalla ni este endpoint.
 
-- [ ] (P0) **Apertura de turno** al primer ingreso del día en un equipo: fondo inicial y
+- [x] (P0) **Apertura de turno** al primer ingreso del día en un equipo: fondo inicial y
       confirmación, dos toques. La tabla `pan.turnos` y el arqueo por turno ya existen
-      (`db/migraciones/0018_turnos_cierre_caja.sql`); lo que falta es la pantalla que abre
-      el turno. Sin ella el arqueo tiene sujeto en la base pero nadie lo declara desde la
-      app (`docs/PROMPT_CORRECTIVO.md` §5, Ola 2) [AC-VEN-05]
+      (`db/migraciones/0018_turnos_cierre_caja.sql`); lo que faltaba era la pantalla que
+      abre el turno. Sin ella el arqueo tenía sujeto en la base pero nadie lo declaraba
+      desde la app (`docs/PROMPT_CORRECTIVO.md` §5, Ola 2) [AC-VEN-05]
+      — **Construido:** `/apertura-turno` (teclado propio + `BotonPrimario`, dos toques:
+      teclear el fondo y confirmar). `Hoy` (`/inicio`) la ofrece como paso siguiente del
+      vendedor cuando no hay turno abierto en el dispositivo, antes que "Vender en el
+      mesón" — sin bloquear el acceso directo a `/vender` (AC-VEN-02/03 no dependen de
+      esto). Probado por e2e real contra el servidor (`e2e/apertura-turno.spec.ts`):
+      sin turno abierto `Hoy` ofrece "Abrir turno"; teclear + confirmar lo abre con el
+      fondo exacto (verificado contra `/api/turnos/actual`, no solo contra la UI); un
+      segundo intento en el mismo equipo lo dice sin reventar (el índice único de la BD,
+      `turnos_uno_abierto_por_dispositivo`, es quien de verdad lo impide).
 
 ## Notas de implementación
 
