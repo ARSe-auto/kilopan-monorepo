@@ -64,12 +64,41 @@ if ! command -v pnpm >/dev/null 2>&1; then
   pausar "'pnpm' no resuelve en el PATH de este proceso ($PATH)."
 fi
 
+# UN SOLO PUNTO DE ARRANQUE (bug real, 3-ago-2026 — lo cometí yo). El motor se lanza por
+# launchd, que lee ~/.claude-oauth-token y exporta CLAUDE_CODE_OAUTH_TOKEN antes de exec.
+# Lanzarlo a mano desde una terminal hereda el PATH pero NO esa variable: `claude -p` muere
+# al instante, cada iteración dura segundos, y loop.sh cuenta cada una como intento fallido
+# del AC. En ~10 minutos así se marcaron SIETE ACs sanos como atascados. El daño no se ve
+# mientras pasa —el log dice «SIN AVANCE», que es lo mismo que diría un AC difícil— y hay
+# que revertirlo a mano después. `command -v claude` no alcanza: el binario está, lo que
+# falta es la credencial.
+# KILOPAN_LOOP_CMD define el modo prueba (loop estubado, nunca se invoca `claude` de
+# verdad): ahí la credencial no hace falta y exigirla rompería el arnés.
+if [ -z "${KILOPAN_LOOP_CMD:-}" ] && [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
+  pausar "sin CLAUDE_CODE_OAUTH_TOKEN: este watchdog NO viene de launchd. Lanzado a mano, cada iteración falla en segundos y marca ACs sanos como atascados. Arrancar el motor solo por launchd (com.kilopan.ralph-loop)."
+fi
+
 echo "watchdog: arrancando — PATH ok, claude=$(command -v claude), tope ${MAX_ITERACIONES} iteraciones, ${MAX_SIN_AVANCE} sin avance seguidas aborta" | tee -a "$LOG"
 
 sin_avance=0
 i=0
 while [ "$i" -lt "$MAX_ITERACIONES" ]; do
   i=$((i + 1))
+
+  # LA SEÑAL DE PARE SE LEE EN CADA VUELTA, NO SOLO AL ARRANCAR (bug real, 3-ago-2026).
+  # El chequeo de arriba corre UNA vez, antes del bucle: impedía que un watchdog NUEVO
+  # arrancara, pero no podía detener uno YA ANDANDO. Poner el marcador con el motor en
+  # marcha no hacía nada — seguía iterando hasta agotar las 20 vueltas. Quien pausa espera
+  # que el motor pare, no que pare el próximo que alguien intente arrancar: sin esto, la
+  # única forma de frenarlo era matar el proceso a mano, que es justo lo que el marcador
+  # vino a evitar.
+  if [ -f "$PAUSA" ]; then
+    echo "watchdog: PARE detectado en la iteración $i — dejo de construir. Motivo:" | tee -a "$LOG"
+    sed 's/^/  /' "$PAUSA" | tee -a "$LOG"
+    echo "watchdog: para reanudar, revisar el log y borrar $PAUSA" | tee -a "$LOG"
+    exit 0
+  fi
+
   echo "=== watchdog: iteración $i/$MAX_ITERACIONES — $(date -Iseconds) ===" | tee -a "$LOG"
 
   # El código de salida del LOOP, no el de tee: sin ${PIPESTATUS[0]} se pierde la

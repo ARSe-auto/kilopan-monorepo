@@ -111,7 +111,30 @@ if [ "$FULL" -eq 1 ]; then
     # que uno ausente (mismo principio que "PASA"/"EXCEDE" en presupuesto-perf.mjs).
     # Offline real queda para Ola 4 (docs/PROMPT_CORRECTIVO.md §3); hasta entonces la
     # etiqueta dice solo lo que este paso de verdad ejercita.
+    # EL LOCK PROTEGE EL RECURSO, NO EL ROL (redefinición 3-ago-2026). `playwright.config.ts`
+    # fija el puerto 3301 para TODOS los worktrees, y `lock.sh` solo lo tomaban loop.sh y
+    # prueba-arnes.sh — o sea, se protegía al «builder», no al puerto. Dos gates a la vez
+    # (una sesión revisando + el motor construyendo) chocaban en 3301 y el perdedor sacaba
+    # un rojo espurio que, para el motor, cuenta como AC fallido y suma un strike: se
+    # marcan ACs sanos como atascados por una colisión de infraestructura. Pasó de verdad.
+    # Quien CONSUME el recurso toma el lock, sin importar quién lo invoque. Un lock propio
+    # (e2e-<app>) y no el de builder: el motor ya tiene el de builder tomado y bloquearse
+    # a sí mismo sería peor que la colisión.
+    # Se ESPERA el turno, pero el e2e SIEMPRE corre. La primera versión de esto salteaba el
+    # paso cuando el lock estaba ocupado, y eso es peor que el problema que resuelve: un
+    # gate que dice VERDE sin haber ejercido el camino dorado es exactamente el falso verde
+    # que esta campaña vino a matar. Un rojo por colisión es recuperable —loop.sh clasifica
+    # los rojos ajenos al AC y no le suma strike—; un verde sin probar no se recupera nunca,
+    # porque nadie vuelve a mirar.
+    lock_e2e=no
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+      bash packages/metodo/scripts/lock.sh tomar "e2e-$APP" $$ >/dev/null 2>&1 && { lock_e2e=si; break; }
+      [ "$?" = "7" ] || break   # 7 = ocupado (vale esperar). Cualquier otro fallo: no esperar.
+      echo "  esperando el puerto 3301 (otro gate lo tiene)…"
+      sleep 15
+    done
     run_step "e2e móvil 390x844" pnpm --filter "$APP" run e2e
+    [ "$lock_e2e" = "si" ] && bash packages/metodo/scripts/lock.sh soltar "e2e-$APP" $$ >/dev/null 2>&1
   else
     skip_step "e2e Playwright" "apps/$APP aún no tiene playwright.config.ts"
   fi

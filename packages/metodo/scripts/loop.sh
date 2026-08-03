@@ -268,6 +268,43 @@ else
     echo "loop: reintentar no lo arregla — pauso para revisión (exit 8)."
     exit 8
   fi
+  # ─────────────────────────────────────────────────────────────────────────────────
+  # CLASIFICAR EL FALLO ANTES DE CONTARLO (redefinición 3-ago-2026).
+  #
+  # Hasta acá, CUALQUIER ausencia de commit sumaba un strike al AC, y a los 3 lo marcaba
+  # atascado para siempre. Pero un commit puede faltar por razones que no dicen NADA sobre
+  # el AC, y las dos se vieron el mismo día:
+  #   · el presupuesto de la iteración se agotó a mitad del trabajo (`budget_exhausted`);
+  #   · el gate salió rojo en un paso que este AC no puede haber roto — un CVE nuevo en
+  #     `audit` (GHSA-rgw5-rvv9-x895 en brace-expansion, transitiva de eslint) tumbó el
+  #     gate entero, y el agente, obedeciendo «no comitear sin verde», terminó en SIN
+  #     AVANCE habiendo hecho el trabajo.
+  # Contar eso como fallo DEL AC es acusar al AC de lo que hizo el entorno: se marcan ACs
+  # sanos como atascados, el motor deja de intentarlos, y el backlog se vacía en falso.
+  # La regla nueva: un strike es evidencia sobre el AC. Si la causa es ajena, se registra
+  # y se reintenta, pero NO se le carga al AC.
+  RESULTADO_JSON="$LOG_DIR/ultimo-resultado.json"
+  if grep -qE '"(terminal_reason|subtype)":"[^"]*(budget|max_turns|timeout)' "$RESULTADO_JSON" 2>/dev/null; then
+    echo "loop: SIN COMMIT por AGOTAMIENTO DE RECURSO (presupuesto/turnos/tiempo), no por el AC."
+    echo "loop: NO cuenta como intento fallido de ${AC_ID:-?} — el trabajo puede estar bien encaminado."
+    exit 1
+  fi
+  # El gate lista sus fallos en una línea «FALLÓ   (n): paso1 paso2». Si el ÚNICO rojo es
+  # `audit`, es dependencias del repo: ningún AC lo rompe ni lo arregla escribiendo su
+  # feature. Se acota a ese caso a propósito — un rojo en lint/typecheck/build/e2e SÍ puede
+  # ser del AC, y ahí el strike es correcto.
+  CHECK_LOG="$LOG_DIR/ultimo-check.log"
+  if [ -f "$CHECK_LOG" ]; then
+    LINEA_FALLO="$(grep -E '^FALLÓ' "$CHECK_LOG" | tail -1)"
+    N_FALLOS="$(printf '%s' "$LINEA_FALLO" | grep -oE '\([0-9]+\)' | tr -dc 0-9)"
+    if [ "${N_FALLOS:-0}" = "1" ] && printf '%s' "$LINEA_FALLO" | grep -q "audit"; then
+      echo "loop: SIN COMMIT porque el gate está rojo SOLO en 'audit' — es una vulnerabilidad de"
+      echo "loop: dependencias del repo, ajena a ${AC_ID:-?}. NO cuenta como intento fallido."
+      echo "loop: arreglar el override en pnpm-workspace.yaml; hasta entonces NINGÚN AC puede comitear."
+      exit 1
+    fi
+  fi
+  # ─────────────────────────────────────────────────────────────────────────────────
   fallos_ac=$(( $(leer_num "$CONT_AC") + 1 ))
   echo "$fallos_ac" > "$CONT_AC"
   echo $(( $(leer_num .ralph/build-fails) + 1 )) > .ralph/build-fails

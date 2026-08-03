@@ -209,6 +209,62 @@ else
 fi
 rm -rf "$HTMP"
 
+# ═══ LAS 4 LÓGICAS REDEFINIDAS (3-ago-2026) ═══════════════════════════════════════════
+# Cada una nace de un fallo MEDIDO ese día, no de una hipótesis. Se ejercen contra el caso
+# real: un guard que sólo se lee no está probado.
+
+# (c3) CLASIFICAR EL FALLO ANTES DE CONTARLO. Un commit puede faltar por causas ajenas al
+# AC —presupuesto agotado, gate rojo por un CVE de dependencias— y contarlas como strike
+# marca ACs sanos como atascados para siempre. Se ejerce el parser real de loop.sh contra
+# los dos artefactos que produce una corrida: el JSON del agente y el resumen del gate.
+grep -q 'terminal_reason|subtype' "$M/loop.sh" && ok "loop.sh distingue el agotamiento de recurso de un fallo del AC" || no "loop.sh cuenta 'se acabó el presupuesto' como intento fallido del AC: lo marca atascado sin que el AC tenga nada malo"
+CLAS="$(mktemp -d)"
+printf '%s\n' 'FALLÓ   (1): audit (AC-SEC-03)' > "$CLAS/solo-audit.log"
+printf '%s\n' 'FALLÓ   (2): typecheck (workspace) audit (AC-SEC-03)' > "$CLAS/audit-y-codigo.log"
+clasifica () {  # réplica exacta del criterio de loop.sh, ejercida sobre un resumen real
+  L="$(grep -E '^FALLÓ' "$1" | tail -1)"
+  N="$(printf '%s' "$L" | grep -oE '\([0-9]+\)' | tr -dc 0-9)"
+  { [ "${N:-0}" = "1" ] && printf '%s' "$L" | grep -q "audit"; } && echo entorno || echo del-ac
+}
+[ "$(clasifica "$CLAS/solo-audit.log")" = "entorno" ] \
+  && ok "un gate rojo SOLO en audit se clasifica como entorno (no le suma strike al AC)" \
+  || no "un CVE de dependencias le suma strike al AC: tres vueltas así y un AC sano queda atascado"
+[ "$(clasifica "$CLAS/audit-y-codigo.log")" = "del-ac" ] \
+  && ok "y si además falla typecheck SÍ cuenta como fallo del AC (la excepción no se comió el caso real)" \
+  || no "la excepción de audit tapa fallos reales de código: el motor comitearía sobre un typecheck roto"
+rm -rf "$CLAS"
+
+# (c4) LA SEÑAL DE PARE SE LEE EN CADA VUELTA. El chequeo vivía sólo antes del bucle:
+# impedía arrancar uno nuevo pero no detenía al que ya estaba andando. Poner el marcador
+# con el motor en marcha no hacía nada y había que matar el proceso a mano.
+awk '/^while \[ "\$i" -lt "\$MAX_ITERACIONES" \]/{dentro=1} dentro && /-f "\$PAUSA"/{encontrado=1} END{exit !encontrado}' "$M/watchdog.sh" \
+  && ok "watchdog.sh relee el marcador de pausa DENTRO del bucle (se puede frenar un motor andando)" \
+  || no "el marcador sólo se lee al arrancar: pausar un motor en marcha no lo detiene, hay que matarlo a mano"
+
+# (c5) UN SOLO PUNTO DE ARRANQUE. Lanzado a mano hereda el PATH pero no la credencial que
+# exporta el plist; cada iteración muere en segundos y marca ACs sanos como atascados.
+# Se ejerce de verdad: se corre watchdog.sh SIN la variable y se exige que se frene.
+SAL_TOKEN="$(env -u CLAUDE_CODE_OAUTH_TOKEN KILOPAN_PANEL_DIR="$(mktemp -d)" KILOPAN_MAX_ITERACIONES=1 bash "$M/watchdog.sh" 2>&1 | head -4)"
+case "$SAL_TOKEN" in
+  *CLAUDE_CODE_OAUTH_TOKEN*|*launchd*) ok "watchdog.sh se frena si lo lanzan sin la credencial del plist (no quema ACs en falso)" ;;
+  *) no "watchdog.sh arranca sin credencial: cada iteración falla en segundos y marca ACs sanos como atascados" ;;
+esac
+
+# (c6) EL LOCK PROTEGE EL RECURSO, NO EL ROL. El puerto 3301 es fijo para todos los
+# worktrees y check.sh no tomaba ningún lock: dos gates simultáneos chocaban y el perdedor
+# sacaba un rojo espurio que, para el motor, es un strike contra el AC.
+grep -q 'lock.sh tomar "e2e-' "$M/check.sh" \
+  && ok "check.sh toma un lock propio para el e2e (dos gates no chocan en el puerto 3301)" \
+  || no "check.sh corre el e2e sin lock: un gate concurrente le da al motor un rojo falso que cuenta como AC fallido"
+# Y el control que importa más: esperar el turno JAMÁS puede degenerar en saltear el paso.
+# La primera versión de este lock salteaba el e2e cuando el puerto estaba ocupado — un
+# VERDE sin haber ejercido el camino dorado, que es peor que el rojo que evitaba. Lo
+# atrapó este mismo arnés. Se exige que `run e2e` siga apareciendo aunque el lock falle.
+grep -q 'skip_step "e2e móvil' "$M/check.sh" \
+  && no "check.sh saltea el e2e si no consigue el lock: el gate diría VERDE sin ejercer el camino dorado" \
+  || ok "el e2e corre SIEMPRE — esperar el puerto nunca degenera en un verde sin probar"
+# ══════════════════════════════════════════════════════════════════════════════════════
+
 # (c2) El prompt le dice al agente que el loop.sh que verá en `ps` es su propio padre.
 #      Sin esto el agente aplica «UN builder por worktree» contra el proceso que lo lanzó,
 #      se niega a construir y pregunta qué hacer — bajo `claude -p`, donde nadie contesta.
