@@ -254,14 +254,23 @@ export async function PATCH(request: NextRequest) {
   }
 
   const db = await obtenerDb();
+  // `anulada_at is null` (0022): sin esto se le registraba un pago a una venta ANULADA y la
+  // fila quedaba afirmando las dos cosas a la vez —«esta venta no existe» y «el cliente la
+  // pagó»—, el falso registro contra el que advierte la cabecera de la 0021. El trigger
+  // trg_ventas_saldado_inmutable ya lo rebota en la BD; el filtro está acá para que el
+  // cliente reciba el 409 que corresponde y no un 500 (mismo reparto que hace `anulada_at
+  // is null` en /api/ventas/anular con el doble-tap).
   const r = await db.query<{ id: string }>(
     `update pan.ventas set saldado_at = now()
-      where id = $1 and medio_pago = 'fiado' and saldado_at is null
+      where id = $1 and medio_pago = 'fiado' and saldado_at is null and anulada_at is null
       returning id`,
     [cuerpo.ventaId]
   );
   if (r.rows.length === 0) {
-    return NextResponse.json({ error: "Ya estaba saldada, no es fiado o no existe" }, { status: 409 });
+    return NextResponse.json(
+      { error: "Ya estaba saldada, está anulada, no es fiado o no existe" },
+      { status: 409 }
+    );
   }
   return NextResponse.json({ ok: true });
 }
