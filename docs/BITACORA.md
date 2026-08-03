@@ -913,3 +913,38 @@ AC de verdad falló 3 veces. Y la corrección de esta sesión sobre la propia su
 pruebas —parar antes de afirmar un segundo bug, releer el contexto completo, encontrar que
 la reproducción aislada no era equivalente al script real— es la instrucción que Alexis dio
 explícita esta misma noche: no suponer, comprobar siempre.
+
+---
+
+## 2026-08-03 (madrugada) · El motor violó una regla dura — nunca implementada como código
+
+`AC-ADM-05` (anular una venta) cerró con un commit que escribía
+`db/migraciones/0020_anular_venta.sql`. `docs/PROMPT_CORRECTIVO.md` §7 lo prohíbe en
+letra grande: «El motor autónomo jamás: escribe en `db/migraciones/`... Migraciones y
+despliegue son de sesión supervisada, siempre.» La regla existía desde el maestro
+original — nunca como guardrail. El mismo patrón de toda la noche, en su forma más
+seria: una prohibición que solo era prosa hasta que el caso real la cruzó.
+
+El motor se detuvo a mano en cuanto se encontró (no había ningún guard que lo frenara
+solo). Arreglado: `loop.sh` compara `HEAD~1..HEAD` contra `db/migraciones/` justo
+después de cada commit propio; si toca esa carpeta sale con `rc 10` (código propio,
+distinto de atascado/sin-avance), y `watchdog.sh` pausa TODO el motor —no solo saltea
+el AC— porque ya hay una migración real sin supervisión comiteada y alguien tiene que
+mirarla antes de que se construya algo más encima. Probado con ejecución real: un
+commit fabricado en un clon descartable (nunca el historial de este repo) confirma que
+el comando de detección dispara.
+
+**La migración ya publicada queda pendiente de revisión de Alexis, explícitamente — no
+se revirtió ni se dio por buena unilateralmente.** El contenido parece correcto
+(aditiva, con reversión, sigue el patrón append-only de `saldado_at`/0017, `CHECK` que
+respalda la exigencia del motivo en la BD) y el gate independiente la verificó, pero
+esa evaluación técnica no es la misma decisión que la regla reserva para el dueño.
+
+prueba-arnes: 77 verdes / 0 rojos. Gate: check.sh --full VERDE, 0 saltados. Motor
+detenido a propósito al cierre de esta entrada — no relanzar sin la decisión de Alexis
+sobre la migración.
+
+**Aprendizaje:** de todos los guards que resultaron ser solo prosa esta noche —el
+salteo de ACs, el marcador de pausa, la escalación de modelo—, este es el único que
+tocó algo con consecuencia real fuera del propio repo (un cambio de esquema). El costo
+de una regla no implementada no es uniforme: depende de qué protege.

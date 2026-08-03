@@ -1,83 +1,105 @@
-# HANDOFF — motor autónomo funcionando por primera vez, Ola 2 planificada
+# HANDOFF — motor detenido a propósito, esperando la decisión de Alexis sobre una migración
 
-Traspaso por límite de sesión, no por bloqueo. Todo lo importante está en `docs/BITACORA.md`
-(entradas del 2-ago noche y 3-ago madrugada). Esto es el resumen operativo.
+Traspaso por límite de sesión. **Hay una decisión pendiente de Alexis, no solo un traspaso
+técnico** — leé la sección siguiente antes que nada.
 
-## Lo que cambió en esta sesión
+## LO MÁS URGENTE: migración escrita por el motor, sin supervisión, ya en `origin/main`
 
-**El motor NUNCA había cerrado un AC por sí mismo.** No era lentitud: era imposible. Ocho
-defectos, de los cuales uno era mortal y los otros siete lo disfrazaban de «AC difícil».
+`AC-ADM-05` (anular una venta) cerró con `db/migraciones/0020_anular_venta.sql`.
+`docs/PROMPT_CORRECTIVO.md` §7 lo prohíbe en letra grande: el motor autónomo JAMÁS escribe
+en `db/migraciones/` — es de sesión supervisada, siempre. La regla nunca estaba
+implementada como guardrail (arreglado esta sesión, ver abajo), y el motor la cruzó.
 
-1. `loop.sh` heredaba el árbol sucio de la iteración fallida anterior → el gate arrancaba
-   rojo por código ajeno y no podía dar verde jamás. Ahora se guarda en `git stash`.
-2. `watchdog.sh` salía con `exit 1` en aborts que decían «NO reintentar solo», y
-   `KeepAlive` lo resucitaba a los 120 s, en bucle infinito quemando US$3 por vuelta.
-   Ahora escribe `panel/PAUSA-REVISION` y sale con 0.
-3. `siguiente_ac()` usaba `grep -m1`: un AC imposible tapaba a todos los de atrás. Ahora
-   hay lista de atascados (`panel/acs-atascados.txt`).
-4. `.ralph/build-fails` no lo escribía nadie: la escalación a Opus era código muerto.
-5. **EL MORTAL:** `AGENTS.md` manda verificar `ps aux | grep loop.sh` antes de construir, y
-   el agente encontraba SIEMPRE al `loop.sh` que lo había lanzado a él. Se negaba a
-   construir y preguntaba al vacío bajo `claude -p`. Arreglado en AGENTS.md y en el prompt.
-6. Las pruebas del selector de modelo no eran herméticas y además BORRABAN el contador.
-7. El agente podía editar pero **no ejecutar**: `acceptEdits` no cubre Bash, así que no
-   podía correr `check.sh` y —obedeciendo su regla— no comiteaba. Lista blanca acotada en
-   `.claude/settings.json` (decisión de Alexis: no `bypassPermissions`).
-8. Mi propia suite podía **pausar el motor de producción**: escribía `PAUSA-REVISION` en el
-   panel vivo. `KILOPAN_PANEL_DIR` lo redirige; se afirma por mtime que el vivo no se toca.
+**El motor está DETENIDO a propósito** (`launchctl bootout`, no solo `PAUSA-REVISION`) —
+NO relanzar hasta que Alexis decida qué hacer con la migración 0020. Le pregunté y eligió
+"la reviso yo": mostrale el SQL completo (`db/migraciones/0020_anular_venta.sql`, ~30
+líneas, aditiva, con reversión) y el AC que cierra
+(`specs/kilopan/10-administracion.md`, buscar AC-ADM-05), y esperá su decisión:
+- **Queda como está** → nada que hacer, solo confirmar con Alexis y relanzar.
+- **Se ajusta** → sesión supervisada la corrige, gate, commit, y recién ahí relanzar.
+- **Se revierte** → `git revert` del commit `4b4d59e` (AC-ADM-05), el AC vuelve a abierto,
+  y OJO: ahora que el guardrail existe, si el motor lo vuelve a tomar y necesita
+  migración otra vez, va a pausar con `rc 10` en vez de comitear — está bien, es lo que
+  se espera. Marcarlo en `panel/acs-atascados.txt` mientras se decide cómo dárselo (a
+  mano, o partiendo el AC en «schema, sesión supervisada» + «endpoint, el motor»).
 
-**Bug de producto encontrado de paso:** `db/migrar.mjs` no fijaba la zona horaria, así que
-migraciones y semilla escribían `current_date` en la zona del proceso. En CI (UTC) eso es
-el día de MAÑANA entre las 20:00 y las 24:00 de Chile → `pan.precios.vigente_desde` en el
-futuro → producto sin precio → tres tests de venta en rojo todas las noches. Arreglado en
-`conectar()` para ambas ramas, con guard probado en negativo.
+## Lo que se arregló esta sesión (larga: cerró Ola 1, encendió el motor por primera vez,
+## escribió y arrancó Ola 2, y encontró/corrigió 10 bugs reales)
 
-## Estado ahora
+Todo el detalle con evidencia está en `docs/BITACORA.md`, entradas del 2-ago noche y
+3-ago madrugada. Resumen:
 
-- **Motor:** verificar con `launchctl list | grep kilopan`. Cerró `AC-ID-03` solo, con gate
-  independiente verde, y publicó. Si está detenido, encender con:
-  `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.kilopan.ralph-loop.plist`
-- **Autonomía:** el watchdog publica lo verificado (`empujar-si-verde.sh`, solo si
-  `last-green.sha == HEAD`), el plist lo relanza cada 30 min (`StartInterval`) y sin
-  trabajo sale con DONE. Un ABORT real escribe `PAUSA-REVISION` y **frena todo arranque
-  posterior** hasta que una persona lo borre — mirar ese archivo PRIMERO si no avanza.
-- **Backlog:** 54 ACs abiertos (41 de deuda de Ola 1 + 13 de Ola 2 recién escritos).
-- **Fuera del motor** (`panel/acs-atascados.txt`): `AC-SEC-05` (migrar el secreto de
-  dispositivo a IndexedDB; trabajo al 80% en un stash, ver abajo) y `AC-ADM-11` (reparación
-  de datos históricos con informe firmado por la dueña — §7, sesión supervisada).
+**El motor nunca había cerrado un AC solo hasta esta sesión.** Ocho defectos (uno
+mortal: el agente se detectaba a sí mismo como builder rival — `AGENTS.md` + prompt de
+`loop.sh`, arreglado) impedían cualquier avance. Arreglados todos, probados con
+ejecución real (stubs de `rc`, clones descartables), no solo grep.
+
+**Bug de producto:** migraciones y semilla no fijaban zona horaria — escribían el día de
+MAÑANA en CI (UTC) entre las 20:00 y las 24:00 de Chile. Arreglado en `db/migrar.mjs`.
+
+**Cadena autónoma cerrada:** el watchdog publica solo lo que el gate independiente
+verifica (`empujar-si-verde.sh`, lee `last-green.sha` DEL DISCO — no hace falta
+comitearlo, comitearlo aparte solo corre el `HEAD` un paso). El plist relanza cada 30 min
+sin desarmar el freno real (`PAUSA-REVISION` sigue frenando todo arranque).
+
+**Ola 2 planificada:** 13 ACs nuevos en `specs/kilopan/{10-administracion,09-plataforma-
+miga,05-entrega-pod,03-venta-mostrador}.md`. §4 (modelo de datos) ya estaba hecho
+(migraciones 0017/0018 existentes) — la reparación de datos históricos (`AC-ADM-11`) es
+la única de sesión supervisada por diseño.
+
+**El bug de esta madrugada, el más serio:** dos frenos con el mismo umbral (3) se
+disparaban juntos, así que el salteo de ACs atascados nunca llegaba a probarse cuando UN
+AC fallaba 3 veces — que es el caso normal. Arreglado con `rc 9` (loop.sh) distinguiendo
+"AC saltado, progreso" de "no sé qué hacer". Y recién DESPUÉS de arreglar eso, el motor
+cerró `AC-ADM-05` con la migración prohibida — ver arriba.
+
+## Estado exacto ahora
+
+- **Motor: DETENIDO** (no cargado en launchd). NO relanzar sin la decisión de Alexis.
+- **Backlog:** 60 ACs abiertos de 110 totales (61 cerrados). `AC-ADM-05` cerrado (con la
+  migración pendiente de revisión); `AC-ADM-04` cerrado limpio.
+- **Fuera del motor** (`panel/acs-atascados.txt`): `AC-SEC-05` (refactor a IndexedDB,
+  trabajo al 80% en un `git stash`, buscar «AC-SEC-05 wip»), `AC-ADM-11` (informe firmado
+  por la dueña), `AC-H0-03` (necesita arnés de tests nuevo en `packages/miga`).
+- **`origin/main` al día** — todo lo comiteado esta sesión ya está publicado, incluida
+  la migración 0020 en revisión.
+- **Panel del motor:** artefacto publicado, URL ya conocida por Alexis (buscar en
+  `claude.ai/code/artifacts` si hace falta el link — "KiloPan · Motor autónomo"). Se
+  actualiza con `node /private/tmp/.../scratchpad/panel-vivo/construir-artefacto.mjs`
+  seguido de `Artifact` sobre el mismo `file_path` — OJO: esa ruta es del scratchpad de
+  ESTA sesión (`/private/tmp/claude-501/...`), no sobrevive el traspaso. Si la sesión
+  siguiente quiere seguir actualizándolo, tiene que recrear `datos.mjs`/`plantilla.mjs`/
+  `construir-artefacto.mjs` en su propio scratchpad (están en la bitácora del código, o
+  se pueden regenerar leyendo este HANDOFF + el historial de git de esta conversación no
+  aplica — quedan como archivos de sesión, no versionados a propósito, son tooling de
+  supervisión, no producto).
 
 ## Verificación rápida al retomar
 
 ```bash
-launchctl list | grep kilopan
-cat ~/kilopan-monorepo/packages/metodo/panel/PAUSA-REVISION 2>/dev/null   # si existe, está frenado A PROPÓSITO
-tail -40 ~/kilopan-monorepo/packages/metodo/panel/watchdog.log
-git -C ~/kilopan-monorepo log origin/main..HEAD --oneline                 # ¿quedó algo sin publicar?
-git -C ~/kilopan-monorepo stash list                                      # trabajo guardado del motor
+launchctl list | grep kilopan                                             # debería NO aparecer (detenido)
+cat ~/kilopan-monorepo/db/migraciones/0020_anular_venta.sql                # la migración en revisión
+git -C ~/kilopan-monorepo log origin/main..HEAD --oneline                  # ¿quedó algo sin publicar? (debería estar vacío)
+git -C ~/kilopan-monorepo stash list                                       # trabajo guardado del motor
+cat ~/kilopan-monorepo/packages/metodo/panel/acs-atascados.txt
 ```
 
 ## Lo que NO está resuelto
 
-1. **`AC-SEC-05`** exige migrar el secreto de dispositivo de `localStorage` a IndexedDB, lo
-   que vuelve asíncrona una API que consumen 3 páginas y 6 specs e2e. El trabajo del motor
-   está bueno y guardado en un `git stash` (buscar «AC-SEC-05 wip»). Es de sesión
-   supervisada; terminarlo y quitarlo de `acs-atascados.txt`.
-2. **CI hay que confirmarlo a mano**: no hay `gh` ni `brew` en la máquina. El repo es
-   público, así que sirve
+1. **La decisión sobre la migración 0020 — lo primero, antes de relanzar nada.**
+2. `AC-SEC-05` (sesión supervisada, trabajo al 80% en stash).
+3. CI se confirma a mano por la API pública de GitHub (no hay `gh` ni `brew` en la máquina):
    `curl -s "https://api.github.com/repos/ARSe-auto/kilopan-monorepo/actions/runs?per_page=5"`.
-3. **Los dos gestos del dueño siguen abiertos**: rotar la credencial de Postgres de
-   producción (G1) y activar branch protection en GitHub (G2).
-4. **Olas 3 y 4 no tienen ACs escritos.** Mismo trabajo que se hizo con Ola 2 hoy: el motor
-   construye pero no planifica. Hacerlo antes de que se agoten los 54.
+4. Los dos gestos del dueño: rotar credencial de Postgres (G1), branch protection (G2).
+5. Olas 3 y 4 sin ACs escritos — mismo trabajo que Ola 2, antes de que se agoten los 60.
+6. Considerar si el guardrail de migraciones (`rc 10`) necesita vivir también en
+   `guardrail.sh` para cubrir otros caminos de entrada, no solo `loop.sh`.
 
 ## Prompt de arranque de la sesión siguiente
 
-> Retoma en `~/kilopan-monorepo` (repo principal, no un worktree). Lee `docs/HANDOFF.md`.
-> El motor autónomo funciona por primera vez y publica solo lo que el gate independiente
-> verifica. Verificá su estado con los comandos de «Verificación rápida»; si hay
-> `PAUSA-REVISION`, LEELO antes de nada: está frenado a propósito y dice por qué. Si avanza,
-> supervisá y confirmá CI por la API de GitHub (no hay `gh` instalado). Cuando el backlog de
-> 54 se acerque a agotarse, traducí Olas 3 y 4 de `docs/PROMPT_CORRECTIVO.md` a ACs con su
-> spec, igual que se hizo con Ola 2. Pendiente de sesión supervisada: `AC-SEC-05` (su
-> trabajo al 80% está en un `git stash`). Armá tu despertador de continuidad (~4h35m).
-> Regla dura de Alexis: **no supongas nada, comprobá siempre y mostrá la evidencia.**
+> Retoma en `~/kilopan-monorepo`. Lee `docs/HANDOFF.md` completo — hay una decisión
+> pendiente de Alexis (qué hacer con `db/migraciones/0020_anular_venta.sql`, que el motor
+> escribió violando una regla dura) antes de relanzar el motor. NO relanzarlo sin esa
+> decisión. El resto del estado (Ola 2 en marcha, 8 bugs de autonomía arreglados, el
+> panel publicado) está en la bitácora. Regla dura de Alexis, la más repetida esta
+> noche: no supongas nada, comprobá siempre y mostrá la evidencia.
