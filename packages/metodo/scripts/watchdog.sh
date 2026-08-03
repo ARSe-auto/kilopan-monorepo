@@ -74,7 +74,10 @@ while [ "$i" -lt "$MAX_ITERACIONES" ]; do
 
   # El código de salida del LOOP, no el de tee: sin ${PIPESTATUS[0]} se pierde la
   # distinción entre «no hay avance», «infra caída» y «hay otro builder».
-  bash packages/metodo/scripts/loop.sh 2>&1 | tee -a "$LOG"
+  # KILOPAN_LOOP_CMD (default: loop.sh de verdad) existe para que prueba-arnes.sh pueda
+  # sustituir un stub que devuelve un rc exacto — probar el manejo de rc 9 sin gastar en
+  # una invocación real de `claude -p` es la única forma honesta de probarlo.
+  ${KILOPAN_LOOP_CMD:-bash packages/metodo/scripts/loop.sh} 2>&1 | tee -a "$LOG"
   rc=${PIPESTATUS[0]}
 
   case "$rc" in
@@ -104,6 +107,22 @@ while [ "$i" -lt "$MAX_ITERACIONES" ]; do
       # es infraestructura, no un veredicto sobre el código.
       bash packages/metodo/scripts/empujar-si-verde.sh 2>&1 | tee -a "$LOG" || \
         echo "watchdog: el push no salió; sigo construyendo, queda para la próxima vuelta." | tee -a "$LOG"
+      ;;
+    9)
+      # ATASCADO RECIÉN MARCADO (bug real, 3-ago-2026 — primer AC de Ola 2 que el motor
+      # tocó). loop.sh usa rc 9 exactamente UNA vez por AC, en la iteración donde cruza su
+      # propio tope y lo anota en acs-atascados.txt. Antes esto salía como rc 1 genérico —
+      # indistinguible de «no sé qué hacer» — y como KILOPAN_MAX_FALLOS_AC y
+      # MAX_SIN_AVANCE valen 3 los dos, y siguiente_ac() reelige el mismo AC hasta que
+      # queda atascado, sus 3 fallos consecutivos eran SIEMPRE también 3 fallos
+      # consecutivos para este watchdog: se pausaba en la misma vuelta que el salteo,
+      # y «sigo con el siguiente AC» nunca llegaba a probarse.
+      # Acá SÍ hay progreso — el motor ya sabe qué va a intentar distinto — así que
+      # resetea el contador en vez de sumarlo. NO es rc 3/7: esos no gastan presupuesto
+      # de iteración porque el intento no fue real; acá los 3 intentos sí ocurrieron y
+      # sí cuestan, así que la iteración se cuenta igual — sólo no empuja hacia la pausa.
+      sin_avance=0
+      echo "watchdog: AC saltado, no atascamiento del motor — sigo con el siguiente (rc 9)" | tee -a "$LOG"
       ;;
     3)
       # INFRA caída (casilla 5): NO es árbol rojo y NO cuenta como falta de avance.

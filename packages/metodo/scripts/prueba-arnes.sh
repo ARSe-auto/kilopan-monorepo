@@ -148,6 +148,11 @@ PANEL="$(mktemp -d)/panel"; mkdir -p "$PANEL"
 export KILOPAN_PANEL_DIR="$PANEL"
 PANEL_VIVO=packages/metodo/panel
 MTIME_PANEL_ANTES="$(stat -f %m "$PANEL_VIVO/watchdog.log" 2>/dev/null || echo ausente)"
+# Existía o no ANTES de correr esta sección — el motor real puede estar genuinamente
+# pausado (pasó de verdad, 3-ago-2026, incidente AC-ADM-04) sin que esta suite tenga
+# nada que ver. La aserción de abajo compara "cambió", no "existe": un PAUSA-REVISION
+# real y preexistente no es una falla de la suite.
+PAUSA_VIVA_ANTES="$([ -f "$PANEL_VIVO/PAUSA-REVISION" ] && echo si || echo no)"
 
 # (a) siguiente_ac saltea los ACs anotados como atascados. Antes usaba `grep -m1` y
 #     devolvía SIEMPRE el mismo primer AC abierto: uno imposible tapaba a todos los demás.
@@ -201,11 +206,57 @@ rm -f "$PANEL/PAUSA-REVISION"
 # aserción se pone roja, la suite volvió a poder pausar el motor de producción.
 MTIME_PANEL_DESPUES="$(stat -f %m "$PANEL_VIVO/watchdog.log" 2>/dev/null || echo ausente)"
 [ "$MTIME_PANEL_ANTES" = "$MTIME_PANEL_DESPUES" ] && ok "el panel vivo no se escribió (la suite no puede pausar el motor de producción)" || no "la suite ESCRIBIÓ en el panel vivo — puede pausar el motor real y ensuciar su log"
-[ -f "$PANEL_VIVO/PAUSA-REVISION" ] && no "quedó un PAUSA-REVISION en el panel VIVO — el motor no volvería a arrancar" || ok "no dejó marcador de pausa en el panel vivo"
+PAUSA_VIVA_DESPUES="$([ -f "$PANEL_VIVO/PAUSA-REVISION" ] && echo si || echo no)"
+[ "$PAUSA_VIVA_ANTES" = "$PAUSA_VIVA_DESPUES" ] && ok "PAUSA-REVISION del panel vivo sin cambios (ni la creó ni la borró — si ya estaba pausado de verdad, sigue igual)" || no "la suite CAMBIÓ el PAUSA-REVISION del panel vivo (antes: $PAUSA_VIVA_ANTES, después: $PAUSA_VIVA_DESPUES) — puede destrabar o trabar el motor real por accidente"
 case "$SALIDA_PAUSA" in
   *"EN PAUSA"*) ok "con el marcador puesto, el watchdog no arranca (frena de verdad)" ;;
   *)            no "el marcador de pausa no frena al watchdog: sigue construyendo" ;;
 esac
+
+echo
+echo "== 3b-e. Un AC atascado no pausa el motor entero (3-ago-2026) =="
+# BUG REAL: KILOPAN_MAX_FALLOS_AC y MAX_SIN_AVANCE valen 3 los dos, y siguiente_ac()
+# reelige el MISMO AC hasta que queda atascado — sus 3 fallos consecutivos eran SIEMPRE
+# también 3 fallos consecutivos para watchdog.sh. El salteo marcaba el AC atascado y el
+# motor se pausaba en la misma vuelta de todos modos: pasó de verdad con AC-ADM-04, el
+# primer AC de Ola 2 que el motor tocó. KILOPAN_LOOP_CMD sustituye un stub de rc exacto —
+# es la única forma de probar esto sin gastar en una invocación real de `claude -p`.
+PVIVO_ANTES="$(stat -f %m "$PANEL_VIVO/watchdog.log" 2>/dev/null || echo ausente)"
+STUB_DIR="$(mktemp -d)"
+cat > "$STUB_DIR/rc9-luego-1.sh" << 'STUBEOF'
+#!/usr/bin/env bash
+CONT="$1/contador"
+n=$(cat "$CONT" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$CONT"
+[ "$n" -eq 1 ] && exit 9 || exit 1
+STUBEOF
+cat > "$STUB_DIR/siempre-9.sh" << 'STUBEOF'
+#!/usr/bin/env bash
+exit 9
+STUBEOF
+chmod +x "$STUB_DIR"/*.sh
+
+# (a) rc 9 resetea el contador global — el rc 1 de después arranca en #1/3, no en #2/3.
+SAL_A="$(KILOPAN_LOOP_CMD="bash $STUB_DIR/rc9-luego-1.sh $STUB_DIR" KILOPAN_PANEL_DIR="$PANEL" KILOPAN_MAX_ITERACIONES=2 bash "$M/watchdog.sh" 2>&1)"
+echo "$SAL_A" | grep -q "AC saltado, no atascamiento" && ok "rc 9 se distingue como progreso, no como falta de avance" || no "rc 9 no se reconoce — el AC atascado sigue contando como fallo genérico"
+echo "$SAL_A" | grep -q "sin avance consecutivo #1/3" && ok "tras un rc 9, el próximo fallo real arranca en #1/3 (el contador se reseteó)" || no "el contador NO se reseteó tras rc 9 — sigue sumando desde antes"
+
+# (b) tres ACs atascados seguidos (rc 9 tres veces) NO deben pausar el motor.
+SAL_B="$(KILOPAN_LOOP_CMD="bash $STUB_DIR/siempre-9.sh" KILOPAN_PANEL_DIR="$PANEL" KILOPAN_MAX_ITERACIONES=4 bash "$M/watchdog.sh" 2>&1)"
+echo "$SAL_B" | grep -q "PAUSA" && no "tres ACs atascados SEGUIDOS pausan el motor — el salteo no sirve de nada si el motor se detiene igual" || ok "tres ACs atascados seguidos NO pausan — el motor sigue con el próximo AC"
+
+# (c) regresión: tres fallos GENÉRICOS (rc 1, sin marcar nada atascado) siguen pausando.
+#     Sin esto, el arreglo de (a)/(b) podría haber apagado el freno real por accidente.
+cat > "$STUB_DIR/siempre-1.sh" << 'STUBEOF'
+#!/usr/bin/env bash
+exit 1
+STUBEOF
+chmod +x "$STUB_DIR/siempre-1.sh"
+SAL_C="$(KILOPAN_LOOP_CMD="bash $STUB_DIR/siempre-1.sh" KILOPAN_PANEL_DIR="$PANEL" KILOPAN_MAX_ITERACIONES=10 bash "$M/watchdog.sh" 2>&1)"
+echo "$SAL_C" | grep -q "PAUSA" && ok "tres fallos genéricos SIN AC atascado siguen pausando (el freno real no se rompió)" || no "REGRESIÓN: el freno de 'sin avance' dejó de funcionar — el motor giraría en falso sin pausar nunca"
+
+rm -rf "$STUB_DIR"
+PVIVO_DESPUES="$(stat -f %m "$PANEL_VIVO/watchdog.log" 2>/dev/null || echo ausente)"
+[ "$PVIVO_ANTES" = "$PVIVO_DESPUES" ] && ok "estas pruebas tampoco tocaron el panel vivo" || no "esta sección SÍ tocó el panel vivo — revisar KILOPAN_PANEL_DIR"
 
 echo
 echo "== 3c. La cadena autónoma se publica sola y no se apaga sola (3-ago-2026) =="

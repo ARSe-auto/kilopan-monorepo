@@ -238,8 +238,22 @@ else
   echo $(( $(leer_num .ralph/build-fails) + 1 )) > .ralph/build-fails
   echo "loop: SIN AVANCE para ${AC_ID:-?} (intento $fallos_ac) — ver $LOG_DIR/ultimo-loop.log y ultimo-resultado.json"
   if [ -n "${AC_ID:-}" ] && [ "$fallos_ac" -ge "${KILOPAN_MAX_FALLOS_AC:-3}" ]; then
-    esta_atascado "$AC_ID" || echo "$AC_ID" >> "$ATASCADOS"
+    # BUG REAL (3-ago-2026, primer AC de Ola 2 que el motor tocó): KILOPAN_MAX_FALLOS_AC
+    # y MAX_SIN_AVANCE de watchdog.sh valen 3 los dos, y como siguiente_ac() vuelve a
+    # elegir el MISMO AC hasta que quede atascado, sus 3 fallos consecutivos son SIEMPRE
+    # también 3 fallos consecutivos para el watchdog. El salteo marcaba el AC y el motor
+    # se pausaba en la misma vuelta de todos modos — la señal de «tengo un plan, sigo con
+    # el próximo» nunca llegaba a distinguirse de «no sé qué hacer». Salió a la luz recién
+    # ahora porque hasta hoy ningún AC real había fallado 3 veces seguidas sin que ADEMÁS
+    # se cayera algo de infra (rc 3) o hubiera otro builder (rc 7) de por medio.
+    #
+    # exit 9 = «acabo de marcar ESTE AC como atascado» — es progreso estructural (el motor
+    # ya sabe qué va a intentar distinto la próxima vuelta), no lo mismo que «no sé qué
+    # hacer». watchdog.sh lo trata como tal: resetea su contador global en vez de sumarlo.
+    ya_estaba="$(esta_atascado "$AC_ID" && echo si || echo no)"
+    [ "$ya_estaba" = "no" ] && echo "$AC_ID" >> "$ATASCADOS"
     echo "loop: ${AC_ID} ATASCADO tras $fallos_ac intentos — sigo con el siguiente AC. Queda abierto y anotado en $ATASCADOS para revisión humana."
+    [ "$ya_estaba" = "no" ] && exit 9
   fi
   exit 1
 fi

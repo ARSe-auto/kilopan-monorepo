@@ -864,3 +864,52 @@ mentira deliberada; las dos eran una conclusión sin ejecutar la comprobación. 
 todo lo afirmado lleva su evidencia: la zona horaria se midió con las dos TZ, el guard se
 probó EN NEGATIVO quitando el arreglo, la aislación del panel se afirmó por mtime, y el
 empujador se ejerció de punta a punta contra `origin/main`.
+
+---
+
+## 2026-08-02 (noche, cierre) · Dos frenos con el mismo umbral se pisaban entre sí
+
+`AC-ADM-04` —el primer AC de Ola 2 que el motor tocó, la pantalla `/arreglar`— falló tres
+veces (con escalación a Opus en el tercer intento, la primera vez que esa escalación se
+disparó en producción) y el motor se pausó.
+
+El mecanismo de salteo funcionó: `AC-ADM-04` quedó anotado en `acs-atascados.txt`
+correctamente. Pero `watchdog.sh` cuenta fallos consecutivos GLOBALES, y como
+`siguiente_ac()` reelige el mismo AC hasta que queda atascado, sus 3 fallos consecutivos
+son siempre también 3 fallos consecutivos para el watchdog — los dos umbrales valen 3.
+El salteo marcó el AC y el motor se pausó en la misma vuelta de todos modos: «sigo con el
+siguiente AC» nunca llegó a probarse. No había pasado antes porque hasta esta noche ningún
+AC real había fallado 3 veces seguidas sin que además se cayera infra (rc 3) o hubiera otro
+builder (rc 7) de por medio.
+
+Arreglado con un código de salida nuevo: `loop.sh` sale con `rc 9` —no `rc 1`— exactamente
+en la iteración donde un AC cruza su propio tope y queda marcado atascado. `watchdog.sh`
+lo reconoce como progreso estructural (el motor ya sabe qué va a intentar distinto) y
+resetea su contador en vez de sumarlo. Probado con ejecución real contra un stub
+(`KILOPAN_LOOP_CMD`, mismo patrón que `KILOPAN_DRY_RUN`), no solo grep: un `rc 9` resetea
+el contador, tres atascamientos seguidos NO pausan, y —regresión— tres fallos GENÉRICOS
+(sin AC de por medio) siguen pausando igual que antes.
+
+**Autocorrección en el camino, vale contarla porque casi se la paso a Alexis:** al
+investigar creí haber encontrado un segundo bug — una llamada a `watchdog.sh` en la propia
+suite sin `KILOPAN_PANEL_DIR`, con riesgo de haber corrido contra el panel de producción.
+Lo probé SUELTO, fuera del script, y sí tocaba el panel real. Pero dentro del script hay un
+`export KILOPAN_PANEL_DIR` unas líneas antes que se hereda en todo lo que sigue — mi prueba
+aislada simplemente no tenía ese export en el entorno. Releer el contexto completo antes de
+afirmar encontró el error propio antes de decirlo. Se verificó que no hubo daño real (sin
+procesos huérfanos, sin commits inesperados, lock libre). El defecto real, más chico:
+una aserción comprobaba «no existe PAUSA-REVISION» en vez de «no cambió», y por eso se
+ponía roja cada vez que el motor está genuinamente pausado — exactamente lo que estaba
+pasando mientras se escribía este arreglo. Corregido al mismo patrón antes/después que ya
+usa el chequeo de mtime.
+
+prueba-arnes: 73 verdes / 0 rojos, corrida CON el motor real todavía pausado — la prueba de
+regresión de la aserción corregida se validó contra el caso real, no uno simulado. Gate:
+check.sh --full VERDE, 0 saltados.
+
+**Aprendizaje:** el mismo patrón de toda la noche, otra vez — un guard (el salteo de ACs
+atascados) estaba bien escrito y nunca se había ejercido contra el caso real hasta que un
+AC de verdad falló 3 veces. Y la corrección de esta sesión sobre la propia suite de
+pruebas —parar antes de afirmar un segundo bug, releer el contexto completo, encontrar que
+la reproducción aislada no era equivalente al script real— es la instrucción que Alexis dio
+explícita esta misma noche: no suponer, comprobar siempre.
