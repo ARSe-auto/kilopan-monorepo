@@ -379,7 +379,7 @@ Causas raíz R3/R4. Dos piezas ya estaban en el plan bajo el encabezado de Ola 2
 spec. `AC-DASH-06` (pantalla de auditoría) también ya existía, escrita antes de esta
 sesión — no se duplicó.
 
-- [x] (P0) [AC-DASH-08] — cola de entregas rechazadas/parciales/GPS fuera de zona cableada a una pantalla del dashboard — `specs/kilopan/07-dashboard-flota.md` — cerrado 3-ago-2026: sección visible bajo la TCK con tarjetas por entrega (razon social, RUT, motivo/kilos, estado); probado con 3 entregas simultáneas; e2e creado y verificas refcheck.
+- [ ] (P0) [AC-DASH-08] — cola de entregas rechazadas/parciales cableada a una pantalla del dashboard — `specs/kilopan/07-dashboard-flota.md`
 - [ ] (P0) [AC-SEC-10] — 500 crudos convertidos en 400 validados, 18 apariciones contadas en `apps/kilopan/src/app/api/` — `specs/kilopan/08-seguridad-rendimiento.md`
 - [ ] (P1) [AC-DASH-09] — histórico con rango de fechas y exportación de la conciliación diaria — `specs/kilopan/07-dashboard-flota.md`
 - [ ] (P1) [AC-SEC-09] — auditoría de límites de negocio validados solo en el cliente, movidos a servidor+BD — `specs/kilopan/08-seguridad-rendimiento.md`
