@@ -401,6 +401,41 @@ grep -q '"test"' packages/miga/package.json && ok "packages/miga tiene su propio
 # Ejercicio real: el test debe EXISTIR como archivo Y su corrida debe pasar de verdad.
 (cd packages/miga && node scripts/correr-tests.mjs >/dev/null 2>&1) && ok "cifras.test.ts corre y pasa contra el código real" || no "cifras.test.ts existe pero NO pasa — revisar packages/miga/src/componentes/"
 
+# Un test que pasa no dice nada hasta que se lo ve FALLAR contra el caso que dice atrapar.
+# Los dos mutantes se ejercen contra un árbol de juguete (MIGA_COMPONENTES_DIR), nunca
+# escribiendo un .tsx de mentira dentro del src/ real: si esto se interrumpe a mitad, no
+# queda basura en el árbol de nadie (mismo motivo que KILOPAN_ENV_FILE arriba).
+MIGA_A="$(mktemp -d)/componentes"; mkdir -p "$MIGA_A"
+cp packages/miga/src/componentes/*.tsx "$MIGA_A"/
+# Mutante A — el que el grep global dejaba vivo: se borra la PROPIEDAD de CifraGrande
+# dejando intacto el comentario que la nombra, y sigue viva en TecladoNumerico. Así se
+# comprueba de una vez que la propiedad es obligatoria por componente Y que el test
+# descarta comentarios (si no, se conformaría con su propia documentación).
+grep -v "fontVariantNumeric" "$MIGA_A/CifraGrande.tsx" > "$MIGA_A/.mut" && mv "$MIGA_A/.mut" "$MIGA_A/CifraGrande.tsx"
+if grep -q "tabular-nums" "$MIGA_A/CifraGrande.tsx" && grep -q "tabular-nums" "$MIGA_A/TecladoNumerico.tsx"; then
+  ok "el árbol mutado reproduce el caso: la cadena sigue viva (comentario + otro componente), que es lo que engañaba al grep"
+else
+  no "el árbol mutado no reproduce el caso — sin la cadena viva en otro lado el mutante no prueba nada"
+fi
+(cd packages/miga && MIGA_COMPONENTES_DIR="$MIGA_A" node scripts/correr-tests.mjs >/dev/null 2>&1) \
+  && no "mutante A VIVO: CifraGrande sin la propiedad y el test pasa igual — es el mismo hueco del grep global" \
+  || ok "mutante A muerto: quitar la propiedad de UN componente pone el test en rojo aunque la cadena siga en un comentario y en otro archivo"
+# Mutante B — el hueco propio del reemplazo: la lista es enumerada, así que un componente
+# NUEVO que muestre plata y que nadie clasifique se cuela EN SILENCIO. Sin este cierre,
+# el arreglo de AC-H0-03 repetiría con otra forma el defecto que vino a corregir.
+MIGA_B="$(mktemp -d)/componentes"; mkdir -p "$MIGA_B"
+cp packages/miga/src/componentes/*.tsx "$MIGA_B"/
+printf 'export function PrecioNuevo({ monto }: { monto: number }) {\n  return <div>{monto}</div>;\n}\n' > "$MIGA_B/PrecioNuevo.tsx"
+# Se captura la salida y DESPUÉS se busca, en vez de encadenar `node ... | grep -q`: con
+# `pipefail` (activo arriba) el pipeline hereda el exit 1 de node —que es justamente el
+# rojo que se quiere— y la aserción reportaba "mutante vivo" con el mutante bien muerto.
+SALIDA_B="$(cd packages/miga && MIGA_COMPONENTES_DIR="$MIGA_B" node scripts/correr-tests.mjs 2>&1)" || true
+case "$SALIDA_B" in
+  *PrecioNuevo.tsx*) ok "mutante B muerto: un componente nuevo sin clasificar pone el test en rojo y lo nombra" ;;
+  *) no "mutante B VIVO: un componente nuevo que muestre plata entra sin que nadie lo mire — la lista se quedó vieja en silencio" ;;
+esac
+rm -rf "$(dirname "$MIGA_A")" "$(dirname "$MIGA_B")"
+
 echo
 echo "== 8. Gate y panel ejecutables (AC-H0-05 · AC-H0-06) =="
 bash -n "$M/check.sh" 2>/dev/null && ok "check.sh es sintácticamente válido y ejecutable" || no "check.sh no parsea"

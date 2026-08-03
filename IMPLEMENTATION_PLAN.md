@@ -32,9 +32,10 @@ para ese AC — no antes.
       árbol de constantes TS + hoja CSS de variables; incluye acento `#C2410C` (KiloPan)
       y `#1D4ED8` (KiloRuta, reservado para `apps/flota`) [AC-H0-02]
 - [x] (P0) Test que falla si una cifra de dinero o peso no usa `tabular-nums` /
-      `font-variant-numeric` en los componentes de `packages/miga` — cifra de mostrador
-      en `src/app/page.tsx` ya lo aplica; el grep de gate se endurece cuando existan más
-      componentes [AC-H0-03]
+      `font-variant-numeric` en los componentes de `packages/miga` — `cifras.test.ts`
+      exige la propiedad por componente (comentarios descartados) y falla si aparece un
+      `.tsx` sin clasificar; `prueba-arnes.sh` §7 lo prueba matando dos mutantes
+      [AC-H0-03]
 - [x] (P0) `packages/metodo/scripts/guardrail.sh` ejecutable: aborta si `DATABASE_URL`
       no es localhost/127.0.0.1, aborta si hay secretos fuera de `.env.local`, grep
       bloqueante `TODO|FIXME|PLACEHOLDER|not implemented|lorem ipsum` en `src/` [AC-H0-04]
@@ -331,7 +332,7 @@ esta misma auditoría — no queda como ítem abierto de la lista de abajo.
 - [ ] (P2) [AC-PES-05] — báscula GATT sin ningún test, ya reconocido por AC-PES-09 — `specs/kilopan/02-catalogo-pesaje.md`
 - [ ] (P2) [AC-RED-01] — describe un mecanismo (sessionStorage/15s) que ya no existe en el código (es IndexedDB/30s); ninguna versión tiene test — `specs/kilopan/02-catalogo-pesaje.md`
 - [ ] (P1-SEC) [AC-PES-08] — la única evidencia citada es lectura de archivo, no un test — `specs/kilopan/02-catalogo-pesaje.md`
-- [ ] (P0) [AC-H0-03] — el grep de tabular-nums solo comprueba que existe UNA VEZ en el árbol, no por componente — `specs/kilopan/09-plataforma-miga.md`
+- [x] (P0) [AC-H0-03] — el grep de tabular-nums solo comprobaba que existe UNA VEZ en el árbol, no por componente — `specs/kilopan/09-plataforma-miga.md` — cerrado con `packages/miga/src/componentes/cifras.test.ts` (propiedad exigida por componente, comentarios descartados) + `pnpm test` propio de miga + `prueba-arnes.sh` §7, que mata dos mutantes contra un árbol de juguete: borrar la propiedad de un solo componente, y agregar uno nuevo sin clasificar
 - [x] (P0) [AC-H0-05] — `prueba-arnes.sh` §8b ejecuta `check.sh --full` en sandbox hermético y exige que dispare pnpm run {lint,typecheck,test,build,e2e}; mata al mutante que borra los run_step — `specs/kilopan/09-plataforma-miga.md`
 - [x] (P0) [AC-H0-06] — `prueba-arnes.sh` §8c ejerce `generar.mjs` en sandbox hermético (specs y loop.pid controlados) y exige: prender el loop no mueve el avance, el avance sube con los ACs cerrados (no con commits), y con el loop VIVO pero 0 cerrados el avance es 0 (el pid jamás es señal de avance) — `specs/kilopan/09-plataforma-miga.md`
 - [x] (P0) [AC-H0-07] — los 4 shells de `packages/nucleo-*` ahora tienen `package.json` real; `prueba-arnes.sh` §5b verifica en disco que cada uno existe y parsea, y que el README sigue advirtiendo que está vacío a propósito — `specs/kilopan/09-plataforma-miga.md`

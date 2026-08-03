@@ -15,12 +15,23 @@ Ningún estado se comunica solo por color.
 - [x] (P0) `packages/miga`: tokens de diseño (color, tipografía, grilla, radios) como
       árbol de constantes TS + hoja CSS de variables; incluye acento `#C2410C` (KiloPan)
       y `#1D4ED8` (KiloRuta, reservado para `apps/flota`) [AC-H0-02]
-- [ ] (P0) Test que falla si una cifra de dinero o peso no usa `tabular-nums` /
+- [x] (P0) Test que falla si una cifra de dinero o peso no usa `tabular-nums` /
       `font-variant-numeric` en los componentes de `packages/miga` [AC-H0-03]
-      — **Anexo D (auditoría 2-ago-2026): HUECO.** `prueba-arnes.sh` solo hace
-      `grep -rq "tabular-nums"` sobre todo `packages/miga/src` — comprueba que la cadena
-      existe UNA VEZ en el árbol, no que CADA componente de cifra la use. Un mutante que
-      la quite de `CifraGrande.tsx` (dejándola en otro componente) sobrevive.
+      — **Cerrado 3-ago-2026.** `packages/miga/src/componentes/cifras.test.ts` exige la
+      propiedad EN EL ARCHIVO de cada componente que muestra dinero o peso
+      (`CifraGrande`, `TecladoNumerico`), descartando las líneas de comentario para no
+      conformarse con su propia documentación. `packages/miga` ganó su `pnpm test`
+      (`scripts/correr-tests.mjs`, recursivo de verdad), que `unit (workspace)` ya corre
+      con `--if-present`. `prueba-arnes.sh` §7 mata DOS mutantes contra un árbol de
+      juguete (`MIGA_COMPONENTES_DIR`, sin escribir un `.tsx` falso en el `src/` real):
+      **(A)** borrar la propiedad de `CifraGrande` dejando la cadena viva en su comentario
+      y en `TecladoNumerico` — el caso exacto que el grep global dejaba pasar; **(B)**
+      agregar un componente sin clasificar, que el cierre de completitud nombra en el
+      error. Ese cierre existe porque la lista es enumerada: sin él, un componente nuevo
+      con plata se colaba en silencio y el arreglo repetía con otra forma el defecto que
+      vino a corregir. Los 7 componentes del padrón se revisaron uno por uno;
+      `ChipEstadoConexion` interpola un contador de cola —ni dinero ni peso— y queda
+      declarado fuera con su porqué.
 - [x] (P0) `packages/metodo/scripts/guardrail.sh` ejecutable: aborta si `DATABASE_URL` no
       es localhost/127.0.0.1, aborta si hay secretos fuera de `.env.local`, grep
       bloqueante de tokens vedados en `src/` [AC-H0-04]
