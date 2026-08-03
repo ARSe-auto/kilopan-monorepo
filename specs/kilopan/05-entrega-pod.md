@@ -43,6 +43,11 @@ bloquea** — el pan no espera (§4).
       `!!e.motivoRechazo`, cualquier string pasa) — sin test que lo ejercite, no hay
       evidencia de que la UI real funcione como se describe.
 
+- [ ] (P0) **Bandeja de pendientes** persistente, alcanzable desde cualquier pantalla, con
+      todo lo que la cola no pudo subir y **por qué**. Nada que la cola rechace desaparece
+      sin una decisión del operador: hoy un rechazo se pierde de vista y la venta se
+      evapora sin que nadie se entere (`docs/PROMPT_CORRECTIVO.md` §5, Ola 2) [AC-POD-06]
+
 ## Notas de implementación
 
 - **La foto era falsa hasta el 25-jul-2026**: `capturarFoto()` calculaba el sha256 de un

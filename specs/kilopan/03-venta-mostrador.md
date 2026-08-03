@@ -30,6 +30,12 @@ Sin venta en ruta — está explícitamente FUERA del MVP (§3).
       ni `PATCH /api/medios-pago` — ni e2e, ni unit, ni HTTP. `AC-PAG-01` cubre el
       permiso a nivel BD, no esta pantalla ni este endpoint.
 
+- [ ] (P0) **Apertura de turno** al primer ingreso del día en un equipo: fondo inicial y
+      confirmación, dos toques. La tabla `pan.turnos` y el arqueo por turno ya existen
+      (`db/migraciones/0018_turnos_cierre_caja.sql`); lo que falta es la pantalla que abre
+      el turno. Sin ella el arqueo tiene sujeto en la base pero nadie lo declara desde la
+      app (`docs/PROMPT_CORRECTIVO.md` §5, Ola 2) [AC-VEN-05]
+
 ## Notas de implementación
 
 - El stock se deriva **siempre** de eventos. Cualquier contador materializado sería una

@@ -800,3 +800,67 @@ mortal — y los seis molestos disfrazaban al mortal de «AC difícil». La señ
 fue ninguna métrica del panel ni el código de salida: fue leer lo que el agente **dijo** en
 `ultimo-resultado.json`. Un motor que reporta «SIN AVANCE» sin que nadie lea su respuesta en
 prosa es un motor que puede estar bloqueado por una razón trivial durante días.
+
+---
+
+## 2026-08-03 (madrugada) · El día se partía a las 20:00, y la cadena autónoma ya no se corta
+
+Tres frentes en una tanda: el bug que ponía CI en rojo todas las noches, las medidas para
+que las Olas no se detengan, y la planificación de Ola 2 que el motor no puede hacer.
+
+**El bug de CI no era flakiness, y no lo causaron los commits de la tarde.** Las corridas de
+22:39, 23:47 y 23:57 UTC pasaron; las de 00:09 y 00:17 fallaron. El corte era medianoche
+UTC — las 20:00 de Chile. `db.ts` fija `timezone=America/Santiago` en su conexión, con
+guard, «porque si no el día se corta a las 20:00». `db/migrar.mjs` —que corre las
+migraciones y, vía `sembrar.mjs`, la semilla— no lo hacía: heredaba la del proceso. En un
+Mac chileno coincide por casualidad y todo se ve bien; en el runner de Ubuntu (UTC) no.
+Medido en vivo a las 00:33 UTC: `TZ=(sistema)` → `current_date=2026-08-02`; `TZ=UTC` →
+`2026-08-03`. Como `pan.precios.vigente_desde` tiene `default current_date`, la semilla
+escribía el precio con fecha de mañana y la app consultaba `vigente_desde <= current_date`
+de hoy: falso, producto sin precio, y caían los tres tests de venta. **No es cosa de
+tests:** sembrar o migrar de verdad en esa franja escribe el día equivocado.
+
+El diagnóstico correcto llegó por descarte disciplinado, no por corazonada: el clon fresco
+daba verde (así que no era estado local), `fullyParallel:false` y `workers:1` mataban la
+hipótesis de carrera entre specs, y `camino-dorado` corre PRIMERO — así que el spec nuevo,
+que se ordena después, no podía ser la causa. Lo que lo destapó fue mirar la hora de las
+corridas.
+
+**Las Olas no se detienen: tres cortes de autonomía, cerrados.** (a) Nadie empujaba lo que
+el motor comiteaba —el agente no tiene permiso de `git push`, decisión de Alexis— así que
+CI no veía nada hasta que una persona lo empujara a mano; ahora lo hace
+`empujar-si-verde.sh` desde el watchdog, con una sola regla verificable: sólo si
+`last-green.sha == HEAD`, o sea sólo el HEAD que el gate INDEPENDIENTE acaba de declarar
+verde. Publica el supervisor, jamás el agente. (b) El motor se apagaba al llegar a su tope
+de iteraciones y esperaba a una persona; `StartInterval` lo relanza cada 30 min sin
+desarmar ningún freno, porque un ABORT real escribe `PAUSA-REVISION` y ese marcador hace
+que todo arranque posterior salga sin construir. (c) Sin trabajo, `loop.sh` salía 0 y el
+watchdog gastaba un gate completo al vacío; ahora sale 6 = DONE.
+
+**Un bug propio, y del peor tipo:** las pruebas del marcador de pausa escribían en el panel
+VIVO y corrían el watchdog real contra él. Ensuciaban `watchdog.log` con «EN PAUSA» falsos
+—que me hicieron dar por detenido a un motor que estaba trabajando— y podían pausar el
+motor de producción si el gate coincidía con el arranque de una iteración. Un test que
+puede apagar el sistema que vigila no es un test. `KILOPAN_PANEL_DIR` redirige el panel y
+se afirma por mtime que el vivo no se escribió, igual que ya se hacía con el `.env.local`.
+
+**Ola 2 planificada: 13 ACs nuevos.** Al escribirlos aparecieron dos cosas que sólo se ven
+mirando. Primero, **§4 ya estaba hecho**: `0017_fiado_mostrador_suma_saldo.sql` y
+`0018_turnos_cierre_caja.sql` cubren el modelo de datos entero, con numeración corrida
+respecto del documento porque en el medio entró el bloqueo de PIN — o sea Ola 2 **no
+necesita migraciones nuevas** y el motor puede construirla casi completa solo. Segundo,
+`AC-H0-11` ya especificaba los cuatro estados de listado **y** el deshacer de 8 s
+empaquetados: escribir ACs nuevos habría creado duplicados. Se partió en dos, que es lo que
+manda la propia regla del proyecto para un AC a medias. Sólo `AC-ADM-11` —la reparación de
+datos históricos con informe firmado por la dueña— queda fuera del motor, anotado en
+`acs-atascados.txt` para que no tape a los demás.
+
+**Aprendizaje.** Alexis lo dijo en una línea a mitad de la sesión —«deja de suponer cosas y
+comprueba siempre»— y tenía razón con evidencia: horas antes yo había afirmado que `main`
+estaba rojo porque el watchdog lo decía (corriendo el gate sobre el mismo HEAD con árbol
+limpio: verde), y había dado por bueno un «gate verde» de corridas donde el motor sostenía
+el lock y mi propia prueba del salteo se iba por su rama de escape. Ninguna de las dos era
+mentira deliberada; las dos eran una conclusión sin ejecutar la comprobación. En esta tanda
+todo lo afirmado lleva su evidencia: la zona horaria se midió con las dos TZ, el guard se
+probó EN NEGATIVO quitando el arreglo, la aislación del panel se afirmó por mtime, y el
+empujador se ejerció de punta a punta contra `origin/main`.

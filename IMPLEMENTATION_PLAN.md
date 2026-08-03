@@ -341,6 +341,36 @@ esta misma auditoría — no queda como ítem abierto de la lista de abajo.
 - [ ] (P2) [AC-PAG-03] — pantalla de admin de medios de pago sin ningún test — `specs/kilopan/03-venta-mostrador.md`
 - [ ] (P1) [AC-POD-05] — flujo de rechazo/parcial desde `/ruta` sin test; el catálogo "cerrado" tampoco se valida en el servidor — `specs/kilopan/05-entrega-pod.md`
 
+## Ola 2 — «Marcha atrás» (`docs/PROMPT_CORRECTIVO.md` §5, planificada 3-ago-2026)
+
+La causa raíz R1: hoy corregir un error de operación exige SQL a mano. Cada AC vive con su
+texto completo en la spec citada — acá va solo su estado, como manda la jerarquía de verdad.
+
+**§4 (modelo de datos) ya estaba hecho** y se verificó antes de escribir esto:
+`0017_fiado_mostrador_suma_saldo.sql` y `0018_turnos_cierre_caja.sql` cubren el saldo del
+fiado de mesón y la tabla `pan.turnos`. La numeración del documento (0016/0017) no coincide
+con la real porque en el medio entró `0016_bloqueo_pin_enrolamiento.sql`. **Ola 2 no
+necesita migraciones nuevas**, así que el motor puede construirla casi entera solo.
+
+- [ ] (P0) [AC-ADM-04] — pantalla `/arreglar` solo admin, con 403 desde el SERVIDOR — `specs/kilopan/10-administracion.md`
+- [ ] (P0) [AC-ADM-05] — anular una venta con motivo escrito, su evento, y que deje de sumar al arqueo — `specs/kilopan/10-administracion.md`
+- [ ] (P0) [AC-ADM-06] — corregir un cierre de turno sin pisar el original (append-only) — `specs/kilopan/10-administracion.md`
+- [ ] (P0) [AC-ADM-10] — `pan.eventos` obligatoria en toda operación de plata y configuración, un test por operación — `specs/kilopan/10-administracion.md`
+- [ ] (P0) [AC-H0-11] — los cuatro estados obligatorios de listado (partido: el undo salió a AC-H0-12) — `specs/kilopan/09-plataforma-miga.md`
+- [ ] (P0) [AC-H0-12] — deshacer de 8 s en pesaje, venta, carro y armar ruta, en vez de modales — `specs/kilopan/09-plataforma-miga.md`
+- [ ] (P0) [AC-POD-06] — bandeja de pendientes persistente con el porqué de cada rechazo — `specs/kilopan/05-entrega-pod.md`
+- [ ] (P0) [AC-VEN-05] — apertura de turno con fondo inicial, dos toques — `specs/kilopan/03-venta-mostrador.md`
+- [ ] (P1) [AC-ADM-07] — cerrar una ruta con odómetro desde `/arreglar` — `specs/kilopan/10-administracion.md`
+- [ ] (P1) [AC-ADM-08] — revocar equipo y desbloquear PIN desde `/arreglar` — `specs/kilopan/10-administracion.md`
+- [ ] (P1) [AC-ADM-09] — quitar un pedido de una ruta desde `/arreglar` — `specs/kilopan/10-administracion.md`
+- [ ] (P1) [AC-H0-13] — teclado grande en todo campo de plata, incluido el arqueo — `specs/kilopan/09-plataforma-miga.md`
+
+**Fuera del alcance del motor** (`docs/PROMPT_CORRECTIVO.md` §7 — sesión supervisada):
+
+- [ ] (P0) [AC-ADM-11] — reparación de datos históricos con informe FIRMADO por la dueña — `specs/kilopan/10-administracion.md`
+      El motor no lo toca: son datos reales con evidencia y exige la firma de una persona.
+      Anotado en `packages/metodo/panel/acs-atascados.txt` para que no tape a los demás.
+
 ## DONE
 
 Plan vacío (todo `[x]`) + `check.sh --full` verde + camino dorado demostrado de punta a

@@ -29,6 +29,47 @@ Todo lo de esta spec es **solo rol `admin`** (regla de rol testeada, §5).
       — **Anexo D (auditoría 2-ago-2026): HUECO.** Cero referencias a `/api/parametros`
       en `*.test.ts`, `*.spec.ts` o `db/test-invariantes.mjs`.
 
+## Ola 2 — «Marcha atrás»: que un error se pueda deshacer sin SQL
+
+`docs/PROMPT_CORRECTIVO.md` §5. La causa raíz R1: hoy toda corrección de un error de
+operación exige entrar a la base por SQL. Mientras eso sea así, la panadería no opera sola
+y cada error queda o congelado o arreglado a mano por un técnico.
+
+Regla transversal de esta sección: **toda acción destructiva se confirma escribiendo el
+motivo, jamás marcando una casilla** — una casilla se marca sin leer; escribir el motivo
+obliga a detenerse y deja el porqué en la auditoría. Y ninguna corrección pisa el dato
+original: se registra encima (append-only), como ya hace el POD con `supersede_id`.
+
+- [ ] (P0) Pantalla `/arreglar`, **solo rol admin**: existe, lista sus seis acciones, y el
+      SERVIDOR rechaza a quien no es admin con 403 — no basta con esconder el enlace, que
+      es teatro de cliente (misma lección que `pesaje_foto_obligatoria`) [AC-ADM-04]
+- [ ] (P0) Anular una venta desde `/arreglar`: exige un motivo escrito y no vacío, escribe
+      su evento en `pan.eventos` con quién, cuándo y en qué equipo, y la venta anulada deja
+      de sumar al arqueo de su turno [AC-ADM-05]
+- [ ] (P0) Corregir un cierre de turno desde `/arreglar`, con motivo escrito y su evento.
+      El cierre original NO se sobrescribe: la corrección se registra encima y ambos quedan
+      legibles, porque un arqueo que cambia sin dejar rastro es indistinguible de un
+      faltante tapado [AC-ADM-06]
+- [ ] (P1) Cerrar una ruta con odómetro desde `/arreglar`, con motivo escrito y su evento
+      [AC-ADM-07]
+- [ ] (P1) Revocar un equipo enrolado y desbloquear un PIN desde `/arreglar`, cada uno con
+      motivo escrito y su evento [AC-ADM-08]
+- [ ] (P1) Quitar un pedido de una ruta desde `/arreglar`, con motivo escrito y su evento
+      [AC-ADM-09]
+- [ ] (P0) `pan.eventos` pasa a ser obligatoria en TODA operación de plata y de
+      configuración —venta, anulación, apertura y cierre de turno, cambio de precio,
+      reseteo de PIN, revocación de equipo, merma, anulación de DTE, cierre de ruta— con un
+      test por operación. Hoy solo la escriben identidad y parámetros. La tabla ya es
+      append-only por `revoke` [AC-ADM-10]
+- [ ] (P0) Reparación de los datos que YA están mal contados en producción: el fiado de
+      mesón que nunca sumó a ningún saldo y los arqueos firmados por quien no vendió. Se
+      produce primero un informe que la dueña **lee y firma**; recién después se corrigen
+      los datos. Los turnos sintéticos del respaldo quedan marcados como tales y declarados
+      en el informe: no son turnos reales y nadie debe leerlos como tales. **La plata
+      histórica no se reescribe en silencio** [AC-ADM-11]
+      — **Sesión supervisada, no el motor** (`docs/PROMPT_CORRECTIVO.md` §7): toca datos
+      reales con evidencia y necesita la firma de una persona. El motor debe saltarlo.
+
 ## Notas de implementación
 
 - Desactivar una persona **nunca** la borra: `activo=false`. Los PODs y pesajes que firmó

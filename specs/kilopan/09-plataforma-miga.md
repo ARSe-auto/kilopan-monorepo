@@ -56,10 +56,23 @@ Ningún estado se comunica solo por color.
       Falta: contraste ≥4.5:1 automatizado, test que recorra el DOM buscando targets
       <44 pt, foco visible, F1/F4/F5 con VoiceOver, texto al 200 % sin truncar kilos
       ni CLP, y grep de `aria-label` vacíos [AC-H0-10]
-- [ ] (P1) Estados obligatorios en todo listado: vacío accionable / skeleton / error con
-      reintentar / sin conexión con **contador real de cola** («Sin conexión — N
-      registros por subir» ámbar → «Sincronizado hace Xs» verde). Undo de 8 s en vez de
-      modales [AC-H0-11]
+- [ ] (P0) Los **cuatro** estados obligatorios en todo listado: vacío accionable /
+      cargando (skeleton) / error con reintentar / sin conexión con **contador real de
+      cola** («Sin conexión — N registros por subir» ámbar → «Sincronizado hace Xs»
+      verde). Hoy un error de red se ve idéntico a «no hay nada»: por eso el repartidor
+      cuya ruta no carga se va a la casa creyendo que no hay reparto [AC-H0-11]
+      — **Partido el 3-ago-2026 (Ola 2):** este AC traía además el «undo de 8 s», que es
+      otro trabajo y en otras pantallas. Un AC que empaqueta dos cosas no se puede cerrar
+      sin mentir a medias, así que el deshacer salió a `AC-H0-12`.
+- [ ] (P0) Deshacer de 8 s en pesaje, venta, agregar al carro y armar ruta, **en vez de
+      modales de confirmación**. Un panadero con las manos ocupadas y enharinadas despacha
+      un modal sin leerlo: confirmar no protege de nada, deshacer sí. Especificado desde el
+      primer día dentro de `AC-H0-11` y nunca construido
+      (`docs/PROMPT_CORRECTIVO.md` §5) [AC-H0-12]
+- [ ] (P1) El teclado grande (`TecladoNumerico`, ya existe) en **todo** campo de plata,
+      incluido el arqueo de caja, que hoy usa el teclado chico del sistema. Mismo defecto
+      de fondo que F23 con los `<select>` nativos: ningún control del sistema en un campo
+      que un panadero real toca a diario [AC-H0-13]
 
 ## Fronteras internas (Anexo C)
 
