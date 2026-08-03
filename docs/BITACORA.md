@@ -10,6 +10,49 @@ el aprendizaje contradice lo que creíamos. **Qué NO va:** el estado del plan (
 
 ---
 
+## 2026-08-03 · AC-H0-03: el reemplazo de un chequeo débil venía con el mismo defecto adentro
+
+`prueba-arnes.sh` comprobaba `tabular-nums` con un `grep -rq` sobre todo
+`packages/miga/src`. Medido, no razonado: en un árbol donde se le borra la propiedad a
+`CifraGrande.tsx` y sigue viva en `TecladoNumerico.tsx`, el grep **queda en verde**. El
+mutante sobrevive. Ahora `cifras.test.ts` la exige en el archivo de cada componente que
+muestra dinero o peso, descartando las líneas de comentario — `CifraGrande` documenta
+«tabular-nums» en su cabecera, y un chequeo sobre el texto crudo se conformaría con su
+propia documentación en vez de mirar el CSS.
+
+**Lo que se aprendió, que es lo que vale la entrada:** el primer reemplazo que escribí
+repetía el defecto con otra forma. Cambié un grep que pasaba sin mirar nada por una
+**lista enumerada a mano**, que se queda vieja EN SILENCIO: un componente nuevo que
+muestre plata y que nadie agregue a la lista no lo mira ese test ni ningún otro. Un
+chequeo que no puede detectar su propia desactualización no es mejor que el que vino a
+reemplazar — es el mismo agujero con mejor prensa. El cierre de completitud falla si
+aparece un `.tsx` sin clasificar y lo nombra en el error. El padrón de 7 se revisó uno por
+uno: `ChipEstadoConexion` interpola un contador de cola —ni dinero ni peso— y queda
+declarado fuera **con su porqué escrito**, que es la diferencia entre excluir y olvidar.
+
+**Bug real en la propia aserción nueva del arnés**, que se lleva su párrafo porque el
+archivo es compartido y el pozo es reutilizable: `node ... | grep -q "PrecioNuevo"` con
+`pipefail` (activo en la cabecera de `prueba-arnes.sh`) hereda el exit 1 de `node` —que es
+exactamente el rojo que uno QUIERE— y por eso reportaba «mutante VIVO» con el mutante
+perfectamente muerto. Se detectó solo porque el mutante ya se había matado a mano y el
+arnés contradijo la evidencia directa; de haber confiado en el arnés, se habría «arreglado»
+un test que funcionaba. Corregido capturando la salida en variable y buscando con `case`.
+
+**Falsa alarma propia, anotada para que nadie la persiga:** un gate murió en el guardrail
+de cáscaras por un comentario que decía «TODO el árbol» en mayúscula, chocando con el token
+prohibido en inglés. Se estuvo por «arreglar» `guardrail.sh` — o sea, contradecir la
+constitución— hasta leer `AGENTS.md:42`, que dice «comentarios incluidos»: la regla es
+deliberada, distingue mayúsculas, y `todo` en minúscula pasa limpio (ambos casos
+ejecutados, no supuestos). El arreglo correcto era el comentario, no el guardrail. En un
+repo escrito íntegramente en español conviene saberlo antes de tocar nada.
+
+Evidencia: `prueba-arnes.sh` §7 mata los dos mutantes contra un árbol de juguete
+(`MIGA_COMPONENTES_DIR`, sin escribir un `.tsx` falso dentro del `src/` real: una
+interrupción a mitad no deja basura en el árbol de nadie). `prueba-arnes`: 82 verdes / 0
+rojos. `check.sh --full`: VERDE 12/12, 0 saltados.
+
+---
+
 ## 2026-08-03 · La columna hermana: `saldado_at` tenía los mismos huecos, y dos más
 
 La lección de la `0021` era «agregar una columna de estado a `pan.ventas` sin revisar a
