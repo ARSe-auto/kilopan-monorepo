@@ -87,11 +87,34 @@ Ningún estado se comunica solo por color.
       Ola 2 — a diferencia de `AC-H0-12` (deshacer de 8 s), que §3 sí lista
       explícitamente dentro de Ola 2. Quedó filed junto a `AC-H0-12` por historia, no
       por scope; no se movió de sección para no generar churn en un AC sin construir.
+      — **Trampa para quien construya el 4º estado (3-ago-2026, verificado):**
+      `public/sw.js:84-100` responde `caches.match("/ingresar")` a TODA página
+      autenticada pedida sin red. Un e2e que emule offline y NAVEGUE a la pantalla
+      aterriza en el login y pasa en VERDE sin haber ejercido nada — falso verde, no
+      rojo, así que nadie lo nota. Hay que perder la señal con la pantalla YA abierta,
+      que además es el escenario real (el furgón entrando a una zona sin cobertura).
 - [ ] (P0) Deshacer de 8 s en pesaje, venta, agregar al carro y armar ruta, **en vez de
       modales de confirmación**. Un panadero con las manos ocupadas y enharinadas despacha
       un modal sin leerlo: confirmar no protege de nada, deshacer sí. Especificado desde el
       primer día dentro de `AC-H0-11` y nunca construido
       (`docs/PROMPT_CORRECTIVO.md` §5) [AC-H0-12]
+      — **Alcance acotado (3-ago-2026), para que el motor no lo tome mal: se implementa
+      DIFIRIENDO el despacho, nunca compensando (escribir y después revertir).**
+      Compensar exige DELETE o un estado de anulación en tablas de negocio, y `pan_app`
+      no los tiene en NINGUNA: verificado grant por grant de `0001` a `0022`, los únicos
+      dos DELETE del esquema son `pan.bloqueos_pin` (`0001:243`) y
+      `pan.bloqueos_pin_enrolamiento` (`0016:71`), ninguna de negocio. Compensar
+      obligaría además a un trigger de REVERSO de `trg_pesajes_suman_linea`
+      (`0004:93-108` — `gramos_pesados` hoy solo SUMA, «lo mantiene un trigger, JAMÁS la
+      app», `0004:52`), a un estado `'anulada'` en `pan.rutas` que su CHECK
+      (`0004:171-172`) hoy no admite, y a filtrar esa anulación en `pan.stock_disponible`
+      (`0012:15-27`) y `pan.conciliacion_diaria` (`0005`) — o sea, migración sí o sí, que
+      es de sesión supervisada y jamás del motor (`docs/PROMPT_CORRECTIVO.md` §7). Y
+      diferir el despacho tampoco es gratis: hoy `enviarOEncolar` garantiza IndexedDB
+      pase lo que pase (`outbox.ts`, el `catch` que encola en `sin_red`); diferir la
+      escritura en memoria de React SIN encolar antes sería una regresión de
+      durabilidad — se pierde el dato si el operador bloquea el teléfono a mitad de los
+      8 s. El orden correcto es ENCOLAR primero, despachar a los 8 s.
 - [ ] (P1) El teclado grande (`TecladoNumerico`, ya existe) en **todo** campo de plata,
       incluido el arqueo de caja, que hoy usa el teclado chico del sistema. Mismo defecto
       de fondo que F23 con los `<select>` nativos: ningún control del sistema en un campo

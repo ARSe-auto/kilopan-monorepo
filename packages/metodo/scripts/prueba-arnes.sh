@@ -235,13 +235,31 @@ exit 9
 STUBEOF
 chmod +x "$STUB_DIR"/*.sh
 
+# BUG REAL (3-ago-2026): esta sección era VERDE en un Mac y ROJA en CI, y CI llevaba horas
+# fallando por eso — el gate.yml corre en cada push, así que llovían correos de «run
+# failed» sin que nada estuviera mal. Causa: `watchdog.sh` exige `command -v claude` ANTES
+# de entrar al loop (y con razón: sin eso se perdieron ~15 h en eauto-crm-next). El runner
+# de GitHub no tiene el CLI `claude` instalado, así que watchdog pausaba en el arranque y
+# las tres aserciones de abajo leían esa pausa en vez del comportamiento que querían medir.
+# No se toca el guard —es correcto y protege algo real—: se le da a la prueba el entorno
+# que el guard pide. `claude` acá JAMÁS se ejecuta, porque KILOPAN_LOOP_CMD ya sustituye al
+# loop entero por un stub de rc exacto; solo tiene que EXISTIR para que el chequeo pase.
+# Reproducido antes de arreglar, con HOME aislado (watchdog.sh:10 reinyecta
+# $HOME/.local/lib/nodejs/current/bin, que en este Mac contiene claude y en CI no existe):
+#   sin claude → 'AC saltado' 0 veces y 'PAUSA' 2 veces; con claude → 4 y 0.
+BIN_FALSO="$STUB_DIR/bin"; mkdir -p "$BIN_FALSO"
+printf '#!/usr/bin/env bash\necho "claude de utileria — el loop real esta estubado por KILOPAN_LOOP_CMD"\n' > "$BIN_FALSO/claude"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN_FALSO/pnpm"
+chmod +x "$BIN_FALSO/claude" "$BIN_FALSO/pnpm"
+PATH_ARNES="$BIN_FALSO:$PATH"
+
 # (a) rc 9 resetea el contador global — el rc 1 de después arranca en #1/3, no en #2/3.
-SAL_A="$(KILOPAN_LOOP_CMD="bash $STUB_DIR/rc9-luego-1.sh $STUB_DIR" KILOPAN_PANEL_DIR="$PANEL" KILOPAN_MAX_ITERACIONES=2 bash "$M/watchdog.sh" 2>&1)"
+SAL_A="$(PATH="$PATH_ARNES" KILOPAN_LOOP_CMD="bash $STUB_DIR/rc9-luego-1.sh $STUB_DIR" KILOPAN_PANEL_DIR="$PANEL" KILOPAN_MAX_ITERACIONES=2 bash "$M/watchdog.sh" 2>&1)"
 echo "$SAL_A" | grep -q "AC saltado, no atascamiento" && ok "rc 9 se distingue como progreso, no como falta de avance" || no "rc 9 no se reconoce — el AC atascado sigue contando como fallo genérico"
 echo "$SAL_A" | grep -q "sin avance consecutivo #1/3" && ok "tras un rc 9, el próximo fallo real arranca en #1/3 (el contador se reseteó)" || no "el contador NO se reseteó tras rc 9 — sigue sumando desde antes"
 
 # (b) tres ACs atascados seguidos (rc 9 tres veces) NO deben pausar el motor.
-SAL_B="$(KILOPAN_LOOP_CMD="bash $STUB_DIR/siempre-9.sh" KILOPAN_PANEL_DIR="$PANEL" KILOPAN_MAX_ITERACIONES=4 bash "$M/watchdog.sh" 2>&1)"
+SAL_B="$(PATH="$PATH_ARNES" KILOPAN_LOOP_CMD="bash $STUB_DIR/siempre-9.sh" KILOPAN_PANEL_DIR="$PANEL" KILOPAN_MAX_ITERACIONES=4 bash "$M/watchdog.sh" 2>&1)"
 echo "$SAL_B" | grep -q "PAUSA" && no "tres ACs atascados SEGUIDOS pausan el motor — el salteo no sirve de nada si el motor se detiene igual" || ok "tres ACs atascados seguidos NO pausan — el motor sigue con el próximo AC"
 
 # (c) regresión: tres fallos GENÉRICOS (rc 1, sin marcar nada atascado) siguen pausando.
@@ -251,8 +269,11 @@ cat > "$STUB_DIR/siempre-1.sh" << 'STUBEOF'
 exit 1
 STUBEOF
 chmod +x "$STUB_DIR/siempre-1.sh"
-SAL_C="$(KILOPAN_LOOP_CMD="bash $STUB_DIR/siempre-1.sh" KILOPAN_PANEL_DIR="$PANEL" KILOPAN_MAX_ITERACIONES=10 bash "$M/watchdog.sh" 2>&1)"
-echo "$SAL_C" | grep -q "PAUSA" && ok "tres fallos genéricos SIN AC atascado siguen pausando (el freno real no se rompió)" || no "REGRESIÓN: el freno de 'sin avance' dejó de funcionar — el motor giraría en falso sin pausar nunca"
+SAL_C="$(PATH="$PATH_ARNES" KILOPAN_LOOP_CMD="bash $STUB_DIR/siempre-1.sh" KILOPAN_PANEL_DIR="$PANEL" KILOPAN_MAX_ITERACIONES=10 bash "$M/watchdog.sh" 2>&1)"
+# Exige la pausa POR falta de avance, no una pausa cualquiera: en CI esta aserción pasaba
+# por el motivo equivocado —leía la pausa por «claude no está en el PATH»— y así un verde
+# tapaba que el freno real ni siquiera se estaba ejerciendo.
+echo "$SAL_C" | grep -q "sin commit nuevo" && ok "tres fallos genéricos SIN AC atascado siguen pausando (el freno real no se rompió)" || no "REGRESIÓN: el freno de 'sin avance' dejó de funcionar — el motor giraría en falso sin pausar nunca"
 
 rm -rf "$STUB_DIR"
 PVIVO_DESPUES="$(stat -f %m "$PANEL_VIVO/watchdog.log" 2>/dev/null || echo ausente)"
