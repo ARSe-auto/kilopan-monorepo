@@ -323,7 +323,7 @@ esta misma auditoría — no queda como ítem abierto de la lista de abajo.
 - [ ] (P1) [AC-DASH-02] — chequeo de rol real en código pero sin e2e que lo confirme — `specs/kilopan/07-dashboard-flota.md`
 - [ ] (P2) [AC-DASH-04] — comparación con el facturador sin ningún test — `specs/kilopan/07-dashboard-flota.md`
 - [ ] (P2) [AC-SHARE-01] — degradación de `navigator.share()` sin test — `specs/kilopan/07-dashboard-flota.md`
-- [ ] (P0-SEC) [AC-SEC-04] — cabeceras de seguridad declaradas pero sin test que confirme que el servidor las emite — `specs/kilopan/08-seguridad-rendimiento.md`
+- [x] (P0-SEC) [AC-SEC-04] — cabeceras de seguridad declaradas pero sin test que confirme que el servidor las emite — `specs/kilopan/08-seguridad-rendimiento.md` — cerrado con `e2e/seguridad-cabeceras.spec.ts` (página + ruta de API)
 - [ ] (P1-PERF) [AC-PERF-02] — compresión de fotos y techo de 1,5 MB sin ningún test — `specs/kilopan/08-seguridad-rendimiento.md`
 - [ ] (P1-PERF) [AC-PERF-01] — índices creados sin `EXPLAIN` que confirme que el planner los usa — `specs/kilopan/00-modelo-datos.md`
 - [ ] (P0) [AC-ID-03] — el 423 de `/api/auth/login` nunca se probó automatizado (solo su hermano de enrolamiento) — `specs/kilopan/01-identidad.md`

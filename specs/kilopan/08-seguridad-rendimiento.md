@@ -20,14 +20,16 @@ puntaje mezcla SEO y PWA con lo que de verdad decide si la pantalla abre.
 - [x] (P0-SEC) `pnpm audit` sin vulnerabilidades altas ni críticas en el gate; falla el
       build si aparecen. Encontró 4 altas + 1 moderada reales (sharp/postcss/
       brace-expansion transitivos) el primer día; corregidas con overrides [AC-SEC-03]
-- [ ] (P0-SEC) Cabeceras de seguridad base (`X-Content-Type-Options`, `Referrer-Policy`,
+- [x] (P0-SEC) Cabeceras de seguridad base (`X-Content-Type-Options`, `Referrer-Policy`,
       `X-Frame-Options`) en `next.config.ts`. CSP completa y HSTS quedan para cuando
       existan orígenes reales que permitir (fotos, mapa estático) — decisión deliberada:
       no declarar una CSP amplia «por si acaso» [AC-SEC-04]
-      — **Anexo D (auditoría 2-ago-2026): HUECO.** Las cabeceras están declaradas en
-      `next.config.ts:28-38` pero ningún test hace `fetch()`/`page.goto()` y lee
-      `response.headers()` para confirmar que el servidor las emite de verdad — una
-      entrada borrada por error no la detectaría nada.
+      — **Cerrado 2-ago-2026 (Ola 1):** el hueco del Anexo D era que ningún test leía
+      `response.headers()`, así que una entrada borrada por error de `headers()` no la
+      detectaba nada. Cubierto por `e2e/seguridad-cabeceras.spec.ts`, que pega contra el
+      servidor real y exige las tres cabeceras en una PÁGINA y en una ruta de API: el
+      `source: "/:path*"` cubre ambas, y angostarlo a rutas de página —error plausible— no
+      lo delataría un test que solo mire `/ingresar`.
 - [ ] (P0-SEC) Cookies de sesión `HttpOnly` + `Secure` (en producción) + `SameSite=Lax`;
       ningún secreto ni token en `localStorage`. Verificado en vivo: `document.cookie` no
       puede leer `kp_sesion` desde JS, pero el navegador la manda sola y
