@@ -371,6 +371,26 @@ necesita migraciones nuevas**, así que el motor puede construirla casi entera s
       El motor no lo toca: son datos reales con evidencia y exige la firma de una persona.
       Anotado en `packages/metodo/panel/acs-atascados.txt` para que no tape a los demás.
 
+## Ola 3 — «Que la dueña vea» (`docs/PROMPT_CORRECTIVO.md` §3, planificada 3-ago-2026)
+
+Causas raíz R3/R4. Dos piezas ya estaban en el plan bajo el encabezado de Ola 2
+(`AC-ADM-10`, arriba) por ser prerrequisito de datos — ver la nota de archivo en su
+spec. `AC-DASH-06` (pantalla de auditoría) también ya existía, escrita antes de esta
+sesión — no se duplicó.
+
+- [ ] (P0) [AC-DASH-08] — cola de entregas rechazadas/parciales cableada a una pantalla del dashboard — `specs/kilopan/07-dashboard-flota.md`
+- [ ] (P0) [AC-SEC-10] — 500 crudos convertidos en 400 validados, 18 apariciones contadas en `apps/kilopan/src/app/api/` — `specs/kilopan/08-seguridad-rendimiento.md`
+- [ ] (P1) [AC-DASH-09] — histórico con rango de fechas y exportación de la conciliación diaria — `specs/kilopan/07-dashboard-flota.md`
+- [ ] (P1) [AC-SEC-09] — auditoría de límites de negocio validados solo en el cliente, movidos a servidor+BD — `specs/kilopan/08-seguridad-rendimiento.md`
+
+## Ola 4 — Robustez y accesibilidad (`docs/PROMPT_CORRECTIVO.md` §3, planificada 3-ago-2026)
+
+Causa raíz R5. `AC-H0-11` (cuatro estados) y `AC-H0-10` (axe/AA) ya estaban en el plan —
+el primero bajo el encabezado de Ola 2 por historia (ver nota de archivo en su spec), el
+segundo escrito antes de esta sesión. Ninguno se duplicó.
+
+- [ ] (P0) [AC-POD-07] — `/ruta` no sabe si está offline; `useEnLinea()` está en `pesar`/`vender` (que exigen red) y no en `/ruta` (el único módulo offline de verdad) — `specs/kilopan/05-entrega-pod.md`
+
 ## DONE
 
 Plan vacío (todo `[x]`) + `check.sh --full` verde + camino dorado demostrado de punta a
