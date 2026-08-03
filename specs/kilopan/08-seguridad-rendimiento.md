@@ -72,6 +72,27 @@ puntaje mezcla SEO y PWA con lo que de verdad decide si la pantalla abre.
 - [ ] (P1-PERF) Cablear la paginación por cursor a una pantalla de historial de entregas.
       El endpoint existe desde `AC-PERF-03` y ninguna pantalla lo consume [AC-PERF-05]
 
+## Ola 3/4 — cierres transversales (`docs/PROMPT_CORRECTIVO.md` §3)
+
+- [ ] (P1) **Auditoría de límites de negocio validados SOLO en el cliente**, movidos al
+      servidor y a la base. El PIN ya está cubierto (`PIN_VALIDO.test(pin)` en
+      `api/usuarios/route.ts`) — no es este el hueco. El resto no se auditó nunca de
+      forma sistemática: cantidad máxima de líneas en el carrito, gramos por línea de
+      pesaje, largo de motivos/textos libres que hoy solo trunca un `.slice()` de
+      React. Mismo procedimiento que el Anexo D: por cada límite encontrado sin
+      respaldo de servidor, o se agrega la validación (con test que mande el valor
+      fuera de rango por HTTP, no por la UI) o se declara explícitamente por qué no
+      hace falta [AC-SEC-09]
+- [ ] (P0) **500 crudos convertidos en 400 validados.** Contados en el código, no
+      supuestos: 18 apariciones de `status: 500`/`status(500)` en `apps/kilopan/src/
+      app/api/*` (`turnos`, `pedidos`, `ventas`, `ventas/anular`, `dispositivos/
+      enrolar`, `auth/login`, `leads`, `usuarios`, y el resto). Un 500 le dice al
+      repartidor con mala señal «el servidor se rompió» cuando la mitad de las veces
+      es un dato inválido que debería ser 400 con un mensaje que se pueda mostrar y
+      reintentar. Por cada ruta: clasificar el error real (validación de entrada →
+      400; excepción de verdad → 500) y probarlo con un caso que mande el dato malo
+      por HTTP [AC-SEC-10]
+
 ## Guardrails que corren antes de cada iteración
 
 `packages/metodo/scripts/guardrail.sh`:
