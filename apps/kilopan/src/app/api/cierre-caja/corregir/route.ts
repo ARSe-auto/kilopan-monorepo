@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { clasificarError } from "@/comun/error-http.ts";
 import { obtenerDb } from "@/comun/db.ts";
+import { registrarEvento } from "@/comun/evento.ts";
 import { exigirSesion } from "@/identidad/sesion.ts";
 import { esUuid, aEnteroEnRango } from "@/comun/validacion.ts";
 
@@ -87,21 +88,13 @@ export async function POST(request: NextRequest) {
         ]
       );
       const correccionId = correccion.rows[0]!.id;
-      await tx.query(
-        `insert into pan.eventos (tipo, entidad, entidad_id, payload, usuario_id, dispositivo_id)
-         values ('cierre_caja_corregido', 'cierres_caja', $1, $2, $3, $4)`,
-        [
-          fila.id,
-          JSON.stringify({
-            motivo,
-            correccionId,
-            declaradoClpAnterior: fila.declarado_clp,
-            declaradoClpNuevo: declaradoClp,
-          }),
-          sesion.usuarioId,
-          sesion.dispositivoId,
-        ]
-      );
+      // AC-ADM-10: mismo catálogo compartido que el resto de las operaciones de plata.
+      await registrarEvento(tx, "cierre_caja_corregido", "cierres_caja", fila.id, {
+        motivo,
+        correccionId,
+        declaradoClpAnterior: fila.declarado_clp,
+        declaradoClpNuevo: declaradoClp,
+      }, sesion);
       return { id: correccionId };
     });
     if (!resultado) {

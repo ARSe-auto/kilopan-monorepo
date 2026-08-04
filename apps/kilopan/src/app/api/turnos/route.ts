@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { clasificarError } from "@/comun/error-http.ts";
 import { obtenerDb } from "@/comun/db.ts";
+import { registrarEvento } from "@/comun/evento.ts";
 import { exigirRol } from "@/identidad/sesion.ts";
 import { aEnteroEnRango } from "@/comun/validacion.ts";
 
@@ -25,12 +26,20 @@ export async function POST(request: NextRequest) {
 
   const db = await obtenerDb();
   try {
-    const r = await db.query<{ id: string }>(
-      `insert into pan.turnos (dispositivo_id, vendedor_id, fondo_inicial_clp)
-       values ($1,$2,$3) returning id`,
-      [sesion.dispositivoId, sesion.usuarioId, fondoInicialClp]
-    );
-    return NextResponse.json({ id: r.rows[0]?.id });
+    // AC-ADM-10: el turno y su evento nacen en la MISMA transacción. Si el turno se abre y
+    // el evento no, la auditoría del día empieza sin saber quién abrió la caja ni con qué
+    // fondo — y es un dato que después nadie puede reconstruir.
+    const id = await db.transaccion(async (tx) => {
+      const r = await tx.query<{ id: string }>(
+        `insert into pan.turnos (dispositivo_id, vendedor_id, fondo_inicial_clp)
+         values ($1,$2,$3) returning id`,
+        [sesion.dispositivoId, sesion.usuarioId, fondoInicialClp]
+      );
+      const turnoId = r.rows[0]!.id;
+      await registrarEvento(tx, "turno_abierto", "turnos", turnoId, { fondoInicialClp }, sesion);
+      return turnoId;
+    });
+    return NextResponse.json({ id });
   } catch (err) {
     const mensaje = err instanceof Error ? err.message : String(err);
     if (/turnos_uno_abierto_por_dispositivo/i.test(mensaje)) {

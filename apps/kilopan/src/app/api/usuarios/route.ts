@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { clasificarError } from "@/comun/error-http.ts";
 import { obtenerDb } from "@/comun/db.ts";
+import { registrarEvento } from "@/comun/evento.ts";
 import { exigirRol } from "@/identidad/sesion.ts";
 import { hashearPin } from "@/identidad/hash.ts";
 import { validaRut, formatearRut } from "@/comun/valida_rut.ts";
@@ -137,7 +138,13 @@ export async function PATCH(request: NextRequest) {
     }
     if (pin !== undefined) {
       const pinHash = await hashearPin(pin);
-      await db.query(`update pan.usuarios set pin_hash = $1 where id = $2`, [pinHash, id]);
+      // AC-ADM-10: resetear el PIN de otra persona es darle acceso a su identidad. El
+      // payload NUNCA lleva el PIN ni su hash — la auditoría registra QUE pasó y quién lo
+      // hizo, no el secreto en sí, que la tabla guarda append-only y no se puede borrar.
+      await db.transaccion(async (tx) => {
+        await tx.query(`update pan.usuarios set pin_hash = $1 where id = $2`, [pinHash, id]);
+        await registrarEvento(tx, "pin_reseteado", "usuarios", id, { porUsuarioId: sesion.usuarioId }, sesion);
+      });
     }
     const r = await db.query<{ id: string; nombre: string; rut: string; rol: string; activo: boolean }>(
       `select id, nombre, rut, rol, activo from pan.usuarios where id = $1`,

@@ -356,7 +356,7 @@ necesita migraciones nuevas**, así que el motor puede construirla casi entera s
 - [x] (P0) [AC-ADM-04] — pantalla `/arreglar` solo admin, con 403 desde el SERVIDOR — `specs/kilopan/10-administracion.md` — cerrado con `app/arreglar/page.tsx` + `e2e/seguridad-arreglar.spec.ts`
 - [x] (P0) [AC-ADM-05] — anular una venta con motivo escrito, su evento, y que deje de sumar al arqueo — `specs/kilopan/10-administracion.md` — cerrado 2-ago-2026: `POST /api/ventas/anular` (solo admin) marca `anulada_at`/`anulada_motivo` append-only + evento `venta_anulada`; `/api/cierre-caja` excluye `anulada_at is not null`; migración 0020 con CHECK; e2e + invariante verdes.
 - [x] (P0) [AC-ADM-06] — corregir un cierre de turno sin pisar el original (append-only) — `specs/kilopan/10-administracion.md`
-- [ ] (P0) [AC-ADM-10] — `pan.eventos` obligatoria en toda operación de plata y configuración, un test por operación — `specs/kilopan/10-administracion.md`
+- [x] (P0) [AC-ADM-10] — `pan.eventos` obligatoria en toda operación de plata y configuración, un test por operación — `specs/kilopan/10-administracion.md`
 - [ ] (P0) [AC-H0-11] — los cuatro estados obligatorios de listado (partido: el undo salió a AC-H0-12) — `specs/kilopan/09-plataforma-miga.md`
 - [ ] (P0) [AC-H0-12] — deshacer de 8 s en pesaje, venta, carro y armar ruta, en vez de modales — `specs/kilopan/09-plataforma-miga.md`
 - [x] (P0) [AC-POD-06] — bandeja de pendientes persistente con el porqué de cada rechazo — `specs/kilopan/05-entrega-pod.md`

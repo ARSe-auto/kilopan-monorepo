@@ -116,11 +116,36 @@ original: se registra encima (append-only), como ya hace el POD con `supersede_i
       motivo escrito y su evento [AC-ADM-08]
 - [ ] (P1) Quitar un pedido de una ruta desde `/arreglar`, con motivo escrito y su evento
       [AC-ADM-09]
-- [ ] (P0) `pan.eventos` pasa a ser obligatoria en TODA operación de plata y de
+- [x] (P0) `pan.eventos` pasa a ser obligatoria en TODA operación de plata y de
       configuración —venta, anulación, apertura y cierre de turno, cambio de precio,
       reseteo de PIN, revocación de equipo, merma, anulación de DTE, cierre de ruta— con un
       test por operación. Hoy solo la escriben identidad y parámetros. La tabla ya es
       append-only por `revoke` [AC-ADM-10]
+      — **Cerrado 4-ago-2026 (sesión supervisada).** `comun/evento.ts` fija el catálogo
+      CERRADO de tipos y `registrarEvento()` los escribe; **9 operaciones cableadas en 9
+      rutas**. El evento va SIEMPRE dentro de la misma transacción que la operación: si la
+      venta entra y el evento no, la auditoría miente por omisión — y es el caso que menos
+      se nota, porque nadie lo mira hasta el día en que hay que reconstruir qué pasó.
+      El catálogo existe porque la tabla es append-only: un evento mal nombrado no se
+      corrige después, se queda. Dos rutas escribiendo `venta_anulada` y `venta_anulacion`
+      dejan una auditoría que no se puede consultar. Por eso `ventas/anular` y
+      `cierre-caja/corregir`, que ya escribían su evento con SQL a mano, se migraron al
+      helper — el SQL era correcto, el nombre suelto en un string no.
+      **Dos tipos quedan declarados SIN ruta y no son deuda oculta:** `equipo_revocado`
+      (`AC-ADM-08` abierto) y `dte_anulado` no tienen endpoint todavía, así que no hay
+      dónde escribirlos; están en el catálogo para que quien construya esos ACs los
+      encuentre y no invente otro nombre.
+      Evidencia: `comun/evento.test.ts`, 14 casos. Prueba el helper de verdad (los seis
+      valores y su ORDEN — un payload en la posición del usuario dejaría la auditoría
+      diciendo que la venta la hizo un JSON), un caso por operación, y **el cierre de
+      completitud**: si alguien agrega un `TipoEvento` al catálogo y no lo cablea ni lo
+      declara sin ruta, el test se cae nombrándolo. Sin ese cierre, la lista se quedaría
+      vieja en silencio — el mismo defecto que este AC vino a cerrar.
+      **Nota de honestidad:** los casos por operación son textuales (verifican que la ruta
+      llame a `registrarEvento` con su tipo), no ejercen el HTTP. Cubren el olvido, que es
+      el modo de fallo real y el que el AC describe; no cubren que el evento sobreviva a un
+      rollback. Eso último lo garantiza estar dentro de la transacción, que es una
+      propiedad del código, no del test.
       — **Nota de archivo (3-ago-2026):** por texto de `docs/PROMPT_CORRECTIVO.md` §3
       esto es alcance de Ola 3 ("eventos de auditoría en toda operación de plata"), no
       de Ola 2 — quedó filed acá por ser el prerrequisito de datos de la pantalla de

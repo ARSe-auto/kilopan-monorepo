@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { clasificarError } from "@/comun/error-http.ts";
 import { obtenerDb } from "@/comun/db.ts";
+import { registrarEvento } from "@/comun/evento.ts";
 import { exigirRol } from "@/identidad/sesion.ts";
 import { aEnteroEnRango } from "@/comun/validacion.ts";
 
@@ -183,6 +184,12 @@ export async function POST(request: NextRequest) {
       // uno nuevo. Todos los medios de pago se cierran juntos, así que un solo turno se
       // cierra una sola vez, no una vez por medio.
       await tx.query(`update pan.turnos set cerrado_at = now() where id = $1`, [turno.id]);
+
+      // AC-ADM-10: el cierre del turno es la operación de plata que más se audita después
+      // —es donde aparece un faltante—, y hasta acá no dejaba ningún evento.
+      await registrarEvento(tx, "turno_cerrado", "turnos", turno.id, {
+        medios: filas.map((f) => ({ medio: f.medioPago, esperado: f.esperado, declarado: f.declarado })),
+      }, sesion);
 
       return filas;
     });

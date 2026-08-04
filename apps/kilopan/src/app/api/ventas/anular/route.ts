@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { clasificarError } from "@/comun/error-http.ts";
 import { obtenerDb } from "@/comun/db.ts";
+import { registrarEvento } from "@/comun/evento.ts";
 import { exigirSesion } from "@/identidad/sesion.ts";
 import { esUuid } from "@/comun/validacion.ts";
 
@@ -52,11 +53,10 @@ export async function POST(request: NextRequest) {
       );
       const venta = upd.rows[0];
       if (!venta) return null; // no existe o ya estaba anulada
-      await tx.query(
-        `insert into pan.eventos (tipo, entidad, entidad_id, payload, usuario_id, dispositivo_id)
-         values ('venta_anulada', 'ventas', $1, $2, $3, $4)`,
-        [venta.id, JSON.stringify({ motivo }), sesion.usuarioId, sesion.dispositivoId]
-      );
+      // AC-ADM-10: migrado del insert a mano al catálogo compartido. El SQL era correcto,
+      // pero con el nombre del tipo suelto en un string: dos rutas escribiendo
+      // 'venta_anulada' y 'venta_anulacion' dejan una auditoría que no se puede consultar.
+      await registrarEvento(tx, "venta_anulada", "ventas", venta.id, { motivo }, sesion);
       return venta;
     });
     if (!resultado) {

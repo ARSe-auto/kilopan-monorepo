@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { clasificarError } from "@/comun/error-http.ts";
 import { obtenerDb } from "@/comun/db.ts";
+import { registrarEvento } from "@/comun/evento.ts";
 import { exigirSesion, exigirRol } from "@/identidad/sesion.ts";
 
 export async function GET(request: NextRequest) {
@@ -168,18 +169,30 @@ export async function PATCH(request: NextRequest) {
       await db.query(`update pan.productos set activo = $1 where id = $2`, [activo, id]);
     }
     if (precioMostradorClp !== undefined) {
-      await db.query(
-        `insert into pan.precios (producto_id, lista, precio_clp) values ($1,'mostrador',$2)
-           on conflict (producto_id, lista, vigente_desde) do update set precio_clp = excluded.precio_clp`,
-        [id, precioMostradorClp]
-      );
+      // AC-ADM-10: un cambio de precio decide lo que se le cobra al cliente desde el
+      // segundo siguiente. Sin evento, «¿quién bajó el precio del marraqueta el martes?»
+      // no tiene respuesta: `pan.precios` guarda el valor vigente, no quién lo puso.
+      await db.transaccion(async (tx) => {
+        await tx.query(
+          `insert into pan.precios (producto_id, lista, precio_clp) values ($1,'mostrador',$2)
+             on conflict (producto_id, lista, vigente_desde) do update set precio_clp = excluded.precio_clp`,
+          [id, precioMostradorClp]
+        );
+        await registrarEvento(tx, "precio_cambiado", "productos", id, { lista: "mostrador", precioClp: precioMostradorClp }, sesion);
+      });
     }
     if (precioMayoristaClp !== undefined) {
-      await db.query(
-        `insert into pan.precios (producto_id, lista, precio_clp) values ($1,'mayorista',$2)
-           on conflict (producto_id, lista, vigente_desde) do update set precio_clp = excluded.precio_clp`,
-        [id, precioMayoristaClp]
-      );
+      // La lista mayorista lleva su evento igual que la de mostrador: el AC dice «cambio de
+      // precio», no «cambio de precio de mostrador», y es la lista que le cobra a los
+      // clientes de reparto — la plata más grande de las dos.
+      await db.transaccion(async (tx) => {
+        await tx.query(
+          `insert into pan.precios (producto_id, lista, precio_clp) values ($1,'mayorista',$2)
+             on conflict (producto_id, lista, vigente_desde) do update set precio_clp = excluded.precio_clp`,
+          [id, precioMayoristaClp]
+        );
+        await registrarEvento(tx, "precio_cambiado", "productos", id, { lista: "mayorista", precioClp: precioMayoristaClp }, sesion);
+      });
     }
     const r = await db.query<{ id: string; nombre: string; activo: boolean }>(
       `select id, nombre, activo from pan.productos where id = $1`,

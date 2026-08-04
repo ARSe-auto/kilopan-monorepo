@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { clasificarError } from "@/comun/error-http.ts";
 import { obtenerDb } from "@/comun/db.ts";
+import { registrarEvento } from "@/comun/evento.ts";
 import { exigirRol } from "@/identidad/sesion.ts";
 import { esUuid } from "@/comun/validacion.ts";
 
@@ -255,6 +256,14 @@ export async function POST(request: NextRequest) {
       r.rows[0]?.id ??
       (await db.query<{ id: string }>(`select id from pan.pesajes where client_uuid = $1`, [clientUuid]))
         .rows[0]?.id;
+    // AC-ADM-10: la MERMA es la operación de plata de esta ruta — pan que se pesó y no se
+    // va a vender. Solo se audita cuando el destino lo es: un pesaje a mostrador o a
+    // reparto es tráfico normal, y llenar `pan.eventos` con eso ahogaría lo que importa.
+    // Va sobre `r.rows[0]` y no sobre `id`: en un reintento de la cola el `do nothing` no
+    // devuelve fila, y escribir el evento igual duplicaría la merma en la auditoría.
+    if (destino === "merma" && r.rows[0]?.id) {
+      await registrarEvento(db, "merma_registrada", "pesajes", r.rows[0].id, { gramos, productoId, motivoMerma }, sesion);
+    }
     return NextResponse.json({ id, clientUuid });
   } catch (err) {
     const mensaje = err instanceof Error ? err.message : String(err);

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { clasificarError } from "@/comun/error-http.ts";
 import { obtenerDb } from "@/comun/db.ts";
+import { registrarEvento } from "@/comun/evento.ts";
 import { exigirSesion, exigirRol } from "@/identidad/sesion.ts";
 import { esUuid } from "@/comun/validacion.ts";
 
@@ -134,14 +135,22 @@ export async function PATCH(request: NextRequest) {
 
   const db = await obtenerDb();
   try {
-    await db.query(
-      `update pan.rutas
-          set estado = $1,
-              km_inicio = coalesce($2, km_inicio),
-              km_fin = coalesce($3, km_fin)
-        where id = $4`,
-      [estado, kmInicio ?? null, kmFin ?? null, rutaId]
-    );
+    await db.transaccion(async (tx) => {
+      await tx.query(
+        `update pan.rutas
+            set estado = $1,
+                km_inicio = coalesce($2, km_inicio),
+                km_fin = coalesce($3, km_fin)
+          where id = $4`,
+        [estado, kmInicio ?? null, kmFin ?? null, rutaId]
+      );
+      // AC-ADM-10: solo el CIERRE deja evento. Los otros cambios de estado son el avance
+      // normal de la ruta; el cierre es el que fija el odómetro con el que se liquida el
+      // combustible, y ese número después nadie puede reconstruir de dónde salió.
+      if (estado === "cerrada") {
+        await registrarEvento(tx, "ruta_cerrada", "rutas", rutaId, { kmInicio: kmInicio ?? null, kmFin: kmFin ?? null }, sesion);
+      }
+    });
     return NextResponse.json({ ok: true, estado });
   } catch (err) {
     const mensaje = err instanceof Error ? err.message : String(err);

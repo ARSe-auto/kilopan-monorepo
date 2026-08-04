@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { clasificarError } from "@/comun/error-http.ts";
 import { obtenerDb } from "@/comun/db.ts";
+import { registrarEvento } from "@/comun/evento.ts";
 import { exigirRol, exigirSesion } from "@/identidad/sesion.ts";
 import { roundClp } from "@/comun/round_clp.ts";
 import { esUuid, normalizarUuid } from "@/comun/validacion.ts";
@@ -175,7 +176,7 @@ export async function POST(request: NextRequest) {
       // Antes eran N+1 queries sueltas y, contra una BD remota, un corte entre medio
       // dejaba una venta con total y sin líneas — plata en la caja sin respaldo de qué
       // se vendió.
-      return tx.query<{ id: string }>(
+      const r = await tx.query<{ id: string }>(
       `with nueva as (
          insert into pan.ventas
            (client_uuid, vendedor_id, dispositivo_id, medio_pago, total_clp, cliente_id)
@@ -201,6 +202,14 @@ export async function POST(request: NextRequest) {
         calculadas.map((l) => l.precioClp),
       ]
       );
+      // AC-ADM-10: la venta y su evento, en la MISMA transacción. Es la operación de plata
+      // por excelencia — si la venta entra y el evento no, el arqueo del turno cuadra pero
+      // nadie puede decir quién la registró ni en qué equipo.
+      const creada = r.rows[0]?.id;
+      if (creada) {
+        await registrarEvento(tx, "venta_registrada", "ventas", creada, { medioPago, totalClp, clienteId: clienteId ?? null }, sesion);
+      }
+      return r;
     });
 
     const ventaId = resultado.rows[0]?.id;
