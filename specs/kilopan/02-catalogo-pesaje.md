@@ -51,10 +51,14 @@ F1 Pesar ≤4 toques; repetir producto: 2 toques.
       `pesajes.estado_merma`; la vista de TCK mueve `recuperada_con_venta` de
       `g_merma_tipificada` a `g_venta` sin cambiar la fórmula — probado: 3.000 g pasan
       de merma a venta y la TCK sigue cerrando al 100 % [AC-MERM-01]
-- [ ] (P1) Orden de productos **por frecuencia real** de pesaje, no alfabético como hoy.
+- [x] (P1) Orden de productos **por frecuencia real** de pesaje, no alfabético como hoy.
       §5 F1 lo exige para que repetir producto cueste 2 toques. Requiere trackear
       frecuencia. Test: sembrar frecuencias desiguales y fallar si la grilla no las
       respeta [AC-PES-07]
+      — Probado: `/api/productos` ordena por `count(*)` de `pan.pesajes` desc, empate a
+      alfabético (route.ts). e2e `frecuencia-pesar.spec.ts` siembra Frica=10, Hallulla=5,
+      resto=0 y falla si la grilla no pone Frica antes que Hallulla y ambas antes que
+      Dobladitas (que en alfabético iría primera). Gate --full verde, 0 saltados.
 - [ ] (P1-SEC) UI de re-confirmación explícita cuando `pan.es_outlier_pesaje()` devuelve
       true: `/pesar` tiene el estado `confirmar_outlier` y conserva el sha256 de la foto
       entre las dos vueltas de `enviar()` — el maestro no fotografía dos veces la misma
