@@ -43,10 +43,23 @@ bloquea** — el pan no espera (§4).
       `!!e.motivoRechazo`, cualquier string pasa) — sin test que lo ejercite, no hay
       evidencia de que la UI real funcione como se describe.
 
-- [ ] (P0) **Bandeja de pendientes** persistente, alcanzable desde cualquier pantalla, con
+- [x] (P0) **Bandeja de pendientes** persistente, alcanzable desde cualquier pantalla, con
       todo lo que la cola no pudo subir y **por qué**. Nada que la cola rechace desaparece
       sin una decisión del operador: hoy un rechazo se pierde de vista y la venta se
       evapora sin que nadie se entere (`docs/PROMPT_CORRECTIVO.md` §5, Ola 2) [AC-POD-06]
+      — **Cerrado 3-ago-2026 (sesión supervisada).** La persistencia ya existía y era
+      INVISIBLE: `sincronizar()` movía a la store `rechazados` de IndexedDB lo que el
+      servidor devolvía con 4xx, y `outbox.ts:129-132` lo decía con todas las letras — «la
+      bandeja que la lee (Ola 2) todavía no existe». El dato estaba a salvo en disco y
+      nadie podía verlo: el operador veía la venta salir de la cola y suponía que había
+      subido. Se perdía de vista, no del disco — que es exactamente lo que el AC describe.
+      `app/pendientes/page.tsx` lo lee con `listarRechazados()` y muestra tipo, **motivo**
+      y fecha por registro; quitarlo exige tocar «Ya lo resolví», que llama
+      `descartarRechazado()` — la decisión del operador que el AC pide, nunca un borrado
+      automático. Es cliente y no Server Component a propósito: los rechazados viven en
+      IndexedDB del dispositivo, no en Postgres; el servidor no los conoce ni puede
+      conocerlos, son justamente los que nunca llegaron. Alcanzable desde los CUATRO roles
+      (`navegacion.ts`), porque cualquiera de ellos puede generar un registro rechazado.
 
 ## Ola 4 — Robustez: offline honesto (`docs/PROMPT_CORRECTIVO.md` §3, R5)
 

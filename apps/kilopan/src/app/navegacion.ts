@@ -39,16 +39,23 @@ export const DESTINOS_POR_ROL: Record<Rol, Destino[]> = {
     { href: "/admin", etiqueta: "Ajustes", detalle: "Personal, productos, precios y medios de pago" },
     // AC-ADM-04: el enlace es solo comodidad — la puerta la cierra el servidor con 403.
     { href: "/arreglar", etiqueta: "Arreglar", detalle: "Deshacer un error de operación sin entrar a la base" },
+    // AC-POD-06: nada que la cola rechace desaparece sin una decisión del operador.
+    { href: "/pendientes", etiqueta: "Pendientes por revisar", detalle: "Lo que no se pudo subir al servidor, y por qué" },
   ],
   maestro: [
     { href: "/pesar", etiqueta: "Pesaje", detalle: "Anotar las bandejas que salen del horno" },
     { href: "/historial", etiqueta: "Mi historial", detalle: "Lo que has pesado, con fecha, hora y foto" },
+    { href: "/pendientes", etiqueta: "Pendientes por revisar", detalle: "Lo que no se pudo subir al servidor, y por qué" },
   ],
   vendedor: [
     { href: "/vender", etiqueta: "Venta mostrador", detalle: "Cobrar en el mesón" },
     { href: "/caja", etiqueta: "Cierre de caja", detalle: "Contar la plata al final del turno" },
+    { href: "/pendientes", etiqueta: "Pendientes por revisar", detalle: "Lo que no se pudo subir al servidor, y por qué" },
   ],
-  repartidor: [{ href: "/ruta", etiqueta: "Mi ruta", detalle: "Tus entregas de hoy, con foto y ubicación" }],
+  repartidor: [
+    { href: "/ruta", etiqueta: "Mi ruta", detalle: "Tus entregas de hoy, con foto y ubicación" },
+    { href: "/pendientes", etiqueta: "Pendientes por revisar", detalle: "Lo que no se pudo subir al servidor, y por qué" },
+  ],
 };
 
 /** Los destinos que van en la barra de pestañas, ADEMÁS de «Hoy» y «Más» que se agregan

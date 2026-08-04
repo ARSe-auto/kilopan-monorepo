@@ -30,12 +30,11 @@ puntaje mezcla SEO y PWA con lo que de verdad decide si la pantalla abre.
       servidor real y exige las tres cabeceras en una PÁGINA y en una ruta de API: el
       `source: "/:path*"` cubre ambas, y angostarlo a rutas de página —error plausible— no
       lo delataría un test que solo mire `/ingresar`.
-- [ ] (P0-SEC) Cookies de sesión `HttpOnly` + `Secure` (en producción) + `SameSite=Lax`;
+- [x] (P0-SEC) Cookies de sesión `HttpOnly` + `Secure` (en producción) + `SameSite=Lax`;
       ningún secreto ni token en `localStorage`. Verificado en vivo: `document.cookie` no
       puede leer `kp_sesion` desde JS, pero el navegador la manda sola y
       `/api/auth/logout` la valida [AC-SEC-05]
-      — **Anexo D (auditoría 2-ago-2026): HUECO, en proceso de cierre 3-ago-2026 (sesión
-      supervisada, no el motor).** El hueco era real — el `secreto` del
+      — **Cerrado 3-ago-2026 (sesión supervisada).** El hueco era real — el `secreto` del
       dispositivo vivía en `localStorage` en texto plano
       (`apps/kilopan/src/identidad/cliente/dispositivo.ts`), legible con
       `localStorage.getItem(...)` desde cualquier script del origen. Migrado a IndexedDB
