@@ -87,7 +87,7 @@ puntaje mezcla SEO y PWA con lo que de verdad decide si la pantalla abre.
       respaldo de servidor, o se agrega la validación (con test que mande el valor
       fuera de rango por HTTP, no por la UI) o se declara explícitamente por qué no
       hace falta [AC-SEC-09]
-- [ ] (P0) **500 crudos convertidos en 400 validados.** Contados en el código, no
+- [x] (P0) **500 crudos convertidos en 400 validados.** Contados en el código, no
       supuestos: 18 apariciones de `status: 500`/`status(500)` en `apps/kilopan/src/
       app/api/*` (`turnos`, `pedidos`, `ventas`, `ventas/anular`, `dispositivos/
       enrolar`, `auth/login`, `leads`, `usuarios`, y el resto). Un 500 le dice al
@@ -96,6 +96,25 @@ puntaje mezcla SEO y PWA con lo que de verdad decide si la pantalla abre.
       reintentar. Por cada ruta: clasificar el error real (validación de entrada →
       400; excepción de verdad → 500) y probarlo con un caso que mande el dato malo
       por HTTP [AC-SEC-10]
+      — **Cerrado 3-ago-2026 (sesión supervisada).** `comun/error-http.ts` clasifica en un
+      solo lugar y las rutas lo llaman: **17 sitios en 14 rutas** convertidos. La
+      clasificación NO se adivina por el texto del mensaje —cambia con el idioma y con el
+      wording de cualquier trigger—: se lee el `code` SQLSTATE, que es contrato estable.
+      Clase 23 (`not_null`, `foreign_key`, `unique`, `check`), `22P02`/`22001` y `P0001`
+      —el `raise exception` de nuestros propios triggers de negocio— son datos que la BD
+      rechaza A PROPÓSITO, o sea entrada inválida → 400 **con el mensaje de la BD**, que
+      escribimos nosotros en español y es lo único accionable que tiene el operador. Todo
+      lo demás sigue siendo 500 con el mensaje genérico, sin filtrar el detalle interno.
+      **Por qué importa más de lo que parece:** `enviarOEncolar` (`pod/outbox.ts`) trata un
+      5xx como «el servidor está caído, reintento» y un 4xx como «este dato no lo va a
+      aceptar nunca, a la bandeja de rechazados». Clasificar mal dejaba una venta
+      reintentándose para siempre contra un error que no se arregla solo.
+      Evidencia: `comun/error-http.test.ts`, 9 casos, cada código real por separado **y el
+      control en negativo** —una caída de verdad (`ECONNREFUSED`) sigue siendo 500 y no
+      filtra el detalle— para que esto no degenere en «todo es 400». Dos sitios quedaron
+      en 500 a propósito y no son deuda: `auth/login` y `dispositivos/enrolar` no están en
+      un `catch` sino en un `insert` que no devolvió fila — ahí no hay error de BD que
+      clasificar, la consulta funcionó y no trajo nada.
 
 ## Guardrails que corren antes de cada iteración
 

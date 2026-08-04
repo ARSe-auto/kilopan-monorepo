@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { clasificarError } from "@/comun/error-http.ts";
 import { obtenerDb } from "@/comun/db.ts";
 import { exigirSesion, exigirRol } from "@/identidad/sesion.ts";
 import { esUuid } from "@/comun/validacion.ts";
@@ -101,7 +102,9 @@ export async function POST(request: NextRequest) {
     const publico = err instanceof Error ? (err as Error & { publico?: string }).publico : undefined;
     if (publico) return NextResponse.json({ error: publico }, { status: 409 });
     console.error("POST /api/rutas:", mensaje);
-    return NextResponse.json({ error: "No se pudo armar la ruta" }, { status: 500 });
+    // AC-SEC-10: 400 si la BD rechazo el DATO; 500 solo si de verdad nos rompimos.
+    const clasificado = clasificarError(err, "No se pudo armar la ruta");
+    return NextResponse.json({ error: clasificado.mensaje }, { status: clasificado.estado });
   }
 }
 
@@ -155,6 +158,8 @@ export async function PATCH(request: NextRequest) {
       );
     }
     console.error("PATCH /api/rutas:", mensaje);
-    return NextResponse.json({ error: "No se pudo actualizar la ruta" }, { status: 500 });
+    // AC-SEC-10: 400 si la BD rechazo el DATO; 500 solo si de verdad nos rompimos.
+    const clasificado = clasificarError(err, "No se pudo actualizar la ruta");
+    return NextResponse.json({ error: clasificado.mensaje }, { status: clasificado.estado });
   }
 }

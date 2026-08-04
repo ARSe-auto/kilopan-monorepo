@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { clasificarError } from "@/comun/error-http.ts";
 import { obtenerDb } from "@/comun/db.ts";
 import { exigirSesion, exigirRol } from "@/identidad/sesion.ts";
 import { esUuid } from "@/comun/validacion.ts";
@@ -133,7 +134,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Ese folio de factura ya está registrado" }, { status: 409 });
     }
     console.error("POST /api/facturar:", mensaje);
-    return NextResponse.json({ error: "No se pudo consolidar" }, { status: 500 });
+    // AC-SEC-10: 400 si la BD rechazo el DATO; 500 solo si de verdad nos rompimos.
+    const clasificado = clasificarError(err, "No se pudo consolidar");
+    return NextResponse.json({ error: clasificado.mensaje }, { status: clasificado.estado });
   }
 }
 

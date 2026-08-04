@@ -380,7 +380,7 @@ spec. `AC-DASH-06` (pantalla de auditoría) también ya existía, escrita antes 
 sesión — no se duplicó.
 
 - [ ] (P0) [AC-DASH-08] — cola de entregas rechazadas/parciales cableada a una pantalla del dashboard — `specs/kilopan/07-dashboard-flota.md`
-- [ ] (P0) [AC-SEC-10] — 500 crudos convertidos en 400 validados, 18 apariciones contadas en `apps/kilopan/src/app/api/` — `specs/kilopan/08-seguridad-rendimiento.md`
+- [x] (P0) [AC-SEC-10] — 500 crudos convertidos en 400 validados, 18 apariciones contadas en `apps/kilopan/src/app/api/` — `specs/kilopan/08-seguridad-rendimiento.md`
 - [ ] (P1) [AC-DASH-09] — histórico con rango de fechas y exportación de la conciliación diaria — `specs/kilopan/07-dashboard-flota.md`
 - [ ] (P1) [AC-SEC-09] — auditoría de límites de negocio validados solo en el cliente, movidos a servidor+BD — `specs/kilopan/08-seguridad-rendimiento.md`
 

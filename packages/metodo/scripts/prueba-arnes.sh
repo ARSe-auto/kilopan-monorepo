@@ -310,7 +310,14 @@ echo "== 3b-e. Un AC atascado no pausa el motor entero (3-ago-2026) =="
 # motor se pausaba en la misma vuelta de todos modos: pasó de verdad con AC-ADM-04, el
 # primer AC de Ola 2 que el motor tocó. KILOPAN_LOOP_CMD sustituye un stub de rc exacto —
 # es la única forma de probar esto sin gastar en una invocación real de `claude -p`.
-PVIVO_ANTES="$(stat -f %m "$PANEL_VIVO/watchdog.log" 2>/dev/null || echo ausente)"
+# Se compara el CONTENIDO que estas pruebas podrian haber escrito, no el mtime (bug real,
+# 4-ago-2026). El mtime de watchdog.log lo mueve cualquiera: launchd intenta arrancar el
+# motor cada 30 min y, si hay un marcador de pausa puesto, el watchdog escribe «EN PAUSA» y
+# sale — comportamiento CORRECTO que movia el mtime y ponia esta asercion en rojo. Un guard
+# que se dispara por algo sano es indistinguible de uno roto, y manda a buscar un fallo que
+# no existe. Lo que de verdad importa es que estas pruebas no metan SUS lineas en el log
+# real: se cuentan las que solo ellas producen.
+PVIVO_ANTES="$(grep -c "sin commit nuevo\|rc 9\|stub" "$PANEL_VIVO/watchdog.log" 2>/dev/null || echo 0)"
 STUB_DIR="$(mktemp -d)"
 cat > "$STUB_DIR/rc9-luego-1.sh" << 'STUBEOF'
 #!/usr/bin/env bash
@@ -365,7 +372,7 @@ SAL_C="$(PATH="$PATH_ARNES" KILOPAN_LOOP_CMD="bash $STUB_DIR/siempre-1.sh" KILOP
 echo "$SAL_C" | grep -q "sin commit nuevo" && ok "tres fallos genéricos SIN AC atascado siguen pausando (el freno real no se rompió)" || no "REGRESIÓN: el freno de 'sin avance' dejó de funcionar — el motor giraría en falso sin pausar nunca"
 
 rm -rf "$STUB_DIR"
-PVIVO_DESPUES="$(stat -f %m "$PANEL_VIVO/watchdog.log" 2>/dev/null || echo ausente)"
+PVIVO_DESPUES="$(grep -c "sin commit nuevo\|rc 9\|stub" "$PANEL_VIVO/watchdog.log" 2>/dev/null || echo 0)"
 [ "$PVIVO_ANTES" = "$PVIVO_DESPUES" ] && ok "estas pruebas tampoco tocaron el panel vivo" || no "esta sección SÍ tocó el panel vivo — revisar KILOPAN_PANEL_DIR"
 
 echo

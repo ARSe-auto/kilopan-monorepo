@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { clasificarError } from "@/comun/error-http.ts";
 import { obtenerDb } from "@/comun/db.ts";
 import { exigirRol, exigirSesion } from "@/identidad/sesion.ts";
 import { roundClp } from "@/comun/round_clp.ts";
@@ -228,7 +229,9 @@ export async function POST(request: NextRequest) {
       }
     }
     console.error("POST /api/ventas:", mensaje);
-    return NextResponse.json({ error: "No se pudo registrar la venta" }, { status: 500 });
+    // AC-SEC-10: 400 si la BD rechazo el DATO; 500 solo si de verdad nos rompimos.
+    const clasificado = clasificarError(err, "No se pudo registrar la venta");
+    return NextResponse.json({ error: clasificado.mensaje }, { status: clasificado.estado });
   }
 }
 

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { clasificarError } from "@/comun/error-http.ts";
 import { obtenerDb } from "@/comun/db.ts";
 import { exigirSesion } from "@/identidad/sesion.ts";
 import { esUuid } from "@/comun/validacion.ts";
@@ -64,6 +65,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, id: resultado.id });
   } catch (err) {
     console.error("POST /api/ventas/anular:", err instanceof Error ? err.message : String(err));
-    return NextResponse.json({ error: "No se pudo anular la venta" }, { status: 500 });
+    // AC-SEC-10: 400 si la BD rechazo el DATO; 500 solo si de verdad nos rompimos.
+    const clasificado = clasificarError(err, "No se pudo anular la venta");
+    return NextResponse.json({ error: clasificado.mensaje }, { status: clasificado.estado });
   }
 }

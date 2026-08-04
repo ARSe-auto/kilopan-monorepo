@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { clasificarError } from "@/comun/error-http.ts";
 import { obtenerDb } from "@/comun/db.ts";
 import { exigirSesion, exigirRol } from "@/identidad/sesion.ts";
 
@@ -121,7 +122,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Ya existe un producto con ese nombre" }, { status: 409 });
     }
     console.error("POST /api/productos:", mensaje);
-    return NextResponse.json({ error: "No se pudo crear el producto" }, { status: 500 });
+    // AC-SEC-10: 400 si la BD rechazo el DATO; 500 solo si de verdad nos rompimos.
+    const clasificado = clasificarError(err, "No se pudo crear el producto");
+    return NextResponse.json({ error: clasificado.mensaje }, { status: clasificado.estado });
   }
 }
 
@@ -187,6 +190,8 @@ export async function PATCH(request: NextRequest) {
   } catch (err) {
     const mensaje = err instanceof Error ? err.message : String(err);
     console.error("PATCH /api/productos:", mensaje);
-    return NextResponse.json({ error: "No se pudo actualizar" }, { status: 500 });
+    // AC-SEC-10: 400 si la BD rechazo el DATO; 500 solo si de verdad nos rompimos.
+    const clasificado = clasificarError(err, "No se pudo actualizar");
+    return NextResponse.json({ error: clasificado.mensaje }, { status: clasificado.estado });
   }
 }

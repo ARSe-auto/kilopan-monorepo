@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { clasificarError } from "@/comun/error-http.ts";
 import { obtenerDb } from "@/comun/db.ts";
 import { exigirSesion, exigirRol } from "@/identidad/sesion.ts";
 import { validaRut, formatearRut } from "@/comun/valida_rut.ts";
@@ -59,6 +60,8 @@ export async function POST(request: NextRequest) {
     if (/unique|duplicate/i.test(mensaje)) {
       return NextResponse.json({ error: "Ya existe un cliente con ese RUT" }, { status: 409 });
     }
-    return NextResponse.json({ error: "No se pudo crear el cliente" }, { status: 500 });
+    // AC-SEC-10: 400 si la BD rechazo el DATO; 500 solo si de verdad nos rompimos.
+    const clasificado = clasificarError(err, "No se pudo crear el cliente");
+    return NextResponse.json({ error: clasificado.mensaje }, { status: clasificado.estado });
   }
 }
