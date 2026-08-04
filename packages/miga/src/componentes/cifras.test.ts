@@ -26,6 +26,11 @@ const COMPONENTES_SIN_CIFRAS = [
   "ChipOperador.tsx",
   "Copyright.tsx",
   "SelectorUnToque.tsx",
+  // AC-H0-11: los tres estados de listado. Ninguno muestra dinero ni peso — rinden un
+  // skeleton, un mensaje de vacío o uno de error con su botón. `EstadoVacio` recibe texto
+  // libre, así que una pantalla PODRÍA pasarle un monto; si eso pasa, el que formatea es
+  // quien lo pasa, no este componente.
+  "EstadoListado.tsx",
 ];
 
 // `index.tsx` es un barril de reexportación pura: no renderiza nada propio.

@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
+import { EstadoCargando, EstadoVacio, EstadoError } from "@kilopan/miga/componentes/index.tsx";
 import { formatearKg, formatearFechaHora } from "@/comun/formato.ts";
 import { Pantalla } from "../Pantalla.tsx";
 import { useSesion } from "../SesionCliente.tsx";
@@ -134,16 +135,16 @@ export default function HistorialPage() {
         </div>
       ) : null}
 
+      {/* AC-H0-11: los tres estados desde miga. El error trae su botón de reintentar —
+          antes decía «inténtalo de nuevo» y no había con qué. */}
       {cargando ? (
-        <p style={{ color: superficie.textoDim, fontSize: 14 }}>Cargando…</p>
+        <EstadoCargando filas={4} />
       ) : errorCarga ? (
-        <p style={{ color: semantico.error, fontSize: 14 }} role="alert">
-          No se pudo cargar el historial. Revisa la conexión e inténtalo de nuevo.
-        </p>
+        <EstadoError mensaje="No se pudo cargar el historial. Revisa la conexión." alReintentar={cargarPrimeraPagina} />
       ) : pesajes.length === 0 ? (
-        <p style={{ color: superficie.textoDim, fontSize: 14 }}>
-          {esAdmin && !filtroUsuarioId ? "Todavía no hay pesajes registrados." : "Todavía no has pesado nada."}
-        </p>
+        <EstadoVacio
+          mensaje={esAdmin && !filtroUsuarioId ? "Todavía no hay pesajes registrados." : "Todavía no has pesado nada."}
+        />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {pesajes.map((p) => (

@@ -1,8 +1,9 @@
 // AC-VEN-03: cierre de caja — esperado vs declarado con la diferencia visible (§3
 // módulo 3). El vendedor cuenta A CIEGAS: no ve lo esperado antes de declarar.
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BotonPrimario, TecladoNumerico, CifraGrande } from "@kilopan/miga/componentes/index.tsx";
+import { EstadoCargando, EstadoVacio, EstadoError } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico } from "@kilopan/miga/tokens.ts";
 import { formatearClp, parsearClp } from "@/comun/formato.ts";
 import { compartir, sePuedeCompartir } from "@/comun/compartir.ts";
@@ -41,7 +42,13 @@ export default function CajaPage() {
   const [errorCarga, setErrorCarga] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
-  useEffect(() => {
+  // AC-H0-11: la carga se extrae a una función con nombre para que el botón «Reintentar»
+  // del estado de error pueda volver a llamarla. Antes vivía dentro del useEffect y no
+  // había forma de reintentar sin recargar la pantalla entera — que es lo que el operador
+  // terminaba haciendo, perdiendo lo que ya había tecleado.
+  const cargarMedios = useCallback(() => {
+    setCargando(true);
+    setErrorCarga(false);
     fetch("/api/cierre-caja")
       .then((r) => {
         if (!r.ok) throw new Error(String(r.status));
@@ -51,6 +58,10 @@ export default function CajaPage() {
       .catch(() => setErrorCarga(true))
       .finally(() => setCargando(false));
   }, []);
+
+  useEffect(() => {
+    cargarMedios();
+  }, [cargarMedios]);
 
   function valorDeCampo(campo: string): string {
     return campo === FACTURADOR ? totalFacturador : declarados[campo] ?? "";
@@ -107,14 +118,14 @@ export default function CajaPage() {
     // dueño— se volvía teatro: todo cuadraba siempre. Ahora lo esperado y la
     // diferencia se revelan RECIÉN al cerrar.
     <Pantalla titulo="Cierre de caja" bajada="Cuenta la plata de cada medio y anótala. Al cerrar te mostramos si cuadra." ancho={520}>
+      {/* AC-H0-11: los tres estados desde miga. El de error ahora trae su botón: antes
+          decía «inténtalo de nuevo» sin darle al vendedor con qué intentarlo. */}
       {cargando ? (
-        <p style={{ color: superficie.textoDim, fontSize: 14 }}>Cargando…</p>
+        <EstadoCargando filas={3} />
       ) : errorCarga ? (
-        <p style={{ color: semantico.error, fontSize: 14 }} role="alert">
-          No se pudo consultar lo esperado de hoy. Revisa la conexión e inténtalo de nuevo.
-        </p>
+        <EstadoError mensaje="No se pudo consultar lo esperado de hoy. Revisa la conexión." alReintentar={cargarMedios} />
       ) : medios.length === 0 ? (
-        <p style={{ color: superficie.textoDim, fontSize: 14 }}>No hay medios de pago activos.</p>
+        <EstadoVacio mensaje="No hay medios de pago activos. Actívalos en Ajustes para poder cerrar la caja." />
       ) : null}
 
       {medios.map((m) => {

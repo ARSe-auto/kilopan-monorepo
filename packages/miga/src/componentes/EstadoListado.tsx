@@ -1,0 +1,75 @@
+import { superficie, semantico } from "../tokens.ts";
+
+// AC-H0-11: los cuatro estados obligatorios de todo listado. El defecto que cierran no es
+// estético: hoy un error de red se ve IDÉNTICO a «no hay nada». El maestro lo dice con el
+// caso que importa — el repartidor cuya ruta no carga se va a la casa creyendo que no hay
+// reparto. Un listado vacío y un listado que falló son dos hechos opuestos y se veían igual.
+//
+// Viven en `miga` y no en cada pantalla porque la diferencia entre los cuatro tiene que ser
+// la MISMA en toda la app: si cada listado inventa su propio «no hay nada», el operador
+// aprende a ignorarlos y volvemos al punto de partida.
+
+/** Cargando. Skeleton y no un «Cargando…»: ocupa el lugar de lo que viene, así la pantalla
+ *  no salta cuando llega el dato — y se distingue de un vacío de un vistazo, sin leer. */
+export function EstadoCargando({ filas = 3 }: { filas?: number }) {
+  return (
+    <div role="status" aria-label="Cargando" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {Array.from({ length: filas }, (_, i) => (
+        <div
+          key={i}
+          style={{
+            height: 56,
+            borderRadius: 12,
+            background: superficie.hairline,
+            // Sin animación: `prefers-reduced-motion` obligaría a apagarla igual, y un
+            // bloque quieto ya comunica «acá viene algo» sin costar batería en el galpón.
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Vacío ACCIONABLE: dice qué pasa y qué hacer. Un «no hay datos» a secas deja al operador
+ *  sin salida y es indistinguible de un error para quien no sabe leer la diferencia. */
+export function EstadoVacio({ mensaje, accion }: { mensaje: string; accion?: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "8px 0" }}>
+      <p role="status" style={{ margin: 0, color: superficie.textoFaint, fontSize: 15 }}>
+        {mensaje}
+      </p>
+      {accion}
+    </div>
+  );
+}
+
+/** Error CON REINTENTAR. El botón es la mitad del estado: sin él, «algo falló» es una
+ *  noticia sin salida, y el operador cierra la app en vez de volver a intentar. */
+export function EstadoError({ mensaje, alReintentar }: { mensaje: string; alReintentar: () => void }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "8px 0" }}>
+      {/* role="alert" y no "status": un error interrumpe al lector de pantalla, un vacío no. */}
+      <p role="alert" style={{ margin: 0, color: semantico.error, fontSize: 15, fontWeight: 600 }}>
+        {mensaje}
+      </p>
+      <button
+        type="button"
+        onClick={alReintentar}
+        style={{
+          // 48px: el mínimo táctil del maestro (§5), con las manos enharinadas.
+          minHeight: 48,
+          padding: "0 20px",
+          borderRadius: 12,
+          border: `1px solid ${superficie.hairline}`,
+          background: superficie.tarjeta,
+          color: superficie.texto,
+          fontSize: 17,
+          fontWeight: 600,
+          alignSelf: "flex-start",
+        }}
+      >
+        Reintentar
+      </button>
+    </div>
+  );
+}

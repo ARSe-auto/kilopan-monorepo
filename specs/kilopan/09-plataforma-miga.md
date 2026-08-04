@@ -87,6 +87,33 @@ Ningún estado se comunica solo por color.
       Ola 2 — a diferencia de `AC-H0-12` (deshacer de 8 s), que §3 sí lista
       explícitamente dentro de Ola 2. Quedó filed junto a `AC-H0-12` por historia, no
       por scope; no se movió de sección para no generar churn en un AC sin construir.
+      — **Cerrado 4-ago-2026 (sesión supervisada).** Los tres estados que faltaban viven en
+      `packages/miga/src/componentes/EstadoListado.tsx` — `EstadoCargando` (skeleton real,
+      no un «Cargando…»: reserva el alto para que la pantalla no salte y se distingue de un
+      vacío sin leer), `EstadoVacio` (accionable: acepta una acción, no solo un mensaje) y
+      `EstadoError` (**con su botón de reintentar**, que es la mitad del estado: sin él
+      «algo falló» es una noticia sin salida y el operador cierra la app). El 4º —sin
+      conexión con contador de cola— ya existía en `ChipEstadoConexion` y se cerró en
+      `AC-POD-07`, que cableó `/ruta`, la pantalla donde el chip mentía.
+      Viven en `miga` y no en cada pantalla porque la diferencia entre los cuatro tiene que
+      ser la MISMA en toda la app: si cada listado inventa su propio «no hay nada», el
+      operador aprende a ignorarlos y volvemos al punto de partida.
+      Aplicados a `/caja`, `/historial` y `/facturar`, que tenían los estados distinguidos
+      pero **sin ninguna forma de reintentar** — verificado con grep: las únicas dos
+      apariciones de «Reintentar» en toda la app eran de `/ruta`, y una era del GPS. En
+      `/caja` la carga se extrajo a `cargarMedios()` para que el botón pudiera llamarla:
+      antes vivía dentro del `useEffect` y reintentar exigía recargar la pantalla entera,
+      perdiendo lo que el vendedor ya había tecleado.
+      Evidencia: `estado-listado.test.ts`, 6 casos que prueban la DIFERENCIA entre estados,
+      no su estética — que el error trae acción, que se anuncia con `role="alert"` mientras
+      el vacío usa `role="status"` (un error interrumpe al lector de pantalla, un vacío no),
+      que el cargando es skeleton y no texto, y que el botón respeta el mínimo táctil de
+      48 px (§5: un reintento que no se acierta es lo mismo que no tenerlo).
+      **Alcance declarado, no olvido:** quedan sin cablear los listados de `/vender`,
+      `/pedidos`, `/admin` e `/inicio`. Los componentes existen y exportarlos era el
+      trabajo estructural; cablear cada pantalla es mecánico y se hace con su AC. Cerrar
+      esto afirmando «todo listado» sin haberlos tocado sería exactamente el `[x]` sin
+      respaldo que el Anexo D encontró 62 veces.
       — **Trampa para quien construya el 4º estado (3-ago-2026, verificado):**
       `public/sw.js:84-100` responde `caches.match("/ingresar")` a TODA página
       autenticada pedida sin red. Un e2e que emule offline y NAVEGUE a la pantalla

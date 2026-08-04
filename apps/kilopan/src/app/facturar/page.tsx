@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { BotonPrimario, CifraGrande } from "@kilopan/miga/componentes/index.tsx";
+import { EstadoCargando, EstadoVacio, EstadoError } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico } from "@kilopan/miga/tokens.ts";
 import { formatearClp, formatearFecha, parsearClp } from "@/comun/formato.ts";
 import { Pantalla } from "../Pantalla.tsx";
@@ -125,14 +126,14 @@ export default function FacturarPage() {
         </div>
       ) : null}
 
-      {clienteId && cargandoGuias ? (
-        <p style={{ color: superficie.textoDim, fontSize: 14 }}>Buscando guías…</p>
-      ) : null}
+      {/* AC-H0-11: skeleton en vez de un texto — reserva el alto para que la lista no
+          salte cuando lleguen las guías. */}
+      {clienteId && cargandoGuias ? <EstadoCargando filas={3} /> : null}
       {clienteId && errorGuias ? (
-        <p style={{ color: semantico.error, fontSize: 14 }} role="alert">
-          No se pudieron consultar las guías de este cliente. Revisa la conexión e
-          inténtalo de nuevo — puede haber fiado sin cobrar.
-        </p>
+        <EstadoError
+          mensaje="No se pudieron consultar las guías de este cliente. Puede haber fiado sin cobrar."
+          alReintentar={() => void cargarGuias(clienteId)}
+        />
       ) : null}
 
       {guias.length > 0 ? (
@@ -179,7 +180,7 @@ export default function FacturarPage() {
           </BotonPrimario>
         </>
       ) : clienteId && !cargandoGuias && !errorGuias ? (
-        <p style={{ color: superficie.textoFaint, fontSize: 14 }}>Este cliente no tiene guías pendientes de facturar.</p>
+        <EstadoVacio mensaje="Este cliente no tiene guías pendientes de facturar." />
       ) : null}
 
       {mensaje ? (
