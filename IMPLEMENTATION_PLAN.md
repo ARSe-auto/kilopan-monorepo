@@ -390,7 +390,7 @@ Causa raíz R5. `AC-H0-11` (cuatro estados) y `AC-H0-10` (axe/AA) ya estaban en 
 el primero bajo el encabezado de Ola 2 por historia (ver nota de archivo en su spec), el
 segundo escrito antes de esta sesión. Ninguno se duplicó.
 
-- [ ] (P0) [AC-POD-07] — `/ruta` no sabe si está offline; `useEnLinea()` está en `pesar`/`vender` (que exigen red) y no en `/ruta` (el único módulo offline de verdad) — `specs/kilopan/05-entrega-pod.md` — **mitad hecha:** `/ruta` ya usa `useEnLinea()` y el chip dice la verdad (`e2e/pod-offline.spec.ts`, mutante muerto). Sigue abierto porque la otra mitad —quitarle el hook a `pesar`/`vender`— choca con que esas pantallas SÍ encolan offline (`enviarOEncolar`), contra lo que el maestro pone fuera del MVP: decisión de Alexis, no de una sesión de construcción
+- [x] (P0) [AC-POD-07] — `/ruta` sabe si está offline y el chip dice la verdad — `specs/kilopan/05-entrega-pod.md`. **Cerrado en la spec el 3-ago-2026** (commits `9d2ae29` primera mitad, `7b8d47b` segunda mitad). El plan había quedado desincronizado con la spec durable, que ya lo tenía `[x]` con las dos mitades hechas. Primera mitad: `/ruta/page.tsx` usa `useEnLinea()`, probado por `e2e/pod-offline.spec.ts` (pierde señal con la pantalla ya cargada y exige «Sin conexión», mutante muerto). Segunda mitad —quitar el hook a `pesar`/`vender`— era decisión de Alexis, ya tomada en sesión supervisada a favor del código: `enviarOEncolar` ya encola ante cortes momentáneos en producción sin incidentes, y el maestro/`AGENTS.md` se actualizaron para decir la verdad («la UX de offline es solo reparto»). Ninguna pantalla miente ya
 
 ## DONE
 
