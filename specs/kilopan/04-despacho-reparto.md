@@ -32,6 +32,14 @@ retención del vehículo. Sin override, ni en BD ni en UI (§7).
 
 ## Notas de implementación
 
+- **Esquema de bultos (0024, sesión supervisada 06-ago-2026):** F3 se construye SOBRE
+  `pan.bultos` — nacen solo por `pan.generar_bultos(pedido_id, cantidad)` al cerrar el
+  pedido (código determinista `P<correlativo_pedido>-<n>`); el escaneo es
+  `pan.cargar_bulto(codigo, usuario, dispositivo)` (duplicado ⇒ excepción «ya
+  escaneado» ⇒ API 409 ⇒ banner ámbar); «Salir a ruta» con bultos pendientes rebota en
+  BD salvo override con motivo+usuario en el MISMO update, que el trigger deja escrito
+  en `pan.eventos` (`ruta.salida_con_bultos_pendientes`). Invariantes probadas en
+  `db/test-invariantes.mjs` (3 tests AC-DES-04). La UI jamás reimplementa estas reglas.
 - El correlativo interno se llama `correlativo_pedido`, **nunca «folio»**: el único folio
   del sistema es el del SII (§4). Lo asigna solo `pan.asignar_correlativo()` al confirmar,
   con trigger que aborta todo UPDATE posterior y `REVOKE UPDATE(correlativo_pedido)`.

@@ -2401,3 +2401,133 @@ test("Tanda 4: la 0011 conserva la ruta que repartió de verdad, no la que figur
   assert.equal(porId[pedidoReal], "en_ruta", "el que sigue en la ruta viva no se toca");
   await db.close();
 });
+
+test("AC-DES-04: los bultos nacen SOLO por pan.generar_bultos() sobre un pedido cerrado", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "repartidor");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const clienteId = await crearCliente(db);
+  const pedidoId = await crearPedido(db, clienteId, usuarioId, dispositivoId);
+
+  // pedido en borrador: los bultos no pueden nacer todavía
+  await assert.rejects(
+    () => db.query(`select pan.generar_bultos($1, 3)`, [pedidoId]),
+    /cerrado/i,
+    "un pedido en borrador no genera bultos"
+  );
+
+  await db.query(`select pan.asignar_correlativo($1)`, [pedidoId]);
+
+  // el INSERT directo rebota: nacen solo por la función
+  await assert.rejects(
+    () => db.query(`insert into pan.bultos (pedido_id, correlativo, codigo) values ($1, 1, 'X-1')`, [pedidoId]),
+    /permission denied|SOLO por pan\.generar_bultos/i,
+    "nadie inserta bultos a mano"
+  );
+
+  await db.query(`select pan.generar_bultos($1, 3)`, [pedidoId]);
+  const bultos = await db.query(
+    `select correlativo, codigo from pan.bultos where pedido_id = $1 order by correlativo`,
+    [pedidoId]
+  );
+  assert.equal(bultos.rows.length, 3, "nacieron los 3 bultos");
+  const corr = await db.query(`select correlativo_pedido from pan.pedidos where id = $1`, [pedidoId]);
+  assert.equal(
+    bultos.rows[0].codigo,
+    `P${corr.rows[0].correlativo_pedido}-1`,
+    "el código escaneable es determinista: P<correlativo_pedido>-<n>"
+  );
+
+  // regenerar es operación supervisada, no un botón
+  await assert.rejects(
+    () => db.query(`select pan.generar_bultos($1, 2)`, [pedidoId]),
+    /ya tiene bultos/i,
+    "no se regeneran bultos por accidente"
+  );
+  await db.close();
+});
+
+test("AC-DES-04: la ruta no sale con bultos sin escanear; el override queda auditado en pan.eventos", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "repartidor");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const clienteId = await crearCliente(db);
+  const pedidoId = await crearPedido(db, clienteId, usuarioId, dispositivoId);
+  await db.query(`select pan.asignar_correlativo($1)`, [pedidoId]);
+  await registrarDte(db, pedidoId, usuarioId, dispositivoId); // el gate del art. 55 (0019) queda satisfecho
+  await db.query(`select pan.generar_bultos($1, 2)`, [pedidoId]);
+
+  const ruta = await db.query(
+    `insert into pan.rutas (repartidor_id, vehiculo) values ($1,'ABCD12') returning id`,
+    [usuarioId]
+  );
+  const rutaId = ruta.rows[0].id;
+  await db.query(`insert into pan.ruta_paradas (ruta_id, pedido_id, orden) values ($1,$2,1)`, [rutaId, pedidoId]);
+
+  // 0 de 2 escaneados: no sale
+  await assert.rejects(
+    () => db.query(`update pan.rutas set estado = 'en_curso' where id = $1`, [rutaId]),
+    /sin escanear/i,
+    "con bultos pendientes la ruta no sale"
+  );
+
+  // 1 de 2: sigue sin salir
+  const c = await db.query(`select codigo from pan.bultos where pedido_id = $1 order by correlativo`, [pedidoId]);
+  await db.query(`select pan.cargar_bulto($1, $2, $3)`, [c.rows[0].codigo, usuarioId, dispositivoId]);
+  await assert.rejects(
+    () => db.query(`update pan.rutas set estado = 'en_curso' where id = $1`, [rutaId]),
+    /sin escanear/i,
+    "1 de 2 no es 100 %"
+  );
+
+  // override auditado: sale Y queda el evento con el motivo y los pendientes
+  const ok = await db.query(
+    `update pan.rutas
+        set estado = 'en_curso', bultos_override_motivo = 'cliente espera, bulto 2 va en 2ª vuelta',
+            bultos_override_usuario_id = $2
+      where id = $1 returning estado`,
+    [rutaId, usuarioId]
+  );
+  assert.equal(ok.rows[0].estado, "en_curso", "con confirmación auditada la ruta sale");
+  const ev = await db.query(
+    `select payload from pan.eventos where tipo = 'ruta.salida_con_bultos_pendientes' and entidad_id = $1`,
+    [rutaId]
+  );
+  assert.equal(ev.rows.length, 1, "la excepción quedó escrita en pan.eventos");
+  assert.equal(ev.rows[0].payload.pendientes, 1, "el evento dice cuántos bultos faltaban");
+  await db.close();
+});
+
+test("AC-DES-04: un bulto es inmutable — no se re-escanea, no se descarga, no se borra", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5", "repartidor");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const clienteId = await crearCliente(db);
+  const pedidoId = await crearPedido(db, clienteId, usuarioId, dispositivoId);
+  await db.query(`select pan.asignar_correlativo($1)`, [pedidoId]);
+  await db.query(`select pan.generar_bultos($1, 1)`, [pedidoId]);
+  const codigo = (await db.query(`select codigo from pan.bultos where pedido_id = $1`, [pedidoId])).rows[0].codigo;
+
+  await db.query(`select pan.cargar_bulto($1, $2, $3)`, [codigo, usuarioId, dispositivoId]);
+  await assert.rejects(
+    () => db.query(`select pan.cargar_bulto($1, $2, $3)`, [codigo, usuarioId, dispositivoId]),
+    /ya escaneado/i,
+    "el segundo escaneo rebota (la UI lo muestra como banner ámbar)"
+  );
+  await assert.rejects(
+    () => db.query(`update pan.bultos set cargado_at = null where codigo = $1`, [codigo]),
+    /permission denied|SOLO por pan\.cargar_bulto/i,
+    "un bulto cargado no se descarga"
+  );
+  await assert.rejects(
+    () => db.query(`update pan.bultos set codigo = 'HACKEADO' where codigo = $1`, [codigo]),
+    /permission denied|SOLO por pan\.cargar_bulto/i,
+    "la identidad del bulto no se reescribe"
+  );
+  await assert.rejects(
+    () => db.query(`delete from pan.bultos where codigo = $1`, [codigo]),
+    /permission denied|no se borran/i,
+    "append-only, como el POD"
+  );
+  await db.close();
+});

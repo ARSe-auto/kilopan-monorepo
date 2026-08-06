@@ -1241,3 +1241,16 @@ watchdog aparta el WIP en stash marcado antes de verificar HEAD; loop atribuye a
 SOLO a commits que llevan `[AC-ID]` en el mensaje (externos se declaran, no se
 acreditan). prueba-arnes: 95 verde / 0 rojo. REGLA NUEVA para sesiones externas: al
 monorepo se commitea con el motor PAUSADO, nunca a mitad de iteración.
+
+## 2026-08-06 · Migración 0024: bultos + gate de carga (destrabe supervisado de AC-DES-04)
+
+El motor declaró DOS veces, con razón, que F3 era inconstruible sin esquema de bultos
+— y tiene vedado escribir migraciones. Sesión supervisada aplica 0024: pan.bultos
+(nacen SOLO por pan.generar_bultos al cerrar el pedido, código determinista
+P<correlativo>-<n>), pan.cargar_bulto (duplicado ⇒ «ya escaneado» ⇒ 409 ⇒ banner
+ámbar), inmutabilidad total por trigger + sin grants de escritura (defensa doble), y
+trg_ruta_exige_bultos_cargados: «Salir a ruta» con pendientes rebota salvo override
+motivo+usuario en el MISMO update, que queda en pan.eventos. Compatible hacia atrás
+(pedido sin bultos no gatilla el gate). test-invariantes: 81/0. Nota de implementación
+agregada a specs/kilopan/04. Strikes de AC-DES-04 reseteados: el bloqueo era real y ya
+no existe — el próximo intento parte limpio.
