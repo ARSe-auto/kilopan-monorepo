@@ -87,7 +87,7 @@ Ningún estado se comunica solo por color.
       Ola 2 — a diferencia de `AC-H0-12` (deshacer de 8 s), que §3 sí lista
       explícitamente dentro de Ola 2. Quedó filed junto a `AC-H0-12` por historia, no
       por scope; no se movió de sección para no generar churn en un AC sin construir.
-      — **Cerrado 4-ago-2026 (sesión supervisada).** Los tres estados que faltaban viven en
+      — **Avance 4-ago-2026 (sesión supervisada; el AC sigue abierto — quedan /vender, /pedidos, /admin, /inicio).** Los tres estados que faltaban viven en
       `packages/miga/src/componentes/EstadoListado.tsx` — `EstadoCargando` (skeleton real,
       no un «Cargando…»: reserva el alto para que la pantalla no salte y se distingue de un
       vacío sin leer), `EstadoVacio` (accionable: acepta una acción, no solo un mensaje) y

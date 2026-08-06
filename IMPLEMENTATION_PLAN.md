@@ -31,7 +31,7 @@ para ese AC — no antes.
 - [x] (P0) `packages/miga`: tokens de diseño (color, tipografía, grilla, radios) como
       árbol de constantes TS + hoja CSS de variables; incluye acento `#C2410C` (KiloPan)
       y `#1D4ED8` (KiloRuta, reservado para `apps/flota`) [AC-H0-02]
-- [x] (P0) Test que falla si una cifra de dinero o peso no usa `tabular-nums` /
+- ~~[x]~~ (P0) Test que falla si una cifra de dinero o peso no usa `tabular-nums` /
       `font-variant-numeric` en los componentes de `packages/miga` — `cifras.test.ts`
       exige la propiedad por componente (comentarios descartados) y falla si aparece un
       `.tsx` sin clasificar; `prueba-arnes.sh` §7 lo prueba matando dos mutantes
@@ -39,11 +39,11 @@ para ese AC — no antes.
 - [x] (P0) `packages/metodo/scripts/guardrail.sh` ejecutable: aborta si `DATABASE_URL`
       no es localhost/127.0.0.1, aborta si hay secretos fuera de `.env.local`, grep
       bloqueante `TODO|FIXME|PLACEHOLDER|not implemented|lorem ipsum` en `src/` [AC-H0-04]
-- [x] (P0) `packages/metodo/scripts/check.sh` ejecutable con `--full`: build + lint +
+- ~~[x]~~ (P0) `packages/metodo/scripts/check.sh` ejecutable con `--full`: build + lint +
       types + unit (+ e2e y axe cuando exista UI) [AC-H0-05]
-- [x] (P0) `packages/metodo/panel/generar.mjs`: genera `panel/index.html` desde estado
+- ~~[x]~~ (P0) `packages/metodo/panel/generar.mjs`: genera `panel/index.html` desde estado
       real del repo (ver §Panel abajo) [AC-H0-06]
-- [x] (P0) Shells vacíos de `packages/nucleo-{identidad,pod,dte,comun}` con
+- ~~[x]~~ (P0) Shells vacíos de `packages/nucleo-{identidad,pod,dte,comun}` con
       `package.json` y un `README.md` que dice explícitamente: *«se puebla en el hito de
       extracción, después del DONE de KiloPan — no escribir lógica de negocio aquí
       todavía»* [AC-H0-07]
@@ -58,7 +58,7 @@ para ese AC — no antes.
       (SECURITY DEFINER, probado por el camino HTTP con `SET ROLE`, no por acceso
       directo) — cableado en `pesajes` y `hornadas` (hito 2); `pan.trg_exige_sesion()`
       es genérico, se reusa tal cual en cada tabla de negocio nueva [AC-ID-02]
-- [x] (P0) PIN de 4 dígitos hasheado, nunca en texto plano en logs ni en
+- ~~[x]~~ (P0) PIN de 4 dígitos hasheado, nunca en texto plano en logs ni en
       `eventos.payload` — **sustitución deliberada**: `node:crypto` scrypt en vez de
       bcrypt (memory-hard, sin dependencia nueva que auditar; ver
       `apps/kilopan/src/identidad/hash.ts`). `POST /api/auth/login` probado en vivo
@@ -101,7 +101,7 @@ para ese AC — no antes.
       >3× la mediana del producto (fase 1: sin cliente todavía — se agrega la dimensión
       cliente en el hito de despacho, cuando `pedido_linea_id` tenga FK real); falta la
       UI que exige re-confirmación explícita cuando la función devuelve true [AC-PES-03]
-- [x] (P2) **Foto de respaldo opcional** (decisión #1, nivel 1): toggle
+- ~~[x]~~ (P2) **Foto de respaldo opcional** (decisión #1, nivel 1): toggle
       `pesaje_foto_obligatoria` en `/admin`, solo para admin — deliberadamente NO en la
       pantalla de pesaje, para que quien pesa no lo apague cuando le incomode. Obturador
       real por `getUserMedia` con compresión a ~400 KB y `sha256` calculado sobre el
@@ -111,16 +111,17 @@ para ese AC — no antes.
       Cerrado de verdad ahora: la exigencia se valida en el SERVIDOR (validarla solo en
       la UI sería teatro), `pan_app` puede marcar `foto_estado` pero no reapuntar
       `foto_sha256`, y hay 2 tests de invariante que lo prueban [AC-PES-04]
-- [x] (P2) **Báscula conectada opcional** (decisión #1, nivel 2): Web Bluetooth
+- ~~[x]~~ (P2) **Báscula conectada opcional** (decisión #1, nivel 2): Web Bluetooth
       contra el perfil GATT Weight Scale, con degradación a manual. **NO probado contra
       una báscula real** — y las marcas comunes en panaderías chilenas (Toledo, CAS,
       Torrey) suelen usar serie propietario, no GATT: dar por validado solo tras
       conectar una de verdad. En iPhone este camino nunca se ofrece (Web Bluetooth no
       existe en Safari) [AC-PES-05]
-- [x] (P2) **Cola con reintento automático** (decisión #4) en pesaje: respaldada
+- ~~[x]~~ (P2) **Cola con reintento automático** (decisión #4) en pesaje: respaldada
       en sessionStorage, reintento cada 15 s y al volver `online`, con el chip «Sin
       conexión — N por subir». Un rechazo 4xx del servidor NO se encola (es una
       respuesta que el operador tiene que ver ahora); solo se reintenta lo que falló por red [AC-RED-01]
+- [x] (P1) Pesaje a reparto imputado a línea de pedido; el stock de mostrador no se descuenta — cerrado directo en spec; evidencia: `db/test-invariantes.mjs:2021` y `:2080` (espejo agregado 06-ago) [AC-PES-06]
 
 ## Hito 3 — Venta mostrador
 
@@ -138,6 +139,7 @@ para ese AC — no antes.
 - [x] (P2) Fiado en mostrador reutiliza el MISMO cliente y saldo que el del
       reparto — cero segundo sistema de crédito. Probado por HTTP: sin cliente rebota
       con mensaje claro, con cliente entra y suma al saldo [AC-PAG-02]
+- [x] (P1) Pantalla de cierre de caja `/caja`: esperado vs declarado por medio — cerrado directo en spec; evidencia: `apps/kilopan/src/app/caja/page.tsx` + e2e «la caja se cuenta a ciegas» (espejo agregado 06-ago) [AC-VEN-03]
 
 ## Hito 4 — Despacho y reparto
 
@@ -148,7 +150,7 @@ para ese AC — no antes.
 - [x] (P1) **Bloqueo real**: «Salir a ruta» rebota si algún pedido de la carga no tiene
       DTE asociado (art. 55 DL 825) — trigger en BD, sin override; probado en ambos
       sentidos (sin guía rebota, con guía sale) [AC-DES-02]
-- [x] (P1) F2 Armar pedido: `/pedidos` con alta de cliente, pedido con precio de la
+- ~~[x]~~ (P1) F2 Armar pedido: `/pedidos` con alta de cliente, pedido con precio de la
       lista del cliente, registro de DTE y «Armar ruta y salir». El bloqueo del art. 55
       se ve en pantalla (pedidos sin documento en rojo) y probado por HTTP: 409 sin
       guía, 200 con guía. **F3 Cargar van con escáner sigue SIN construir** [AC-DES-03]
@@ -187,12 +189,12 @@ para ese AC — no antes.
       cola de fotos del outbox y se reintenta solo. **Compila y pasa lint, pero el
       flujo NO está ejercitado de punta a punta todavía**: sembrar una parada de prueba
       exige sesión viva de operador. Faltan los modos rechazo/parcial [AC-POD-03]
-- [x] (P2) **Consolidación de guías en una factura + saldo por cliente** (decisión #2):
+- ~~[x]~~ (P2) **Consolidación de guías en una factura + saldo por cliente** (decisión #2):
       `documento_tributario.consolidado_en_id` (self-FK, índice único — ninguna guía se
       factura dos veces), vista `pan.saldo_cliente` derivada de eventos (nunca tabla
       editable a mano), `estado_pago` con «marcar pagada» — probado de punta a punta en
       BD [AC-FIA-01]
-- [x] (P2) UI «Consolidar y facturar»: admin elige cliente, ve sus guías sueltas,
+- ~~[x]~~ (P2) UI «Consolidar y facturar»: admin elige cliente, ve sus guías sueltas,
       las marca y registra la factura que las cubre (monto = suma de las guías, no un
       número tecleado aparte). Probado: doble facturación rebota con 409 [AC-FIA-02]
 
@@ -203,7 +205,7 @@ para ese AC — no antes.
       por destino, merma perdida vs recuperada separadas, semáforo contra la meta de
       95%. Probado en vivo: 13.000 g pesados, 9.000 vendidos + 1.000 merma ⇒ 77% en
       ámbar. Falta el mapa Leaflet+OSM y la pantalla de auditoría [AC-DASH-01]
-- [x] (P1) Tarjeta «Tu flota»: km reales del odómetro, combustión vs EV desde
+- ~~[x]~~ (P1) Tarjeta «Tu flota»: km reales del odómetro, combustión vs EV desde
       `pan.parametros` (editables, con fuente), aparece solo con ≥20 rutas cerradas —
       la regla de rol está testeada: el dashboard entero rebota si no sos `admin`, así
       que el CLP jamás llega al teléfono del repartidor [AC-DASH-02]
@@ -211,7 +213,7 @@ para ese AC — no antes.
       alguien más reparta por mí» → tabla `lead_kiloruta` simétrica a `lead_eauto`,
       ambas exigiendo consentimiento explícito (probado). No depende del contrato
       técnico del Anexo B. Falta cablear el POST de ambos CTA [AC-DASH-03]
-- [x] (P2) **Lectura de totales del facturador** (decisión #3, fase 1): campo en
+- ~~[x]~~ (P2) **Lectura de totales del facturador** (decisión #3, fase 1): campo en
       el cierre de caja que compara contra lo que registró KiloPan. Probado: detecta
       que el facturador marcó $310 más. Las fases CSV y API quedan para cuando el
       piloto lo pida [AC-DASH-04]
@@ -220,11 +222,11 @@ para ese AC — no antes.
       `g_merma_tipificada` a `g_venta` sin cambiar la fórmula — probado (3.000 g pasan
       de merma a venta y la TCK sigue cerrando al 100%). Falta la UI de resolución al
       día siguiente [AC-MERM-01]
-- [x] (P2) **Multisucursal ligero** (decisión #7): tabla `sucursales` +
+- ~~[x]~~ (P2) **Multisucursal ligero** (decisión #7): tabla `sucursales` +
       `sucursal_id` heredado automáticamente del dispositivo (el equipo vive en un
       local, nadie lo elige a mano). Probado que con una sola sucursal queda NULL y no
       agrega complejidad. Falta el selector en el dashboard [AC-SUC-01]
-- [x] (P2) **Botón compartir nativo** (decisión #9): `navigator.share()` con
+- ~~[x]~~ (P2) **Botón compartir nativo** (decisión #9): `navigator.share()` con
       degradación a texto si el teléfono no soporta compartir archivos. Cero número de
       teléfono guardado, cero envío automático. Está en el cierre de caja; falta
       agregarlo al detalle de entrega [AC-SHARE-01]
@@ -240,7 +242,7 @@ para ese AC — no antes.
       gate; falla el build si aparecen — encontró 4 altas + 1 moderada reales (sharp/
       postcss/brace-expansion transitivos) el primer día; corregidas con overrides en
       `pnpm-workspace.yaml` [AC-SEC-03]
-- [x] (P0-SEC) Cabeceras de seguridad base (`X-Content-Type-Options`, `Referrer-Policy`,
+- ~~[x]~~ (P0-SEC) Cabeceras de seguridad base (`X-Content-Type-Options`, `Referrer-Policy`,
       `X-Frame-Options`) en `next.config.ts` — CSP completa y HSTS quedan para cuando
       existan orígenes reales que permitir (fotos, mapa estático); no declarar una CSP
       amplia "por si acaso" [AC-SEC-04]
@@ -257,13 +259,13 @@ para ese AC — no antes.
       foto si no coincide con el declarado en el POD. Guardar el binario en la BD es
       decisión consciente para el piloto (volumen chico); si crece, pasa a URL sin
       cambiar el contrato [AC-SEC-07]
-- [x] (P1-PERF) Índices en los filtros calientes (`pesajes.capturado_at`,
+- ~~[x]~~ (P1-PERF) Índices en los filtros calientes (`pesajes.capturado_at`,
       `destino+fecha`, `ventas.creado_at`, `pedidos(fecha,estado)`, `ruta_paradas`,
       `entregas.capturado_at`). Nota: el índice sobre `creado_at::date` NO se puede —
       castear timestamptz a date no es IMMUTABLE [AC-PERF-01]
-- [x] (P1-PERF) Compresión de fotos en el cliente antes de subir: 1280 px de ancho
+- ~~[x]~~ (P1-PERF) Compresión de fotos en el cliente antes de subir: 1280 px de ancho
       máximo y calidad 0.72, objetivo ≈400 KB, con techo duro de 1,5 MB en el servidor [AC-PERF-02]
-- [x] (P1-PERF) Paginación por CURSOR (keyset), no por OFFSET, en el listado de
+- ~~[x]~~ (P1-PERF) Paginación por CURSOR (keyset), no por OFFSET, en el listado de
       entregas: con OFFSET la página 40 obliga a recorrer y descartar 2.000 filas, y el
       cursor además no se corre si entra una entrega nueva mientras el dueño scrollea.
       Falta cablearlo a una pantalla de historial (el endpoint ya existe) [AC-PERF-03]
@@ -280,8 +282,8 @@ verificarlos uno por uno **leyendo el código, no grepeando** —un grep no dist
 pantalla de un comentario que la menciona— 7 ya estaban construidos y 2 estaban a medias.
 Quedan 16 reales. Cada AC cerrado hoy lleva su cita en el archivo que lo implementa.
 
-- [x] (P1) F23 — sin `<select>` nativo en manos enharinadas: `vender/page.tsx` (cliente al fiar) y `admin/page.tsx` (rol de usuario) usan el `<select>` del sistema; reemplazar por `SelectorUnToque` (packages/miga), el mismo patrón que ya usan destino de pesaje y medio de pago. Actualizar los 5 e2e que dependen del DOM actual — correctivo: `docs/PROMPT_CORRECTIVO.md` §5 — **cerrado**: commit `e9edb29` (/caja, /vender, /admin migrados a SelectorUnToque/TecladoNumerico/CifraGrande), verificado dos veces (navegador real + `check.sh --full` 12/12 antes y después de comitear), marcador de verde `89a39df`. El checkbox de este plan quedó desincronizado del código hasta esta auditoría (2-ago-2026); no hay `<select>` nativo restante en esas tres rutas (quedan en `historial`, `pedidos` y `facturar`, fuera del alcance declarado de F23).
-- [x] (P1) Chip con el nombre del operador **siempre visible** en cada pantalla, como exige §5 F5. Hoy el relevo funciona pero el chip no existe: quien pesa no puede confirmar de un vistazo baj… — spec: `specs/kilopan/01-identidad.md` [AC-ID-07]
+- [x] (P1) F23 — sin `<select>` nativo en manos enharinadas: `vender/page.tsx` (cliente al fiar) y `admin/page.tsx` (rol de usuario) usan el `<select>` del sistema; reemplazar por `SelectorUnToque` (packages/miga), el mismo patrón que ya usan destino de pesaje y medio de pago. Actualizar los 5 e2e que dependen del DOM actual — correctivo: `docs/PROMPT_CORRECTIVO.md` §5 — **cerrado**: commit `e9edb29` (/caja, /vender, /admin migrados a SelectorUnToque/TecladoNumerico/CifraGrande), verificado dos veces (navegador real + `check.sh --full` 12/12 antes y después de comitear), marcador de verde `89a39df`. El checkbox de este plan quedó desincronizado del código hasta esta auditoría (2-ago-2026); no hay `<select>` nativo restante en esas tres rutas (quedan en `historial`, `pedidos` y `facturar`, fuera del alcance declarado de F23). [nota 06-ago: sin AC de spec — F23 es del correctivo §5, excluido del conteo por AC]
+- ~~[x]~~ (P1) Chip con el nombre del operador **siempre visible** en cada pantalla, como exige §5 F5. Hoy el relevo funciona pero el chip no existe: quien pesa no puede confirmar de un vistazo baj… — spec: `specs/kilopan/01-identidad.md` [AC-ID-07]
 - [x] (P1) Orden de productos **por frecuencia real** de pesaje, no alfabético como hoy. §5 F1 lo exige para que repetir producto cueste 2 toques. Requiere trackear frecuencia. Test: sembrar fr… — spec: `specs/kilopan/02-catalogo-pesaje.md` [AC-PES-07]
 - [ ] (P1) F3 Cargar van: contador N/M en 96 px, escáner de cámara full-screen con linterna (48 px, alcanzable con pulgar — madrugada real), lectura válida = beep + vibración, duplicada = tono … — spec: `specs/kilopan/04-despacho-reparto.md` [AC-DES-04]
 - [ ] (P1) Escaneo del TED con zxing-js como mejora progresiva. La captura MANUAL —el camino primario en iOS según §7— ya existe: panel «Registrar documento del SII» en `/pedidos`. Falta solo e… — spec: `specs/kilopan/06-registro-dte.md` [AC-DTE-03]
@@ -291,7 +293,7 @@ Quedan 16 reales. Cada AC cerrado hoy lleva su cita en el archivo que lo impleme
 - [ ] (P1) TEST que verifique la escala tipográfica completa de Miga. Los tokens ya existen (`tokens.ts`: `pesoBascula` 96/700, y `CifraGrande.tsx` la aplica); lo que no existe es la prueba que… — spec: `specs/kilopan/09-plataforma-miga.md` [AC-H0-08]
 - [ ] (P1) es-CL verificado por grep de gate: `12,450 kg` (coma, 3 decimales desde gramos), `$12.500` (entero, punto de miles), `dd-mm-aaaa`, RUT `12.345.678-5` validado al escribir. **Cero str… — spec: `specs/kilopan/09-plataforma-miga.md` [AC-H0-09]
 - [ ] (P1) AA medible en el gate: **axe no está instalado ni como dependencia ni como test** — `check.sh` solo lo nombra en un comentario y en el mensaje de «saltado». Falta: contraste ≥4.5:1 a… — spec: `specs/kilopan/09-plataforma-miga.md` [AC-H0-10]
-- [ ] (P1) Estados obligatorios en todo listado: vacío accionable / skeleton / error con reintentar / sin conexión con **contador real de cola** («Sin conexión — N registros por subir» ámbar → … — spec: `specs/kilopan/09-plataforma-miga.md` [AC-H0-11]
+- ~~[ ]~~ (P1) Estados obligatorios en todo listado: vacío accionable / skeleton / error con reintentar / sin conexión con **contador real de cola** («Sin conexión — N registros por subir» ámbar → … — spec: `specs/kilopan/09-plataforma-miga.md` [AC-H0-11] — fusionado 06-ago: el checkbox vigente de AC-H0-11 es el de Ola 2 (P0)
 - [ ] (P2) Validar el camino GATT contra una báscula real antes de darlo por bueno. Las marcas comunes en panaderías chilenas (Toledo, CAS, Torrey) suelen usar serie propietario, no GATT — `AC-… — spec: `specs/kilopan/02-catalogo-pesaje.md` [AC-PES-09]
 - [ ] (P2) UI de resolución de mermas al día siguiente: hoy la máquina de estados existe y la TCK la respeta, pero nadie puede mover una merma a `recuperada_con_venta` desde pantalla — spec: `specs/kilopan/02-catalogo-pesaje.md` [AC-MERM-02]
 - [ ] (P2) Cablear el POST de ambos CTA (`lead_eauto` y `lead_kiloruta`): las tablas y el consentimiento están probados, pero el botón no envía — spec: `specs/kilopan/07-dashboard-flota.md` [AC-DASH-07]
@@ -388,7 +390,8 @@ sesión — no se duplicó.
 
 Causa raíz R5. `AC-H0-11` (cuatro estados) y `AC-H0-10` (axe/AA) ya estaban en el plan —
 el primero bajo el encabezado de Ola 2 por historia (ver nota de archivo en su spec), el
-segundo escrito antes de esta sesión. Ninguno se duplicó.
+segundo escrito antes de esta sesión. (Corrección 06-ago: AC-H0-11 SÍ quedó
+duplicado — líneas de «Trabajo abierto» y de Ola 2; fusionado dejando vigente el de Ola 2.)
 
 - [x] (P0) [AC-POD-07] — `/ruta` sabe si está offline y el chip dice la verdad — `specs/kilopan/05-entrega-pod.md`. **Cerrado en la spec el 3-ago-2026** (commits `9d2ae29` primera mitad, `7b8d47b` segunda mitad). El plan había quedado desincronizado con la spec durable, que ya lo tenía `[x]` con las dos mitades hechas. Primera mitad: `/ruta/page.tsx` usa `useEnLinea()`, probado por `e2e/pod-offline.spec.ts` (pierde señal con la pantalla ya cargada y exige «Sin conexión», mutante muerto). Segunda mitad —quitar el hook a `pesar`/`vender`— era decisión de Alexis, ya tomada en sesión supervisada a favor del código: `enviarOEncolar` ya encola ante cortes momentáneos en producción sin incidentes, y el maestro/`AGENTS.md` se actualizaron para decir la verdad («la UX de offline es solo reparto»). Ninguna pantalla miente ya
 
