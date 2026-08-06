@@ -4,6 +4,8 @@
 // Exige, por app: specs/<app>/ existe y NO está vacío; cada spec tiene una línea
 // `Fuente: §N` que RESUELVE contra el maestro de esa app; cada spec tiene >=3 ACs
 // con formato [AC-FAM-NN]; ningún id de AC duplicado; ningún AC cerrado que diga "falta".
+// Y desde el 06-ago-2026: el plan no contradice el contrato — máximo 1 checkbox por AC
+// en IMPLEMENTATION_PLAN.md, y su estado espeja el de la spec (la spec manda).
 //
 // Uso: node gate_specs.mjs [--app=kilopan] [--todas]
 // Exit: 0 verde · 1 contrato roto.
@@ -12,6 +14,11 @@
 // vacío ("ok en hito 0"), y NINGÚN script lo invocaba. El motor construyó durante días
 // sin criterio de aceptación contra el cual fallar; las tandas A-F de reparación son la
 // factura. Un gate que no puede ponerse rojo no es un gate.
+//
+// HISTORIA (06-ago-2026): el plan acumuló 21 ACs con DOBLE checkbox (el Anexo D y la
+// Ola 2 re-listaron ítems sin tocar el original) y el conteo por líneas del plan (69/45)
+// divergió del de specs (50/44) hasta hacer dudar del avance real. La regla 5 de abajo
+// hace que esa deriva ponga el gate en ROJO el mismo día que nace.
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
@@ -32,6 +39,28 @@ const err = (msg) => {
   console.error(`GATE: ${msg}`);
   fallo = true;
 };
+
+// Acumula ítems `- [x|- [ ]` con sus líneas de continuación (los ítems envuelven varias
+// líneas y el id suele ir al final). Contar por línea perdía el 99% de los ACs (bug del
+// 26-jul). Las líneas tachadas (`- ~~[x]~~`, historia neutralizada) NO son ítems.
+function parseItems(texto) {
+  const items = [];
+  let actual = null;
+  let nLinea = 0;
+  for (const linea of texto.split("\n")) {
+    nLinea++;
+    const inicio = linea.match(/^- \[([ x])\]/);
+    if (inicio) {
+      if (actual) items.push(actual);
+      actual = { estado: inicio[1], texto: linea, linea: nLinea };
+    } else if (actual) {
+      if (/^(#|- )/.test(linea)) { items.push(actual); actual = null; }
+      else actual.texto += " " + linea;
+    }
+  }
+  if (actual) items.push(actual);
+  return items;
+}
 
 for (const app of apps) {
   const dirSpecs = join(ROOT, "specs", app);
@@ -61,6 +90,7 @@ for (const app of apps) {
   }
 
   const vistos = new Map(); // id de AC -> archivo que lo define
+  const estadoSpec = new Map(); // id de AC -> "x" | " " (estado del checkbox en su spec)
   let abiertos = 0;
   let cerrados = 0;
 
@@ -93,29 +123,38 @@ for (const app of apps) {
     }
 
     // 4. Estado explícito, y un AC cerrado no puede confesar trabajo pendiente.
-    //    Los ítems envuelven varias líneas: se acumula desde `- [x]` hasta el próximo
-    //    ítem o encabezado. Contar por línea perdía el 99% de los ACs (bug del 26-jul).
-    const items = [];
-    let actual = null;
-    for (const linea of texto.split("\n")) {
-      const inicio = linea.match(/^- \[([ x])\]/);
-      if (inicio) {
-        if (actual) items.push(actual);
-        actual = { estado: inicio[1], texto: linea };
-      } else if (actual) {
-        if (/^(#|- )/.test(linea)) { items.push(actual); actual = null; }
-        else actual.texto += " " + linea;
-      }
-    }
-    if (actual) items.push(actual);
-
-    for (const item of items) {
+    for (const item of parseItems(texto)) {
       const id = item.texto.match(/\[(AC-[A-Z0-9]+-\d+)\]/)?.[1];
       if (!id) { err(`${app}/${archivo}: ítem sin id de AC → "${item.texto.trim().slice(0, 60)}…"`); continue; }
       if (item.estado === "x") cerrados++;
       else abiertos++;
+      estadoSpec.set(id, item.estado);
       if (item.estado === "x" && /\bfaltan?\b/i.test(item.texto)) {
         err(`${app}/${archivo}: ${id} está marcado [x] pero su texto dice "falta" — pártelo en dos`);
+      }
+    }
+  }
+
+  // 5. El plan no contradice el contrato: máx. 1 checkbox por AC de esta app, y su
+  //    estado = el de la spec. (Solo ids que las specs de ESTA app definen: el plan es
+  //    compartido y puede listar ACs de otras apps.) Deriva plan↔spec = ROJO hoy, no
+  //    descubrimiento arqueológico en 3 semanas.
+  const rutaPlan = [`IMPLEMENTATION_PLAN_${app}.md`, "IMPLEMENTATION_PLAN.md"]
+    .map((f) => join(ROOT, f)).find(existsSync);
+  if (rutaPlan) {
+    const porId = new Map(); // id -> [{estado, linea}]
+    for (const item of parseItems(readFileSync(rutaPlan, "utf8"))) {
+      const id = item.texto.match(/\[(AC-[A-Z0-9]+-\d+)\]/)?.[1];
+      if (!id || !estadoSpec.has(id)) continue; // sin id (histórico) o de otra app
+      if (!porId.has(id)) porId.set(id, []);
+      porId.get(id).push({ estado: item.estado, linea: item.linea });
+    }
+    for (const [id, its] of porId) {
+      if (its.length > 1) {
+        err(`${app}: ${id} tiene ${its.length} checkboxes en el plan (líneas ${its.map((i) => i.linea).join(", ")}) — fusiona en uno; el viejo se tacha (- ~~[x]~~), no se borra`);
+      }
+      if (its[0].estado !== estadoSpec.get(id)) {
+        err(`${app}: ${id} está [${its[0].estado}] en el plan (línea ${its[0].linea}) pero [${estadoSpec.get(id)}] en su spec — la spec manda`);
       }
     }
   }

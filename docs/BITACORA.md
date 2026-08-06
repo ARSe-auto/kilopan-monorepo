@@ -1211,3 +1211,18 @@ sobre la migración.
 salteo de ACs, el marcador de pausa, la escalación de modelo—, este es el único que
 tocó algo con consecuencia real fuera del propio repo (un cambio de esquema). El costo
 de una regla no implementada no es uniforme: depende de qué protege.
+
+## 2026-08-06 · Reconciliación plan↔specs + guard anti-deriva (sesión externa, Fable 5)
+
+El conteo por líneas del plan (69/45) divergía del gate (50/44). Análisis Fable 5
+(informe en /tmp/informe-acs-kilopan.md): 21 ACs con DOBLE checkbox (Anexo D y Ola 2
+re-listaron sin tocar el original), 2 ACs cerrados solo en spec (PES-06, VEN-03), 1
+checkbox sin AC (F23), y el rótulo «Cerrado» de AC-H0-11 en la spec 09 colgando de un
+checkbox abierto. La aritmética cierra exacta: 114 = 94 − 2 + 21 + 1. No había
+divergencia de fondo — doble contabilidad de historia. Correcciones en `5f1d344`
+(plan espeja specs: 50/44) y este commit: regla 5 del gate — máx 1 checkbox por AC en
+el plan y estado espejado a la spec, probada contra fixture (dup ⇒ ROJO, mismatch ⇒
+ROJO, espejo ⇒ VERDE). La cifra oficial de avance es la del gate: 50/94 (53%).
+También hoy: motor reanudado tras 2 días de PAUSA-REVISION (11 stashes archivados
+como tags archivo-wip/*, lista vaciada — nada borrado) y motor de eauto detenido por
+orden del dueño (solo arnés de construcción; Postgres y mail-worker intactos).
