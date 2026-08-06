@@ -1254,3 +1254,13 @@ motivo+usuario en el MISMO update, que queda en pan.eventos. Compatible hacia at
 (pedido sin bultos no gatilla el gate). test-invariantes: 81/0. Nota de implementación
 agregada a specs/kilopan/04. Strikes de AC-DES-04 reseteados: el bloqueo era real y ya
 no existe — el próximo intento parte limpio.
+
+## 2026-08-06 · Anti-Sísifo: tope $3→$6 + el builder recupera su propio stash
+
+AC-DES-04 murió dos veces por agotamiento de presupuesto con el trabajo encaminado: el
+WIP iba al stash y la iteración siguiente partía de CERO sin saber que su avance estaba
+guardado. Dos ajustes en loop.sh: tope por iteración 3→6 USD (el freno contra el gasto
+en círculo son los 3 sin-avance + el marker, no el tope), y una instrucción nueva en el
+prompt del builder: revisar git stash list y recuperar el motor-wip de su propio AC
+antes de re-implementar. Regla que queda: si un AC no cabe en $6 × 3 intentos, se PARTE
+— no se sube el tope de nuevo.

@@ -22,7 +22,12 @@ if [ ! -f "$PLAN" ] && [ "$APP" = "kilopan" ] && [ -f "IMPLEMENTATION_PLAN.md" ]
 fi
 [ -f "$PLAN" ] || { echo "loop: falta $PLAN"; exit 2; }
 LOG_DIR="${KILOPAN_PANEL_DIR:-packages/metodo/panel}"   # ver watchdog.sh: la suite lo redirige
-MAX_BUDGET_USD="${KILOPAN_MAX_BUDGET_USD:-3}"
+# 3→6 (06-ago-2026): con tope $3, AC-DES-04 (F3, el AC más grande del flujo dorado)
+# murió DOS veces por agotamiento con el trabajo bien encaminado — Sísifo: el WIP iba
+# al stash y la iteración siguiente partía de cero. El freno contra el gasto en círculo
+# ya no es este tope sino los 3 sin-avance del watchdog + el marker de pausa. Si un AC
+# no cabe en $6 × 3 intentos, la respuesta es PARTIRLO, no subir esto de nuevo.
+MAX_BUDGET_USD="${KILOPAN_MAX_BUDGET_USD:-6}"
 
 # UN SOLO BUILDER POR WORKTREE (casilla 15). Se toma ANTES de mirar el plan: dos loops
 # que leen el mismo plan eligen el mismo AC y se pisan los commits. El 26-jul-2026 dos
@@ -199,6 +204,12 @@ Reglas duras:
 - Un AC no se marca [x] si todavía falta parte de él. Si quedó a medias, partilo: cerrá
   lo hecho y dejá el resto como AC abierto nuevo en la spec. Un [x] cuyo texto dice
   'falta' pone el gate en rojo — y con razón.
+- ANTES de escribir nada: corré 'git stash list'. Si hay stashes 'motor-wip' recientes,
+  alguno puede traer TU PROPIO avance de este mismo AC, de una iteración que murió por
+  presupuesto (el arnés guarda el trabajo, no lo bota). Miralo con
+  'git stash show -p stash@{N}' y recuperá lo útil ('git stash apply' o rescate a
+  mano si no aplica limpio). Los stashes NO se borran jamás. Re-implementar de cero lo
+  que ya está en un stash es tirar presupuesto.
 - No toques ningún otro AC ni refactorices código no relacionado.
 - Si el AC ya está hecho o depende de algo que no existe aún, decilo explícitamente y no
   inventes trabajo ni marques nada como [x]."
