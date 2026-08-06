@@ -124,6 +124,21 @@ while [ "$i" -lt "$MAX_ITERACIONES" ]; do
       # verdad. No se revierte solo (la lección de camino-dorado.spec.ts:223: un
       # veredicto malo revirtiendo un commit sano es peor que uno rojo esperando).
       echo "watchdog: commit nuevo — re-verificando el gate completo de forma independiente sobre HEAD" | tee -a "$LOG"
+      # HEAD, no el árbol (bug real, 06-ago-2026): esta verificación corría sobre el
+      # árbol de trabajo, y un WIP ajeno al commit (builder a medio camino, intervención
+      # externa) la ponía roja con HEAD sano — «TODOS los DTE» del WIP pausó el motor.
+      # Mismo tratamiento que al inicio de iteración: el WIP se guarda en stash con
+      # marca — JAMÁS se borra — y el veredicto es sobre lo comiteado.
+      EXCLUIR_SUCIO_WD=(':!packages/metodo/panel' ':!apps/kilopan/next-env.d.ts')
+      if [ -n "$(git status --porcelain -- "${EXCLUIR_SUCIO_WD[@]}" 2>/dev/null)" ]; then
+        MARCA_PV="motor-wip-preverify-$(date +%Y%m%d-%H%M%S)"
+        if git stash push -u -m "$MARCA_PV (guardado por watchdog.sh — NO borrado)" -- "${EXCLUIR_SUCIO_WD[@]}" >/dev/null 2>&1; then
+          echo "watchdog: WIP ajeno al commit apartado en stash '$MARCA_PV' antes de verificar HEAD." | tee -a "$LOG"
+          rm -rf apps/*/.next/types apps/*/.next-e2e/types 2>/dev/null || true
+        else
+          echo "watchdog: no pude apartar el WIP — verifico igual; un rojo aquí puede ser del WIP y no de HEAD." | tee -a "$LOG"
+        fi
+      fi
       if ! bash packages/metodo/scripts/check.sh --full 2>&1 | tee -a "$LOG"; then
         pausar "el gate independiente NO dio verde sobre el HEAD que el agente acaba de comitear ($(git rev-parse --short HEAD)). El auto-reporte del agente no es evidencia; revisar a mano."
       fi

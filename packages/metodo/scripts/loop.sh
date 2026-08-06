@@ -250,7 +250,22 @@ mkdir -p .ralph/fallos
 CONT_AC=".ralph/fallos/${AC_ID:-sin-id}"
 leer_num () { n="$(cat "$1" 2>/dev/null | tr -dc 0-9)"; echo "${n:-0}"; }
 
+# ATRIBUCIÓN DE AVANCE (bug real, 06-ago-2026): dos commits docs EXTERNOS (5f1d344,
+# e32327e, de una sesión supervisada) aterrizaron a mitad de iteración y el delta ciego
+# de commits los acreditó como avance de AC-DES-04 — que seguía sin comitear — y encima
+# gatilló la re-verificación del watchdog sobre un árbol con WIP. El avance de UN AC son
+# commits que llevan SU id en el mensaje; lo externo se declara, no se acredita.
+AVANCE_DEL_AC=0
 if [ "$COMMITS_DESPUES" -gt "$COMMITS_ANTES" ]; then
+  N_NUEVOS=$((COMMITS_DESPUES - COMMITS_ANTES))
+  N_DEL_AC=$(git log --oneline --fixed-strings --grep="[${AC_ID:-<sin-id>}]" "HEAD~${N_NUEVOS}..HEAD" 2>/dev/null | wc -l | tr -d ' ')
+  if [ "${N_DEL_AC:-0}" -gt 0 ]; then
+    AVANCE_DEL_AC=1
+  else
+    echo "loop: ${N_NUEVOS} commit(s) nuevo(s) pero ninguno lleva [${AC_ID:-?}] — externos al AC; no cuentan como avance."
+  fi
+fi
+if [ "$AVANCE_DEL_AC" -eq 1 ]; then
   echo "loop: OK — commit nuevo (${COMMITS_ANTES} -> ${COMMITS_DESPUES}) para ${AC_ID:-?}"
   echo 0 > .ralph/build-fails
   rm -f "$CONT_AC"

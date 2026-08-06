@@ -91,7 +91,10 @@ if grep -RInE "(api[_-]?key|secret|password|token)\s*[:=]\s*['\"][A-Za-z0-9/+_-]
 fi
 
 echo "== guardrail: cero cáscaras en src/ =="
-if grep -RInE "TODO|FIXME|PLACEHOLDER|not implemented|lorem ipsum" \
+# -w (palabra completa): «TODOS los DTE» es español legítimo, no un TODO (bug real,
+# 06-ago-2026 — tres archivos de AC-DES-04 marcados como cáscara por la palabra TODOS
+# y el motor pausado por un rojo que no existía).
+if grep -RInwE "TODO|FIXME|PLACEHOLDER|not implemented|lorem ipsum" \
     --include='*.ts' --include='*.tsx' \
     --exclude-dir=node_modules --exclude-dir=.next \
     apps/*/src packages/*/src 2>/dev/null; then

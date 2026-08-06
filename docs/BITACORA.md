@@ -1226,3 +1226,18 @@ ROJO, espejo ⇒ VERDE). La cifra oficial de avance es la del gate: 50/94 (53%).
 También hoy: motor reanudado tras 2 días de PAUSA-REVISION (11 stashes archivados
 como tags archivo-wip/*, lista vaciada — nada borrado) y motor de eauto detenido por
 orden del dueño (solo arnés de construcción; Postgres y mail-worker intactos).
+
+## 2026-08-06 · Tres bugs del arnés destapados por commits externos a mitad de iteración
+
+Los commits `5f1d344`/`e32327e` (reconciliación plan↔specs, sesión externa) aterrizaron
+con la iteración 2 en curso y destaparon en cascada: (B3) el loop acreditó esos commits
+como «avance de AC-DES-04» — delta ciego de commits, sin filtrar por AC; (B1) ese falso
+avance gatilló la re-verificación independiente del watchdog, que corría sobre el ÁRBOL
+(con el WIP del builder), no sobre HEAD; (B2) el grep anti-cáscaras sin frontera de
+palabra marcó «TODOS los DTE» (art. 55, español legítimo) como TODO en 3 archivos del
+WIP ⇒ guardrail FALLÓ ⇒ PAUSA con HEAD sano. Correcciones, cada una probada contra su
+caso: guardrail con `grep -w` (+ caso 2a en prueba-arnes: TODOS no dispara, TODO sí);
+watchdog aparta el WIP en stash marcado antes de verificar HEAD; loop atribuye avance
+SOLO a commits que llevan `[AC-ID]` en el mensaje (externos se declaran, no se
+acreditan). prueba-arnes: 95 verde / 0 rojo. REGLA NUEVA para sesiones externas: al
+monorepo se commitea con el motor PAUSADO, nunca a mitad de iteración.

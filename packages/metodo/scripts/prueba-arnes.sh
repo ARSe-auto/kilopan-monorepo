@@ -84,6 +84,16 @@ bash "$M/guardrail.sh" >/dev/null 2>&1 && no "el grep anti-cáscaras NO detecta 
 rm -f "$CANARIO"
 
 echo
+echo "== 2a. El anti-cáscaras NO confunde español con tokens (bug real 06-ago) =="
+# «TODOS los DTE» disparó el grep sin -w y pausó el motor con HEAD sano. El canario
+# se busca por NOMBRE en la salida: así el veredicto no depende de que el resto del
+# árbol esté verde en este momento.
+CANARIO_ES="apps/kilopan/src/.canario-prueba-arnes-espanol.ts"
+printf '// «Salir a ruta» exige TODOS los DTE asociados (art. 55); métodos y FIXMEs no.\nexport const todosLosDte = true;\n' > "$CANARIO_ES"
+bash "$M/guardrail.sh" 2>&1 | grep -q "canario-prueba-arnes-espanol" && no "falso positivo: la palabra TODOS dispara el anti-cáscaras" || ok "no confunde TODOS/métodos (español) con TODO/FIXME"
+rm -f "$CANARIO_ES"
+
+echo
 echo "== 2b. Interpolación de SQL en minúsculas (AC-SEC-06, docs/PROMPT_CORRECTIVO.md §7) =="
 # El grep era case-sensitive y por eso nunca podía disparar en ESTE repo: todo el SQL
 # real de db/migraciones/*.sql y db/test-invariantes.mjs se escribe en minúsculas. Una
