@@ -1264,3 +1264,14 @@ en círculo son los 3 sin-avance + el marker, no el tope), y una instrucción nu
 prompt del builder: revisar git stash list y recuperar el motor-wip de su propio AC
 antes de re-implementar. Regla que queda: si un AC no cabe en $6 × 3 intentos, se PARTE
 — no se sube el tope de nuevo.
+
+## 2026-08-06 · AC-DES-04 partido en cuatro (regla aplicada: no cabe en $6×3 ⇒ se parte)
+
+Dos intentos con $6 produjeron trabajo real (API + 106 líneas de UI en stashes) sin
+llegar al commit: F3 completo no cabe en el sobre de una iteración. Partición
+supervisada: DES-04 queda redefinido como la capa de BD (0024, ya construida y
+probada — cerrado con evidencia); DES-05 = API HTTP (generar/escanear/estado N/M);
+DES-06 = pantalla /cargar con captura manual y la única modal; DES-07 (P2) = escáner
+de cámara como mejora progresiva. Gates verdes: 97 ACs (51/46), espejo plan↔spec
+validado por la regla 5. DES-04 removido de atascados; sus strikes borrados. El
+builder tiene 3 stashes motor-wip con avance rescatable para DES-05/06.

@@ -23,12 +23,28 @@ retención del vehículo. Sin override, ni en BD ni en UI (§7).
       mismo commit). El invariante de BD del art. 55 sí está sólido
       (`db/test-invariantes.mjs`, etiquetado `AC-DES-02`), pero la afirmación específica
       de este AC —el flujo de pantalla completo— depende del mismo test flaky.
-- [ ] (P1) F3 Cargar van: contador N/M en 96 px, escáner de cámara full-screen con
-      linterna (48 px, alcanzable con pulgar — madrugada real), lectura válida = beep +
-      vibración, duplicada = tono distinto + banner ámbar, sin código = checklist 44 px
-      equivalente. «Salir a ruta» exige 100 % o confirmación auditada (única modal
-      permitida) **y** todos los DTE asociados. **Sin construir** — es el hueco más
-      grande del flujo dorado [AC-DES-04]
+- [x] (P1) Capa de BD de la carga (partido 06-ago-2026: F3 completo no cabía en el
+      sobre de una iteración — API → AC-DES-05, pantalla → AC-DES-06, escáner →
+      AC-DES-07): `pan.bultos` con código determinista `P<correlativo>-<n>`, nacimiento
+      SOLO por `pan.generar_bultos()` al cerrar el pedido, escaneo SOLO por
+      `pan.cargar_bulto()` con rebote de duplicado («ya escaneado»), inmutabilidad por
+      trigger + sin grants de escritura, y «Salir a ruta» exige 100 % de bultos
+      escaneados o override motivo+usuario que el trigger deja en `pan.eventos`.
+      Evidencia: `db/migraciones/0024_bultos_carga.sql` + 3 tests en
+      `db/test-invariantes.mjs` (suite 81/0) [AC-DES-04]
+- [ ] (P1) API de carga por HTTP sobre 0024: generar bultos al confirmar el pedido
+      (cantidad la digita quien cierra), POST de escaneo que traduce «ya escaneado» a
+      409, GET de estado N/M por ruta para el contador. Probada en ambos sentidos:
+      escaneo válido 2xx, duplicado 409, N/M correcto con carga parcial [AC-DES-05]
+- [ ] (P1) Pantalla F3 `/cargar`: contador N/M en 96 px, captura MANUAL del código con
+      el teclado propio + checklist 44 px equivalente para bultos sin código, duplicado
+      = banner ámbar, «Salir a ruta» al 100 % o la única modal permitida (motivo +
+      quién — el override auditado de 0024) **y** todos los DTE asociados. e2e móvil
+      390×844 del camino feliz y del duplicado [AC-DES-06]
+- [ ] (P2) Escáner de cámara full-screen con linterna (48 px, alcanzable con pulgar) +
+      beep + vibración con zxing-js, como MEJORA PROGRESIVA sobre la captura manual de
+      AC-DES-06 — que sigue siendo el camino primario en iOS (§7). Cámara denegada o
+      sin soporte degrada a manual sin bloquear nada [AC-DES-07]
 
 ## Notas de implementación
 
