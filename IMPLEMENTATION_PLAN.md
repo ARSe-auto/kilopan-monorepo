@@ -326,7 +326,6 @@ esta misma auditoría — no queda como ítem abierto de la lista de abajo.
 - [ ] (P2) [AC-FIA-01] — el "índice único" de consolidación no existe (solo índice no-único); ver nota en `specs/kilopan/06-registro-dte.md`
 - [ ] (P2) [AC-FIA-02] — doble facturación 409 sin test — `specs/kilopan/06-registro-dte.md`
 - [ ] (P2) [AC-SUC-01] — sucursal_id probado en BD pero invisible en toda la UI — `specs/kilopan/07-dashboard-flota.md`
-- [ ] (P1-PERF) [AC-PERF-03] — endpoint de cursor sin pantalla que lo consuma — `specs/kilopan/08-seguridad-rendimiento.md`
 - [ ] (P1) [AC-POD-04] — e2e flaky confirmado, no es evidencia repetible — `specs/kilopan/05-entrega-pod.md`
 - [ ] (P1) [AC-DES-03] — depende del mismo e2e flaky que AC-POD-04 — `specs/kilopan/04-despacho-reparto.md`
 - [ ] (P1) [AC-ID-07] — chip existe pero el test de cobertura-en-toda-pantalla descrito nunca se escribió — `specs/kilopan/01-identidad.md`
