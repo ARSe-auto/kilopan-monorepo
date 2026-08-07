@@ -10,6 +10,22 @@ el aprendizaje contradice lo que creíamos. **Qué NO va:** el estado del plan (
 
 ---
 
+## 2026-08-07 · AC-ADM-09 salteado: «quitar pedido de ruta» sí necesita migración, pese a la nota de Ola 2
+
+`IMPLEMENTATION_PLAN.md` decía «Ola 2 no necesita migraciones nuevas» — cierto para
+ADM-05/06/07/10, falso para este. `pan.ruta_paradas` (0004) solo tiene grant `insert,
+update` para `pan_app`, nunca `delete`, y su CHECK de `estado` es cerrado a
+`pendiente/entregada/rechazada`. Sacar un pedido de la ruta exige que el repartidor deje
+de verlo: `GET /api/rutas/mi-ruta` lista TODAS las paradas de la ruta sin filtrar por
+estado, así que reusar `rechazada` para «lo sacó el admin» mentiría en la auditoría —esa
+palabra ya significa «el cliente rechazó la entrega en el POD»— y rompería la regla
+transversal de la sección Ola 2: toda corrección es append-only (como `supersede_id`),
+nunca un valor prestado de otro significado. La única forma correcta es un estado nuevo
+(o mecanismo equivalente) en el CHECK de `pan.ruta_paradas`, y el motor **nunca** edita
+`db/migraciones/` (regla dura de `AGENTS.md`). Sin código escrito, sin AC marcado — queda
+en `packages/metodo/panel/acs-atascados.txt` y movido a «Fuera del alcance del motor» en
+el plan, a la espera de una migración de sesión supervisada.
+
 ## 2026-08-03 (tarde) · El bucle de muerte: el motor se condenó a Opus y no podía salir solo
 
 El motor pasó ~2 h y 9 iteraciones sin cerrar un solo AC, dejando un stash por vuelta

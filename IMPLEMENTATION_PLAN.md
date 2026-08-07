@@ -372,7 +372,6 @@ necesita migraciones nuevas**, así que el motor puede construirla casi entera s
 - [x] (P0) [AC-VEN-05] — apertura de turno con fondo inicial, dos toques — `specs/kilopan/03-venta-mostrador.md`
 - [x] (P1) [AC-ADM-07] — cerrar una ruta con odómetro desde `/arreglar` — `specs/kilopan/10-administracion.md`
 - [ ] (P1) [AC-ADM-08] — revocar equipo y desbloquear PIN desde `/arreglar` — `specs/kilopan/10-administracion.md`
-- [ ] (P1) [AC-ADM-09] — quitar un pedido de una ruta desde `/arreglar` — `specs/kilopan/10-administracion.md`
 - [ ] (P1) [AC-H0-13] — teclado grande en todo campo de plata, incluido el arqueo — `specs/kilopan/09-plataforma-miga.md`
 
 **Fuera del alcance del motor** (`docs/PROMPT_CORRECTIVO.md` §7 — sesión supervisada):
@@ -380,6 +379,16 @@ necesita migraciones nuevas**, así que el motor puede construirla casi entera s
 - [ ] (P0) [AC-ADM-11] — reparación de datos históricos con informe FIRMADO por la dueña — `specs/kilopan/10-administracion.md`
       El motor no lo toca: son datos reales con evidencia y exige la firma de una persona.
       Anotado en `packages/metodo/panel/acs-atascados.txt` para que no tape a los demás.
+- [ ] (P1) [AC-ADM-09] — quitar un pedido de una ruta desde `/arreglar` — `specs/kilopan/10-administracion.md`
+      Corrige la nota de la línea 362 («Ola 2 no necesita migraciones nuevas»): ESTE ítem sí
+      la necesita. `pan.ruta_paradas` solo tiene grant `insert, update` (0004) — nunca
+      `delete` — y su CHECK de `estado` es cerrado a `pendiente/entregada/rechazada`. Sacar un
+      pedido de la ruta exige que el repartidor deje de verlo en `/api/rutas/mi-ruta` (que
+      lista TODAS las paradas sin filtrar por estado), así que reusar `rechazada` mentiría
+      —esa es la reservada para un rechazo real del cliente en el POD— y violaría la regla
+      transversal de la sección (append-only, como `supersede_id`). Hace falta un estado
+      nuevo (o equivalente) en el CHECK: migración de sesión supervisada, no del motor.
+      Anotado en `packages/metodo/panel/acs-atascados.txt`.
 
 ## Ola 3 — «Que la dueña vea» (`docs/PROMPT_CORRECTIVO.md` §3, planificada 3-ago-2026)
 
