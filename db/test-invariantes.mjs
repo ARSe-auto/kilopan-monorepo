@@ -446,6 +446,74 @@ test("AC-PES-03: es_outlier_pesaje detecta 25.000 g donde iban 2.500 (test centi
   await db.close();
 });
 
+test("AC-ADM-02: cambiar un precio inserta una fila nueva — el precio de una fecha pasada nunca se reescribe", async () => {
+  // specs/kilopan/10-administracion.md: «cambiar un precio crea una fila nueva, jamás
+  // edita la vigente». El HTTP (`e2e/administracion-productos.spec.ts`) solo puede ver
+  // el precio VIGENTE de hoy — no hay GET que liste el historial — así que la
+  // afirmación central se prueba acá, bajo pan_app, contra la tabla real, con la MISMA
+  // sentencia SQL que usa `PATCH /api/productos` (ver comentario en esa ruta).
+  const db = await dbNueva();
+  const productoId = await crearProducto(db);
+
+  // Un precio que ya quedó fijado en el pasado (como si alguien lo hubiera puesto el
+  // 1-ene-2026): esta fila es la que una venta o un pedido de esa fecha lee, y no puede
+  // moverse jamás.
+  await db.query(
+    `insert into pan.precios (producto_id, lista, precio_clp, vigente_desde) values ($1,'mostrador',1000,'2026-01-01')`,
+    [productoId]
+  );
+
+  // El mismo upsert que corre `PATCH /api/productos` para "hoy" con un precio nuevo.
+  await db.query(
+    `insert into pan.precios (producto_id, lista, precio_clp) values ($1,'mostrador',1300)
+       on conflict (producto_id, lista, vigente_desde) do update set precio_clp = excluded.precio_clp`,
+    [productoId]
+  );
+
+  const filas = await db.query(
+    `select precio_clp, vigente_desde from pan.precios where producto_id = $1 and lista = 'mostrador' order by vigente_desde`,
+    [productoId]
+  );
+  assert.equal(filas.rows.length, 2, "el cambio de hoy debe sumar una fila, no reemplazar la de enero");
+  assert.equal(filas.rows[0].precio_clp, 1000, "la fila de enero no se toca");
+  assert.equal(filas.rows[1].precio_clp, 1300, "hoy queda con el precio nuevo");
+
+  // Vigencia histórica: una fecha intermedia (después de enero, antes de hoy) sigue
+  // resolviendo al precio de enero — el mismo patrón de subconsulta que usa la API
+  // (`vigente_desde <= fecha order by vigente_desde desc limit 1`).
+  const vigenteEnJunio = await db.query(
+    `select precio_clp from pan.precios
+      where producto_id = $1 and lista = 'mostrador' and vigente_desde <= '2026-06-01'
+      order by vigente_desde desc limit 1`,
+    [productoId]
+  );
+  assert.equal(vigenteEnJunio.rows[0].precio_clp, 1000, "una fecha pasada sigue viendo el precio de esa época");
+
+  const vigenteHoy = await db.query(
+    `select precio_clp from pan.precios
+      where producto_id = $1 and lista = 'mostrador' and vigente_desde <= current_date
+      order by vigente_desde desc limit 1`,
+    [productoId]
+  );
+  assert.equal(vigenteHoy.rows[0].precio_clp, 1300, "hoy resuelve al precio nuevo");
+
+  // Dos ediciones el MISMO día sí se pisan entre sí (mismo vigente_desde = misma fila):
+  // corregir un tipeo recién cometido no debe dejar dos versiones del mismo día.
+  await db.query(
+    `insert into pan.precios (producto_id, lista, precio_clp) values ($1,'mostrador',1800)
+       on conflict (producto_id, lista, vigente_desde) do update set precio_clp = excluded.precio_clp`,
+    [productoId]
+  );
+  const trasSegundoCambioHoy = await db.query(
+    `select precio_clp, vigente_desde from pan.precios where producto_id = $1 and lista = 'mostrador' order by vigente_desde`,
+    [productoId]
+  );
+  assert.equal(trasSegundoCambioHoy.rows.length, 2, "un segundo cambio el mismo día no suma una tercera fila");
+  assert.equal(trasSegundoCambioHoy.rows[0].precio_clp, 1000, "enero sigue intacto");
+  assert.equal(trasSegundoCambioHoy.rows[1].precio_clp, 1800, "hoy queda con el último valor del día");
+  await db.close();
+});
+
 // =============================================================================
 // Hito 3 — venta mostrador
 // =============================================================================

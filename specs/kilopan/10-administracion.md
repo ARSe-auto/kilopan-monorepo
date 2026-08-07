@@ -17,12 +17,22 @@ Todo lo de esta spec es **solo rol `admin`** (regla de rol testeada, §5).
       (`exigirRol(["admin"])`, valida RUT/PIN/rol, candado de auto-desactivación), pero
       ningún test (unit, e2e o invariante) llama `POST`/`PATCH /api/usuarios` — nadie lo
       ejercita de forma automatizada.
-- [ ] (P1) Dar de alta pan nuevo y editar precios desde la app (`/admin` +
+- [x] (P1) Dar de alta pan nuevo y editar precios desde la app (`/admin` +
       `POST/PATCH /api/productos`), respetando la vigencia histórica de `precios`: cambiar
       un precio crea una fila nueva, jamás edita la vigente [AC-ADM-02]
-      — **Anexo D (auditoría 2-ago-2026): HUECO.** Ningún test llama
-      `POST`/`PATCH /api/productos`, y en particular ninguno verifica la afirmación
-      central — que cambiar el precio crea fila nueva sin pisar la vigente.
+      — **Cerrado 7-ago-2026:** el HUECO del Anexo D era de test, no de endpoint. El
+      `POST`/`PATCH /api/productos` ya existía (`exigirRol(["admin"])`, alta con precio
+      inicial en `pan.precios`, PATCH que activa/desactiva y versiona precio con
+      `on conflict … vigente_desde`). Ahora dos tests lo ejercitan de verdad, con el mismo
+      reparto de responsabilidades que AC-ADM-06: `e2e/administracion-productos.spec.ts`
+      ataca el HTTP con sesión admin real (alta → dup 409, sin nombre/tipo/precio inválido
+      → 400; PATCH deja el precio nuevo VIGENTE en `?detalle=1`, desactivar saca el
+      producto de `/pesar` y reactivar lo devuelve, id inexistente → 404; vendedor rebota
+      403 en POST y PATCH). La **afirmación central** —cambiar un precio inserta fila nueva
+      sin pisar la vigente, y una fecha pasada sigue viendo su precio de época— vive en
+      `db/test-invariantes.mjs` bajo `pan_app` con la MISMA sentencia SQL de la ruta,
+      porque por HTTP el catálogo solo expone el precio vigente de hoy (no hay GET de
+      historial). Dos ediciones el mismo día sí se pisan (mismo `vigente_desde`).
 - [ ] (P2) Edición de `pan.parametros` desde `/admin`: la pantalla lee y escribe
       `/api/parametros`, así que `clp_km_combustible`, `clp_km_ev` y `co2_g_km_evitado`
       se corrigen sin SQL [AC-ADM-03]
