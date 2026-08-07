@@ -1,0 +1,13 @@
+diff --git b/db/migraciones/0021_anulacion_baja_deuda_y_es_irreversible.sql a/db/migraciones/0021_anulacion_baja_deuda_y_es_irreversible.sql
+index 74eafe7..3c40843 100644
+--- b/db/migraciones/0021_anulacion_baja_deuda_y_es_irreversible.sql
++++ a/db/migraciones/0021_anulacion_baja_deuda_y_es_irreversible.sql
+@@ -18,7 +18,7 @@ create or replace view pan.saldo_cliente as
+ select c.id as cliente_id,
+        c.rut,
+        c.razon_social,
+-       coalesce(deuda_dte.monto, 0)::integer as saldo_pendiente_clp -- MUTANTE: fiado del mesón removido del saldo
++       (coalesce(deuda_dte.monto, 0) + coalesce(deuda_mesa.monto, 0))::integer as saldo_pendiente_clp
+   from pan.clientes c
+   left join (
+     select p.cliente_id, sum(d.monto_total) as monto
