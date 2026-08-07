@@ -82,12 +82,19 @@ const repartidorDespacho = await uno(
   [pinHashLuis]
 );
 
-// AC-DES-06: un TERCER repartidor para el segundo test de carga. El primer test deja a
-// Diego con una ruta en 'en_curso', así que el segundo test 409 si reutiliza el mismo.
-// RUT distinto pero en el mismo rango válido (serie 11.111.111, que Diego ya validó).
+// AC-DES-06: cada test que sale a ruta deja a SU repartidor con una ruta del día, y
+// `rutas_una_activa_por_repartidor_dia` (0011) no admite otra para el mismo repartidor la
+// misma fecha. Como los tests corren SERIADOS contra UNA sola base, cada uno necesita un
+// repartidor propio, libre de los demás: Diego (arriba) es de AC-DES-05; Eva es del test 2
+// de esta pantalla; Fabián, del test 1. RUTs distintos, todos con DV correcto (valida_rut).
 const repartidorDespacho2 = await uno(
   `insert into pan.usuarios (nombre, rut, rol, pin_hash)
    values ('Eva Entrega', '12.222.222-5', 'repartidor', $1) returning id`,
+  [pinHashLuis]
+);
+const repartidorDespacho3 = await uno(
+  `insert into pan.usuarios (nombre, rut, rol, pin_hash)
+   values ('Fabián Flete', '22.222.222-2', 'repartidor', $1) returning id`,
   [pinHashLuis]
 );
 
@@ -165,8 +172,10 @@ const datos = {
   pedido: { id: pedido.id, gramosPedidos: 20000 },
   // AC-DES-05: repartidor propio del test de carga, libre de la ruta del camino dorado.
   repartidorDespacho: { id: repartidorDespacho.id },
-  // AC-DES-06: segundo repartidor para el segundo test (el primero deja al primero con ruta activa).
+  // AC-DES-06: repartidores propios de la pantalla F3 — test 2 (Eva) y test 1 (Fabián),
+  // distintos entre sí y de Diego, porque cada uno deja una ruta activa del día.
   repartidorDespacho2: { id: repartidorDespacho2.id },
+  repartidorDespacho3: { id: repartidorDespacho3.id },
 };
 writeFileSync(join(E2E, "datos-semilla.json"), JSON.stringify(datos, null, 2));
 await db.close();

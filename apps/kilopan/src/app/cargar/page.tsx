@@ -103,6 +103,9 @@ export default function CargarPage() {
       setCargados((c) => c + 1);
       setCodigoTexto("");
       setUltimoDuplicado(null);
+      // AC-DES-06: un escaneo válido vuelve sola a la lista para ver el contador avanzar;
+      // el duplicado (rama 409 arriba) se queda en la captura mostrando el banner ámbar.
+      setPaso("lista");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error de red");
     }
@@ -337,24 +340,18 @@ export default function CargarPage() {
                   textAlign: "center",
                 }}
               >
-                {codigoTexto || "—"}
+                {codigoTexto ? `P${codigoTexto}` : "—"}
               </div>
             </div>
 
-            <TecladoNumerico
-              valor={codigoTexto}
-              onCambiar={(v) => {
-                // Permitir letras P, 0-9 para códigos tipo P123-4
-                const permitidas = /^[P0-9\-]*$/;
-                if (permitidas.test(v)) {
-                  setCodigoTexto(v.toUpperCase());
-                }
-              }}
-            />
+            {/* AC-DES-06: contrato de captura fijado en la spec (06-ago-2026) — el
+                teclado propio es numérico + «−»; el prefijo «P» lo pone la pantalla,
+                jamás se teclea. */}
+            <TecladoNumerico valor={codigoTexto} onCambiar={setCodigoTexto} permitirGuion />
 
             <button
               onClick={() => {
-                void escanear(codigoTexto);
+                void escanear(`P${codigoTexto}`);
               }}
               style={{
                 padding: "12px 16px",
@@ -403,6 +400,10 @@ export default function CargarPage() {
             backgroundColor: "rgba(0, 0, 0, 0.5)",
             display: "flex",
             alignItems: "flex-end",
+            // AC-DES-06: por encima de la BarraPestanas (zIndex 40); si no, la barra de
+            // navegación inferior tapa el botón de confirmar del override y la única modal
+            // permitida queda intappable — el override auditado no se podría ejecutar.
+            zIndex: 100,
           }}
         >
           <div

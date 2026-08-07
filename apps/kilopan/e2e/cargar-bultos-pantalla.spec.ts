@@ -1,9 +1,22 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { sembrarDispositivo } from "./sembrar-dispositivo.ts";
 import { ingresar } from "./ingresar.ts";
+
+// AC-DES-06 (contrato fijado 06-ago-2026 en specs/kilopan/04-despacho-reparto.md):
+// el teclado propio es numérico + «−» (el guión ASCII del código lo traduce el botón);
+// el prefijo «P» lo agrega la pantalla sola. Los e2e operan ESOS BOTONES — jamás
+// input[type=text] ni page.keyboard, que simulan el teclado del sistema (inexistente
+// en terreno, §5).
+async function tocarCodigo(page: Page, codigoConP: string) {
+  await expect(page.locator("text=Ingresa el código del bulto")).toBeVisible();
+  for (const char of codigoConP.slice(1)) {
+    const tecla = char === "-" ? "−" : char;
+    await page.getByRole("button", { name: tecla, exact: true }).click();
+  }
+}
 
 // AC-DES-06: pantalla F3 `/cargar` — contador N/M 96 px, captura manual + checklist,
 // banner ámbar en duplicado, salir-a-ruta con la única modal permitida (motivo + quién).
@@ -17,6 +30,8 @@ const datos = JSON.parse(
   productos: Record<string, string>;
   cliente: { id: string; razonSocial: string };
   repartidorDespacho: { id: string };
+  repartidorDespacho2: { id: string };
+  repartidorDespacho3: { id: string };
 };
 
 test.use({ viewport: { width: 390, height: 844 } });
@@ -41,10 +56,31 @@ test("AC-DES-06: pantalla de carga — contador, captura manual, duplicado y ove
   });
   const { id: pedidoId } = (await pedido.json()) as { id: string };
 
-  // Una ruta con ese pedido
-  const ruta = await page.request.post("/api/rutas", {
-    data: { repartidorId: datos.repartidorDespacho.id, pedidoIds: [pedidoId] },
+  // AC-DES-06 / art. 55 DL 825: sin guía asociada la BD no deja pasar la ruta a
+  // en_curso — ni con el override de bultos, que solo salta el conteo de carga, no el
+  // DTE. Se registra la guía del pedido recién creado (AC-DTE-01) para que «Salir a
+  // ruta» pueda completarse.
+  const dte = await page.request.post("/api/dte", {
+    data: {
+      tipoDte: 52,
+      folioSii: 900011,
+      rutEmisor: "76.192.083-9",
+      rutReceptor: "76.192.083-9",
+      montoTotal: 33000,
+      indTraslado: 1,
+      pedidoId,
+    },
   });
+  expect(dte.ok()).toBeTruthy();
+
+  // Una ruta con ese pedido. Repartidor propio del test 1 (Fabián): AC-DES-05 ya dejó a
+  // Diego con ruta del día y `rutas_una_activa_por_repartidor_dia` (0011) no admite otra.
+  const ruta = await page.request.post("/api/rutas", {
+    data: { repartidorId: datos.repartidorDespacho3.id, pedidoIds: [pedidoId] },
+  });
+  if (!ruta.ok()) {
+    throw new Error(`POST /api/rutas ${ruta.status()}: ${await ruta.text()}`);
+  }
   const { id: rutaId } = (await ruta.json()) as { id: string };
 
   // Obtener los códigos de los bultos
@@ -75,15 +111,7 @@ test("AC-DES-06: pantalla de carga — contador, captura manual, duplicado y ove
 
   // Camino feliz: escanear el primer bulto
   await page.click("button:has-text('Escanear código')");
-  // En la pantalla de captura manual, el TecladoNumerico debe ser visible
-  await expect(page.locator("text=Ingresa el código del bulto")).toBeVisible();
-
-  // Usar el TecladoNumerico para ingresar el código (es numerico + P y -)
-  const inputCodigo = page.locator('input[type="text"]').first(); // El input del TecladoNumerico
-  await inputCodigo.click();
-  for (const char of codigo1) {
-    await page.keyboard.type(char);
-  }
+  await tocarCodigo(page, codigo1);
 
   // Click en escanear
   const botonEscanear = page.locator("button:has-text('Escanear')").first();
@@ -94,26 +122,21 @@ test("AC-DES-06: pantalla de carga — contador, captura manual, duplicado y ove
   await expect(page.locator("text=/^1\\/3$/")).toBeVisible();
   // El primer bulto debe estar marcado como cargado (checkbox checked y ✓)
   const primeraFila = page.locator("text=" + codigo1).first();
-  const checkbox = primeraFila.locator("xpath=preceding::input[@type='checkbox']").first();
+  // .last(): `preceding::` devuelve en orden de documento; el checkbox más cercano al
+  // texto (el de SU fila) es el último de esa lista. Con .first() se tomaba el de la
+  // primera fila y la aserción miraba el bulto equivocado.
+  const checkbox = primeraFila.locator("xpath=preceding::input[@type='checkbox']").last();
   await expect(checkbox).toBeChecked();
 
   // Escanear el segundo bulto — flujo repetido
   await page.click("button:has-text('Escanear código')");
-  const input2 = page.locator('input[type="text"]').first();
-  await input2.click();
-  for (const char of codigo2) {
-    await page.keyboard.type(char);
-  }
+  await tocarCodigo(page, codigo2);
   await page.locator("button:has-text('Escanear')").first().click();
   await expect(page.locator("text=/^2\\/3$/")).toBeVisible();
 
   // Repetir el segundo código (duplicado) — debería mostrar banner ámbar
   await page.click("button:has-text('Escanear código')");
-  const input3 = page.locator('input[type="text"]').first();
-  await input3.click();
-  for (const char of codigo2) {
-    await page.keyboard.type(char);
-  }
+  await tocarCodigo(page, codigo2);
   await page.locator("button:has-text('Escanear')").first().click();
 
   // Banner ámbar de duplicado
@@ -126,11 +149,12 @@ test("AC-DES-06: pantalla de carga — contador, captura manual, duplicado y ove
 
   // Verificar que todavía hay un bulto sin cargar (el tercero)
   const terceraFila = page.locator("text=" + codigo3).first();
-  const checkboxTercera = terceraFila.locator("xpath=preceding::input[@type='checkbox']").first();
+  const checkboxTercera = terceraFila.locator("xpath=preceding::input[@type='checkbox']").last();
   await expect(checkboxTercera).not.toBeChecked();
 
-  // Intentar salir sin cargar el 100% — abre modal
-  await page.click("button:has-text(/^Salir a ruta/)");
+  // Intentar salir sin cargar el 100% — abre modal. En este punto el único botón
+  // «Salir a ruta» es el de la lista ("Salir a ruta (2/3)"); el de la modal aún no existe.
+  await page.click("button:has-text('Salir a ruta')");
   await expect(page.locator("text=Salir con bultos pendientes")).toBeVisible();
 
   // Rellenar el motivo del override
@@ -163,9 +187,24 @@ test("AC-DES-06: camino feliz — 100% cargado sin modal", async ({ page }) => {
   });
   const { id: pedidoId } = (await pedido.json()) as { id: string };
 
+  // AC-DES-06 / art. 55 DL 825: la guía del pedido, sin la cual «Salir a ruta» rebota
+  // en la BD (mismo motivo que el test 1). Folio propio para no chocar con el UNIQUE.
+  const dte = await page.request.post("/api/dte", {
+    data: {
+      tipoDte: 52,
+      folioSii: 900012,
+      rutEmisor: "76.192.083-9",
+      rutReceptor: "76.192.083-9",
+      montoTotal: 22000,
+      indTraslado: 1,
+      pedidoId,
+    },
+  });
+  expect(dte.ok()).toBeTruthy();
+
   // AC-DES-06: usar repartidor2 para evitar conflicto con la ruta del test 1.
   const ruta = await page.request.post("/api/rutas", {
-    data: { repartidorId: (datos as any).repartidorDespacho2.id, pedidoIds: [pedidoId] },
+    data: { repartidorId: datos.repartidorDespacho2.id, pedidoIds: [pedidoId] },
   });
   if (!ruta.ok()) {
     const err = await ruta.text();
@@ -188,11 +227,7 @@ test("AC-DES-06: camino feliz — 100% cargado sin modal", async ({ page }) => {
   // Escanear ambos bultos
   for (const codigo of [codigo1, codigo2]) {
     await page.click("button:has-text('Escanear código')");
-    const input = page.locator('input[type="text"]').first();
-    await input.click();
-    for (const char of codigo) {
-      await page.keyboard.type(char);
-    }
+    await tocarCodigo(page, codigo);
     await page.locator("button:has-text('Escanear')").first().click();
   }
 

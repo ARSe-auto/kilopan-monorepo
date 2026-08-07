@@ -42,16 +42,21 @@ retención del vehículo. Sin override, ni en BD ni en UI (§7).
       «ya escaneado»→409 y código inexistente→404. e2e `carga-bultos.spec.ts` ejercita
       los tres endpoints por HTTP (generar, 2xx, 409, 404, N/M parcial 1/3) sobre un
       repartidor propio del test. La pantalla F3 sigue en AC-DES-06.
-- [ ] (P1) Pantalla F3 `/cargar`: contador N/M en 96 px, captura MANUAL del código con
+- [x] (P1) Pantalla F3 `/cargar`: contador N/M en 96 px, captura MANUAL del código con
       el teclado propio + checklist 44 px equivalente para bultos sin código, duplicado
       = banner ámbar, «Salir a ruta» al 100 % o la única modal permitida (motivo +
       quién — el override auditado de 0024) **y** todos los DTE asociados. e2e móvil
-      390×844 del camino feliz y del duplicado. — **Reabierto 06-ago-2026 (supervisado):
-      el cierre fue prematuro — la pantalla, banners, modal de override y POST
-      /api/rutas/salir EXISTEN (commit 6100516), pero sus DOS e2e
-      (`cargar-bultos-pantalla.spec.ts`) fallan: `GET /api/bultos?rutaId=…` responde
-      not-ok (desajuste de contrato con la API de AC-DES-05). Cerrar recién cuando esos
-      e2e pasen en el gate completo.** [AC-DES-06]
+      390×844 del camino feliz y del duplicado. — **Cerrado 06-ago-2026:** los DOS e2e de
+      `cargar-bultos-pantalla.spec.ts` pasan en verde. Se probó de punta a punta:
+      contador 0/3→2/3 en 96 px; captura por LOS BOTONES del teclado propio (numérico +
+      «−», prefijo «P» que agrega la pantalla — contrato de las Notas); banner ámbar en
+      duplicado (409→sigue en captura); modal única con motivo (elevado sobre la
+      BarraPestanas, antes intappable) que sale con override; y el camino feliz al 100 %
+      que sale sin modal. Tres arreglos que faltaban para cerrar: (a) `/api/rutas/salir`
+      ahora setea `bultos_override_motivo`+`_usuario_id` en el MISMO update —el trigger de
+      0024 lo exige y él audita el evento—, en vez de un update pelado que rebotaba; (b)
+      el modal por encima de `zIndex` 40; (c) el e2e registra la guía (DTE 52) del pedido,
+      sin la cual el art. 55 rebota la salida. [AC-DES-06]
 - [ ] (P2) Escáner de cámara full-screen con linterna (48 px, alcanzable con pulgar) +
       beep + vibración con zxing-js, como MEJORA PROGRESIVA sobre la captura manual de
       AC-DES-06 — que sigue siendo el camino primario en iOS (§7). Cámara denegada o

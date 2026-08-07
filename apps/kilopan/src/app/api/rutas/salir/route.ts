@@ -55,19 +55,36 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // Cambiar estado a 'en_curso' — el trigger de BD valida los DTE
-      await tx.query(`update pan.rutas set estado = 'en_curso' where id = $1`, [rutaId]);
-
-      // Si hay override, registrar evento auditado (AC-DES-04)
-      if (hayPendientes && motivo?.trim()) {
+      // Cambiar estado a 'en_curso'. Dos triggers de BD lo validan: el del art. 55
+      // (DTE por pedido) y el de carga (0024). Este último EXIGE que el override
+      // —motivo + usuario— viaje en el MISMO update que mueve el estado, y él mismo
+      // escribe el evento 'ruta.salida_con_bultos_pendientes' en pan.eventos: por eso
+      // acá se setean las columnas bultos_override_* en vez de registrar el evento a
+      // mano (AC-DES-06, AC-DES-04). Al 100 % las columnas quedan NULL y no hay override.
+      if (hayPendientes) {
+        await tx.query(
+          `update pan.rutas
+              set estado = 'en_curso',
+                  bultos_override_motivo = $2,
+                  bultos_override_usuario_id = $3
+            where id = $1`,
+          [rutaId, motivo!.trim(), sesion.usuarioId]
+        );
+        // El trigger de 0024 ya dejó `ruta.salida_con_bultos_pendientes` en pan.eventos al
+        // ver las columnas de override; acá se agrega además el rastro a nivel de app que
+        // exige AC-ADM-10 (toda operación de plata registra su evento en su ruta). Antes
+        // esta línea era inalcanzable: el update pelado rebotaba en el trigger y abortaba
+        // la transacción antes de llegar aquí — el override nunca dejaba rastro de app.
         await registrarEvento(
           tx,
           "ruta_salida_con_bultos_pendientes",
           "rutas",
           rutaId,
-          { motivo: motivo.trim() },
+          { motivo: motivo!.trim() },
           sesion
         );
+      } else {
+        await tx.query(`update pan.rutas set estado = 'en_curso' where id = $1`, [rutaId]);
       }
     });
 

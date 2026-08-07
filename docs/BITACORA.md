@@ -1310,3 +1310,14 @@ una AMBIGÜEDAD real de producto: el teclado propio es numérico y el código es
 — la captura manual no podía escribirlo, y el test esperaba un input del sistema que
 Miga prohíbe. Decisión supervisada fijada en la spec: tecla «−» + prefijo «P»
 automático; los e2e operan los botones del teclado propio. Implementación: del motor.
+
+## 2026-08-07 · Cierre supervisado de AC-DES-06 (el trabajo del motor, el commit del supervisor)
+
+Tres iteraciones completaron la pantalla F3 sin alcanzar el commit dentro del sobre
+(la última dejó TODO terminado en stash: tecla «−» en TecladoNumerico, prefijo P,
+override en el mismo update de /api/rutas/salir, modal sobre la BarraPestanas, guía
+DTE en el e2e, spec y plan espejados). Sesión supervisada: stash aplicado, e2e
+corridos DE VERDAD (2 passed), gate_specs verde 53/44, check rápido verde, 11 stashes
+archivados como tags (tanda b), DES-06 desatascado. Pendiente estructural anotado: el
+sobre de $6 queda corto cuando el AC exige iterar e2e de UI — considerar sobre por
+TIPO de AC o e2e dirigido en el quick para ACs de pantalla.

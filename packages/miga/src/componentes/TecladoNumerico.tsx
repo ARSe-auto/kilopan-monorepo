@@ -7,6 +7,7 @@ export function TecladoNumerico({
   onCambiar,
   permitirDecimal = false,
   permitirCeroInicial = false,
+  permitirGuion = false,
 }: {
   valor: string;
   onCambiar: (nuevoValor: string) => void;
@@ -19,10 +20,20 @@ export function TecladoNumerico({
    *  un error que lo culpaba a él. Lo encontró la auditoría de experiencia; nunca se
    *  vio porque los usuarios sembrados usan PIN "1234". */
   permitirCeroInicial?: boolean;
+  /** AC-DES-06: captura manual del código de bulto P<correlativo>-<n> — sustituye la
+   *  coma decimal por «−» en la misma celda (un código no tiene decimales, nunca
+   *  coexisten). El prefijo «P» lo agrega la pantalla, no este teclado. */
+  permitirGuion?: boolean;
 }) {
   function tocar(tecla: string) {
     if (tecla === "⌫") {
       onCambiar(valor.slice(0, -1));
+      return;
+    }
+    // El botón muestra «−» (guión tipográfico) pero el valor lleva el guión ASCII "-"
+    // que espera la BD en el código P<correlativo>-<n> — dos glifos, un solo carácter real.
+    if (permitirGuion && tecla === "−") {
+      onCambiar(valor + "-");
       return;
     }
     if (tecla === ",") {
@@ -44,15 +55,16 @@ export function TecladoNumerico({
         // sin decimales) esta tecla se mostraba apagada y sin poder tocarse — un botón
         // muerto ocupando espacio, con contraste bajo el mínimo. Si no aplica, no se
         // pinta: se deja el hueco vacío para no correr "0" y "⌫" de lugar.
-        if (tecla === "," && !permitirDecimal) {
+        if (tecla === "," && !permitirDecimal && !permitirGuion) {
           return <div key={tecla} aria-hidden="true" style={{ minHeight: 64, minWidth: 64 }} />;
         }
+        const etiqueta = tecla === "," && permitirGuion ? "−" : tecla;
         return (
           <button
             key={tecla}
             type="button"
-            onClick={() => tocar(tecla)}
-            aria-label={tecla === "⌫" ? "Borrar" : tecla}
+            onClick={() => tocar(etiqueta)}
+            aria-label={etiqueta === "⌫" ? "Borrar" : etiqueta}
             style={{
               minHeight: 64,
               minWidth: 64,
@@ -65,7 +77,7 @@ export function TecladoNumerico({
               color: "#1B1712",
             }}
           >
-            {tecla}
+            {etiqueta}
           </button>
         );
       })}
