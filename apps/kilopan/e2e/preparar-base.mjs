@@ -84,10 +84,10 @@ const repartidorDespacho = await uno(
 
 // AC-DES-06: un TERCER repartidor para el segundo test de carga. El primer test deja a
 // Diego con una ruta en 'en_curso', así que el segundo test 409 si reutiliza el mismo.
-// RUT válido derivado de Luis (5.000.006-0 → 6.000.007-1, checksum válido).
+// RUT distinto pero en el mismo rango válido (serie 11.111.111, que Diego ya validó).
 const repartidorDespacho2 = await uno(
   `insert into pan.usuarios (nombre, rut, rol, pin_hash)
-   values ('Eva Entrega', '6.000.007-1', 'repartidor', $1) returning id`,
+   values ('Eva Entrega', '12.222.222-1', 'repartidor', $1) returning id`,
   [pinHashLuis]
 );
 
