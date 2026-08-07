@@ -205,10 +205,12 @@ para ese AC — no antes.
       por destino, merma perdida vs recuperada separadas, semáforo contra la meta de
       95%. Probado en vivo: 13.000 g pesados, 9.000 vendidos + 1.000 merma ⇒ 77% en
       ámbar. Falta el mapa Leaflet+OSM y la pantalla de auditoría [AC-DASH-01]
-- ~~[x]~~ (P1) Tarjeta «Tu flota»: km reales del odómetro, combustión vs EV desde
+- [x] (P1) Tarjeta «Tu flota»: km reales del odómetro, combustión vs EV desde
       `pan.parametros` (editables, con fuente), aparece solo con ≥20 rutas cerradas —
-      la regla de rol está testeada: el dashboard entero rebota si no sos `admin`, así
-      que el CLP jamás llega al teléfono del repartidor [AC-DASH-02]
+      la regla de rol está testeada: el dashboard entero bloquea el contenido si no sos
+      `admin`, así que el CLP jamás llega al teléfono del repartidor. Probado:
+      `autorizacion.spec.ts` ingresa como repartidor y confirma el bloqueo y la
+      ausencia de TCK/«Tu flota»/CLP [AC-DASH-02]
 - [x] (P2) **CTA hermano de KiloRuta** en la misma tarjeta «Tu flota»: «Prefiero que
       alguien más reparta por mí» → tabla `lead_kiloruta` simétrica a `lead_eauto`,
       ambas exigiendo consentimiento explícito (probado). No depende del contrato
@@ -328,7 +330,6 @@ esta misma auditoría — no queda como ítem abierto de la lista de abajo.
 - [ ] (P2) [AC-SUC-01] — sucursal_id probado en BD pero invisible en toda la UI — `specs/kilopan/07-dashboard-flota.md`
 - [ ] (P1) [AC-POD-04] — e2e flaky confirmado, no es evidencia repetible — `specs/kilopan/05-entrega-pod.md`
 - [ ] (P1) [AC-DES-03] — depende del mismo e2e flaky que AC-POD-04 — `specs/kilopan/04-despacho-reparto.md`
-- [ ] (P1) [AC-DASH-02] — chequeo de rol real en código pero sin e2e que lo confirme — `specs/kilopan/07-dashboard-flota.md`
 - [ ] (P2) [AC-DASH-04] — comparación con el facturador sin ningún test — `specs/kilopan/07-dashboard-flota.md`
 - [ ] (P2) [AC-SHARE-01] — degradación de `navigator.share()` sin test — `specs/kilopan/07-dashboard-flota.md`
 - [x] (P0-SEC) [AC-SEC-04] — cabeceras de seguridad declaradas pero sin test que confirme que el servidor las emite — `specs/kilopan/08-seguridad-rendimiento.md` — cerrado con `e2e/seguridad-cabeceras.spec.ts` (página + ruta de API)

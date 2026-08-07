@@ -18,15 +18,13 @@ repartidor muestra solo km y kg (§5).
       por destino, merma perdida vs recuperada separadas, semáforo contra la meta de
       95 %. Probado en vivo: 13.000 g pesados, 9.000 vendidos + 1.000 merma ⇒ 77 % en
       ámbar [AC-DASH-01]
-- [ ] (P1) Tarjeta «Tu flota»: km reales del odómetro, combustión vs EV desde
+- [x] (P1) Tarjeta «Tu flota»: km reales del odómetro, combustión vs EV desde
       `pan.parametros` (editables, con fuente), aparece solo con ≥20 rutas cerradas. La
-      regla de rol está testeada: el dashboard entero rebota si no sos `admin`, así que
-      el CLP jamás llega al teléfono del repartidor [AC-DASH-02]
-      — **Anexo D (auditoría 2-ago-2026): HUECO.** El chequeo de rol es real
-      (`apps/kilopan/src/app/dashboard/page.tsx:36`, `if (usuario.rol !== "admin")`),
-      pero "está testeada" es falso: ningún e2e visita `/dashboard` con un usuario no
-      admin para confirmar el bloqueo — `autorizacion.spec.ts` solo prueba el redirect
-      sin sesión, no el rol.
+      regla de rol está testeada: el dashboard entero bloquea el contenido si no sos
+      `admin`, así que el CLP jamás llega al teléfono del repartidor [AC-DASH-02]
+      — Probado: `autorizacion.spec.ts` ingresa como repartidor (rol no admin) y
+      visita `/dashboard`; confirma el bloqueo (`apps/kilopan/src/app/dashboard/page.tsx:38`)
+      y la ausencia de la TCK, «Tu flota» y cualquier cifra en CLP.
 - [x] (P2) CTA hermano de KiloRuta en la misma tarjeta: «Prefiero que alguien más reparta
       por mí» → tabla `lead_kiloruta` simétrica a `lead_eauto`, ambas exigiendo
       consentimiento explícito (probado). No depende del contrato técnico del Anexo B
