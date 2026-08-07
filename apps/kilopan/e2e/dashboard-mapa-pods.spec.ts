@@ -22,7 +22,7 @@ test.use({ extraHTTPHeaders: { "x-forwarded-for": "203.0.113.50" } });
 test("Dashboard: mapa de entregas del día [AC-DASH-05]", async ({ page }) => {
   // Siembra el dispositivo y entra como admin al dashboard
   await sembrarDispositivo(page, datos.dispositivo);
-  await ingresar(page, "admin", datos.pin);
+  await ingresar(page, datos.usuarios.admin.rut, datos.pin);
   await page.goto("/dashboard");
 
   // AC-DASH-05: valida que la sección del mapa exista

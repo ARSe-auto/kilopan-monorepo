@@ -1330,3 +1330,12 @@ escribir→e2e→corregir→e2e de un AC de pantalla cuesta más que uno de API.
 ahora detecta AC de UI+e2e por su línea (e2e|pantalla|zxing|escáner|cámara|modal|
 banner) y amplía el sobre a $10 (KILOPAN_MAX_BUDGET_USD_UI). El freno contra el gasto
 en círculo sigue siendo el watchdog + marker.
+
+## 2026-08-07 · DASH-05: el e2e pasaba el ROL donde el helper espera RUT
+
+El gate independiente frenó DASH-05: su e2e llamaba ingresar(page, "admin", pin) contra
+el helper compartido cuya firma es (page, rut, pin) — llenaba el campo RUT con la
+palabra «admin» y moría en /ingresar. Una línea: datos.usuarios.admin.rut. El e2e pasa
+(1 passed); prueba-arnes 95/0 (su rojo era arrastre). Nota: los siete specs viejos usan
+un ingresar() local con firma (page, rol) — la dualidad de firmas es una trampa
+conocida; el helper compartido documenta que es el destino cuando alguien los toque.
