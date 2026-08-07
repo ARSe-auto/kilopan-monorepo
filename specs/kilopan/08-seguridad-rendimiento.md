@@ -57,12 +57,16 @@ puntaje mezcla SEO y PWA con lo que de verdad decide si la pantalla abre.
       foto si no coincide con el declarado en el POD. Guardar el binario en la BD es
       decisión consciente para el piloto; si crece, pasa a URL sin cambiar el contrato
       [AC-SEC-07]
-- [ ] (P1-PERF) Compresión de fotos en el cliente antes de subir: 1280 px de ancho máximo,
+- [x] (P1-PERF) Compresión de fotos en el cliente antes de subir: 1280 px de ancho máximo,
       calidad 0.72, objetivo ≈400 KB, con techo duro de 1,5 MB en el servidor [AC-PERF-02]
-      — **Anexo D (auditoría 2-ago-2026): HUECO.** `camara.ts` (ancho/calidad) y el techo
-      de 1,5 MB en `api/fotos/route.ts` existen, pero ningún test referencia esos valores
-      ni sube una foto pesada esperando 413 — cero prueba automatizada de cualquiera de
-      las dos mitades.
+      — **Cerrado 7-ago-2026 (sesión motor).** El Anexo D (auditoría 2-ago-2026) marcó HUECO
+      porque `camara.ts` (ancho/calidad) y el techo de 1,5 MB en `api/fotos/route.ts` existían
+      sin ningún test referenciar esos valores. Dos mitades, dos pruebas: (1) `camara.test.ts`
+      —Node no tiene Canvas/getUserMedia para ejecutar `capturar()`, así que prueba por
+      ausencia de cambio silencioso, igual que `dispositivo.test.ts` con IndexedDB— asegura
+      que `ANCHO_MAX = 1280` y `CALIDAD = 0.72` siguen exactamente así en el código fuente;
+      (2) `e2e/foto-techo-servidor.spec.ts` pega contra `POST /api/fotos` con sesión real: un
+      byte sobre 1.500.000 rebota 413, y exactamente en el techo (1.500.000 bytes) entra.
 - [x] (P1-PERF) Paginación por CURSOR (keyset), no por OFFSET, en el listado de entregas:
       con OFFSET la página 40 obliga a recorrer y descartar 2.000 filas, y el cursor
       además no se corre si entra una entrega nueva mientras el dueño scrollea [AC-PERF-03]

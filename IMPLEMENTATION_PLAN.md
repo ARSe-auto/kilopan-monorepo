@@ -266,7 +266,8 @@ para ese AC — no antes.
       `entregas.capturado_at`). Nota: el índice sobre `creado_at::date` NO se puede —
       castear timestamptz a date no es IMMUTABLE [AC-PERF-01]
 - ~~[x]~~ (P1-PERF) Compresión de fotos en el cliente antes de subir: 1280 px de ancho
-      máximo y calidad 0.72, objetivo ≈400 KB, con techo duro de 1,5 MB en el servidor [AC-PERF-02]
+      máximo y calidad 0.72, objetivo ≈400 KB, con techo duro de 1,5 MB en el servidor
+      [AC-PERF-02]
 - [x] (P1-PERF) Paginación por CURSOR (keyset), no por OFFSET, en el listado de
       entregas: con OFFSET la página 40 obliga a recorrer y descartar 2.000 filas, y el
       cursor además no se corre si entra una entrega nueva mientras el dueño scrollea —
@@ -333,7 +334,7 @@ esta misma auditoría — no queda como ítem abierto de la lista de abajo.
 - [ ] (P2) [AC-DASH-04] — comparación con el facturador sin ningún test — `specs/kilopan/07-dashboard-flota.md`
 - [ ] (P2) [AC-SHARE-01] — degradación de `navigator.share()` sin test — `specs/kilopan/07-dashboard-flota.md`
 - [x] (P0-SEC) [AC-SEC-04] — cabeceras de seguridad declaradas pero sin test que confirme que el servidor las emite — `specs/kilopan/08-seguridad-rendimiento.md` — cerrado con `e2e/seguridad-cabeceras.spec.ts` (página + ruta de API)
-- [ ] (P1-PERF) [AC-PERF-02] — compresión de fotos y techo de 1,5 MB sin ningún test — `specs/kilopan/08-seguridad-rendimiento.md`
+- [x] (P1-PERF) [AC-PERF-02] — compresión de fotos y techo de 1,5 MB sin ningún test — `specs/kilopan/08-seguridad-rendimiento.md` — cerrado con `src/comun/camara.test.ts` + `e2e/foto-techo-servidor.spec.ts`
 - [ ] (P1-PERF) [AC-PERF-01] — índices creados sin `EXPLAIN` que confirme que el planner los usa — `specs/kilopan/00-modelo-datos.md`
 - [x] (P0) [AC-ID-03] — el 423 de `/api/auth/login` nunca se probó automatizado (solo su hermano de enrolamiento) — `specs/kilopan/01-identidad.md` — cerrado con `e2e/seguridad-login.spec.ts`: 4 PIN incorrectos en 401, el 5º en 423, y el PIN correcto sigue en 423 tras el bloqueo; control aparte confirma el 200 con cookie
 - [ ] (P2) [AC-PES-04] — falta test de que el servidor RECHACE un pesaje sin foto con el toggle activo (mismo patrón que ya falló una vez) — `specs/kilopan/02-catalogo-pesaje.md`
