@@ -1384,3 +1384,13 @@ ambos estilos. Probado contra los 2 commits reales + 1 caso negativo.
 Cuarta tanda archivada como tags (11, archivo-wip/d-*). Gate en 65/98 (66%). Cola
 supervisada en 9 ACs. Patrón de la mañana: el motor sigue sano con el filtro de
 atribución corregido — los "sin avance" son intentos reales, no falsos negativos.
+
+## 2026-08-07 · Rojo transitorio en AC-ADM-02 (no era un bug)
+
+El gate independiente marcó ROJO por ENOENT leyendo 0019_ruta_exige_dte_tipo_valido.sql
+durante el test de invariantes. Verificado: el archivo existe, su contenido es
+idéntico a HEAD (mismo MD5, sin diff git), y la suite completa re-corrida a mano da
+83/83 verde. Fue una condición transitoria de filesystem (mtime recién tocado, sin
+cambio de contenido) coincidiendo con el momento del check — no un defecto de código
+ni del commit de AC-ADM-02, que queda tal cual. Sin cambios de código; solo se
+relanza el motor.
