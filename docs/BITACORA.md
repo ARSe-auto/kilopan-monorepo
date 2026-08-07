@@ -1298,3 +1298,15 @@ prueba-arnes era arrastre del mismo desync. Corrección supervisada: DES-06 reab
 con nota (el código EXISTE — commit 6100516 — faltan sus e2e verdes) y dos reglas
 nuevas en el prompt: spec+plan en el mismo commit o rojo, y un AC cuyo texto exige e2e
 se cierra SOLO con ese e2e corrido en primer plano.
+
+## 2026-08-06 · Segundo rojo de DES-06: semilla con RUT inválido + contrato de captura manual sin definir
+
+El gate independiente volvió a frenar el segundo intento de DES-06 por DOS causas:
+(1) preparar-base.mjs sembraba 'Eva Entrega' con RUT 12.222.222-1 (módulo 11 exige
+DV 5) — la siembra moría contra usuarios_rut_valido y el webserver de Playwright no
+arrancaba (corregido a -5; el commit del builder además trackeó loop.pid, destrackeado
+y agregado a .gitignore del panel). (2) Con la semilla viva, los e2e igual fallaban por
+una AMBIGÜEDAD real de producto: el teclado propio es numérico y el código es P<n>-<m>
+— la captura manual no podía escribirlo, y el test esperaba un input del sistema que
+Miga prohíbe. Decisión supervisada fijada en la spec: tecla «−» + prefijo «P»
+automático; los e2e operan los botones del teclado propio. Implementación: del motor.

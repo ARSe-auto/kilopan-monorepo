@@ -59,6 +59,15 @@ retención del vehículo. Sin override, ni en BD ni en UI (§7).
 
 ## Notas de implementación
 
+- **Contrato de captura manual (decisión supervisada 06-ago-2026, cierra la ambigüedad
+  que reventó los e2e de AC-DES-06):** el código `P<correlativo>-<n>` se digita en el
+  teclado PROPIO con las teclas [0-9] + una tecla «−» (guión); el prefijo «P» lo agrega
+  la pantalla automáticamente y el display muestra el código completo (`P7-1`). Teclear
+  `7-1` = 3 pulsaciones. El POST a /api/bultos lleva el código completo. Los e2e operan
+  LOS BOTONES del teclado propio (`button "7"`, `button "−"`, …) — JAMÁS
+  `input[type=text]` ni `page.keyboard` (el teclado del sistema no existe en terreno,
+  §5). La vía sin tipeo sigue siendo el checklist de 44 px por bulto.
+
 - **Esquema de bultos (0024, sesión supervisada 06-ago-2026):** F3 se construye SOBRE
   `pan.bultos` — nacen solo por `pan.generar_bultos(pedido_id, cantidad)` al cerrar el
   pedido (código determinista `P<correlativo_pedido>-<n>`); el escaneo es

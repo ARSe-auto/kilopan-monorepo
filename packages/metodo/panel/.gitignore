@@ -1,1 +1,5 @@
 .vercel
+loop.pid
+launchd-loop.out.log
+launchd-loop.err.log
+watchdog.log

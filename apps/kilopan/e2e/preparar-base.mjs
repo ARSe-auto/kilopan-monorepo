@@ -87,7 +87,7 @@ const repartidorDespacho = await uno(
 // RUT distinto pero en el mismo rango válido (serie 11.111.111, que Diego ya validó).
 const repartidorDespacho2 = await uno(
   `insert into pan.usuarios (nombre, rut, rol, pin_hash)
-   values ('Eva Entrega', '12.222.222-1', 'repartidor', $1) returning id`,
+   values ('Eva Entrega', '12.222.222-5', 'repartidor', $1) returning id`,
   [pinHashLuis]
 );
 
