@@ -160,6 +160,17 @@ fi
 AC_ID=$(echo "$AC_LINEA" | grep -oE '\[AC-[A-Z0-9-]+\]' | tr -d '[]')
 echo "loop: siguiente = ${AC_ID:-sin-id} :: $AC_LINEA"
 
+# SOBRE POR TIPO DE AC (07-ago-2026). Los AC de UI con e2e no caben en el sobre base:
+# DES-06 y DTE-03 murieron 2 veces cada uno a centímetros del commit (el ciclo
+# escribir→e2e→corregir→e2e cuesta más que un AC de API) y cerraron recién con la
+# escalación a Opus en la 3ª iteración — 3 sobres para pagar 1. Si la línea del AC
+# huele a UI+e2e, el sobre sube. El freno contra el gasto en círculo sigue siendo el
+# watchdog (3 sin-avance) + el marker, no este número.
+if echo "$AC_LINEA" | grep -qiE 'e2e|pantalla|zxing|esc[áa]ner|c[áa]mara|modal|banner'; then
+  MAX_BUDGET_USD="${KILOPAN_MAX_BUDGET_USD_UI:-10}"
+  echo "loop: AC de UI+e2e — sobre ampliado a \$${MAX_BUDGET_USD}"
+fi
+
 COMMITS_ANTES=$(git rev-list --count HEAD 2>/dev/null || echo 0)
 
 # SOS EL BUILDER, NO SU RIVAL (bug real, 2-ago-2026 — la razón por la que este motor

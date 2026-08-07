@@ -1321,3 +1321,12 @@ corridos DE VERDAD (2 passed), gate_specs verde 53/44, check rápido verde, 11 s
 archivados como tags (tanda b), DES-06 desatascado. Pendiente estructural anotado: el
 sobre de $6 queda corto cuando el AC exige iterar e2e de UI — considerar sobre por
 TIPO de AC o e2e dirigido en el quick para ACs de pantalla.
+
+## 2026-08-07 · Sobre de presupuesto por tipo de AC
+
+DES-06 y DTE-03 repitieron el mismo patrón: 2 iteraciones Sonnet muertas a centímetros
+del commit + cierre por Opus en la 3ª — tres sobres para pagar uno, porque el ciclo
+escribir→e2e→corregir→e2e de un AC de pantalla cuesta más que uno de API. loop.sh
+ahora detecta AC de UI+e2e por su línea (e2e|pantalla|zxing|escáner|cámara|modal|
+banner) y amplía el sobre a $10 (KILOPAN_MAX_BUDGET_USD_UI). El freno contra el gasto
+en círculo sigue siendo el watchdog + marker.
