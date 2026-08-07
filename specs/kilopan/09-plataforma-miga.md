@@ -63,9 +63,20 @@ Ningún estado se comunica solo por color.
       `package.json` existe y parsea, y que cada `README.md` sigue advirtiendo que el
       paquete está vacío a propósito — mata el hueco anterior, donde el AC afirmaba algo
       fácticamente falso.
-- [ ] (P1) TEST que verifique la escala tipográfica completa de Miga. Los tokens ya
+- [x] (P1) TEST que verifique la escala tipográfica completa de Miga. Los tokens ya
       existen (`tokens.ts`: `pesoBascula` 96/700, y `CifraGrande.tsx` la aplica); lo que
       no existe es la prueba que falle si una pantalla se sale de la escala [AC-H0-08]
+      — **Cerrado 7-ago-2026.** `packages/miga/src/componentes/tipografia.test.ts`: (1)
+      la escala tiene sus 5 peldaños exactos y estrictamente descendentes, sin huecos ni
+      inversiones; (2) `pesoBascula` sigue siendo 96/700; (3) todo `fontSize:` literal en
+      cada `.tsx` de `packages/miga/src/componentes` se compara contra los tamaños VIVOS
+      importados de `tokens.ts` (no contra números copiados en el test), así que sigue
+      protegiendo aunque la escala cambie de valores; (4) cierre de completitud sobre
+      `NO_ES_COMPONENTE` para que nadie tape un componente real. Al escribir la prueba
+      aparecieron 3 pantallas fuera de escala — `SelectorUnToque` y `EstadoListado` en
+      15px (ningún peldaño), `TecladoNumerico` en 24px — se llevaron a `pie` (13),
+      `cuerpo` (17) y `titulo` (22/600, cuyo peso ya coincidía) respectivamente, tomando
+      el valor del token en vez de hardcodearlo de nuevo. Gate `--full` verde (12/0/0).
 - [ ] (P1) es-CL verificado por grep de gate: `12,450 kg` (coma, 3 decimales desde
       gramos), `$12.500` (entero, punto de miles), `dd-mm-aaaa`, RUT `12.345.678-5`
       validado al escribir. **Cero strings visibles en inglés** [AC-H0-09]

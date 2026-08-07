@@ -1,4 +1,4 @@
-import { superficie, semantico } from "../tokens.ts";
+import { superficie, semantico, tipografia } from "../tokens.ts";
 
 // AC-H0-11: los cuatro estados obligatorios de todo listado. El defecto que cierran no es
 // estético: hoy un error de red se ve IDÉNTICO a «no hay nada». El maestro lo dice con el
@@ -35,7 +35,12 @@ export function EstadoCargando({ filas = 3 }: { filas?: number }) {
 export function EstadoVacio({ mensaje, accion }: { mensaje: string; accion?: React.ReactNode }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "8px 0" }}>
-      <p role="status" style={{ margin: 0, color: superficie.textoFaint, fontSize: 15 }}>
+      <p
+        role="status"
+        // AC-H0-08: 15px no pertenecía a la escala tipográfica de Miga — "cuerpo" (17/400)
+        // es el peldaño correcto para texto de mensaje.
+        style={{ margin: 0, color: superficie.textoFaint, fontSize: tipografia.cuerpo.tamano, fontWeight: tipografia.cuerpo.peso }}
+      >
         {mensaje}
       </p>
       {accion}
@@ -49,7 +54,12 @@ export function EstadoError({ mensaje, alReintentar }: { mensaje: string; alRein
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "8px 0" }}>
       {/* role="alert" y no "status": un error interrumpe al lector de pantalla, un vacío no. */}
-      <p role="alert" style={{ margin: 0, color: semantico.error, fontSize: 15, fontWeight: 600 }}>
+      <p
+        role="alert"
+        // AC-H0-08: mismo peldaño "cuerpo" que el mensaje de EstadoVacio; el peso 600 se
+        // mantiene como énfasis propio del error, no del token (mismo patrón que ChipOperador).
+        style={{ margin: 0, color: semantico.error, fontSize: tipografia.cuerpo.tamano, fontWeight: 600 }}
+      >
         {mensaje}
       </p>
       <button

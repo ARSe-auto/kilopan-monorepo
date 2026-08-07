@@ -1,3 +1,5 @@
+import { tipografia } from "../tokens.ts";
+
 // Elegir entre 2-4 opciones en UN toque (destino de pesaje, medio de pago, etc.).
 // Ningún estado se comunica solo por color (PROMPT_MAESTRO.md §5): la opción activa
 // también lleva check visual (✓) en el texto, no solo un cambio de fondo.
@@ -33,7 +35,10 @@ export function SelectorUnToque<T extends string>({
               border: activo ? "2px solid #C2410C" : "1px solid rgba(27,23,18,.14)",
               background: activo ? "#C2410C" : "#FFFFFF",
               color: activo ? "#FFFFFF" : "#1B1712",
-              fontSize: 15,
+              // AC-H0-08: 15px no pertenecía a la escala tipográfica de Miga — "pie" (13)
+              // es el peldaño correcto para la etiqueta de una pill; 700 se mantiene como
+              // énfasis propio (mismo patrón que ChipOperador, que también usa "pie" + 700).
+              fontSize: tipografia.pie.tamano,
               fontWeight: 700,
               lineHeight: 1.2,
             }}

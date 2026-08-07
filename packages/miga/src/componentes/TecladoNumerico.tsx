@@ -1,3 +1,5 @@
+import { tipografia } from "../tokens.ts";
+
 // Teclado numérico PROPIO — jamás el teclado del sistema (PROMPT_MAESTRO.md §5).
 // Teclas >=64px (manos con harina/guantes). Coma es-CL como separador decimal.
 const TECLAS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ",", "0", "⌫"] as const;
@@ -68,8 +70,10 @@ export function TecladoNumerico({
             style={{
               minHeight: 64,
               minWidth: 64,
-              fontSize: 24,
-              fontWeight: 600,
+              // AC-H0-08: 24px no pertenecía a la escala tipográfica de Miga — "titulo"
+              // (22/600) es el peldaño correcto, y el peso ya coincidía con el token.
+              fontSize: tipografia.titulo.tamano,
+              fontWeight: tipografia.titulo.peso,
               fontVariantNumeric: "tabular-nums",
               borderRadius: 12,
               border: "1px solid rgba(27,23,18,.14)",
