@@ -1368,3 +1368,13 @@ compartidos con RUT (no rol), page.request con sesión, estado vacío con .or(),
 selectores reales con exact, y browser-only con dynamic ssr:false. Cola supervisada al
 momento: ADM-11, H0-11, H0-12, DASH-08, H0-10, H0-14 (este último requiere VoiceOver
 con humano — partición hecha por el propio builder).
+
+## 2026-08-07 · Falsa pausa: mi propio filtro de atribución (B3, anoche) rechazaba commits sin corchetes
+
+El motor pausó por «3 sin avance» que eran 2 falsos negativos: AC-ID-07 (f783ae2) y
+AC-DASH-02 (d13ec79) se cerraron BIEN (specs+plan [x], e2e verdes, gate 63/98) pero el
+filtro de anoche exigía `[AC-ID]` con corchetes literales, y el builder de hoy escribe
+`test(x): AC-XX-NN — ...` sin corchetes al inicio. Ningún dato se perdió ni quedó mal
+marcado — solo se quemaron 2 de los 3 strikes por una detección de texto, no por un AC
+atascado de verdad. Corregido: grep -E con corchetes OPCIONALES (`\[?AC-ID\]?`), acepta
+ambos estilos. Probado contra los 2 commits reales + 1 caso negativo.

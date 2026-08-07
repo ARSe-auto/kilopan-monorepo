@@ -301,14 +301,21 @@ leer_num () { n="$(cat "$1" 2>/dev/null | tr -dc 0-9)"; echo "${n:-0}"; }
 # de commits los acreditó como avance de AC-DES-04 — que seguía sin comitear — y encima
 # gatilló la re-verificación del watchdog sobre un árbol con WIP. El avance de UN AC son
 # commits que llevan SU id en el mensaje; lo externo se declara, no se acredita.
+# BUG REAL (07-ago-2026, mismo día del fix): el filtro exigía `[AC-ID]` con corchetes
+# literales — el estilo `feat(x): ... [AC-XX-YY]` al final del mensaje. Dos commits
+# reales y bien cerrados (AC-ID-07, AC-DASH-02: specs+plan [x], e2e verde) se
+# rechazaron porque el builder escribió `test(dashboard): AC-DASH-02 — ...` SIN
+# corchetes al inicio — y las 2 "no-atribuciones" falsas quemaron 2 de los 3 strikes
+# que pausaron el motor entero sin AC real atascado. Grep extendido (-E), corchetes
+# OPCIONALES: acepta `[AC-XX-YY]` y `AC-XX-YY` a secas, en cualquier posición.
 AVANCE_DEL_AC=0
 if [ "$COMMITS_DESPUES" -gt "$COMMITS_ANTES" ]; then
   N_NUEVOS=$((COMMITS_DESPUES - COMMITS_ANTES))
-  N_DEL_AC=$(git log --oneline --fixed-strings --grep="[${AC_ID:-<sin-id>}]" "HEAD~${N_NUEVOS}..HEAD" 2>/dev/null | wc -l | tr -d ' ')
+  N_DEL_AC=$(git log --oneline --extended-regexp --grep="\[?${AC_ID:-<sin-id>}\]?" "HEAD~${N_NUEVOS}..HEAD" 2>/dev/null | wc -l | tr -d ' ')
   if [ "${N_DEL_AC:-0}" -gt 0 ]; then
     AVANCE_DEL_AC=1
   else
-    echo "loop: ${N_NUEVOS} commit(s) nuevo(s) pero ninguno lleva [${AC_ID:-?}] — externos al AC; no cuentan como avance."
+    echo "loop: ${N_NUEVOS} commit(s) nuevo(s) pero ninguno menciona ${AC_ID:-?} — externos al AC; no cuentan como avance."
   fi
 fi
 if [ "$AVANCE_DEL_AC" -eq 1 ]; then
