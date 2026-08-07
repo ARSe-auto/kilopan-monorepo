@@ -204,6 +204,15 @@ Reglas duras:
 - Un AC no se marca [x] si todavía falta parte de él. Si quedó a medias, partilo: cerrá
   lo hecho y dejá el resto como AC abierto nuevo en la spec. Un [x] cuyo texto dice
   'falta' pone el gate en rojo — y con razón.
+- TUS COMANDOS BASH SE APRUEBAN POR PREFIJO contra una lista blanca (.claude/settings.json).
+  Usá comandos SIMPLES: sin 'cd' (ya estás en la raíz del repo), sin ';', sin '&&' y sin
+  heredocs — un comando compuesto NO calza ningún patrón y muere denegado, quemando el
+  turno. 'pnpm …', 'node …', 'git …', 'bash packages/metodo/scripts/…' directos sí pasan.
+- JAMÁS lances el gate ni tests en background, y tu último mensaje JAMÁS puede ser
+  «espero que termine X»: en modo -p NO EXISTE el turno siguiente — morirías esperando
+  (pasó el 06-ago: gate lanzado en background, sesión terminada «esperando», cero
+  commit con el trabajo listo). Corré 'bash packages/metodo/scripts/check.sh' en
+  PRIMER PLANO, esperá su exit code en el mismo turno, y actuá: verde ⇒ commit AHORA.
 - ANTES de escribir nada: corré 'git stash list'. Si hay stashes 'motor-wip' recientes,
   alguno puede traer TU PROPIO avance de este mismo AC, de una iteración que murió por
   presupuesto (el arnés guarda el trabajo, no lo bota). Miralo con

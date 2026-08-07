@@ -1275,3 +1275,15 @@ DES-06 = pantalla /cargar con captura manual y la única modal; DES-07 (P2) = es
 de cámara como mejora progresiva. Gates verdes: 97 ACs (51/46), espejo plan↔spec
 validado por la regla 5. DES-04 removido de atascados; sus strikes borrados. El
 builder tiene 3 stashes motor-wip con avance rescatable para DES-05/06.
+
+## 2026-08-06 · El builder moría esperando su propio gate + sobre de permisos afinado
+
+Evidencia capturada (ultimo-resultado.json de DES-05): 6 permission denials en una
+iteración — incluidos el «git stash show -p» que el propio prompt ordenaba (no estaba
+en la allowlist) y compuestos con cd/heredoc que no calzan patrón — y el mensaje final
+del builder: «I'll wait for the background gate task to complete and report back»:
+lanzó check.sh en background y terminó la sesión «esperando» — en modo -p no hay turno
+siguiente; murió con el trabajo listo y sin commit. Fixes: allowlist suma git stash
+show*/apply* (drop/clear siguen denegados); el prompt enseña el sobre (comandos
+simples, sin cd/;/&&/heredoc) y prohíbe gate en background o terminar «esperando» —
+check.sh en primer plano y commit en el mismo turno.
