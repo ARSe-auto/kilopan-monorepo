@@ -6,7 +6,7 @@ import { superficie, acentos, semantico } from "@kilopan/miga/tokens.ts";
 import { Copyright } from "@kilopan/miga/componentes/index.tsx";
 import { formatearKg, formatearClp } from "@/comun/formato.ts";
 import { CtaFlota } from "./CtaFlota.tsx";
-import { MapaPodsDia } from "./MapaPodsDia.tsx";
+import { MapaPodsDia } from "./MapaPodsDiaCliente.tsx";
 import { PantallaAuditoria } from "./PantallaAuditoria.tsx";
 import { Pantalla } from "../Pantalla.tsx";
 

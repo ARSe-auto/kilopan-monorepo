@@ -1339,3 +1339,15 @@ palabra «admin» y moría en /ingresar. Una línea: datos.usuarios.admin.rut. E
 (1 passed); prueba-arnes 95/0 (su rojo era arrastre). Nota: los siete specs viejos usan
 un ingresar() local con firma (page, rol) — la dualidad de firmas es una trampa
 conocida; el helper compartido documenta que es el destino cuando alguien los toque.
+
+## 2026-08-07 · DASH-06 rojo: SSR de Leaflet + e2e con flujo inventado (cierre supervisado)
+
+Cuatro defectos en el commit de DASH-06, todos pillados por el gate independiente y
+corregidos supervisadamente: (1) react-leaflet importado directo en el server component
+del dashboard — «window is not defined» reventaba TODO el dashboard en SSR; envoltorio
+cliente MapaPodsDiaCliente con dynamic ssr:false. (2) TS18048 por Record indexado sin
+noUncheckedIndexedAccess-safety en los dos specs nuevos (y en el fix de anoche): admin!.
+(3) auditoria.spec enrolaba contra un placeholder inventado (pin-secreto-en-IndexedDB)
+en vez de los helpers compartidos — reescrito con sembrarDispositivo+ingresar.
+(4) selectores ambiguos (getByText Usuario/Dispositivo matcheaba el h2) y tabla asertada
+sin contemplar el estado vacío legítimo de Miga. typecheck limpio; e2e 3/3 passed.
