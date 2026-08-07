@@ -1,7 +1,7 @@
 "use client";
 
 // react-leaflet toca `window` al cargar el módulo: importado directo desde el server
-// component del dashboard reventaba TODO el dashboard en SSR («ReferenceError: window
+// component del dashboard se rompía completamente en SSR («ReferenceError: window
 // is not defined», 07-ago-2026) y los e2e morían esperando una página 500. El mapa
 // solo existe en el navegador; un server component no puede usar ssr:false, así que
 // este envoltorio cliente hace la carga dinámica. El h2 «Entregas del día» vive dentro

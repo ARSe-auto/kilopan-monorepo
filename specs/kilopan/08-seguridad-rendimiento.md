@@ -73,8 +73,10 @@ puntaje mezcla SEO y PWA con lo que de verdad decide si la pantalla abre.
 - [x] (P1-PERF) Presupuesto de performance en el gate: peso GZIP del flujo dorado contra
       150 KB. Hoy 104 KB en `/pesar`, `/vender`, `/ruta` — coincide con lo que reporta
       Next, o sea está bien calibrado [AC-PERF-04]
-- [ ] (P1-PERF) Cablear la paginación por cursor a una pantalla de historial de entregas.
+- [x] (P1-PERF) Cablear la paginación por cursor a una pantalla de historial de entregas.
       El endpoint existe desde `AC-PERF-03` y ninguna pantalla lo consume [AC-PERF-05]
+      — **Cerrado 7-ago-2026:** pantalla en `/admin/entregas/historial` con paginación por cursor,
+      filtro de entregas por revisar, y e2e cobriendo la consunción del endpoint.
 
 ## Ola 3/4 — cierres transversales (`docs/PROMPT_CORRECTIVO.md` §3)
 
