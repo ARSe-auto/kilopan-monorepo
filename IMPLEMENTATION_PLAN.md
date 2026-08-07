@@ -370,7 +370,7 @@ necesita migraciones nuevas**, así que el motor puede construirla casi entera s
 - [ ] (P0) [AC-H0-12] — deshacer de 8 s en pesaje, venta, carro y armar ruta, en vez de modales — `specs/kilopan/09-plataforma-miga.md`
 - [x] (P0) [AC-POD-06] — bandeja de pendientes persistente con el porqué de cada rechazo — `specs/kilopan/05-entrega-pod.md`
 - [x] (P0) [AC-VEN-05] — apertura de turno con fondo inicial, dos toques — `specs/kilopan/03-venta-mostrador.md`
-- [ ] (P1) [AC-ADM-07] — cerrar una ruta con odómetro desde `/arreglar` — `specs/kilopan/10-administracion.md`
+- [x] (P1) [AC-ADM-07] — cerrar una ruta con odómetro desde `/arreglar` — `specs/kilopan/10-administracion.md`
 - [ ] (P1) [AC-ADM-08] — revocar equipo y desbloquear PIN desde `/arreglar` — `specs/kilopan/10-administracion.md`
 - [ ] (P1) [AC-ADM-09] — quitar un pedido de una ruta desde `/arreglar` — `specs/kilopan/10-administracion.md`
 - [ ] (P1) [AC-H0-13] — teclado grande en todo campo de plata, incluido el arqueo — `specs/kilopan/09-plataforma-miga.md`

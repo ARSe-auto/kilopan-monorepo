@@ -120,8 +120,21 @@ original: se registra encima (append-only), como ya hace el POD con `supersede_i
       —el único con grant, y por eso el único que puede llegar al trigger— rebota por el
       trigger nuevo. Sin ese tercer caso el trigger podía ser código muerto sin que nadie se
       enterara. El esquema y el endpoint en sí no tenían defectos: se verificaron sin cambios.
-- [ ] (P1) Cerrar una ruta con odómetro desde `/arreglar`, con motivo escrito y su evento
+- [x] (P1) Cerrar una ruta con odómetro desde `/arreglar`, con motivo escrito y su evento
       [AC-ADM-07]
+      — **Cerrado 7-ago-2026:** `POST /api/rutas/cerrar` (solo admin, 403 al resto por HTTP)
+      exige motivo no vacío (400 en blanco), rechaza un `rutaId` inexistente (404) y cierra
+      con `select … for update` + `where estado <> 'cerrada'` para que el doble-tap sobre la
+      MISMA ruta rebote 409 en vez de pisar el odómetro ya registrado; el evento
+      `ruta_cerrada` (catálogo de AC-ADM-10) va en la misma transacción que el `update`. A
+      diferencia de `PATCH /api/rutas` —que ya movía el estado a `cerrada` pero sin exigir
+      motivo y sin que ninguna pantalla lo invocara así (Anexo C)— este endpoint es la vía
+      real desde `/arreglar`: la tarjeta ya vivía en el índice de esa pantalla (AC-ADM-04),
+      apuntando a este AC. Probado de verdad por HTTP con sesión admin real
+      (`e2e/cerrar-ruta.spec.ts`): arma una ruta propia con `POST /api/pedidos` +
+      `POST /api/rutas`, la cierra por HTTP, confirma en el GET admin que `estado`,
+      `km_inicio` y `km_fin` quedaron guardados, y que un vendedor rebota 403 sin llegar a
+      tocar la ruta.
 - [ ] (P1) Revocar un equipo enrolado y desbloquear un PIN desde `/arreglar`, cada uno con
       motivo escrito y su evento [AC-ADM-08]
 - [ ] (P1) Quitar un pedido de una ruta desde `/arreglar`, con motivo escrito y su evento
