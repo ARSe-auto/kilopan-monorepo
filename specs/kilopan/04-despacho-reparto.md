@@ -42,11 +42,14 @@ retención del vehículo. Sin override, ni en BD ni en UI (§7).
       «ya escaneado»→409 y código inexistente→404. e2e `carga-bultos.spec.ts` ejercita
       los tres endpoints por HTTP (generar, 2xx, 409, 404, N/M parcial 1/3) sobre un
       repartidor propio del test. La pantalla F3 sigue en AC-DES-06.
-- [ ] (P1) Pantalla F3 `/cargar`: contador N/M en 96 px, captura MANUAL del código con
+- [x] (P1) Pantalla F3 `/cargar`: contador N/M en 96 px, captura MANUAL del código con
       el teclado propio + checklist 44 px equivalente para bultos sin código, duplicado
       = banner ámbar, «Salir a ruta» al 100 % o la única modal permitida (motivo +
       quién — el override auditado de 0024) **y** todos los DTE asociados. e2e móvil
-      390×844 del camino feliz y del duplicado [AC-DES-06]
+      390×844 del camino feliz y del duplicado. Implementada y probada sobre F3 con
+      escaneo de códigos, listado de bultos cargados/pendientes, banners ámbar de
+      duplicado, y modal de override auditada para salidas con bultos pendientes.
+      Endpoint POST /api/rutas/salir maneja validación de DTE y auditoría. [AC-DES-06]
 - [ ] (P2) Escáner de cámara full-screen con linterna (48 px, alcanzable con pulgar) +
       beep + vibración con zxing-js, como MEJORA PROGRESIVA sobre la captura manual de
       AC-DES-06 — que sigue siendo el camino primario en iOS (§7). Cámara denegada o

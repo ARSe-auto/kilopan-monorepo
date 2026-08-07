@@ -55,6 +55,7 @@ const OPERACIONES: { tipo: string; ruta: string }[] = [
   { tipo: "pin_reseteado", ruta: "usuarios/route.ts" },
   { tipo: "merma_registrada", ruta: "pesajes/route.ts" },
   { tipo: "ruta_cerrada", ruta: "rutas/route.ts" },
+  { tipo: "ruta_salida_con_bultos_pendientes", ruta: "rutas/salir/route.ts" },
 ];
 
 // Declaradas fuera y con su porqué, no olvidadas: su OPERACIÓN todavía no existe, así que
