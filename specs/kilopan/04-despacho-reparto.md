@@ -32,10 +32,16 @@ retención del vehículo. Sin override, ni en BD ni en UI (§7).
       escaneados o override motivo+usuario que el trigger deja en `pan.eventos`.
       Evidencia: `db/migraciones/0024_bultos_carga.sql` + 3 tests en
       `db/test-invariantes.mjs` (suite 81/0) [AC-DES-04]
-- [ ] (P1) API de carga por HTTP sobre 0024: generar bultos al confirmar el pedido
+- [x] (P1) API de carga por HTTP sobre 0024: generar bultos al confirmar el pedido
       (cantidad la digita quien cierra), POST de escaneo que traduce «ya escaneado» a
       409, GET de estado N/M por ruta para el contador. Probada en ambos sentidos:
       escaneo válido 2xx, duplicado 409, N/M correcto con carga parcial [AC-DES-05]
+      — cerrado 06-ago-2026: `POST /api/pedidos` llama a `pan.generar_bultos()` al
+      confirmar (cantidadBultos opcional; sin ella, 0 bultos, compatible con el
+      histórico); `GET/POST /api/bultos` dan el contador N/M por ruta y el escaneo con
+      «ya escaneado»→409 y código inexistente→404. e2e `carga-bultos.spec.ts` ejercita
+      los tres endpoints por HTTP (generar, 2xx, 409, 404, N/M parcial 1/3) sobre un
+      repartidor propio del test. La pantalla F3 sigue en AC-DES-06.
 - [ ] (P1) Pantalla F3 `/cargar`: contador N/M en 96 px, captura MANUAL del código con
       el teclado propio + checklist 44 px equivalente para bultos sin código, duplicado
       = banner ámbar, «Salir a ruta» al 100 % o la única modal permitida (motivo +

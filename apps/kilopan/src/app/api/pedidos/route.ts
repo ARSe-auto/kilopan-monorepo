@@ -34,18 +34,26 @@ export async function POST(request: NextRequest) {
   const sesion = await exigirRol(request, ["admin"]);
   if (sesion instanceof NextResponse) return sesion;
 
-  let cuerpo: { clienteId?: string; fechaEntrega?: string; lineas?: LineaEntrada[] };
+  let cuerpo: { clienteId?: string; fechaEntrega?: string; lineas?: LineaEntrada[]; cantidadBultos?: number };
   try {
     cuerpo = await request.json();
   } catch {
     return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
   }
-  const { clienteId, fechaEntrega, lineas } = cuerpo;
+  const { clienteId, fechaEntrega, lineas, cantidadBultos } = cuerpo;
   if (clienteId != null && !esUuid(clienteId)) {
     return NextResponse.json({ error: "Cliente inválido" }, { status: 400 });
   }
   if (!clienteId || !fechaEntrega || !lineas?.length) {
     return NextResponse.json({ error: "Faltan campos" }, { status: 400 });
+  }
+  // AC-DES-05: los bultos que F3 escanea nacen ACÁ, al cerrar el pedido — es el único
+  // momento en que pan.generar_bultos() los acepta (exige 'confirmado'/'pesado'; una vez
+  // la ruta parte el pedido pasa a 'en_ruta' y ya es tarde). Opcional y aditivo: un
+  // pedido sin cantidad no genera bultos y el gate de carga de 0024 no lo toca
+  // (pendientes = 0), igual que todo el histórico previo a esta función.
+  if (cantidadBultos != null && (!Number.isInteger(cantidadBultos) || cantidadBultos < 1 || cantidadBultos > 500)) {
+    return NextResponse.json({ error: "Cantidad de bultos inválida (1 a 500)" }, { status: 400 });
   }
 
   const db = await obtenerDb();
@@ -113,6 +121,14 @@ export async function POST(request: NextRequest) {
         `select pan.asignar_correlativo($1) as correlativo`,
         [pedidoId]
       );
+
+      // AC-DES-05: el pedido ya quedó 'confirmado' (asignar_correlativo lo dejó así), así
+      // que ahora sí nacen sus bultos con código determinista 'P<correlativo>-<n>'. La UI
+      // jamás inserta en pan.bultos: solo llama a la función, que es la que el trigger de
+      // 0024 deja pasar (mismo patrón que asignar_correlativo).
+      if (cantidadBultos != null) {
+        await tx.query(`select pan.generar_bultos($1, $2)`, [pedidoId, cantidadBultos]);
+      }
 
       return { id: pedidoId, correlativo: correlativo.rows[0]?.correlativo, totalClp: total };
     });

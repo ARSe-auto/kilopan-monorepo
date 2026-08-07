@@ -67,6 +67,21 @@ const productos = Object.fromEntries(
   (await todos(`select nombre, id from pan.productos`)).map((p) => [p.nombre, p.id])
 );
 
+// AC-DES-05: un SEGUNDO repartidor, solo para el e2e de carga. El camino dorado (test 8)
+// deja a Luis Repartidor con una ruta activa hoy, y `rutas_una_activa_por_repartidor_dia`
+// (0011) no admite otra para el mismo repartidor la misma fecha: sin un repartidor propio,
+// el test de carga chocaría con la ruta del camino dorado y pasaría o fallaría según el
+// orden. Se inserta DESPUÉS del mapa `usuarios` de arriba, así `usuarios.repartidor` sigue
+// siendo Luis (el que el camino dorado elige por etiqueta). No inicia sesión —el admin hace
+// todo el flujo por HTTP—, así que reusa el hash de PIN de Luis; el RUT 11.111.111-1 pasa
+// valida_rut. Dos repartidores dados de alta es además el caso real (nota en pedidos/page.tsx).
+const pinHashLuis = (await uno(`select pin_hash from pan.usuarios where rut = '5.000.006-0'`)).pin_hash;
+const repartidorDespacho = await uno(
+  `insert into pan.usuarios (nombre, rut, rol, pin_hash)
+   values ('Diego Despacho', '11.111.111-1', 'repartidor', $1) returning id`,
+  [pinHashLuis]
+);
+
 // El tramo de reparto necesita algo que repartir, y armarlo por la UI sería probar el
 // alta de pedidos dentro del test de entrega. Se siembra la antesala —cliente, pedido
 // confirmado y su DTE, que la BD exige para que la ruta salga (art. 55 DL 825)— y el
@@ -139,6 +154,8 @@ const datos = {
   productos,
   cliente: { id: cliente.id, razonSocial: "Almacén Don Pepe" },
   pedido: { id: pedido.id, gramosPedidos: 20000 },
+  // AC-DES-05: repartidor propio del test de carga, libre de la ruta del camino dorado.
+  repartidorDespacho: { id: repartidorDespacho.id },
 };
 writeFileSync(join(E2E, "datos-semilla.json"), JSON.stringify(datos, null, 2));
 await db.close();
