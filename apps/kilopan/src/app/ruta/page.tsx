@@ -11,18 +11,16 @@ import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
 import { formatearKg } from "@/comun/formato.ts";
 import { kgTextoAGramos, pesoValido, gramosAKgTexto } from "@/comun/peso.ts";
 import { encolar, encolarFoto, iniciarSyncAutomatico, contarPendientes } from "@/pod/outbox.ts";
+import { MOTIVOS_RECHAZO } from "@/pod/motivosRechazo.ts";
 import { useEnLinea } from "@/comun/useEnLinea.ts";
 import { abrirCamara, capturar, cerrarCamara, subirFoto } from "@/comun/camara.ts";
 import { Pantalla } from "../Pantalla.tsx";
 
-const MOTIVOS_FALLA = [
-  { valor: "cerrado", etiqueta: "Local cerrado" },
-  { valor: "direccion", etiqueta: "No se encontró la dirección" },
-  // AC-POD-05: catálogo CERRADO de motivos. Rechazo total acá; el parcial sale de
-  // gramos_entregados < gramos_pedidos y se muestra como «Entregada parcial — X de Y».
-  { valor: "rechazo", etiqueta: "Cliente rechazó el pedido" },
-  { valor: "otro", etiqueta: "Otro" },
-] as const;
+// AC-POD-05: catálogo CERRADO de motivos, compartido con `/api/sync` (`pod/motivosRechazo.ts`)
+// para que el servidor valide el MISMO catálogo por código, no un texto libre. Rechazo
+// total acá; el parcial sale de gramos_entregados < gramos_pedidos y se muestra como
+// «Entregada parcial — X de Y».
+const MOTIVOS_FALLA = MOTIVOS_RECHAZO;
 
 interface Parada {
   parada_id: string;
@@ -308,6 +306,10 @@ export default function RutaPage() {
         lng: gps?.lng ?? null,
         precisionM: gps?.precision ?? null,
         gramosEntregados: 0,
+        // `motivoCodigo` es lo que valida el servidor contra el catálogo cerrado
+        // (`pod/motivosRechazo.ts`); `motivoRechazo` es el texto legible —igual a la
+        // etiqueta salvo en "otro", donde es libre— que el servidor solo usa para "otro".
+        motivoCodigo: motivoFallida,
         motivoRechazo: motivo,
         capturadoAt: new Date().toISOString(),
       },

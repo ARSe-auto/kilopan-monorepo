@@ -139,6 +139,79 @@ await db.query(
   [pedido.id, usuarios.admin.id, dispositivo.id]
 );
 
+// AC-POD-05: repartidor propio del e2e de rechazo/parcial (pod-rechazo-parcial.spec.ts),
+// con su ruta sembrada COMPLETA —cliente, pedidos, DTE, ruta en_curso y paradas—. Armarla
+// por la UI de despacho sería probar el alta de la ruta dentro del test de entrega (mismo
+// criterio que la antesala de Luis, arriba). Libre de las rutas de Luis/Diego/Eva/Fabián,
+// que rutas_una_activa_por_repartidor_dia (0011) no deja coexistir para un mismo
+// repartidor. Reusa el hash de PIN de Luis (el e2e entra por la UI con el PIN 1234); el
+// RUT 13.333.333-9 pasa valida_rut. Tres paradas del mismo cliente: dos las recorre la
+// pantalla (parcial en la 1, rechazo en la 2) y la tercera la golpea el test por HTTP para
+// probar que el servidor valida el catálogo cerrado de motivos. La pantalla distingue las
+// paradas por el mensaje, no por el nombre, así que un solo cliente basta y el seed no
+// inventa tres RUT.
+const repartidorPod05 = await uno(
+  `insert into pan.usuarios (nombre, rut, rol, pin_hash)
+   values ('Gonzalo Guía', '13.333.333-9', 'repartidor', $1) returning id`,
+  [pinHashLuis]
+);
+const clientePod05 = await uno(
+  `insert into pan.clientes (rut, razon_social, canal, direccion, contacto_nombre, lat, lng)
+   values ('77.123.456-9', 'Panadería Gonzalo', 'reparto', 'Av. Siempre Viva 742', 'Encargado de bodega', -33.4489, -70.6693)
+   returning id`
+);
+const rutaPod05 = await uno(
+  `insert into pan.rutas (repartidor_id, vehiculo, estado) values ($1, 'KLPN-05', 'planificada') returning id`,
+  [repartidorPod05.id]
+);
+const paradasPod05 = [];
+let folioPod05 = 900010;
+// gramos por parada: la 1 con 20 kg deja margen para probar la entrega PARCIAL (se
+// entregan 8 kg); las otras dos son fallidas (0 g), su peso pedido no importa.
+for (const [orden, gramos] of [
+  [1, 20000],
+  [2, 12000],
+  [3, 15000],
+]) {
+  const ped = await uno(
+    `insert into pan.pedidos (cliente_id, fecha_entrega, usuario_id, dispositivo_id)
+     values ($1, current_date, $2, $3) returning id`,
+    [clientePod05.id, usuarios.admin.id, dispositivo.id]
+  );
+  await db.query(
+    `insert into pan.pedido_lineas (pedido_id, producto_id, gramos_pedidos, precio_clp)
+     values ($1, $2, $3, 1650)`,
+    [ped.id, productos.Marraqueta, gramos]
+  );
+  await db.query(`select pan.asignar_correlativo($1)`, [ped.id]);
+  await db.query(`update pan.pedidos set estado = 'confirmado' where id = $1`, [ped.id]);
+  // Guía (52) por pedido: el trigger del art. 55 DL 825 no deja pasar la ruta a en_curso
+  // con una parada sin DTE registrado de tipo válido (33/39/52).
+  await db.query(
+    `insert into pan.documento_tributario
+       (tipo_dte, folio_sii, rut_emisor, rut_receptor, fecha_emision, monto_total,
+        origen_captura, ind_traslado, pedido_id, usuario_id, dispositivo_id)
+     values (52, $1, '77.123.456-9', '77.123.456-9', current_date, 33000,
+             'manual', 1, $2, $3, $4)`,
+    [folioPod05++, ped.id, usuarios.admin.id, dispositivo.id]
+  );
+  await db.query(`insert into pan.ruta_paradas (ruta_id, pedido_id, orden) values ($1, $2, $3)`, [
+    rutaPod05.id,
+    ped.id,
+    orden,
+  ]);
+  paradasPod05.push({ pedidoId: ped.id, orden, gramos });
+}
+// Recién con las paradas y sus DTE en su lugar la ruta sale: el trigger corre en la
+// transición a 'en_curso', por eso se inserta 'planificada' y se sube acá.
+await db.query(`update pan.rutas set estado = 'en_curso' where id = $1`, [rutaPod05.id]);
+// Armar la ruta mueve sus pedidos a 'en_ruta' —exactamente lo que hace POST /api/rutas—:
+// sin esto quedan 'confirmado' y "Armar ruta y salir" en despacho los barre hacia la ruta
+// de OTRO repartidor (rompió el camino dorado, que esperaba 1 parada y veía 4).
+await db.query(`update pan.pedidos set estado = 'en_ruta' where id = any($1::uuid[])`, [
+  paradasPod05.map((p) => p.pedidoId),
+]);
+
 // AC-PES-04: la foto por bandeja la prende el admin y no se puede apagar desde la
 // pantalla de pesaje. Encendida acá para que el e2e recorra el camino CON foto — que es
 // el control antifraude de verdad, y el que además cubre la cámara in-app.
@@ -176,6 +249,14 @@ const datos = {
   // distintos entre sí y de Diego, porque cada uno deja una ruta activa del día.
   repartidorDespacho2: { id: repartidorDespacho2.id },
   repartidorDespacho3: { id: repartidorDespacho3.id },
+  // AC-POD-05: repartidor con ruta sembrada para pod-rechazo-parcial.spec.ts. `paradas`
+  // lleva el pedido_id de cada una en orden — el HTTP test necesita el de la parada 3.
+  repartidorPod05: {
+    id: repartidorPod05.id,
+    rut: "13.333.333-9",
+    cliente: "Panadería Gonzalo",
+    paradas: paradasPod05,
+  },
 };
 writeFileSync(join(E2E, "datos-semilla.json"), JSON.stringify(datos, null, 2));
 await db.close();

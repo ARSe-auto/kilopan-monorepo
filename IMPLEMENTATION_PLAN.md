@@ -349,7 +349,7 @@ esta misma auditoría — no queda como ítem abierto de la lista de abajo.
 - [x] (P1) [AC-ADM-02] — `e2e/administracion-productos.spec.ts` ataca `POST`/`PATCH /api/productos` por HTTP con sesión admin (alta dup→409, datos malos→400; precio nuevo vigente en `?detalle=1`; desactivar/reactivar; 404 id inexistente; vendedor→403 en POST y PATCH) y `db/test-invariantes.mjs` prueba la vigencia histórica: cambiar el precio inserta fila nueva sin pisar la vigente y una fecha pasada ve su precio de época — `specs/kilopan/10-administracion.md`
 - [ ] (P2) [AC-ADM-03] — cero referencias a `/api/parametros` en cualquier test — `specs/kilopan/10-administracion.md`
 - [ ] (P2) [AC-PAG-03] — pantalla de admin de medios de pago sin ningún test — `specs/kilopan/03-venta-mostrador.md`
-- [ ] (P1) [AC-POD-05] — flujo de rechazo/parcial desde `/ruta` sin test; el catálogo "cerrado" tampoco se valida en el servidor — `specs/kilopan/05-entrega-pod.md`
+- [x] (P1) [AC-POD-05] — catálogo cerrado a módulo compartido (`pod/motivosRechazo.ts`), `api/sync` valida el código contra él (antes cualquier string colaba), y `e2e/pod-rechazo-parcial.spec.ts` ejercita parcial + rechazo desde `/ruta` y la validación por HTTP — `specs/kilopan/05-entrega-pod.md`
 
 ## Ola 2 — «Marcha atrás» (`docs/PROMPT_CORRECTIVO.md` §5, planificada 3-ago-2026)
 

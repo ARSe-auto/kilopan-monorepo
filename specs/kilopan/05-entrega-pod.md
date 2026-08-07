@@ -33,15 +33,19 @@ bloquea** — el pan no espera (§4).
       declaraba la inestabilidad; formalizado como hueco porque un test flaky no es
       evidencia repetible — coincide con `docs/PROMPT_CORRECTIVO.md` §9.2 ("se estabiliza
       o se saca del gate con su ítem abierto").
-- [ ] (P1) Rechazo total y parcial con motivo de catálogo cerrado: `/ruta` define el
+- [x] (P1) Rechazo total y parcial con motivo de catálogo cerrado: `/ruta` define el
       catálogo (`rechazo`: «Cliente rechazó el pedido»), reporta rechazos por
       `clientUuid` desde el outbox y muestra «Entregada parcial — X de Y» cuando
       `gramos_entregados < gramos_pedidos` [AC-POD-05]
-      — **Anexo D (auditoría 2-ago-2026): HUECO.** Ningún test toca el flujo de rechazo
-      desde `/ruta` ni el texto «Entregada parcial — X de Y». Además el catálogo
-      "cerrado" no se valida en el servidor (`api/sync/route.ts` solo chequea
-      `!!e.motivoRechazo`, cualquier string pasa) — sin test que lo ejercite, no hay
-      evidencia de que la UI real funcione como se describe.
+      — **Cerrado 7-ago-2026.** El catálogo salió del inline de `ruta/page.tsx` a un módulo
+      único (`pod/motivosRechazo.ts`) que la pantalla y el servidor comparten; `api/sync`
+      valida ahora el CÓDIGO contra ese catálogo cerrado (antes solo miraba
+      `!!motivoRechazo`, cualquier string colaba) y guarda el texto del catálogo, no el que
+      manda el cliente, salvo en «otro» (única puerta a texto libre, que exige descripción).
+      Probado por `e2e/pod-rechazo-parcial.spec.ts`: (1) desde `/ruta`, entrega parcial de
+      8 kg de 20 kg → «Entregada parcial — X de Y», y rechazo con motivo «Cliente rechazó el
+      pedido» → «No se pudo entregar — …»; (2) por HTTP, un código fuera del catálogo y un
+      «otro» sin describir rebotan, y un código válido se acepta.
 
 - [x] (P0) **Bandeja de pendientes** persistente, alcanzable desde cualquier pantalla, con
       todo lo que la cola no pudo subir y **por qué**. Nada que la cola rechace desaparece

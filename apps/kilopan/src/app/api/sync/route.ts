@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { obtenerDb } from "@/comun/db.ts";
 import { exigirRol } from "@/identidad/sesion.ts";
 import { fechaCapturaValida } from "@/comun/validacion.ts";
+import { motivoDeCatalogo } from "@/pod/motivosRechazo.ts";
 
 interface EntregaEntrada {
   clientUuid: string;
@@ -15,6 +16,11 @@ interface EntregaEntrada {
   lng?: number | null;
   precisionM?: number | null;
   gramosEntregados: number;
+  // AC-POD-05: `motivoCodigo` es el valor del catálogo CERRADO (`pod/motivosRechazo.ts`)
+  // que el servidor valida — es lo que separa una entrega FALLIDA de una exitosa.
+  // `motivoRechazo` es solo el texto libre, y únicamente se usa cuando el código es
+  // "otro"; para los motivos fijos el texto guardado sale del catálogo, no del cliente.
+  motivoCodigo?: string | null;
   motivoRechazo?: string | null;
   capturadoAt: string;
 }
@@ -41,10 +47,10 @@ export async function POST(request: NextRequest) {
 
   for (const e of entregas) {
     try {
-      // Fallida = motivoRechazo presente: no se dejó nada, así que exige exactamente 0 g.
+      // Fallida = motivoCodigo presente: no se dejó nada, así que exige exactamente 0 g.
       // Exitosa (total o parcial) = sin motivo: exige haber dejado algo, nunca 0.
       // Separa los dos caminos en el dato mismo, sin estado intermedio ambiguo.
-      const esFallida = !!e.motivoRechazo;
+      const esFallida = !!e.motivoCodigo;
       if (
         !e.clientUuid ||
         !e.pedidoId ||
@@ -55,6 +61,22 @@ export async function POST(request: NextRequest) {
       ) {
         rechazadas.push({ clientUuid: e.clientUuid, motivo: "faltan campos obligatorios" });
         continue;
+      }
+      // AC-POD-05: el catálogo de motivos es CERRADO. Antes acá solo se miraba
+      // `!!motivoRechazo` y cualquier string colaba, así que un cliente HTTP directo (o un
+      // bug de UI) podía dejar un motivo inventado como evidencia de una entrega fallida.
+      // Ahora el código tiene que pertenecer a `pod/motivosRechazo.ts`; el texto libre
+      // queda reservado SOLO a "otro", la única puerta abierta a propósito del catálogo.
+      const catalogoMotivo = esFallida ? motivoDeCatalogo(e.motivoCodigo) : null;
+      if (esFallida) {
+        if (!catalogoMotivo) {
+          rechazadas.push({ clientUuid: e.clientUuid, motivo: "motivo de rechazo fuera del catálogo" });
+          continue;
+        }
+        if (catalogoMotivo.valor === "otro" && !e.motivoRechazo?.trim()) {
+          rechazadas.push({ clientUuid: e.clientUuid, motivo: "falta describir el motivo" });
+          continue;
+        }
       }
       // El GPS es la prueba de que el pan llegó a la dirección correcta: la entrega
       // EXITOSA no se registra sin él. La FALLIDA sí — ahí no se afirma haber dejado
@@ -128,6 +150,16 @@ export async function POST(request: NextRequest) {
       ]);
       const fotoEstado = fotoYaSubida.rows[0]?.ok ? "subida" : "pendiente_subida";
 
+      // El texto guardado sale del CATÁLOGO, no de lo que mandó el cliente: para los tres
+      // motivos fijos se ignora `e.motivoRechazo` (así nadie cuela una etiqueta falsa
+      // aunque el código sea válido) y solo "otro" usa el texto libre, ya validado no
+      // vacío arriba y acotado a 200 caracteres.
+      const motivoGuardado = catalogoMotivo
+        ? catalogoMotivo.valor === "otro"
+          ? e.motivoRechazo!.trim().slice(0, 200)
+          : catalogoMotivo.etiqueta
+        : null;
+
       // Una fallida NO cierra el POD del pedido (cerrada=false): el índice único
       // `entregas_una_vigente_por_pedido` solo mira filas cerradas, así que un intento
       // fallido no bloquea el reintento de mañana ni exige encadenar supersede_id. El
@@ -153,7 +185,7 @@ export async function POST(request: NextRequest) {
           gpsDegradado,
           distanciaOk.rows[0]?.fuera ?? false,
           e.gramosEntregados,
-          e.motivoRechazo ?? null,
+          motivoGuardado,
           !esFallida,
           sesion.usuarioId,
           sesion.dispositivoId,
