@@ -235,6 +235,16 @@ Reglas duras:
   'git stash show -p stash@{N}' y recuperá lo útil ('git stash apply' o rescate a
   mano si no aplica limpio). Los stashes NO se borran jamás. Re-implementar de cero lo
   que ya está en un stash es tirar presupuesto.
+- CHECKLIST DE e2e NUEVOS (cada punto es un rojo real de la noche del 06/07-ago):
+  (1) enrolar/ingresar SOLO con los helpers compartidos: sembrarDispositivo(page, datos.dispositivo)
+  e ingresar(page, RUT, pin) — la firma pide RUT, no el nombre del rol, y no inventes
+  placeholders que la pantalla no tiene; (2) para pegarle a la API usa page.request
+  (comparte cookies de la sesión) — el fixture 'request' pelado va sin sesión y da 401;
+  (3) todo listado puede venir VACÍO en la base e2e: aserta contenido real O el estado
+  vacío de Miga con .or(); (4) selectores por contenido visible real o getByRole, con
+  { exact: true } si el texto puede ser substring de otro — jamás selectores fantasma
+  tipo div[style*="..."]; (5) componentes de mapa/browser-only van con dynamic
+  ssr:false desde un envoltorio cliente, o el dashboard entero muere en SSR.
 - No toques ningún otro AC ni refactorices código no relacionado.
 - Si el AC ya está hecho o depende de algo que no existe aún, decilo explícitamente y no
   inventes trabajo ni marques nada como [x]."

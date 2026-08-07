@@ -1359,3 +1359,12 @@ Dos bugs de test en el commit del builder, pillados por el gate independiente:
 Miga — reemplazado por contenido real o «Sin entregas para mostrar.»; (2) el test del
 endpoint usaba el fixture `request` pelado (sin cookies de sesión → 401) en vez de
 page.request. e2e 7/7 passed.
+
+## 2026-08-07 · Mantención: tanda c de stashes + checklist de e2e en el prompt
+
+Tercera tanda de stashes archivada como tags (11, archivo-wip/c-*). El prompt del
+builder gana el checklist de e2e destilado de los rojos de la noche: helpers
+compartidos con RUT (no rol), page.request con sesión, estado vacío con .or(),
+selectores reales con exact, y browser-only con dynamic ssr:false. Cola supervisada al
+momento: ADM-11, H0-11, H0-12, DASH-08, H0-10, H0-14 (este último requiere VoiceOver
+con humano — partición hecha por el propio builder).
