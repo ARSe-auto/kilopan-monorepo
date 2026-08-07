@@ -26,3 +26,11 @@ overrides:
   # motivo que brace-expansion: un high en `audit` pone TODO el gate en rojo y ningún AC
   # puede comitear hasta el override.
   js-yaml: ">=4.3.1"
+  # 7-ago-2026: nanoid a >=3.3.17 por GHSA-2v37-7h3g-55p8 (un generador custom con size=0
+  # entra en loop indefinido). Transitiva vía next>postcss>nanoid, no directa. Esta es la
+  # que dejó el gate en rojo desde el 3-ago (commit 3cec1bd en adelante, 15 corridas de CI
+  # seguidas en rojo): loop.sh ya clasifica un rojo SOLO-audit como ajeno al AC y no lo
+  # cuenta como strike, así que el motor local siguió comiteando sin parar — pero check.sh
+  # seguía devolviendo ROJO de verdad, local Y en CI, porque loop.sh no fuerza el override,
+  # solo tolera el rojo. Sin el override el síntoma vuelve con el próximo advisory.
+  nanoid: ">=3.3.17"
