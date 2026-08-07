@@ -1,6 +1,17 @@
 import { test, expect } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { sembrarDispositivo } from "./sembrar-dispositivo.ts";
 import { ingresar } from "./ingresar.ts";
+
+const datos = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), "datos-semilla.json"), "utf8")
+) as {
+  dispositivo: { id: string; secreto: string; nombre: string };
+  pin: string;
+  usuarios: Record<string, { rut: string; id: string }>;
+};
 
 // AC-PERF-05: paginación por cursor en historial de entregas
 // Verifica que el endpoint /api/entregas con cursor devuelve filas paginadas
@@ -29,11 +40,9 @@ interface RespuestaEntregas {
 
 test.describe("AC-PERF-05: Historial de entregas con paginación por cursor", () => {
   // Configurar autenticación antes de cada test
-  test.beforeEach(async ({ page, request }) => {
-    const datosResp = await request.get("/api/test-data");
-    const datos = await datosResp.json();
+  test.beforeEach(async ({ page }) => {
     await sembrarDispositivo(page, datos.dispositivo);
-    await ingresar(page, datos.usuarios.admin.rut, datos.pin);
+    await ingresar(page, datos.usuarios.admin!.rut, datos.pin);
   });
 
   test("debe cargar la primera página del historial", async ({ page }) => {
