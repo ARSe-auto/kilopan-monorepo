@@ -105,6 +105,13 @@ bash "$M/guardrail.sh" >/dev/null 2>&1 && no "el grep anti-interpolación NO det
 rm -f "$CANARIO_SQL"
 
 echo
+echo "== 2c-bis. aria-label vacíos en JSX (AC-H0-10) =="
+CANARIO_ARIA="apps/kilopan/src/.canario-prueba-arnes-aria.tsx"
+printf 'export function X() {\n  return <button aria-label="">x</button>;\n}\n' > "$CANARIO_ARIA"
+bash "$M/guardrail.sh" >/dev/null 2>&1 && no "el grep anti-aria-label vacío NO detecta aria-label=\"\" en .tsx" || ok "detecta un aria-label vacío plantado en .tsx"
+rm -f "$CANARIO_ARIA"
+
+echo
 echo "== 2c. Migraciones y semilla en la MISMA zona horaria que la app (3-ago-2026) =="
 # `apps/kilopan/src/comun/db.ts` fija America/Santiago en SU conexión; `db/migrar.mjs` —que
 # corre las migraciones y, vía sembrar.mjs, la semilla— heredaba la del proceso. En un Mac

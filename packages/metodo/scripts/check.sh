@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Gate único (PROMPT_MAESTRO.md §9). `--full` agrega e2e/perf/invariantes de BD; sin
-# flag corre lo rápido. axe/lighthouse NO son pasos todavía, ni con --full (AC-H0-10).
+# flag corre lo rápido. axe corre DENTRO de `e2e` (accessibility.spec.ts, AC-H0-10) —
+# solo con --full, igual que el resto del e2e.
 # Nunca reporta OK por omisión: cada paso que no corre queda listado en "SALTADOS",
 # y el resumen final es explícito sobre qué se verificó de verdad (ver docs/LECCION_RALPH.md).
 set -uo pipefail
@@ -153,13 +154,9 @@ if [ "$FULL" -eq 1 ]; then
     skip_step "invariantes de BD" "migraciones aún no existen"
   fi
 else
-  # P2 (auditoría 1-ago-2026): "correr con --full" es engañoso para axe/lighthouse —
-  # NI CON --full existe ese paso en este archivo (grep -n "axe\|lighthouse" no
-  # encuentra ningún run_step). No es que estén detrás de una bandera: no están
-  # implementados, punto — AC-H0-10 (specs/kilopan/09-plataforma-miga.md) sigue
-  # abierto por esto, honestamente, y así lo dice el mensaje.
-  skip_step "e2e / invariantes de BD" "correr con --full"
-  skip_step "axe / lighthouse" "no implementado todavía — AC-H0-10 sigue abierto"
+  # accessibility.spec.ts (axe, AC-H0-10) vive dentro del mismo `e2e` de Playwright:
+  # no tiene run_step propio, así que se salta con el resto sin --full.
+  skip_step "e2e / invariantes de BD / accesibilidad (axe)" "correr con --full"
 fi
 
 echo

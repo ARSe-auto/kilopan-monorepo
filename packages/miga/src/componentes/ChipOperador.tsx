@@ -18,7 +18,10 @@ export function ChipOperador({ nombre, anchoMaximo }: { nombre: string; anchoMax
         fontSize: 13,
         fontWeight: 700,
         background: "rgba(194,65,12,.13)",
-        color: "#C2410C",
+        // AC-H0-10: el acento "#C2410C" a 13px/700 sobre este fondo tinta daba 3.89:1
+        // (axe), bajo el 4.5:1 de AA — mismo matiz de marca, oscurecido lo justo para
+        // cruzar el umbral (mismo patrón que `superficie.textoFaint`).
+        color: "#9A3412",
         maxWidth: anchoMaximo,
         minWidth: 0,
       }}

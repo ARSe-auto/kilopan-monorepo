@@ -265,10 +265,13 @@ para ese AC — no antes.
       castear timestamptz a date no es IMMUTABLE [AC-PERF-01]
 - ~~[x]~~ (P1-PERF) Compresión de fotos en el cliente antes de subir: 1280 px de ancho
       máximo y calidad 0.72, objetivo ≈400 KB, con techo duro de 1,5 MB en el servidor [AC-PERF-02]
-- ~~[x]~~ (P1-PERF) Paginación por CURSOR (keyset), no por OFFSET, en el listado de
+- [x] (P1-PERF) Paginación por CURSOR (keyset), no por OFFSET, en el listado de
       entregas: con OFFSET la página 40 obliga a recorrer y descartar 2.000 filas, y el
-      cursor además no se corre si entra una entrega nueva mientras el dueño scrollea.
-      Falta cablearlo a una pantalla de historial (el endpoint ya existe) [AC-PERF-03]
+      cursor además no se corre si entra una entrega nueva mientras el dueño scrollea —
+      cerrado 08-ago: endpoint `/api/entregas` con cursor keyset, e2e
+      `ac-perf-05-historial-entregas-cursor.spec.ts` verifica sin offset y sin desvío de
+      cursor ante inserciones. Consumido por pantalla `/admin/entregas/historial`
+      (AC-PERF-05). Gate --full en progreso [AC-PERF-03]
 - [x] (P1-PERF) Presupuesto de performance en el gate: **no Lighthouse** —necesita
       Chrome headless, ~300 MB de dependencias, y su puntaje mezcla SEO/PWA con lo
       único que importa a las 4 AM. Se mide el peso GZIP del flujo dorado contra 150 KB.
@@ -295,7 +298,8 @@ Quedan 16 reales. Cada AC cerrado hoy lleva su cita en el archivo que lo impleme
 - [x] (P1-PERF) Cablear la paginación por cursor a una pantalla de historial de entregas. El endpoint existe desde `AC-PERF-03` y ninguna pantalla lo consume — cerrado 07-ago: pantalla `/admin/entregas/historial` con paginación por cursor, filtro de entregas por revisar, indicadores de problemas (GPS degradado, foto pendiente, entrega parcial); `ac-perf-05-historial-entregas-cursor.spec.ts` cobriendo el endpoint y consumo en UI — spec: `specs/kilopan/08-seguridad-rendimiento.md` [AC-PERF-05]
 - [x] (P1) TEST que verifique la escala tipográfica completa de Miga — cerrado 07-ago: `packages/miga/src/componentes/tipografia.test.ts` (escala completa+descendente, `pesoBascula` 96/700, cada `fontSize` literal de `packages/miga/src/componentes` comparado contra el token vivo); corrigió 3 pantallas fuera de escala (`SelectorUnToque`, `EstadoListado`, `TecladoNumerico`). Gate --full verde — spec: `specs/kilopan/09-plataforma-miga.md` [AC-H0-08]
 - [x] (P1) es-CL verificado por grep de gate — cerrado 07-ago: `verifica-es-cl.mjs` propio en `check.sh` (kg/CLP/fecha sin bypass manual, cero inglés visible, RUT validado en vivo con `estadoRut()`); corrigió bug real en `MapaPodsDia.tsx` (`.toFixed(1)` daba punto en vez de coma); `verifica-es-cl.test.mjs` mata los mutantes. Gate --full verde — spec: `specs/kilopan/09-plataforma-miga.md` [AC-H0-09]
-- [ ] (P1) AA medible en el gate: **axe no está instalado ni como dependencia ni como test** — `check.sh` solo lo nombra en un comentario y en el mensaje de «saltado». Falta: contraste ≥4.5:1 a… — spec: `specs/kilopan/09-plataforma-miga.md` [AC-H0-10]
+- [x] (P1) AA medible en el gate: **axe instalado y en el gate** — cerrado 07-ago: `accessibility.spec.ts` (5 tests: contraste axe en `/ingresar` y `/dashboard`, targets ≥44px, aria-label vacíos, zoom 200%) corre dentro de `e2e` con `check.sh --full`; corrigió 2 violaciones reales de contraste (`ChipOperador`, estado vacío de `MapaPodsDia`). Foco visible y VoiceOver partidos a `AC-H0-14` — spec: `specs/kilopan/09-plataforma-miga.md` [AC-H0-10]
+- [ ] (P1) Foco visible + recorrido VoiceOver (F1/F4/F5) sin trampas — partido de `AC-H0-10` el 7-ago porque un e2e headless no puede ejercer ninguno de los dos; sesión supervisada — spec: `specs/kilopan/09-plataforma-miga.md` [AC-H0-14]
 - ~~[ ]~~ (P1) Estados obligatorios en todo listado: vacío accionable / skeleton / error con reintentar / sin conexión con **contador real de cola** («Sin conexión — N registros por subir» ámbar → … — spec: `specs/kilopan/09-plataforma-miga.md` [AC-H0-11] — fusionado 06-ago: el checkbox vigente de AC-H0-11 es el de Ola 2 (P0)
 - [ ] (P2) Validar el camino GATT contra una báscula real antes de darlo por bueno. Las marcas comunes en panaderías chilenas (Toledo, CAS, Torrey) suelen usar serie propietario, no GATT — `AC-… — spec: `specs/kilopan/02-catalogo-pesaje.md` [AC-PES-09]
 - [ ] (P2) UI de resolución de mermas al día siguiente: hoy la máquina de estados existe y la TCK la respeta, pero nadie puede mover una merma a `recuperada_con_venta` desde pantalla — spec: `specs/kilopan/02-catalogo-pesaje.md` [AC-MERM-02]

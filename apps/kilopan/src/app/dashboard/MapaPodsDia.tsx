@@ -5,6 +5,7 @@ import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { formatearKg } from "@/comun/formato.ts";
+import { superficie } from "@kilopan/miga/tokens.ts";
 
 interface Pod {
   id: string;
@@ -25,8 +26,10 @@ export function MapaPodsDia({ pods }: { pods: Pod[] }) {
   if (!mounted) return null;
 
   if (pods.length === 0) {
+    // AC-H0-10: #999 sobre blanco daba 2.84:1 (axe), bajo el 4.5:1 de AA — el mismo
+    // matiz "faint" que ya cruzaba el umbral para textoDim vive en el token.
     return (
-      <p style={{ fontSize: 13, color: "#999", textAlign: "center" }}>
+      <p style={{ fontSize: 13, color: superficie.textoFaint, textAlign: "center" }}>
         Sin entregas hoy aún.
       </p>
     );

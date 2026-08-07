@@ -96,11 +96,25 @@ Ningún estado se comunica solo por color.
       `formatearKg()`. El campo de RUT de "Nuevo cliente" en `pedidos/page.tsx` ahora
       muestra "RUT inválido" en vivo vía `estadoRut()`, cubierto por
       `comun.test.ts`. Gate `--full` verde (14/0/0, e2e e invariantes de BD incluidos).
-- [ ] (P1) AA medible en el gate: **axe no está instalado ni como dependencia ni como
-      test** — `check.sh` solo lo nombra en un comentario y en el mensaje de «saltado».
-      Falta: contraste ≥4.5:1 automatizado, test que recorra el DOM buscando targets
-      <44 pt, foco visible, F1/F4/F5 con VoiceOver, texto al 200 % sin truncar kilos
-      ni CLP, y grep de `aria-label` vacíos [AC-H0-10]
+- [x] (P1) AA medible en el gate: **axe instalado y en el gate** — `check.sh --full`
+      corre `accessibility.spec.ts` como parte de `e2e` [AC-H0-10]
+      — **Cerrado 7-ago-2026.** `@axe-core/playwright` instalado. `apps/kilopan/e2e/
+      accessibility.spec.ts` (5 tests): contraste ≥4.5:1 automatizado con axe en
+      `/ingresar` (sin sesión) y `/dashboard` (admin, kg y CLP en pantalla); targets
+      clickeables ≥44px recorriendo el DOM de `/ingresar`; cero `aria-label` vacíos en
+      el DOM renderizado; zoom 200% (`document.documentElement.style.zoom`) smoke test
+      contra la cifra de kg del dashboard, verificando que sigue visible y que su caja
+      CRECE en vez de recortarse. `guardrail.sh` suma el grep estático de
+      `aria-label=""` en `.tsx` (más rápido que esperar al e2e), y `prueba-arnes.sh`
+      §2c-bis lo mata plantando un `aria-label=""` real. Al escribir el axe scan
+      aparecieron DOS violaciones reales de contraste — `ChipOperador` (`#C2410C` sobre
+      su propio fondo tinta, 3.89:1) y el estado vacío de `MapaPodsDia`
+      (`#999` sobre blanco, 2.84:1) — corregidas a `#9A3412` y `superficie.textoFaint`
+      respectivamente, los dos bajo el mismo patrón que ya cruzaba el umbral en
+      `textoFaint`. Gate `--full` verde.
+      **Foco visible y el recorrido F1/F4/F5 con VoiceOver NO están en este cierre** —
+      exigen control real del lector de pantalla del sistema operativo, que un e2e
+      headless no puede ejercer; ambos siguen en `AC-H0-14`, con su porqué.
 - [ ] (P0) Los **cuatro** estados obligatorios en todo listado: vacío accionable /
       cargando (skeleton) / error con reintentar / sin conexión con **contador real de
       cola** («Sin conexión — N registros por subir» ámbar → «Sincronizado hace Xs»
@@ -173,6 +187,16 @@ Ningún estado se comunica solo por color.
       incluido el arqueo de caja, que hoy usa el teclado chico del sistema. Mismo defecto
       de fondo que F23 con los `<select>` nativos: ningún control del sistema en un campo
       que un panadero real toca a diario [AC-H0-13]
+- [ ] (P1) Foco visible en todo control interactivo (outline o equivalente, jamás
+      `outline: none` sin reemplazo) y recorrido F1/F4/F5 con VoiceOver sin trampas —
+      **partido de `AC-H0-10` el 7-ago-2026** porque ninguno de los dos se puede
+      verificar con un e2e headless: el foco visible exige inspección real de estilos de
+      `:focus-visible` contra cada componente interactivo, y VoiceOver exige control del
+      lector de pantalla del sistema operativo, algo que Playwright no ejerce. `axe`
+      detecta ALGUNOS problemas de foco por herencia de reglas, pero no reemplaza el
+      paseo real — cerrar esto con solo el axe scan de `AC-H0-10` habría sido el mismo
+      `[x]` sin respaldo que el Anexo D vino a corregir. Sesión supervisada, no motor
+      [AC-H0-14]
 
 ## Fronteras internas (Anexo C)
 

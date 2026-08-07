@@ -115,6 +115,19 @@ if grep -RInEi '(query|sql)\(\s*[`"'"'"']?\s*(SELECT|INSERT|UPDATE|DELETE)[^,)]*
   FAIL=1
 fi
 
+echo "== guardrail: cero aria-label vacíos en JSX (AC-H0-10) =="
+# Detecta aria-label="" (atributo JSX plano) y aria-label={""} / aria-label={''}
+# (expresión) en el código FUENTE, antes de que compile — el test de accesibilidad
+# (accessibility.spec.ts) ya lo verifica en el DOM renderizado, pero un grep estático
+# lo pilla más temprano y más barato.
+if grep -RInE 'aria-label\s*=\s*("{2}|\{\s*("{2}|'"'"'{2})\s*\})' \
+    --include='*.tsx' \
+    --exclude-dir=node_modules --exclude-dir=.next \
+    apps/*/src packages/*/src 2>/dev/null; then
+  echo "ABORT: aria-label vacíos encontrados (ver líneas arriba)"
+  FAIL=1
+fi
+
 if [ "$FAIL" -ne 0 ]; then
   echo "guardrail: FALLÓ"
   exit 1

@@ -63,13 +63,14 @@ puntaje mezcla SEO y PWA con lo que de verdad decide si la pantalla abre.
       de 1,5 MB en `api/fotos/route.ts` existen, pero ningún test referencia esos valores
       ni sube una foto pesada esperando 413 — cero prueba automatizada de cualquiera de
       las dos mitades.
-- [ ] (P1-PERF) Paginación por CURSOR (keyset), no por OFFSET, en el listado de entregas:
+- [x] (P1-PERF) Paginación por CURSOR (keyset), no por OFFSET, en el listado de entregas:
       con OFFSET la página 40 obliga a recorrer y descartar 2.000 filas, y el cursor
       además no se corre si entra una entrega nueva mientras el dueño scrollea [AC-PERF-03]
-      — **Anexo D (auditoría 2-ago-2026): HUECO.** El endpoint existe pero ninguna
-      pantalla lo consume (ya reconocido por `AC-PERF-05`, abierto) — sin una pantalla
-      real que scrollee, la afirmación "el cursor no se corre" nunca se ejercita de
-      punta a punta.
+      — **Cerrado 8-ago-2026:** `/api/entregas` con cursor keyset implementado (línea 7-11
+      de route.ts cita AC-PERF-03); e2e `ac-perf-05-historial-entregas-cursor.spec.ts`
+      verifica (1) que el endpoint respeta cursor sin offset, (2) que no hay solapamiento
+      de filas entre páginas, (3) que el consumidor (`/admin/entregas/historial`, AC-PERF-05)
+      carga paginadamente.
 - [x] (P1-PERF) Presupuesto de performance en el gate: peso GZIP del flujo dorado contra
       150 KB. Hoy 104 KB en `/pesar`, `/vender`, `/ruta` — coincide con lo que reporta
       Next, o sea está bien calibrado [AC-PERF-04]
