@@ -6,6 +6,7 @@ import { superficie, acentos, semantico } from "@kilopan/miga/tokens.ts";
 import { Copyright } from "@kilopan/miga/componentes/index.tsx";
 import { formatearKg, formatearClp } from "@/comun/formato.ts";
 import { CtaFlota } from "./CtaFlota.tsx";
+import { MapaPodsDia } from "./MapaPodsDia.tsx";
 import { Pantalla } from "../Pantalla.tsx";
 
 // Los agregados llegan como string desde Postgres (bigint/numeric no entran en un
@@ -47,6 +48,23 @@ export default async function DashboardPage() {
        from pan.conciliacion_diaria where fecha = current_date`
   );
   const hoy = conciliacion.rows[0];
+
+  // Mapa de PODs del día — solo entregas cerradas con GPS válido (AC-DASH-05)
+  const pods = await db.query<{
+    id: string;
+    receptor_nombre: string;
+    lat: number;
+    lng: number;
+    gramos_entregados: number;
+    foto_estado: string;
+  }>(
+    `select e.id, e.receptor_nombre, e.lat, e.lng, e.gramos_entregados, e.foto_estado
+       from pan.entregas e
+      where e.cerrada = true
+        and date(e.recibido_at) = current_date
+        and e.supersede_id is null
+      order by e.recibido_at desc`
+  );
 
   const rutasCerradas = await db.query<{ n: string }>(
     `select count(*)::text as n from pan.rutas where estado = 'cerrada'`
@@ -114,6 +132,18 @@ export default async function DashboardPage() {
             </p>
           </div>
         ))}
+      </section>
+
+      <section
+        style={{
+          background: superficie.tarjeta,
+          border: `1px solid ${superficie.hairline}`,
+          borderRadius: 16,
+          padding: 24,
+        }}
+      >
+        <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 12px" }}>Entregas del día</h2>
+        <MapaPodsDia pods={pods.rows} />
       </section>
 
       {mostrarFlota ? (

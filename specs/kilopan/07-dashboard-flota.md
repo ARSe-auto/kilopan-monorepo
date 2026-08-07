@@ -55,8 +55,10 @@ repartidor muestra solo km y kg (§5).
       implementa la degradación, pero no existe `compartir.test.ts` ni ninguna referencia
       a `navigator.share`/`compartir` en `*.test.ts` o `e2e/*.spec.ts` — la degradación
       nunca se ejercitó de forma automatizada.
-- [ ] (P1) Mapa estático de pines de los PODs del día (Leaflet + OSM, **solo dashboard**,
-      §3 módulo 7). Sin construir [AC-DASH-05]
+- [x] (P1) Mapa estático de pines de los PODs del día (Leaflet + OSM, **solo dashboard**,
+      §3 módulo 7). Probado: MapaPodsDia.tsx componente client con react-leaflet, query
+      de entregas cerradas de hoy en dashboard/page.tsx, test e2e valida que se pinten
+      marcadores y popups interactivos [AC-DASH-05]
 - [ ] (P1) Pantalla de auditoría por usuario y dispositivo sobre la tabla `eventos`
       (append-only). Sin construir: hoy los eventos se escriben y nadie puede leerlos
       desde la app [AC-DASH-06]
