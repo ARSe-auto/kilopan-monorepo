@@ -183,10 +183,21 @@ Ningún estado se comunica solo por color.
       escritura en memoria de React SIN encolar antes sería una regresión de
       durabilidad — se pierde el dato si el operador bloquea el teléfono a mitad de los
       8 s. El orden correcto es ENCOLAR primero, despachar a los 8 s.
-- [ ] (P1) El teclado grande (`TecladoNumerico`, ya existe) en **todo** campo de plata,
+- [x] (P1) El teclado grande (`TecladoNumerico`, ya existe) en **todo** campo de plata,
       incluido el arqueo de caja, que hoy usa el teclado chico del sistema. Mismo defecto
       de fondo que F23 con los `<select>` nativos: ningún control del sistema en un campo
       que un panadero real toca a diario [AC-H0-13]
+      — **Cerrado 7-ago-2026.** El arqueo (`/caja` cierre de caja y `/apertura-turno`
+      fondo inicial) ya tenía el teclado propio desde F23; quedaban tres campos de plata
+      reales con el `<input>` del sistema: los parámetros `clp_km_combustible`/`clp_km_ev`
+      de Ajustes ($/km, `co2_g_km_evitado` NO es plata y sigue con `<input type=number>`
+      a propósito), precio de mostrador/mayorista del catálogo (crear y editar), y el
+      monto del documento en el registro de DTE de `/pedidos` (el folio SII, en cambio,
+      es un identificador, no plata, y sigue nativo). Mismo patrón de botón + teclado
+      compartido que ya usa `/caja` (F23): el botón muestra el valor formateado y abre
+      el `TecladoNumerico` de abajo. Evidencia: `teclado-plata.test.ts`, escaneo de
+      fuente que confirma el `TecladoNumerico` en cada pantalla y la ausencia de los
+      `<input>` reemplazados (más una guarda de regresión sobre el arqueo).
 - [ ] (P1) Foco visible en todo control interactivo (outline o equivalente, jamás
       `outline: none` sin reemplazo) y recorrido F1/F4/F5 con VoiceOver sin trampas —
       **partido de `AC-H0-10` el 7-ago-2026** porque ninguno de los dos se puede

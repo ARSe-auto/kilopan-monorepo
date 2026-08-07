@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BotonPrimario } from "@kilopan/miga/componentes/index.tsx";
+import { BotonPrimario, CifraGrande, TecladoNumerico } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
 import { formatearClp, parsearClp } from "@/comun/formato.ts";
 import { kgTextoAGramos, pesoValido } from "@/comun/peso.ts";
@@ -76,6 +76,8 @@ export default function PedidosPage() {
   const [dteFolio, setDteFolio] = useState("");
   const [dteRut, setDteRut] = useState("76.192.083-9");
   const [dteMonto, setDteMonto] = useState("");
+  // AC-H0-13: el monto del documento es plata — teclado propio, no el chico del sistema.
+  const [dteMontoAbierto, setDteMontoAbierto] = useState(false);
   // AC-DTE-03: si el timbre se llenó escaneando el PDF417, se guarda el XML crudo y el
   // origen pasa a "ted_scan". Cualquier edición manual posterior de un campo descarta el
   // XML: el `ted_xml` registrado tiene que coincidir con lo que finalmente se envía, o no
@@ -226,6 +228,7 @@ export default function PedidosPage() {
       setDtePedidoId(null);
       setDteFolio("");
       setDteMonto("");
+      setDteMontoAbierto(false);
       setDteTedXml(null);
       await cargar();
     } catch {
@@ -413,7 +416,32 @@ export default function PedidosPage() {
           </select>
           <input value={dteFolio} onChange={(e) => { setDteFolio(e.target.value); setDteTedXml(null); }} placeholder="Folio" style={campo} inputMode="numeric" />
           <input value={dteRut} onChange={(e) => { setDteRut(e.target.value); setDteTedXml(null); }} placeholder="RUT emisor" style={campo} />
-          <input value={dteMonto} onChange={(e) => { setDteMonto(e.target.value); setDteTedXml(null); }} placeholder="Monto total" style={campo} inputMode="numeric" />
+          {/* AC-H0-13: botón que abre el teclado propio en vez del <input inputMode="numeric">
+              que dejaba entrar el teclado chico del sistema en un campo de plata. */}
+          <button
+            type="button"
+            onClick={() => setDteMontoAbierto((v) => !v)}
+            aria-pressed={dteMontoAbierto}
+            aria-label={`Monto total: ${dteMonto ? formatearClp(parsearClp(dteMonto)) : "sin definir"}`}
+            style={{ ...campo, textAlign: "left", color: dteMonto ? "#1B1712" : superficie.textoFaint }}
+          >
+            {dteMonto ? formatearClp(parsearClp(dteMonto)) : "Monto total"}
+          </button>
+          {dteMontoAbierto ? (
+            <div style={{ background: superficie.tarjeta, border: `1px solid ${superficie.hairline}`, borderRadius: 14, padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                <CifraGrande valor={dteMonto || "0"} unidad="CLP" />
+                <button
+                  type="button"
+                  onClick={() => setDteMontoAbierto(false)}
+                  style={{ minHeight: 44, padding: "0 16px", borderRadius: 10, border: `1px solid ${superficie.hairline}`, background: "#fff", fontWeight: 700, fontSize: 14 }}
+                >
+                  Listo
+                </button>
+              </div>
+              <TecladoNumerico valor={dteMonto} onCambiar={(nuevo) => { setDteMonto(nuevo); setDteTedXml(null); }} />
+            </div>
+          ) : null}
           <BotonPrimario onClick={registrarDte} disabled={registrandoDte}>
             {registrandoDte ? "Registrando…" : "Registrar documento"}
           </BotonPrimario>

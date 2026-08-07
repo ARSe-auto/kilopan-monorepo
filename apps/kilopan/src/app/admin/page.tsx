@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { BotonPrimario, SelectorUnToque, Copyright } from "@kilopan/miga/componentes/index.tsx";
+import { BotonPrimario, SelectorUnToque, Copyright, CifraGrande, TecladoNumerico } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
 import { formatearClp, parsearClp } from "@/comun/formato.ts";
 import { validaRut } from "@/comun/valida_rut.ts";
@@ -17,6 +17,9 @@ interface ProductoAdmin {
   precio_mayorista_clp: number | null;
 }
 interface MedioPagoAdmin { clave: string; etiqueta: string; activo: boolean }
+
+// AC-H0-13: campos de precio del catálogo — plata, así que van con teclado propio.
+type CampoPrecio = "crear-mostrador" | "crear-mayorista" | "edit-mostrador" | "edit-mayorista";
 
 const ROLES = [
   { valor: "admin", etiqueta: "Admin" },
@@ -37,6 +40,11 @@ export default function AdminPage() {
   const [parametros, setParametros] = useState<Parametro[]>([]);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // AC-H0-13: los parámetros clp_* son plata (CLP por km) — teclado propio, no el chico
+  // del sistema. co2_g_km_evitado no es plata (gramos), así que sigue con el <input>
+  // nativo: el AC pide teclado grande en campos de PLATA, no en todo número.
+  const [borradoresClp, setBorradoresClp] = useState<Record<string, string>>({});
+  const [campoClpActivo, setCampoClpActivo] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/parametros").then((r) => r.json()).then((d) => setParametros(d.parametros ?? []));
@@ -53,6 +61,30 @@ export default function AdminPage() {
     if (!r.ok) { setError(cuerpo.error); return; }
     setParametros((ps) => ps.map((p) => (p.clave === clave ? { ...p, valor } : p)));
     setMensaje("Guardado.");
+  }
+
+  function alternarCampoClp(p: Parametro) {
+    if (campoClpActivo === p.clave) {
+      confirmarCampoClp(p);
+    } else {
+      setCampoClpActivo(p.clave);
+    }
+  }
+
+  // Mismo criterio que el onBlur del <input> nativo que reemplaza: vacío o negativo se
+  // descarta en silencio, sin guardar un costo por km de $0 que nadie tecleó a propósito.
+  function confirmarCampoClp(p: Parametro) {
+    const texto = borradoresClp[p.clave];
+    setCampoClpActivo(null);
+    setBorradoresClp((bs) => {
+      const resto = { ...bs };
+      delete resto[p.clave];
+      return resto;
+    });
+    if (texto === undefined) return;
+    const v = Math.round(Number(texto.replace(",", ".")));
+    if (!Number.isInteger(v) || v < 0) return;
+    if (v !== p.valor) void guardar(p.clave, v);
   }
 
   const foto = parametros.find((p) => p.clave === "pesaje_foto_obligatoria");
@@ -92,32 +124,92 @@ export default function AdminPage() {
         {/* Antes decía "Costos de reparto", pero acá también viven parámetros que no
             son costos (CO2 evitado por km, umbral de rutas para mostrar "Tu flota"). */}
         <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Ajustes de reparto y flota</h2>
-        {resto.map((p) => (
-          <label key={p.clave} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ flex: 1, fontSize: 14, color: superficie.textoDim }}>{p.descripcion}</span>
-            <input
-              type="number"
-              defaultValue={p.valor}
-              onBlur={(e) => {
-                // Vaciar el campo (Number("") = 0) o escribir un negativo guardaba
-                // silenciosamente un costo por km de $0 o negativo, sin que nadie lo
-                // pidiera — alimenta el $/km del panel del dueño.
-                if (e.target.value.trim() === "") {
-                  e.target.value = String(p.valor);
-                  return;
-                }
-                const v = Math.round(Number(e.target.value));
-                if (!Number.isInteger(v) || v < 0) {
-                  e.target.value = String(p.valor);
-                  return;
-                }
-                if (v !== p.valor) void guardar(p.clave, v);
-              }}
-              style={{ width: 110, minHeight: 44, borderRadius: 12, border: `1px solid ${superficie.hairline}`, padding: "0 12px", fontSize: 17, fontVariantNumeric: "tabular-nums", textAlign: "right" }}
-            />
-          </label>
-        ))}
+        {resto.map((p) => {
+          const esPlata = p.clave.startsWith("clp_");
+          if (!esPlata) {
+            return (
+              <label key={p.clave} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ flex: 1, fontSize: 14, color: superficie.textoDim }}>{p.descripcion}</span>
+                <input
+                  type="number"
+                  defaultValue={p.valor}
+                  onBlur={(e) => {
+                    // Vaciar el campo (Number("") = 0) o escribir un negativo guardaba
+                    // silenciosamente un valor de 0 o negativo, sin que nadie lo pidiera.
+                    if (e.target.value.trim() === "") {
+                      e.target.value = String(p.valor);
+                      return;
+                    }
+                    const v = Math.round(Number(e.target.value));
+                    if (!Number.isInteger(v) || v < 0) {
+                      e.target.value = String(p.valor);
+                      return;
+                    }
+                    if (v !== p.valor) void guardar(p.clave, v);
+                  }}
+                  style={{ width: 110, minHeight: 44, borderRadius: 12, border: `1px solid ${superficie.hairline}`, padding: "0 12px", fontSize: 17, fontVariantNumeric: "tabular-nums", textAlign: "right" }}
+                />
+              </label>
+            );
+          }
+          const activo = campoClpActivo === p.clave;
+          // El borrador empieza VACÍO, no precargado con p.valor: TecladoNumerico
+          // acumula dígitos sobre lo que ya hay, así que precargar "140" y tocar "5"
+          // daría "1405" en vez de reemplazar. Mismo criterio que editMostrador/
+          // editMayorista más abajo: retipear el valor completo, no corregirlo dígito
+          // a dígito.
+          const borrador = borradoresClp[p.clave];
+          return (
+            <label key={p.clave} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ flex: 1, fontSize: 14, color: superficie.textoDim }}>{p.descripcion}</span>
+              {/* AC-H0-13: botón que abre el teclado propio, no un <input type=number> con
+                  el teclado chico del sistema — el mismo patrón que /caja (F23). */}
+              <button
+                type="button"
+                onClick={() => alternarCampoClp(p)}
+                aria-pressed={activo}
+                aria-label={`${p.descripcion}: ${formatearClp(borrador ? Number(borrador) || 0 : p.valor)}`}
+                style={{
+                  width: 110,
+                  minHeight: 44,
+                  borderRadius: 12,
+                  border: activo ? "2px solid #C2410C" : `1px solid ${superficie.hairline}`,
+                  padding: "0 12px",
+                  fontSize: 17,
+                  fontVariantNumeric: "tabular-nums",
+                  textAlign: "right",
+                  background: "#fff",
+                  color: "#1B1712",
+                }}
+              >
+                {formatearClp(borrador ? Number(borrador) || 0 : p.valor)}
+              </button>
+            </label>
+          );
+        })}
       </section>
+
+      {campoClpActivo ? (
+        <div style={{ background: superficie.tarjeta, border: `1px solid ${superficie.hairline}`, borderRadius: 14, padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <CifraGrande valor={borradoresClp[campoClpActivo] || "0"} unidad="CLP" />
+            <button
+              type="button"
+              onClick={() => {
+                const p = parametros.find((x) => x.clave === campoClpActivo);
+                if (p) confirmarCampoClp(p);
+              }}
+              style={{ minHeight: 44, padding: "0 16px", borderRadius: 10, border: `1px solid ${superficie.hairline}`, background: "#fff", fontWeight: 700, fontSize: 14 }}
+            >
+              Listo
+            </button>
+          </div>
+          <TecladoNumerico
+            valor={borradoresClp[campoClpActivo] ?? ""}
+            onCambiar={(nuevo) => setBorradoresClp((bs) => ({ ...bs, [campoClpActivo]: nuevo }))}
+          />
+        </div>
+      ) : null}
 
       {mensaje ? <p style={{ color: semantico.ok, fontSize: 14 }} role="status">{mensaje}</p> : null}
       {error ? <p style={{ color: semantico.error, fontSize: 14 }} role="alert">{error}</p> : null}
@@ -339,6 +431,26 @@ function SeccionCatalogo() {
   const [editMayorista, setEditMayorista] = useState("");
   const [guardandoId, setGuardandoId] = useState<string | null>(null);
 
+  // AC-H0-13: precio de mostrador y mayorista son plata — teclado propio compartido,
+  // enrutado al campo que se tocó, igual que /caja (F23).
+  const [campoActivo, setCampoActivo] = useState<CampoPrecio | null>(null);
+  function valorDeCampo(campo: CampoPrecio): string {
+    switch (campo) {
+      case "crear-mostrador": return precioMostrador;
+      case "crear-mayorista": return precioMayorista;
+      case "edit-mostrador": return editMostrador;
+      case "edit-mayorista": return editMayorista;
+    }
+  }
+  function fijarValorDeCampo(campo: CampoPrecio, nuevo: string) {
+    switch (campo) {
+      case "crear-mostrador": setPrecioMostrador(nuevo); break;
+      case "crear-mayorista": setPrecioMayorista(nuevo); break;
+      case "edit-mostrador": setEditMostrador(nuevo); break;
+      case "edit-mayorista": setEditMayorista(nuevo); break;
+    }
+  }
+
   async function cargar() {
     setCargando(true);
     setErrorCarga(false);
@@ -469,8 +581,21 @@ function SeccionCatalogo() {
               </button>
             ))}
           </div>
-          <input value={precioMostrador} onChange={(e) => setPrecioMostrador(e.target.value)} placeholder="Precio mostrador (CLP)" style={campo} inputMode="numeric" />
-          <input value={precioMayorista} onChange={(e) => setPrecioMayorista(e.target.value)} placeholder="Precio mayorista (opcional, para reparto)" style={campo} inputMode="numeric" />
+          <BotonCampoPrecio
+            etiqueta="Precio mostrador (CLP)"
+            valor={precioMostrador}
+            activo={campoActivo === "crear-mostrador"}
+            onTocar={() => setCampoActivo(campoActivo === "crear-mostrador" ? null : "crear-mostrador")}
+          />
+          <BotonCampoPrecio
+            etiqueta="Precio mayorista (opcional, para reparto)"
+            valor={precioMayorista}
+            activo={campoActivo === "crear-mayorista"}
+            onTocar={() => setCampoActivo(campoActivo === "crear-mayorista" ? null : "crear-mayorista")}
+          />
+          {campoActivo === "crear-mostrador" || campoActivo === "crear-mayorista" ? (
+            <TecladoDeCampo campo={campoActivo} valor={valorDeCampo(campoActivo)} onCambiar={fijarValorDeCampo} onListo={() => setCampoActivo(null)} />
+          ) : null}
           <BotonPrimario onClick={crear} disabled={creando}>{creando ? "Guardando…" : "Agregar producto"}</BotonPrimario>
         </div>
       ) : null}
@@ -501,29 +626,34 @@ function SeccionCatalogo() {
               </button>
             </div>
             {editandoId === p.id ? (
-              <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                <input
-                  value={editMostrador}
-                  onChange={(e) => setEditMostrador(e.target.value)}
-                  placeholder="Nuevo precio mostrador"
-                  inputMode="numeric"
-                  style={{ width: 160, minHeight: 44, borderRadius: 10, border: `1px solid ${superficie.hairline}`, padding: "0 10px", fontSize: 14 }}
-                />
-                <input
-                  value={editMayorista}
-                  onChange={(e) => setEditMayorista(e.target.value)}
-                  placeholder="Nuevo precio mayorista"
-                  inputMode="numeric"
-                  style={{ width: 160, minHeight: 44, borderRadius: 10, border: `1px solid ${superficie.hairline}`, padding: "0 10px", fontSize: 14 }}
-                />
-                <button type="button" onClick={() => guardarPrecio(p.id)} style={{ minHeight: 44, padding: "0 12px", borderRadius: 10, border: "none", background: acentos.kilopan, color: "#fff", fontWeight: 700, fontSize: 13 }}>
-                  Guardar
-                </button>
+              <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                  <BotonCampoPrecio
+                    etiqueta="Nuevo precio mostrador"
+                    valor={editMostrador}
+                    activo={campoActivo === "edit-mostrador"}
+                    ancho={160}
+                    onTocar={() => setCampoActivo(campoActivo === "edit-mostrador" ? null : "edit-mostrador")}
+                  />
+                  <BotonCampoPrecio
+                    etiqueta="Nuevo precio mayorista"
+                    valor={editMayorista}
+                    activo={campoActivo === "edit-mayorista"}
+                    ancho={160}
+                    onTocar={() => setCampoActivo(campoActivo === "edit-mayorista" ? null : "edit-mayorista")}
+                  />
+                  <button type="button" onClick={() => guardarPrecio(p.id)} style={{ minHeight: 44, padding: "0 12px", borderRadius: 10, border: "none", background: acentos.kilopan, color: "#fff", fontWeight: 700, fontSize: 13 }}>
+                    Guardar
+                  </button>
+                </div>
+                {campoActivo === "edit-mostrador" || campoActivo === "edit-mayorista" ? (
+                  <TecladoDeCampo campo={campoActivo} valor={valorDeCampo(campoActivo)} onCambiar={fijarValorDeCampo} onListo={() => setCampoActivo(null)} />
+                ) : null}
               </div>
             ) : (
               <button
                 type="button"
-                onClick={() => { setEditandoId(p.id); setEditMostrador(""); setEditMayorista(""); }}
+                onClick={() => { setEditandoId(p.id); setEditMostrador(""); setEditMayorista(""); setCampoActivo(null); }}
                 style={{ marginTop: 10, minHeight: 44, padding: "0 12px", borderRadius: 10, border: `1px solid ${superficie.hairline}`, background: "#fff", fontWeight: 700, fontSize: 13 }}
               >
                 Cambiar precio
@@ -536,6 +666,55 @@ function SeccionCatalogo() {
       {mensaje ? <p style={{ color: semantico.ok, fontSize: 14 }} role="status">{mensaje}</p> : null}
       {error ? <p style={{ color: semantico.error, fontSize: 14 }} role="alert">{error}</p> : null}
     </section>
+  );
+}
+
+// AC-H0-13: botón que abre el teclado propio para un campo de plata — reemplaza el
+// <input inputMode="numeric"> que dejaba entrar el teclado chico del sistema.
+function BotonCampoPrecio({
+  etiqueta, valor, activo, onTocar, ancho = "100%",
+}: { etiqueta: string; valor: string; activo: boolean; onTocar: () => void; ancho?: number | string }) {
+  return (
+    <button
+      type="button"
+      onClick={onTocar}
+      aria-pressed={activo}
+      aria-label={`${etiqueta}: ${valor ? formatearClp(parsearClp(valor)) : "sin definir"}`}
+      style={{
+        width: ancho,
+        minHeight: 44,
+        borderRadius: 10,
+        border: activo ? "2px solid #C2410C" : `1px solid ${superficie.hairline}`,
+        padding: "0 10px",
+        fontSize: 14,
+        fontVariantNumeric: "tabular-nums",
+        textAlign: "left",
+        background: "#fff",
+        color: valor ? "#1B1712" : superficie.textoFaint,
+      }}
+    >
+      {valor ? formatearClp(parsearClp(valor)) : etiqueta}
+    </button>
+  );
+}
+
+function TecladoDeCampo({
+  campo, valor, onCambiar, onListo,
+}: { campo: CampoPrecio; valor: string; onCambiar: (campo: CampoPrecio, nuevo: string) => void; onListo: () => void }) {
+  return (
+    <div style={{ background: superficie.tarjeta, border: `1px solid ${superficie.hairline}`, borderRadius: 14, padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        <CifraGrande valor={valor || "0"} unidad="CLP" />
+        <button
+          type="button"
+          onClick={onListo}
+          style={{ minHeight: 44, padding: "0 16px", borderRadius: 10, border: `1px solid ${superficie.hairline}`, background: "#fff", fontWeight: 700, fontSize: 14 }}
+        >
+          Listo
+        </button>
+      </div>
+      <TecladoNumerico valor={valor} onCambiar={(nuevo) => onCambiar(campo, nuevo)} />
+    </div>
   );
 }
 

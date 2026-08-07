@@ -372,7 +372,7 @@ necesita migraciones nuevas**, así que el motor puede construirla casi entera s
 - [x] (P0) [AC-VEN-05] — apertura de turno con fondo inicial, dos toques — `specs/kilopan/03-venta-mostrador.md`
 - [x] (P1) [AC-ADM-07] — cerrar una ruta con odómetro desde `/arreglar` — `specs/kilopan/10-administracion.md`
 - [ ] (P1) [AC-ADM-08] — revocar equipo y desbloquear PIN desde `/arreglar` — `specs/kilopan/10-administracion.md`
-- [ ] (P1) [AC-H0-13] — teclado grande en todo campo de plata, incluido el arqueo — `specs/kilopan/09-plataforma-miga.md`
+- [x] (P1) [AC-H0-13] — teclado grande en todo campo de plata, incluido el arqueo — `specs/kilopan/09-plataforma-miga.md`
 
 **Fuera del alcance del motor** (`docs/PROMPT_CORRECTIVO.md` §7 — sesión supervisada):
 
