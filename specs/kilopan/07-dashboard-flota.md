@@ -59,9 +59,10 @@ repartidor muestra solo km y kg (§5).
       §3 módulo 7). Probado: MapaPodsDia.tsx componente client con react-leaflet, query
       de entregas cerradas de hoy en dashboard/page.tsx, test e2e valida que se pinten
       marcadores y popups interactivos [AC-DASH-05]
-- [ ] (P1) Pantalla de auditoría por usuario y dispositivo sobre la tabla `eventos`
-      (append-only). Sin construir: hoy los eventos se escriben y nadie puede leerlos
-      desde la app [AC-DASH-06]
+- [x] (P1) Pantalla de auditoría por usuario y dispositivo sobre la tabla `eventos`
+      (append-only). Construido: sección en `/dashboard` con filtros por usuario y
+      dispositivo, tabla de eventos últimos 500 (append-only, REVOKE UPDATE/DELETE en BD),
+      test e2e verifica encabezados y selectores [AC-DASH-06]
 - [ ] (P2) Cablear el POST de ambos CTA (`lead_eauto` y `lead_kiloruta`): las tablas y el
       consentimiento están probados, pero el botón no envía [AC-DASH-07]
 - [ ] (P2) Selector de sucursal en el dashboard, para que multisucursal sirva de algo

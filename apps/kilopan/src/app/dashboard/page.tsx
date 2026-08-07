@@ -7,6 +7,7 @@ import { Copyright } from "@kilopan/miga/componentes/index.tsx";
 import { formatearKg, formatearClp } from "@/comun/formato.ts";
 import { CtaFlota } from "./CtaFlota.tsx";
 import { MapaPodsDia } from "./MapaPodsDia.tsx";
+import { PantallaAuditoria } from "./PantallaAuditoria.tsx";
 import { Pantalla } from "../Pantalla.tsx";
 
 // Los agregados llegan como string desde Postgres (bigint/numeric no entran en un
@@ -74,6 +75,14 @@ export default async function DashboardPage() {
   );
   const mostrarFlota =
     Number(rutasCerradas.rows[0]?.n ?? 0) >= (minimoFlota.rows[0]?.valor ?? 20);
+
+  // AC-DASH-06: usuarios y dispositivos para los filtros de auditoría
+  const usuariosR = await db.query<{ id: string; nombre: string; rut: string }>(
+    `select id, nombre, rut from pan.usuarios where activo order by nombre`
+  );
+  const dispositivosR = await db.query<{ id: string; nombre: string }>(
+    `select id, nombre from pan.dispositivos where revocado_at is null order by nombre`
+  );
 
   const tckPct = hoy?.tck != null ? Math.round(Number(hoy.tck) * 100) : null;
   const colorTck = tckPct == null ? superficie.textoFaint : tckPct >= 95 ? semantico.ok : semantico.alerta;
@@ -154,6 +163,8 @@ export default async function DashboardPage() {
           con tus kilómetros reales, no con estimaciones.
         </p>
       )}
+
+      <PantallaAuditoria usuarios={usuariosR.rows} dispositivos={dispositivosR.rows} />
 
       <Copyright />
     </Pantalla>
