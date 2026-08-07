@@ -8,6 +8,7 @@ import { formatearKg, formatearClp } from "@/comun/formato.ts";
 import { CtaFlota } from "./CtaFlota.tsx";
 import { MapaPodsDia } from "./MapaPodsDiaCliente.tsx";
 import { PantallaAuditoria } from "./PantallaAuditoria.tsx";
+import { HistoricoConciliacion } from "./HistoricoConciliacion.tsx";
 import { Pantalla } from "../Pantalla.tsx";
 
 // Los agregados llegan como string desde Postgres (bigint/numeric no entran en un
@@ -154,6 +155,8 @@ export default async function DashboardPage() {
         <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 12px" }}>Entregas del día</h2>
         <MapaPodsDia pods={pods.rows} />
       </section>
+
+      <HistoricoConciliacion />
 
       {mostrarFlota ? (
         <TarjetaFlota />

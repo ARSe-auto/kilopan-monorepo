@@ -87,11 +87,18 @@ Lo que falta, verificado en el código, no supuesto:
       pantalla de `/dashboard` lista esas entregas para que la dueña las revise y
       decida qué hacer con cada una. Sin esto, R3/R4 no se cumplen aunque el evento
       exista — el dato está, nadie lo ve [AC-DASH-08]
-- [ ] (P1) **Histórico y exportación** de la conciliación diaria: hoy `/dashboard`
+- [x] (P1) **Histórico y exportación** de la conciliación diaria: hoy `/dashboard`
       (`AC-DASH-01`) solo muestra el día en curso desde `pan.conciliacion_diaria`. Sin
       rango de fechas ni exportar (CSV como mínimo), la dueña no puede reconstruir un
       faltante de una semana atrás sin pedirle el dato a alguien con acceso a la BD —
       exactamente lo que esta ola existe para evitar [AC-DASH-09]
+      — Construido: `GET /api/conciliacion-historico?desde&hasta` (admin only, valida
+      fechas) sobre `pan.conciliacion_diaria`, con `formato=csv` para exportar
+      (`content-disposition: attachment`). Sección `HistoricoConciliacion.tsx` en
+      `/dashboard` con selector de rango (por defecto últimos 7 días) y botón «Exportar
+      CSV». Probado con e2e (`dashboard-historico-conciliacion.spec.ts`): la sección
+      se ve con tabla o estado vacío, el CSV responde con encabezado y content-type
+      correctos, y la API rechaza con 403 a un rol no admin.
 
 ## Notas de implementación
 

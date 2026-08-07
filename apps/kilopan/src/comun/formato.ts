@@ -41,6 +41,16 @@ export function formatearFecha(fecha: Date): string {
   return `${dd}-${mm}-${aaaa}`;
 }
 
+/** Date -> "aaaa-mm-dd" (ISO), para el `value` de `<input type="date">` y para
+ *  parámetros de consulta — NUNCA para texto visible al usuario, que siempre pasa por
+ *  `formatearFecha()` (dd-mm-aaaa, AC-DASH-09). */
+export function formatearFechaISO(fecha: Date): string {
+  const aaaa = fecha.getFullYear();
+  const mm = String(fecha.getMonth() + 1).padStart(2, "0");
+  const dd = String(fecha.getDate()).padStart(2, "0");
+  return `${aaaa}-${mm}-${dd}`;
+}
+
 /** Date -> "dd-mm-aaaa hh:mm". Para el historial de pesajes: la fecha sola no basta
  *  cuando la pregunta es "¿a qué hora se pesó esto?" — el reloj de la panadería
  *  arranca antes del amanecer y varias bandejas del mismo producto pueden caer el
