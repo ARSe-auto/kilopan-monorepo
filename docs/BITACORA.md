@@ -1394,3 +1394,9 @@ idéntico a HEAD (mismo MD5, sin diff git), y la suite completa re-corrida a man
 cambio de contenido) coincidiendo con el momento del check — no un defecto de código
 ni del commit de AC-ADM-02, que queda tal cual. Sin cambios de código; solo se
 relanza el motor.
+
+## 2026-08-07 · Mantención: tanda e de stashes (55 archivados en total)
+
+Quinta tanda archivada (11, archivo-wip/e-*). Gate en 68/98 (69%). Cola supervisada
+en 11 ACs. Motor sano, sin más falsos negativos de atribución desde el fix del
+mediodía.
