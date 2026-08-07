@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { roundClp } from "./round_clp.ts";
-import { validaRut, calcularDv, formatearRut } from "./valida_rut.ts";
+import { validaRut, calcularDv, formatearRut, estadoRut } from "./valida_rut.ts";
 import { formatearKg, formatearClp, formatearFecha, parsearClp } from "./formato.ts";
 
 // --- round_clp (AC-H0 apoyo, invariante "dinero = CLP entero") ---
@@ -42,6 +42,24 @@ test("validaRut: rechaza formato imposible", () => {
 });
 test("formatearRut: produce la forma es-CL estándar", () => {
   assert.equal(formatearRut("123456785"), "12.345.678-5");
+});
+
+// AC-H0-09: estado de validación EN VIVO — mientras el cuerpo aún es corto no es un
+// error, es un RUT a medio escribir.
+test("estadoRut: vacío e incompleto no son 'invalido' (el usuario sigue escribiendo)", () => {
+  assert.equal(estadoRut(""), "vacio");
+  assert.equal(estadoRut("   "), "vacio");
+  assert.equal(estadoRut("12"), "incompleto");
+  assert.equal(estadoRut("123456"), "incompleto"); // cuerpo de 5, aún corto
+});
+test("estadoRut: 'valido' solo con dígito verificador correcto", () => {
+  assert.equal(estadoRut("12.345.678-5"), "valido");
+  assert.equal(estadoRut("123456785"), "valido");
+});
+test("estadoRut: 'invalido' con formato completo pero DV que no cuadra, o cuerpo imposible", () => {
+  assert.equal(estadoRut("12.345.678-9"), "invalido");
+  assert.equal(estadoRut("no-es-un-rut"), "invalido");
+  assert.equal(estadoRut("1234567890123-5"), "invalido"); // cuerpo > 8 dígitos
 });
 
 // --- formato es-CL ---

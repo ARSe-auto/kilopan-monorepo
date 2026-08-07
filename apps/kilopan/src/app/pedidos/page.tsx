@@ -4,7 +4,7 @@ import { BotonPrimario } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
 import { formatearClp, parsearClp } from "@/comun/formato.ts";
 import { kgTextoAGramos, pesoValido } from "@/comun/peso.ts";
-import { validaRut, formatearRut } from "@/comun/valida_rut.ts";
+import { validaRut, formatearRut, estadoRut } from "@/comun/valida_rut.ts";
 import { Pantalla } from "../Pantalla.tsx";
 import { SiguientePaso, type AccionSiguiente } from "../SiguientePaso.tsx";
 import { useSesion } from "../SesionCliente.tsx";
@@ -313,6 +313,13 @@ export default function PedidosPage() {
             <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>Nuevo cliente</p>
             <input value={nuevoRazonSocial} onChange={(e) => setNuevoRazonSocial(e.target.value)} placeholder="Razón social" style={campo} />
             <input value={nuevoRut} onChange={(e) => setNuevoRut(e.target.value)} placeholder="RUT (ej: 12.345.678-5)" style={campo} />
+            {/* AC-H0-09: RUT validado AL ESCRIBIR, no solo al enviar — "incompleto" y
+                "vacio" no son errores (el usuario sigue tecleando), solo "invalido" lo es. */}
+            {estadoRut(nuevoRut) === "invalido" ? (
+              <p role="alert" style={{ margin: 0, fontSize: 12, color: semantico.error }}>
+                RUT inválido
+              </p>
+            ) : null}
             <div style={{ display: "flex", gap: 8 }}>
               {(["reparto", "mostrador"] as const).map((c) => (
                 <button

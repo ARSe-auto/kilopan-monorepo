@@ -77,9 +77,25 @@ Ningún estado se comunica solo por color.
       15px (ningún peldaño), `TecladoNumerico` en 24px — se llevaron a `pie` (13),
       `cuerpo` (17) y `titulo` (22/600, cuyo peso ya coincidía) respectivamente, tomando
       el valor del token en vez de hardcodearlo de nuevo. Gate `--full` verde (12/0/0).
-- [ ] (P1) es-CL verificado por grep de gate: `12,450 kg` (coma, 3 decimales desde
+- [x] (P1) es-CL verificado por grep de gate: `12,450 kg` (coma, 3 decimales desde
       gramos), `$12.500` (entero, punto de miles), `dd-mm-aaaa`, RUT `12.345.678-5`
       validado al escribir. **Cero strings visibles en inglés** [AC-H0-09]
+      — **Cerrado 7-ago-2026.** `packages/metodo/scripts/verifica-es-cl.mjs`, corrido como
+      paso propio de `check.sh` (nunca solo con `--full`), recorre `apps/kilopan/src` y
+      `packages/miga/src` y falla si encuentra: gramos/1000 formateado a mano en vez de
+      `formatearKg()` (coma es-CL, no punto), `` `$${…}` `` en vez de `formatearClp()`,
+      fecha armada con `getMonth()+1` en vez de `formatearFecha()` (dd-mm-aaaa),
+      `toLocale*String()` sin locale `"es-CL"` explícito, cualquier palabra de una
+      denylist de inglés visible entre `>` y `<`, o un `<input>` de RUT sin la nueva
+      `estadoRut()` (validación EN VIVO, no solo al enviar) de `comun/valida_rut.ts`.
+      `verifica-es-cl.test.mjs` (`node --test`, propio paso del gate porque
+      `packages/metodo` no es paquete de workspace) ejerce `revisarArchivo()` directo y
+      mata los 6 mutantes de arriba, más el caso de exención (`comun/{formato,peso,
+      valida_rut}.ts` no se marcan a sí mismos). Al escribirlo apareció una violación
+      real: `MapaPodsDia.tsx` formateaba kg con `.toFixed(1)` (punto, en-US) — corregido a
+      `formatearKg()`. El campo de RUT de "Nuevo cliente" en `pedidos/page.tsx` ahora
+      muestra "RUT inválido" en vivo vía `estadoRut()`, cubierto por
+      `comun.test.ts`. Gate `--full` verde (14/0/0, e2e e invariantes de BD incluidos).
 - [ ] (P1) AA medible en el gate: **axe no está instalado ni como dependencia ni como
       test** — `check.sh` solo lo nombra en un comentario y en el mensaje de «saltado».
       Falta: contraste ≥4.5:1 automatizado, test que recorra el DOM buscando targets

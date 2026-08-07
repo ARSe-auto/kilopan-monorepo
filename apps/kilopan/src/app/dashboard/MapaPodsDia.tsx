@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { formatearKg } from "@/comun/formato.ts";
 
 interface Pod {
   id: string;
@@ -51,7 +52,9 @@ export function MapaPodsDia({ pods }: { pods: Pod[] }) {
             <div style={{ fontSize: 12 }}>
               <strong>{pod.receptor_nombre}</strong>
               <br />
-              {pod.gramos_entregados ? `${(pod.gramos_entregados / 1000).toFixed(1)} kg` : "Sin peso"}
+              {/* AC-H0-09: `.toFixed(1)` da "12.5 kg" (punto, formato en-US) — formatearKg
+                  usa coma decimal es-CL ("12,5 kg"), la misma función que el resto de la app. */}
+              {pod.gramos_entregados ? formatearKg(pod.gramos_entregados) : "Sin peso"}
               <br />
               <span style={{ color: "#999", fontSize: 11 }}>
                 {pod.foto_estado === "subida" ? "✓ Foto registrada" : "Foto pendiente"}

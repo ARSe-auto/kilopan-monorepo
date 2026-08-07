@@ -47,3 +47,26 @@ export function formatearRut(rut: string): string {
   const conMiles = partes.cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   return `${conMiles}-${partes.dv}`;
 }
+
+export type EstadoRut = "vacio" | "incompleto" | "invalido" | "valido";
+
+/** Estado de validación EN VIVO, para retroalimentación mientras el usuario todavía
+ *  está escribiendo (AC-H0-09: "RUT validado al escribir", no solo al enviar el
+ *  formulario). "vacio" e "incompleto" no son errores — el cuerpo todavía no llegó a
+ *  7 dígitos, así que el usuario simplemente no terminó de teclear; gritarle "RUT
+ *  inválido" en esa mitad de camino es peor que no decir nada. Solo "invalido" (formato
+ *  completo con dígito verificador que no cuadra) debe pintarse en rojo. */
+export function estadoRut(rut: string): EstadoRut {
+  const texto = rut.trim();
+  if (texto === "") return "vacio";
+  // No reusa normalizar(): ahí un cuerpo corto y uno con letras dan el mismo null, y acá
+  // hay que distinguirlos — "12" es a medio escribir, "no-es-un-rut" ya está mal.
+  const limpio = texto.replace(/\./g, "").replace(/\s/g, "").toUpperCase();
+  if (limpio.length < 2) return "incompleto";
+  const cuerpo = limpio.slice(0, -1).replace(/-/g, "");
+  const dv = limpio.slice(-1);
+  if (!/^\d+$/.test(cuerpo) || !/^[0-9K]$/.test(dv)) return "invalido";
+  if (cuerpo.length < 7) return "incompleto";
+  if (cuerpo.length > 8) return "invalido";
+  return calcularDv(cuerpo) === dv ? "valido" : "invalido";
+}

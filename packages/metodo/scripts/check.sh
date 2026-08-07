@@ -81,6 +81,14 @@ else
     node packages/metodo/scripts/verify-refs.mjs "--app=$APP"
 fi
 
+run_step "es-CL ($APP): kg/CLP/fecha sin bypass, RUT validado al escribir, cero inglés (AC-H0-09)" \
+  node packages/metodo/scripts/verifica-es-cl.mjs "--app=$APP"
+# packages/metodo no es paquete de workspace (no tiene package.json) — "unit (workspace)"
+# de más abajo no lo alcanza. Sin esto, verifica-es-cl.test.mjs quedaría escrito y nunca
+# ejecutado, que es precisamente el defecto de AC-H0-05 que este gate existe para evitar.
+run_step "unit (packages/metodo/scripts): mutantes de verifica-es-cl.mjs" \
+  node --test packages/metodo/scripts/verifica-es-cl.test.mjs
+
 run_step "lint (workspace)" pnpm -r --if-present run lint
 run_step "typecheck (workspace)" pnpm -r --if-present run typecheck
 run_step "unit (workspace)" pnpm -r --if-present run test
