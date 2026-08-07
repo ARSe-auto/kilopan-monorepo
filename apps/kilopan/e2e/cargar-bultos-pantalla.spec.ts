@@ -62,7 +62,7 @@ test("AC-DES-06: pantalla de carga — contador, captura manual, duplicado y ove
   const codigo3 = bultoData.bultos![2]!.codigo;
 
   // Navegar a la pantalla de carga
-  await page.goto(`/cargar?rutaId=${rutaId}`);
+  await page.goto(`/cargar?rutaId=${rutaId}`, { waitUntil: "networkidle" });
 
   // Verificar que el contador empieza en 0/3
   await expect(page.locator("text=/^0\\/3$/")).toBeVisible();
@@ -163,9 +163,14 @@ test("AC-DES-06: camino feliz — 100% cargado sin modal", async ({ page }) => {
   });
   const { id: pedidoId } = (await pedido.json()) as { id: string };
 
+  // AC-DES-06: usar repartidor2 para evitar conflicto con la ruta del test 1.
   const ruta = await page.request.post("/api/rutas", {
-    data: { repartidorId: datos.repartidorDespacho.id, pedidoIds: [pedidoId] },
+    data: { repartidorId: (datos as any).repartidorDespacho2.id, pedidoIds: [pedidoId] },
   });
+  if (!ruta.ok()) {
+    const err = await ruta.text();
+    throw new Error(`POST /api/rutas ${ruta.status()}: ${err}`);
+  }
   const { id: rutaId } = (await ruta.json()) as { id: string };
 
   const bultosList = await page.request.get(`/api/bultos?rutaId=${rutaId}`);
@@ -178,7 +183,7 @@ test("AC-DES-06: camino feliz — 100% cargado sin modal", async ({ page }) => {
   const codigo1 = bultoData.bultos![0]!.codigo;
   const codigo2 = bultoData.bultos![1]!.codigo;
 
-  await page.goto(`/cargar?rutaId=${rutaId}`);
+  await page.goto(`/cargar?rutaId=${rutaId}`, { waitUntil: "networkidle" });
 
   // Escanear ambos bultos
   for (const codigo of [codigo1, codigo2]) {

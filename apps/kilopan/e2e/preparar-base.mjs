@@ -82,6 +82,15 @@ const repartidorDespacho = await uno(
   [pinHashLuis]
 );
 
+// AC-DES-06: un TERCER repartidor para el segundo test de carga. El primer test deja a
+// Diego con una ruta en 'en_curso', así que el segundo test 409 si reutiliza el mismo.
+// RUT válido derivado de Luis (5.000.006-0 → 6.000.007-1, checksum válido).
+const repartidorDespacho2 = await uno(
+  `insert into pan.usuarios (nombre, rut, rol, pin_hash)
+   values ('Eva Entrega', '6.000.007-1', 'repartidor', $1) returning id`,
+  [pinHashLuis]
+);
+
 // El tramo de reparto necesita algo que repartir, y armarlo por la UI sería probar el
 // alta de pedidos dentro del test de entrega. Se siembra la antesala —cliente, pedido
 // confirmado y su DTE, que la BD exige para que la ruta salga (art. 55 DL 825)— y el
@@ -156,6 +165,8 @@ const datos = {
   pedido: { id: pedido.id, gramosPedidos: 20000 },
   // AC-DES-05: repartidor propio del test de carga, libre de la ruta del camino dorado.
   repartidorDespacho: { id: repartidorDespacho.id },
+  // AC-DES-06: segundo repartidor para el segundo test (el primero deja al primero con ruta activa).
+  repartidorDespacho2: { id: repartidorDespacho2.id },
 };
 writeFileSync(join(E2E, "datos-semilla.json"), JSON.stringify(datos, null, 2));
 await db.close();
