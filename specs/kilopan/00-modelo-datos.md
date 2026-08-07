@@ -36,14 +36,14 @@ El reloj del **servidor** (`recibido_at`) manda para negocio y métricas; el del
 - [x] (P0-SEC) Rol de aplicación de mínimo privilegio `pan_app`: la app nunca se conecta
       como dueño del esquema. Todo test de invariante hace `SET ROLE pan_app` antes de
       intentar violar algo [AC-SEC-08]
-- [ ] (P1-PERF) Índices en los filtros calientes: `pesajes.capturado_at`,
+- [x] (P1-PERF) Índices en los filtros calientes: `pesajes.capturado_at`,
       `destino+fecha`, `ventas.creado_at`, `pedidos(fecha,estado)`, `ruta_paradas`,
       `entregas.capturado_at`. Nota: índice sobre `creado_at::date` es imposible —
       castear timestamptz a date no es IMMUTABLE [AC-PERF-01]
-      — **Anexo D (auditoría 2-ago-2026): HUECO.** Los índices existen en las
-      migraciones, pero ningún test hace `EXPLAIN` ni mide que el planner realmente los
-      use — un índice creado sin verificación de uso no es una prueba de que cumple su
-      propósito.
+      — Cerrado con `db/test-invariantes.mjs` ("AC-PERF-01: EXPLAIN confirma..."):
+      siembra ~3000 filas por tabla, corre `ANALYZE` y lee el plan real de `EXPLAIN`
+      para cada uno de los 6 filtros calientes, confirmando que el planner elige el
+      índice (nunca `Seq Scan`) y no solo que el índice existe.
 
 ## Invariantes que el gate debe intentar violar
 

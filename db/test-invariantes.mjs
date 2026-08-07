@@ -2531,3 +2531,144 @@ test("AC-DES-04: un bulto es inmutable — no se re-escanea, no se descarga, no 
   );
   await db.close();
 });
+
+// =============================================================================
+// AC-PERF-01 — un índice creado y nunca usado por el planner no cumple su propósito
+// (Anexo D, auditoría 2-ago-2026: existían en las migraciones sin ningún EXPLAIN
+// que probara que Postgres realmente los elige). Cada caso siembra filas suficientes
+// para que la estadística post-ANALYZE haga que un filtro selectivo sea más barato
+// por índice que por Seq Scan, y lee el plan real con EXPLAIN.
+// =============================================================================
+
+async function planDe(db, sql, params = []) {
+  const r = await db.query(`explain ${sql}`, params);
+  return r.rows.map((f) => f["QUERY PLAN"]).join("\n");
+}
+
+function aseguraIndiceUsado(plan, indiceEsperadoRegex, etiqueta) {
+  assert.doesNotMatch(plan, /Seq Scan/, `${etiqueta}: el planner no debería recorrer la tabla completa:\n${plan}`);
+  assert.match(plan, indiceEsperadoRegex, `${etiqueta}: el planner debería usar el índice esperado:\n${plan}`);
+}
+
+test("AC-PERF-01: EXPLAIN confirma que el planner usa cada índice de los filtros calientes", async () => {
+  const db = await dbNueva();
+  const { usuarioId, dispositivoId } = await crearUsuarioYDispositivo(db, "12.345.678-5");
+  await crearSesion(db, usuarioId, dispositivoId);
+  const clienteId = await crearCliente(db);
+  const pedidoBase = await crearPedido(db, clienteId, usuarioId, dispositivoId);
+  const productoId = await crearProducto(db);
+
+  const N = 3000;
+
+  // pesajes: capturado_at solo, y destino+capturado_at combinados — dos índices
+  // distintos sobre la misma tabla (pesajes_capturado_at_idx, pesajes_destino_fecha_idx).
+  await db.query(
+    `insert into pan.pesajes (client_uuid, producto_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+     select gen_random_uuid(), $1, 100 + (random()*900)::int, 'mostrador', $2, $3,
+            now() - (random() * interval '200 days')
+     from generate_series(1,$4)`,
+    [productoId, usuarioId, dispositivoId, N]
+  );
+
+  // ventas: filtros por creado_at
+  await db.query(
+    `insert into pan.ventas (client_uuid, vendedor_id, dispositivo_id, medio_pago, total_clp, creado_at)
+     select gen_random_uuid(), $1, $2, 'efectivo', 1000 + (random()*9000)::int, now() - (random() * interval '200 days')
+     from generate_series(1,$3)`,
+    [usuarioId, dispositivoId, N]
+  );
+
+  // pedidos: filtros por fecha_entrega + estado
+  await db.query(
+    `insert into pan.pedidos (cliente_id, fecha_entrega, usuario_id, dispositivo_id)
+     select $1, current_date - (random()*200)::int, $2, $3
+     from generate_series(1,$4)`,
+    [clienteId, usuarioId, dispositivoId, N]
+  );
+
+  // entregas: filtros por capturado_at, todas contra el mismo pedido base
+  await db.query(
+    `insert into pan.entregas
+       (client_uuid, pedido_id, receptor_nombre, foto_sha256, lat, lng, precision_m,
+        gramos_entregados, usuario_id, dispositivo_id, capturado_at)
+     select gen_random_uuid(), $1, 'Receptor Prueba', md5(random()::text || g::text), -33.45, -70.66, 5,
+            1000, $2, $3, now() - (random() * interval '200 days')
+     from generate_series(1,$4) g`,
+    [pedidoBase, usuarioId, dispositivoId, N]
+  );
+
+  // ruta_paradas: filtro por ruta_id — una parada por ruta, todas contra el mismo
+  // pedido base (lo que importa para el índice es la cardinalidad de ruta_id).
+  // rutas_una_activa_por_repartidor_dia exige (repartidor_id, fecha) único entre las
+  // no cerradas: una fecha distinta por ruta evita chocar con esa restricción.
+  const rutas = await db.query(
+    `with nuevas as (
+       insert into pan.rutas (repartidor_id, fecha)
+       select $1, date '2000-01-01' + g from generate_series(1,$2) g returning id
+     )
+     insert into pan.ruta_paradas (ruta_id, pedido_id, orden)
+     select id, $3, 1 from nuevas
+     returning ruta_id`,
+    [usuarioId, N, pedidoBase]
+  );
+  const rutaMuestra = rutas.rows[Math.floor(rutas.rows.length / 2)].ruta_id;
+
+  await db.exec(
+    `analyze pan.pesajes; analyze pan.ventas; analyze pan.pedidos; analyze pan.entregas; analyze pan.ruta_paradas;`
+  );
+
+  aseguraIndiceUsado(
+    await planDe(
+      db,
+      `select id from pan.pesajes where capturado_at >= now() - interval '101 days' and capturado_at < now() - interval '100 days'`
+    ),
+    /pesajes_capturado_at_idx/,
+    "pesajes.capturado_at"
+  );
+
+  aseguraIndiceUsado(
+    await planDe(
+      db,
+      `select id from pan.pesajes
+        where destino = 'mostrador'
+          and capturado_at >= now() - interval '101 days' and capturado_at < now() - interval '100 days'`
+    ),
+    /pesajes_destino_fecha_idx/,
+    "pesajes (destino, capturado_at)"
+  );
+
+  aseguraIndiceUsado(
+    await planDe(
+      db,
+      `select id from pan.ventas where creado_at >= now() - interval '101 days' and creado_at < now() - interval '100 days'`
+    ),
+    /ventas_creado_at_idx/, // dos índices redundantes sobre la misma columna (0003 y 0007): cualquiera de los dos vale
+    "ventas.creado_at"
+  );
+
+  aseguraIndiceUsado(
+    await planDe(
+      db,
+      `select id from pan.pedidos where fecha_entrega = current_date - 100 and estado = 'borrador'`
+    ),
+    /pedidos_fecha_estado_idx/,
+    "pedidos (fecha_entrega, estado)"
+  );
+
+  aseguraIndiceUsado(
+    await planDe(db, `select id from pan.ruta_paradas where ruta_id = $1`, [rutaMuestra]),
+    /ruta_paradas_ruta_orden_idx/,
+    "ruta_paradas (ruta_id, orden)"
+  );
+
+  aseguraIndiceUsado(
+    await planDe(
+      db,
+      `select id from pan.entregas where capturado_at >= now() - interval '101 days' and capturado_at < now() - interval '100 days'`
+    ),
+    /entregas_capturado_at_idx/,
+    "entregas.capturado_at"
+  );
+
+  await db.close();
+});
