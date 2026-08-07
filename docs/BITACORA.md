@@ -1455,3 +1455,12 @@ relanza el motor.
 Quinta tanda archivada (11, archivo-wip/e-*). Gate en 68/98 (69%). Cola supervisada
 en 11 ACs. Motor sano, sin más falsos negativos de atribución desde el fix del
 mediodía.
+
+## 2026-08-07 · Segundo rojo transitorio (AC-ADM-09) — el check completo, no el código
+
+El gate independiente marcó ROJO sin línea de resumen final en ultimo-check.log (se
+cortó tras dos pasadas completas de invariantes 83/83 + e2e 64/64, todo verde, sin
+ningún ✘). Reproducción manual de check.sh --full: 14/14 OK, 0 fallos, 0 saltados,
+marcador verde-20260807-180830. El commit de AC-ADM-09 queda tal cual — segundo flake
+consecutivo del propio proceso de verificación (no del código), mismo patrón que el de
+esta tarde con 0019. Sin cambios de código.
