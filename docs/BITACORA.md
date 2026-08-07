@@ -1351,3 +1351,11 @@ noUncheckedIndexedAccess-safety en los dos specs nuevos (y en el fix de anoche):
 en vez de los helpers compartidos — reescrito con sembrarDispositivo+ingresar.
 (4) selectores ambiguos (getByText Usuario/Dispositivo matcheaba el h2) y tabla asertada
 sin contemplar el estado vacío legítimo de Miga. typecheck limpio; e2e 3/3 passed.
+
+## 2026-08-07 · PERF-05 rojo: selector fantasma y fixture request sin sesión
+
+Dos bugs de test en el commit del builder, pillados por el gate independiente:
+(1) selector div[style*="tarjeta"] que no existe y no contemplaba el estado vacío de
+Miga — reemplazado por contenido real o «Sin entregas para mostrar.»; (2) el test del
+endpoint usaba el fixture `request` pelado (sin cookies de sesión → 401) en vez de
+page.request. e2e 7/7 passed.
