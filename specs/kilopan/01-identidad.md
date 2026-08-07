@@ -36,17 +36,20 @@ cambio de operador por PIN — el equipo vive en un local, no se elige a mano.
       relevo atómico y auditado (evento `operador_relevado`). Bug real encontrado
       probando el login: el EXCLUDE impedía que el vendedor tomara la tablet que dejó el
       maestro y devolvía 500 [AC-ID-06]
-- [ ] (P1) Chip con el nombre del operador **siempre visible** en cada pantalla, como
-      exige §5 F5. Hoy el relevo funciona pero el chip no existe: quien pesa no puede
-      confirmar de un vistazo bajo qué identidad está escribiendo. Test: recorrer las
-      rutas de operación con sesión abierta y fallar si alguna no muestra el nombre
-      [AC-ID-07] — chip fijo en top-right de todas las pantallas, renderizado por
-      Server Component con la sesión actual
-      — **Anexo D (auditoría 2-ago-2026): HUECO.** El componente (`ChipOperador.tsx`)
-      existe y se usa, pero el test descrito en el propio AC ("recorrer las rutas...
-      fallar si alguna no muestra el nombre") no existe en ningún `*.spec.ts` — nadie
-      verifica que el chip aparezca en TODAS las pantallas, solo que el componente
-      compila.
+- [x] (P1) Chip con el nombre del operador **siempre visible** en cada pantalla, como
+      exige §5 F5. El relevo funciona y el chip confirma de un vistazo bajo qué
+      identidad se está escribiendo. Test: recorrer las rutas de operación con sesión
+      abierta y fallar si alguna no muestra el nombre [AC-ID-07] — chip fijo en
+      top-right de todas las pantallas, renderizado dentro de `Pantalla.tsx` con la
+      sesión actual
+      — **Cerrado 7-ago-2026.** El Anexo D (auditoría 2-ago-2026) marcó HUECO porque el
+      test descrito en el propio AC no existía. `e2e/identidad-chip-operador.spec.ts`
+      lo cierra: un test por rol (maestro, repartidor, vendedor, admin) que entra con
+      sesión real y recorre TODAS las rutas de `DESTINOS_POR_ROL` de ese rol —diez para
+      admin— más `/inicio` y `/mas`, comunes a los cuatro, y falla si el chip
+      (localizado por su atributo `title`, que `ChipOperador.tsx` fija al nombre
+      completo, para no confundirlo con el nombre que también aparece como texto suelto
+      en «Hoy» y en «Más») no está visible en alguna.
 
 ## Notas de implementación
 
