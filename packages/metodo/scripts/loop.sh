@@ -200,7 +200,12 @@ Reglas duras:
   verdad el 26-jul-2026 con AC-ID-07. La cita no es burocracia: es lo que deja ir del
   código al contrato y de vuelta.
 - Si el gate pasa, marcá el AC como [x] EN SU SPEC (specs/${APP}/) y en ${PLAN}, en el
-  MISMO commit, con una nota breve de qué se probó.
+  MISMO commit, con una nota breve de qué se probó. Marcar solo uno de los dos pone el
+  gate en ROJO (regla 5: la spec y el plan se espejan).
+- Si el TEXTO de tu AC exige un e2e, el [x] exige ESE e2e verde: corré
+  'npx playwright test <su spec.ts>' en PRIMER PLANO antes de marcar nada — el check
+  rápido NO corre e2e, y un [x] con e2e rojo lo pilla el gate independiente y pausa
+  todo el motor (pasó el 06-ago con AC-DES-06).
 - Un AC no se marca [x] si todavía falta parte de él. Si quedó a medias, partilo: cerrá
   lo hecho y dejá el resto como AC abierto nuevo en la spec. Un [x] cuyo texto dice
   'falta' pone el gate en rojo — y con razón.

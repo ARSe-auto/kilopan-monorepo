@@ -1287,3 +1287,14 @@ siguiente; murió con el trabajo listo y sin commit. Fixes: allowlist suma git s
 show*/apply* (drop/clear siguen denegados); el prompt enseña el sobre (comandos
 simples, sin cd/;/&&/heredoc) y prohíbe gate en background o terminar «esperando» —
 check.sh en primer plano y commit en el mismo turno.
+
+## 2026-08-06 · El gate independiente pilló un cierre prematuro (separación de poderes en acción)
+
+El builder cerró AC-DES-06 en la spec con sus DOS e2e nuevos ROJOS (GET
+/api/bultos?rutaId responde not-ok — desajuste de contrato con la API de DES-05) y sin
+espejar el plan. La regla 5 (instalada hoy) puso el gate en rojo por el desync, y el
+check --full del watchdog pilló los e2e — el quick del builder no los corre. El rojo de
+prueba-arnes era arrastre del mismo desync. Corrección supervisada: DES-06 reabierto
+con nota (el código EXISTE — commit 6100516 — faltan sus e2e verdes) y dos reglas
+nuevas en el prompt: spec+plan en el mismo commit o rojo, y un AC cuyo texto exige e2e
+se cierra SOLO con ese e2e corrido en primer plano.
