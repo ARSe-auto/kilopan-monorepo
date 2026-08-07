@@ -10,6 +10,45 @@ el aprendizaje contradice lo que creíamos. **Qué NO va:** el estado del plan (
 
 ---
 
+## 2026-08-07 · CI en rojo desde el 3-ago (15 corridas seguidas): CVE de nanoid sin override
+
+**Síntoma:** GitHub Actions en rojo casi sin excepción desde la corrida #33 (3cec1bd,
+3-ago 23:28) hasta la #48 (5f294d3, 7-ago) — 15 de 16 corridas fallidas, en commits de
+features totalmente distintas entre sí (zxing, eventos de admin, orden de pesajes,
+bandeja POD…), lo que ya apuntaba a una causa estructural y no a cada feature rompiendo
+algo. El motor autónomo seguía comiteando sin pausarse: no detectó nada raro.
+
+**Causa raíz:** `pnpm audit --audit-level=high` fallaba de verdad (exit 1) por
+nanoid@3.3.16 (GHSA-2v37-7h3g-55p8, alta severidad), transitiva vía
+`next>postcss>nanoid` — no una dependencia directa. Coincide en fecha con el commit
+3cec1bd, que ese mismo día clasificó los rojos SOLO-audit como «ajenos al AC» y dejó de
+sumarles strike a loop.sh (motivado por un CVE distinto, de brace-expansion, horas
+antes). Ese cambio era correcto para no atascar ACs sanos por una vulnerabilidad de
+terceros — pero tuvo un efecto secundario no anticipado: el motor dejó de sentir el
+dolor del rojo y nadie volvió a mirar `pnpm audit` durante 4 días. `check.sh --full`
+seguía devolviendo ROJO de verdad, tanto local como en CI — loop.sh solo toleraba el
+síntoma, nunca lo arregló.
+
+**Por qué no se vio antes:** el diagnóstico requería leer el resumen de la corrida en
+GitHub (`$GITHUB_STEP_SUMMARY`), y el Browser pane estuvo devolviendo
+«Policy check temporarily unavailable» de forma sostenida (timeouts incluso al abrir
+pestaña nueva). Se abandonó esa vía y se reprodujo el gate completo en local en su
+lugar — más lento de rodear pero, con el lock del builder libre, igual de confiable:
+`pnpm audit --audit-level=high` reprodujo el rojo inmediatamente, sin necesitar ni
+navegador ni token de GitHub.
+
+**Arreglo:** override `nanoid: ">=3.3.17"` en `pnpm-workspace.yaml` (mismo patrón que
+sharp/postcss/brace-expansion/js-yaml, todos ahí por el mismo motivo). `pnpm install`
+resolvió a nanoid@6.0.1 — engines `^22 || ^24 || >=26`, compatible: local y CI corren
+Node 24. Verificado en vivo: `pnpm audit --audit-level=high` de exit 1 a exit 0;
+`check.sh --full` 14/14 verde, 0 saltados (incluye e2e e invariantes de BD). Commit
+04b253c, push a main, corrida #49 confirmando verde.
+
+**Aprendizaje:** la excepción de loop.sh a los rojos solo-audit es correcta para no
+atascar ACs, pero le quitó al motor la única señal que hubiera forzado el override. Falta
+una segunda señal independiente de que «tolerado localmente» no es lo mismo que
+«arreglado» — hoy esa señal solo la trae una persona mirando CI de afuera.
+
 ## 2026-08-07 · AC-ADM-09 salteado: «quitar pedido de ruta» sí necesita migración, pese a la nota de Ola 2
 
 `IMPLEMENTATION_PLAN.md` decía «Ola 2 no necesita migraciones nuevas» — cierto para
