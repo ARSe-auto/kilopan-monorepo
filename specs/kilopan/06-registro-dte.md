@@ -33,9 +33,14 @@ eso el correlativo interno se llama `correlativo_pedido` y nunca «folio».
       (`apps/kilopan/src/app/api/facturar/route.ts:123`), pero ningún test
       (`db/test-invariantes.mjs`, `e2e/*.spec.ts`, `**/*.test.ts`) ejercita el escenario
       de doble facturación descrito — nadie lo ha corrido de verdad.
-- [ ] (P1) Escaneo del TED con zxing-js como mejora progresiva. La captura MANUAL —el
+- [x] (P1) Escaneo del TED con zxing-js como mejora progresiva. La captura MANUAL —el
       camino primario en iOS según §7— ya existe: panel «Registrar documento del SII» en
-      `/pedidos`. Falta solo el escaneo del PDF417 [AC-DTE-03]
+      `/pedidos`. El escaneo del PDF417 rellena tipo+folio+RUT+monto y guarda el `ted_xml`
+      crudo — probado: `parsearTed` (src/comun/ted.ts) con 6 tests unitarios (guía real,
+      sin receptor, texto no-TED, tipo fuera de dominio 33/39/52/61, sin monto, folio/monto
+      en cero); `EscanerTed.tsx` decodifica con `BrowserPDF417Reader` y degrada a manual
+      ante cualquier fallo (el botón solo aparece si hay cámara). Editar un campo a mano
+      descarta el `ted_xml` para que lo registrado coincida con lo timbrado [AC-DTE-03]
 
 ## Notas de implementación
 

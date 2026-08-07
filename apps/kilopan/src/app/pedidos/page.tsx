@@ -4,11 +4,13 @@ import { BotonPrimario } from "@kilopan/miga/componentes/index.tsx";
 import { superficie, semantico, acentos } from "@kilopan/miga/tokens.ts";
 import { formatearClp, parsearClp } from "@/comun/formato.ts";
 import { kgTextoAGramos, pesoValido } from "@/comun/peso.ts";
-import { validaRut } from "@/comun/valida_rut.ts";
+import { validaRut, formatearRut } from "@/comun/valida_rut.ts";
 import { Pantalla } from "../Pantalla.tsx";
 import { SiguientePaso, type AccionSiguiente } from "../SiguientePaso.tsx";
 import { useSesion } from "../SesionCliente.tsx";
 import { puedeEntrar } from "../navegacion.ts";
+import { EscanerTed } from "../EscanerTed.tsx";
+import type { TedLeido } from "@/comun/ted.ts";
 
 interface Pedido {
   id: string;
@@ -74,6 +76,20 @@ export default function PedidosPage() {
   const [dteFolio, setDteFolio] = useState("");
   const [dteRut, setDteRut] = useState("76.192.083-9");
   const [dteMonto, setDteMonto] = useState("");
+  // AC-DTE-03: si el timbre se llenó escaneando el PDF417, se guarda el XML crudo y el
+  // origen pasa a "ted_scan". Cualquier edición manual posterior de un campo descarta el
+  // XML: el `ted_xml` registrado tiene que coincidir con lo que finalmente se envía, o no
+  // sirve para re-verificar contra el CAF. Sin escaneo, el origen es "manual".
+  const [dteTedXml, setDteTedXml] = useState<string | null>(null);
+
+  function tomarTed(ted: TedLeido) {
+    setDteTipo(String(ted.tipoDte));
+    setDteFolio(String(ted.folioSii));
+    setDteRut(formatearRut(ted.rutEmisor));
+    setDteMonto(String(ted.montoTotal));
+    setDteTedXml(ted.tedXml);
+    setMensaje({ tipo: "ok", texto: `Timbre leído: documento ${ted.tipoDte} folio ${ted.folioSii}` });
+  }
 
   // Doble toque con las manos ocupadas: ninguno de los tres botones de abajo se
   // deshabilitaba mientras su petición estaba en vuelo. Para "Armar ruta y salir" es
@@ -200,7 +216,8 @@ export default function PedidosPage() {
           rutEmisor: dteRut,
           montoTotal: parsearClp(dteMonto || "0"),
           pedidoId: dtePedidoId,
-          origenCaptura: "manual",
+          origenCaptura: dteTedXml ? "ted_scan" : "manual",
+          tedXml: dteTedXml ?? undefined,
         }),
       });
       const cuerpo = await r.json();
@@ -209,6 +226,7 @@ export default function PedidosPage() {
       setDtePedidoId(null);
       setDteFolio("");
       setDteMonto("");
+      setDteTedXml(null);
       await cargar();
     } catch {
       setMensaje({ tipo: "error", texto: "Sin conexión con el servidor" });
@@ -374,15 +392,21 @@ export default function PedidosPage() {
           <p style={{ margin: 0, fontSize: 13, color: superficie.textoDim }}>
             KiloPan no emite documentos: registra el folio de uno que el SII ya emitió.
           </p>
-          <select value={dteTipo} onChange={(e) => setDteTipo(e.target.value)} style={campo}>
+          <EscanerTed onLeido={tomarTed} />
+          {dteTedXml ? (
+            <p style={{ margin: 0, fontSize: 13, color: semantico.ok }}>
+              ✓ Datos tomados del timbre escaneado — corrige a mano si hace falta.
+            </p>
+          ) : null}
+          <select value={dteTipo} onChange={(e) => { setDteTipo(e.target.value); setDteTedXml(null); }} style={campo}>
             <option value="52">Guía de despacho (52)</option>
             <option value="33">Factura electrónica (33)</option>
             <option value="39">Boleta electrónica (39)</option>
             <option value="61">Nota de crédito (61)</option>
           </select>
-          <input value={dteFolio} onChange={(e) => setDteFolio(e.target.value)} placeholder="Folio" style={campo} inputMode="numeric" />
-          <input value={dteRut} onChange={(e) => setDteRut(e.target.value)} placeholder="RUT emisor" style={campo} />
-          <input value={dteMonto} onChange={(e) => setDteMonto(e.target.value)} placeholder="Monto total" style={campo} inputMode="numeric" />
+          <input value={dteFolio} onChange={(e) => { setDteFolio(e.target.value); setDteTedXml(null); }} placeholder="Folio" style={campo} inputMode="numeric" />
+          <input value={dteRut} onChange={(e) => { setDteRut(e.target.value); setDteTedXml(null); }} placeholder="RUT emisor" style={campo} />
+          <input value={dteMonto} onChange={(e) => { setDteMonto(e.target.value); setDteTedXml(null); }} placeholder="Monto total" style={campo} inputMode="numeric" />
           <BotonPrimario onClick={registrarDte} disabled={registrandoDte}>
             {registrandoDte ? "Registrando…" : "Registrar documento"}
           </BotonPrimario>

@@ -13,6 +13,7 @@
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@zxing/library": "0.21.3",
     "next": "^15.4.0",
     "pg": "^8.22.0",
     "react": "^19.1.0",
