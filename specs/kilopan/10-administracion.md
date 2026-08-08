@@ -145,8 +145,28 @@ original: se registra encima (append-only), como ya hace el POD con `supersede_i
       `POST /api/rutas`, la cierra por HTTP, confirma en el GET admin que `estado`,
       `km_inicio` y `km_fin` quedaron guardados, y que un vendedor rebota 403 sin llegar a
       tocar la ruta.
-- [ ] (P1) Revocar un equipo enrolado y desbloquear un PIN desde `/arreglar`, cada uno con
+- [x] (P1) Revocar un equipo enrolado y desbloquear un PIN desde `/arreglar`, cada uno con
       motivo escrito y su evento [AC-ADM-08]
+      — **Cerrado 08-ago-2026 (sesión supervisada, rescate del tag
+      `archivo-wip/e-00-motor-wip-20260807-174758`):** el motor escribió los dos endpoints
+      y sus dos e2e completos y los perdió al agotar presupuesto antes de comitear; el
+      rescate los corrió de verdad (4/4 verdes, más el resto de la suite tocada).
+      **Revocar** (`POST /api/dispositivos/revocar`, solo admin con 403 del SERVIDOR):
+      escribe `revocado_at` —que el login ya respetaba (0001) sin que nada lo escribiera
+      desde la app—, corta EN EL ACTO la sesión de operador viva del equipo en la misma
+      transacción (revocar sin eso es teatro mientras quien tiene el equipo en la mano
+      sigue operando), motivo no vacío validado en el servidor (400), inexistente 404,
+      doble-tap 409, y evento `equipo_revocado` (AC-ADM-10, ya declarado en el catálogo
+      esperando esta ruta). Probado en `e2e/revocar-equipo.spec.ts` con un equipo
+      DESECHABLE enrolado en el propio test: la sesión viva pasa a 401 al instante y el
+      login posterior rebota.
+      **Desbloquear PIN** (`POST /api/usuarios/desbloquear-pin`, solo admin): borra TODOS
+      los bloqueos vigentes de la persona (el admin no sabe en qué equipo falló — dejar
+      un bloqueo vivo en otro equipo sería un desbloqueo a medias), evento
+      `pin_desbloqueado` nuevo en el catálogo. Probado en `e2e/desbloquear-pin.spec.ts`
+      disparando el bloqueo REAL de AC-SEC-01 (5 PIN errados → 423, y el PIN correcto
+      sigue en 423), desbloqueo con motivo → el login entra ANTES de los 15 minutos,
+      doble-tap 409, vendedor 403.
 - [ ] (P1) Quitar un pedido de una ruta desde `/arreglar`, con motivo escrito y su evento
       [AC-ADM-09]
 - [x] (P0) `pan.eventos` pasa a ser obligatoria en TODA operación de plata y de
@@ -164,10 +184,12 @@ original: se registra encima (append-only), como ya hace el POD con `supersede_i
       dejan una auditoría que no se puede consultar. Por eso `ventas/anular` y
       `cierre-caja/corregir`, que ya escribían su evento con SQL a mano, se migraron al
       helper — el SQL era correcto, el nombre suelto en un string no.
-      **Dos tipos quedan declarados SIN ruta y no son deuda oculta:** `equipo_revocado`
-      (`AC-ADM-08` abierto) y `dte_anulado` no tienen endpoint todavía, así que no hay
-      dónde escribirlos; están en el catálogo para que quien construya esos ACs los
-      encuentre y no invente otro nombre.
+      **Dos tipos quedaron declarados SIN ruta y no eran deuda oculta:** `equipo_revocado`
+      (`AC-ADM-08` abierto entonces) y `dte_anulado` no tenían endpoint todavía, así que
+      no había dónde escribirlos; quedaron en el catálogo para que quien construyera esos
+      ACs los encontrara y no inventara otro nombre. (08-ago-2026: `equipo_revocado` ya
+      tiene su ruta — `dispositivos/revocar`, AC-ADM-08 cerrado; sigue sin ruta solo
+      `dte_anulado`.)
       Evidencia: `comun/evento.test.ts`, 14 casos. Prueba el helper de verdad (los seis
       valores y su ORDEN — un payload en la posición del usuario dejaría la auditoría
       diciendo que la venta la hizo un JSON), un caso por operación, y **el cierre de

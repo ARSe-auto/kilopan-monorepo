@@ -381,7 +381,7 @@ necesita migraciones nuevas**, así que el motor puede construirla casi entera s
 - [x] (P0) [AC-POD-06] — bandeja de pendientes persistente con el porqué de cada rechazo — `specs/kilopan/05-entrega-pod.md`
 - [x] (P0) [AC-VEN-05] — apertura de turno con fondo inicial, dos toques — `specs/kilopan/03-venta-mostrador.md`
 - [x] (P1) [AC-ADM-07] — cerrar una ruta con odómetro desde `/arreglar` — `specs/kilopan/10-administracion.md`
-- [ ] (P1) [AC-ADM-08] — revocar equipo y desbloquear PIN desde `/arreglar` — `specs/kilopan/10-administracion.md`
+- [x] (P1) [AC-ADM-08] — cerrado 08-ago (barrido supervisado, rescate de `archivo-wip/e-00`): `POST /api/dispositivos/revocar` (mata la sesión viva en la misma transacción) + `POST /api/usuarios/desbloquear-pin` (borra todos los bloqueos vigentes), 4 e2e verdes con bloqueo real de AC-SEC-01 — `specs/kilopan/10-administracion.md`
 - [x] (P1) [AC-H0-13] — teclado grande en todo campo de plata, incluido el arqueo — `specs/kilopan/09-plataforma-miga.md`
 
 **Fuera del alcance del motor** (`docs/PROMPT_CORRECTIVO.md` §7 — sesión supervisada):

@@ -53,6 +53,8 @@ const OPERACIONES: { tipo: string; ruta: string }[] = [
   { tipo: "cierre_caja_corregido", ruta: "cierre-caja/corregir/route.ts" },
   { tipo: "precio_cambiado", ruta: "productos/route.ts" },
   { tipo: "pin_reseteado", ruta: "usuarios/route.ts" },
+  { tipo: "pin_desbloqueado", ruta: "usuarios/desbloquear-pin/route.ts" }, // AC-ADM-08
+  { tipo: "equipo_revocado", ruta: "dispositivos/revocar/route.ts" }, // AC-ADM-08
   { tipo: "merma_registrada", ruta: "pesajes/route.ts" },
   { tipo: "merma_resuelta", ruta: "pesajes/resolver-merma/route.ts" },
   { tipo: "ruta_cerrada", ruta: "rutas/route.ts" },
@@ -63,7 +65,6 @@ const OPERACIONES: { tipo: string; ruta: string }[] = [
 // no hay dónde escribir el evento. El tipo ya está en el catálogo para que quien construya
 // esos ACs lo encuentre y no invente otro nombre.
 const SIN_RUTA_TODAVIA = [
-  "equipo_revocado", // AC-ADM-08 abierto: no existe endpoint de revocación
   "dte_anulado", // no existe endpoint de anulación de DTE
 ];
 

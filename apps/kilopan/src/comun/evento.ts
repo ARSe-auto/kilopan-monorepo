@@ -19,6 +19,7 @@ export type TipoEvento =
   | "cierre_caja_corregido"
   | "precio_cambiado"
   | "pin_reseteado"
+  | "pin_desbloqueado"
   | "equipo_revocado"
   | "merma_registrada"
   | "merma_resuelta"
