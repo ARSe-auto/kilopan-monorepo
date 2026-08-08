@@ -59,6 +59,7 @@ const OPERACIONES: { tipo: string; ruta: string }[] = [
   { tipo: "merma_resuelta", ruta: "pesajes/resolver-merma/route.ts" },
   { tipo: "ruta_cerrada", ruta: "rutas/route.ts" },
   { tipo: "ruta_salida_con_bultos_pendientes", ruta: "rutas/salir/route.ts" },
+  { tipo: "parada_quitada", ruta: "rutas/paradas/quitar/route.ts" }, // AC-ADM-09
 ];
 
 // Declaradas fuera y con su porqué, no olvidadas: su OPERACIÓN todavía no existe, así que

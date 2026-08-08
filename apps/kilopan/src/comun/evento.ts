@@ -25,7 +25,8 @@ export type TipoEvento =
   | "merma_resuelta"
   | "dte_anulado"
   | "ruta_cerrada"
-  | "ruta_salida_con_bultos_pendientes";
+  | "ruta_salida_con_bultos_pendientes"
+  | "parada_quitada";
 
 /** Lo mínimo que necesita un evento para ser auditable: quién y en qué equipo. */
 export interface QuienYDonde {

@@ -20,6 +20,10 @@ export async function GET(request: NextRequest) {
        join pan.clientes c on c.id = p.cliente_id
        left join pan.pedido_lineas pl on pl.pedido_id = p.id
       where r.repartidor_id = $1 and r.fecha = current_date and r.estado in ('en_curso','cargando')
+        -- AC-ADM-09: una parada quitada por el admin desde /arreglar no es una parada
+        -- de la ruta del repartidor — no es pendiente, entregada ni rechazada, es una
+        -- que ya no corresponde ver.
+        and rp.estado <> 'quitada'
       group by rp.id, rp.pedido_id, rp.orden, rp.estado, c.razon_social, c.direccion, c.contacto_nombre, c.lat, c.lng
       order by rp.orden`,
     [sesion.usuarioId]

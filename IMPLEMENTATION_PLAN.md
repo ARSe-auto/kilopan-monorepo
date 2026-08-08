@@ -389,16 +389,7 @@ necesita migraciones nuevas**, así que el motor puede construirla casi entera s
 - [ ] (P0) [AC-ADM-11] — reparación de datos históricos con informe FIRMADO por la dueña — `specs/kilopan/10-administracion.md`
       El motor no lo toca: son datos reales con evidencia y exige la firma de una persona.
       Anotado en `packages/metodo/panel/acs-atascados.txt` para que no tape a los demás.
-- [ ] (P1) [AC-ADM-09] — quitar un pedido de una ruta desde `/arreglar` — `specs/kilopan/10-administracion.md`
-      Corrige la nota de la línea 362 («Ola 2 no necesita migraciones nuevas»): ESTE ítem sí
-      la necesita. `pan.ruta_paradas` solo tiene grant `insert, update` (0004) — nunca
-      `delete` — y su CHECK de `estado` es cerrado a `pendiente/entregada/rechazada`. Sacar un
-      pedido de la ruta exige que el repartidor deje de verlo en `/api/rutas/mi-ruta` (que
-      lista TODAS las paradas sin filtrar por estado), así que reusar `rechazada` mentiría
-      —esa es la reservada para un rechazo real del cliente en el POD— y violaría la regla
-      transversal de la sección (append-only, como `supersede_id`). Hace falta un estado
-      nuevo (o equivalente) en el CHECK: migración de sesión supervisada, no del motor.
-      Anotado en `packages/metodo/panel/acs-atascados.txt`.
+- [x] (P1) [AC-ADM-09] — cerrado 08-ago (barrido supervisado — la migración que el motor tenía vedada): `0025_quitar_pedido_de_ruta.sql` (estado `quitada` en el CHECK + `trg_ruta_exige_dte` partiendo de 0019, probada 83/83 contra pglite local), `POST /api/rutas/paradas/quitar` con motivo+evento, filtros en `mi-ruta` y `api/sync`, 2 e2e verdes — `specs/kilopan/10-administracion.md`
 
 ## Ola 3 — «Que la dueña vea» (`docs/PROMPT_CORRECTIVO.md` §3, planificada 3-ago-2026)
 

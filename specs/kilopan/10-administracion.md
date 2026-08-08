@@ -167,8 +167,32 @@ original: se registra encima (append-only), como ya hace el POD con `supersede_i
       disparando el bloqueo REAL de AC-SEC-01 (5 PIN errados → 423, y el PIN correcto
       sigue en 423), desbloqueo con motivo → el login entra ANTES de los 15 minutos,
       doble-tap 409, vendedor 403.
-- [ ] (P1) Quitar un pedido de una ruta desde `/arreglar`, con motivo escrito y su evento
+- [x] (P1) Quitar un pedido de una ruta desde `/arreglar`, con motivo escrito y su evento
       [AC-ADM-09]
+      — **Cerrado 08-ago-2026 (sesión supervisada — la migración que el motor tenía
+      vedada).** Migración `0025_quitar_pedido_de_ruta.sql`: `pan.ruta_paradas.estado`
+      gana `'quitada'` en el mismo CHECK. Ni `'rechazada'` (reservada para un rechazo
+      REAL del cliente en el POD, catálogo cerrado de AC-POD-05) ni un DELETE (la tabla
+      nunca tuvo ese grant, 0004) — append-only, cada estado cuenta su propia historia.
+      La migración también actualiza `trg_ruta_exige_dte` (partiendo de la definición
+      VIGENTE de 0019, no de la de 0004 — sobreescribirla habría revivido el hueco de la
+      nota de crédito): una parada quitada sin guía ya no bloquea «Salir a ruta», porque
+      ya no viaja pan con ella. Probada contra pglite LOCAL: `db/test-invariantes.mjs`
+      83/83 (la primera versión SÍ revivió el hueco de la NC y el propio test P0-5 la
+      pilló — se corrigió antes de commitear nada).
+      **Endpoint** `POST /api/rutas/paradas/quitar` (solo admin, 403 del servidor):
+      identifica por (rutaId, pedidoId) —no hay GET que exponga `ruta_paradas.id`, mismo
+      patrón que AC-ADM-06—, `for update` contra el doble-tap (409 si ya no está
+      pendiente), motivo no vacío (400), 404 si el par no es una parada, y evento
+      `parada_quitada` en la misma transacción. El pedido vuelve a `'confirmado'` (mismo
+      destino que una entrega fallida en `api/sync`) para poder rearmarse en otra ruta.
+      **Los dos consumidores que habrían mentido sin su filtro:** `GET /api/rutas/mi-ruta`
+      ya no lista paradas quitadas (listaba TODAS sin filtrar por estado), y `POST
+      /api/sync` rechaza el POD encolado offline de una parada quitada (el sync nunca
+      pasa por el SELECT de mi-ruta — sin esto, un POD tardío la cerraba igual).
+      Probado en `e2e/quitar-pedido-ruta.spec.ts` (2 verdes): quitar con motivo, doble-tap
+      409, el repartidor REAL (logueado por equipo desechable) deja de verla en mi-ruta,
+      y el pedido se rearma en una segunda ruta con paradas=1.
 - [x] (P0) `pan.eventos` pasa a ser obligatoria en TODA operación de plata y de
       configuración —venta, anulación, apertura y cierre de turno, cambio de precio,
       reseteo de PIN, revocación de equipo, merma, anulación de DTE, cierre de ruta— con un

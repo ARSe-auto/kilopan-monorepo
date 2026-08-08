@@ -96,12 +96,17 @@ export async function POST(request: NextRequest) {
       // Sin esto, cualquier sesión repartidor cierra el POD de CUALQUIER pedido del
       // sistema con solo adivinar el id — la conciliación del día queda falseada y
       // una parada ajena se marca entregada sin que su repartidor real se entere.
+      // AC-ADM-09: una parada que el admin quitó desde /arreglar no es una parada de
+      // la ruta activa del repartidor — sin este filtro, un POD encolado offline ANTES
+      // de que se quitara podría llegar tarde y cerrarla igual, evadiendo por completo
+      // el filtro de /api/rutas/mi-ruta (el sync nunca pasa por ese SELECT).
       const parada = await db.query<{ ok: boolean; gramos_pedidos: string }>(
         `select true as ok, coalesce(sum(pl.gramos_pedidos), 0)::text as gramos_pedidos
            from pan.ruta_paradas rp
            join pan.rutas r on r.id = rp.ruta_id
            join pan.pedido_lineas pl on pl.pedido_id = rp.pedido_id
           where rp.pedido_id = $1 and r.repartidor_id = $2 and r.estado in ('en_curso','cargando')
+            and rp.estado <> 'quitada'
           group by rp.id`,
         [e.pedidoId, sesion.usuarioId]
       );
