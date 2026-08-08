@@ -63,3 +63,24 @@ export function aEnteroEnRango(valor: unknown, min: number, max: number = MAX_IN
   if (n === null || n < min || n > max) return null;
   return n;
 }
+
+// AC-SEC-09: auditoría de límites de negocio validados SOLO en el cliente. Tres huecos
+// reales, ninguno con respaldo de servidor: `pesoValido()` (comun/peso.ts) solo gatea el
+// botón de /vender y /pedidos —el mismo comentario del archivo dice "no valida de
+// verdad"— pero /api/ventas y /api/pedidos no repetían el techo; nada topaba la
+// cantidad de líneas de un carro o pedido; y "motivo" de anulación/corrección/override
+// solo exigía no-vacío, sin techo de largo, en tres rutas distintas.
+
+/** Techo de gramos por línea de venta o pedido — el mismo 100 kg que exige el CHECK de
+ *  `pan.pesajes` y `pan.venta_lineas`, y el mismo `MAX_GRAMOS` que gatea el botón en el
+ *  cliente (comun/peso.ts). `pan.pedido_lineas` no tiene ese CHECK en la BD todavía. */
+export const MAX_GRAMOS_LINEA = 100_000;
+
+/** Techo de líneas por venta o pedido. Sin este límite un POST directo (sesión válida,
+ *  sin pasar por la UI) podía mandar miles de líneas en una sola transacción. */
+export const MAX_LINEAS_POR_DOCUMENTO = 200;
+
+/** Techo de largo para los motivos de auditoría de anulación de venta, corrección de
+ *  cierre de caja y salida a ruta con bultos pendientes: las tres columnas son `text`
+ *  sin CHECK de largo, y las tres rutas solo exigían "no vacío". */
+export const MAX_LARGO_MOTIVO = 500;

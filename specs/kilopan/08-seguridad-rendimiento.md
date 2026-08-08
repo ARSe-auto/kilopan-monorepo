@@ -85,7 +85,7 @@ puntaje mezcla SEO y PWA con lo que de verdad decide si la pantalla abre.
 
 ## Ola 3/4 — cierres transversales (`docs/PROMPT_CORRECTIVO.md` §3)
 
-- [ ] (P1) **Auditoría de límites de negocio validados SOLO en el cliente**, movidos al
+- [x] (P1) **Auditoría de límites de negocio validados SOLO en el cliente**, movidos al
       servidor y a la base. El PIN ya está cubierto (`PIN_VALIDO.test(pin)` en
       `api/usuarios/route.ts`) — no es este el hueco. El resto no se auditó nunca de
       forma sistemática: cantidad máxima de líneas en el carrito, gramos por línea de
@@ -93,7 +93,30 @@ puntaje mezcla SEO y PWA con lo que de verdad decide si la pantalla abre.
       React. Mismo procedimiento que el Anexo D: por cada límite encontrado sin
       respaldo de servidor, o se agrega la validación (con test que mande el valor
       fuera de rango por HTTP, no por la UI) o se declara explícitamente por qué no
-      hace falta [AC-SEC-09]
+      corresponde [AC-SEC-09]
+      — **Cerrado 7-ago-2026 (sesión motor).** Auditoría exhaustiva sobre `apps/kilopan/
+      src` (grep de `.slice(0,` en `.tsx`, y de cada límite numérico contra su ruta API):
+      **pesajes (`/api/pesajes`) ya estaba bien: cliente (`pesoValido`), servidor
+      (`gramos between 1 and 100000` explícito) y BD (`CHECK` de `0002`) alineados —
+      declarado sin arreglo.** Tres huecos reales, cerrados con validación de servidor
+      y test que ataca la ruta por HTTP, no por la UI (`e2e/seguridad-limites-negocio.
+      spec.ts`, 7 tests): (1) `pesoValido()` (comun/peso.ts, techo 100.000 g) gateaba el
+      botón de `/vender` y `/pedidos` pero `/api/ventas` y `/api/pedidos` no repetían el
+      techo — un POST directo lo saltaba; `/api/ventas` ya tenía el `CHECK` de BD como
+      red de respaldo (rechazaba con 400 genérico vía `AC-SEC-10`), `/api/pedidos` NO
+      tenía ningún respaldo, ni de servidor ni de BD — el hueco real. (2) Ninguna capa
+      topaba la cantidad de líneas de una venta o un pedido — un POST directo podía
+      mandar miles de líneas en una transacción. (3) `anulada_motivo` (anular venta),
+      `correccion_motivo` (corregir cierre) y `bultos_override_motivo` (salir con
+      bultos pendientes) son columnas `text` sin `CHECK` de largo, y las tres rutas
+      solo exigían "no vacío". `MAX_GRAMOS_LINEA` (100.000 g), `MAX_LINEAS_POR_
+      DOCUMENTO` (200) y `MAX_LARGO_MOTIVO` (500) nacen en `comun/validacion.ts` y se
+      aplican en `api/ventas`, `api/pedidos`, `api/ventas/anular`, `api/cierre-caja/
+      corregir` y `api/rutas/salir`. Sin migración: el motor no toca `db/migraciones/`
+      (regla dura de AGENTS.md) — un `CHECK (gramos_pedidos between 1 and 100000)` en
+      `pan.pedido_lineas` y topes de largo en las tres columnas `text` quedan como
+      trabajo de sesión supervisada, no bloquean este AC porque su propio texto solo
+      exige "agregar la validación" de servidor con test por HTTP.
 - [x] (P0) **500 crudos convertidos en 400 validados.** Contados en el código, no
       supuestos: 18 apariciones de `status: 500`/`status(500)` en `apps/kilopan/src/
       app/api/*` (`turnos`, `pedidos`, `ventas`, `ventas/anular`, `dispositivos/

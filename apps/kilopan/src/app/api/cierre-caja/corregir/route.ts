@@ -3,7 +3,7 @@ import { clasificarError } from "@/comun/error-http.ts";
 import { obtenerDb } from "@/comun/db.ts";
 import { registrarEvento } from "@/comun/evento.ts";
 import { exigirSesion } from "@/identidad/sesion.ts";
-import { esUuid, aEnteroEnRango } from "@/comun/validacion.ts";
+import { esUuid, aEnteroEnRango, MAX_LARGO_MOTIVO } from "@/comun/validacion.ts";
 
 // AC-ADM-06 (Ola 2 «Marcha atrás», specs/kilopan/10-administracion.md): corregir un
 // cierre de turno desde /arreglar. SOLO admin, y el rechazo lo decide el SERVIDOR (misma
@@ -40,6 +40,14 @@ export async function POST(request: NextRequest) {
   const motivo = typeof cuerpo.motivo === "string" ? cuerpo.motivo.trim() : "";
   if (!motivo) {
     return NextResponse.json({ error: "Escribe el motivo de la corrección" }, { status: 400 });
+  }
+  // AC-SEC-09: el CHECK cierres_caja_correccion_exige_motivo (0023) exige no-vacío,
+  // pero ninguna capa topaba el largo — `correccion_motivo` es `text` sin límite.
+  if (motivo.length > MAX_LARGO_MOTIVO) {
+    return NextResponse.json(
+      { error: `El motivo no puede superar los ${MAX_LARGO_MOTIVO} caracteres` },
+      { status: 400 }
+    );
   }
 
   const db = await obtenerDb();

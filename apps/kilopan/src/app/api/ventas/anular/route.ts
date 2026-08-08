@@ -3,7 +3,7 @@ import { clasificarError } from "@/comun/error-http.ts";
 import { obtenerDb } from "@/comun/db.ts";
 import { registrarEvento } from "@/comun/evento.ts";
 import { exigirSesion } from "@/identidad/sesion.ts";
-import { esUuid } from "@/comun/validacion.ts";
+import { esUuid, MAX_LARGO_MOTIVO } from "@/comun/validacion.ts";
 
 // AC-ADM-05 (Ola 2 «Marcha atrás», specs/kilopan/10-administracion.md): anular una venta
 // desde /arreglar. SOLO admin —toda la superficie de /arreglar lo es (§5)— y el rechazo lo
@@ -35,6 +35,14 @@ export async function POST(request: NextRequest) {
   const motivo = typeof cuerpo.motivo === "string" ? cuerpo.motivo.trim() : "";
   if (!motivo) {
     return NextResponse.json({ error: "Escribe el motivo de la anulación" }, { status: 400 });
+  }
+  // AC-SEC-09: el CHECK ventas_anulada_exige_motivo (0020) exige no-vacío, pero ninguna
+  // capa topaba el largo — `anulada_motivo` es `text` sin límite.
+  if (motivo.length > MAX_LARGO_MOTIVO) {
+    return NextResponse.json(
+      { error: `El motivo no puede superar los ${MAX_LARGO_MOTIVO} caracteres` },
+      { status: 400 }
+    );
   }
 
   const db = await obtenerDb();

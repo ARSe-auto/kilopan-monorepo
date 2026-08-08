@@ -3,7 +3,7 @@ import { clasificarError } from "@/comun/error-http.ts";
 import { obtenerDb } from "@/comun/db.ts";
 import { registrarEvento } from "@/comun/evento.ts";
 import { exigirRol } from "@/identidad/sesion.ts";
-import { esUuid } from "@/comun/validacion.ts";
+import { esUuid, MAX_LARGO_MOTIVO } from "@/comun/validacion.ts";
 
 // AC-DES-06: «Salir a ruta» desde la pantalla de carga F3. Valida:
 // 1. Todos los pedidos tienen DTE asociado (trigger de 0024 en BD)
@@ -22,6 +22,15 @@ export async function POST(request: NextRequest) {
   const { rutaId, motivo } = cuerpo;
   if (!rutaId || !esUuid(rutaId)) {
     return NextResponse.json({ error: "Ruta inválida" }, { status: 400 });
+  }
+  // AC-SEC-09: `bultos_override_motivo` es `text` sin CHECK de largo, y el único guard
+  // que existía era "no vacío" —y solo cuando hay bultos pendientes—. Se topa el largo
+  // acá, ANTES de tocar la BD, para que aplique venga o no motivo y haya o no pendientes.
+  if (typeof motivo === "string" && motivo.trim().length > MAX_LARGO_MOTIVO) {
+    return NextResponse.json(
+      { error: `El motivo no puede superar los ${MAX_LARGO_MOTIVO} caracteres` },
+      { status: 400 }
+    );
   }
 
   const db = await obtenerDb();

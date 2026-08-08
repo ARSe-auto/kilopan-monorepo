@@ -4,7 +4,7 @@ import { obtenerDb } from "@/comun/db.ts";
 import { registrarEvento } from "@/comun/evento.ts";
 import { exigirRol, exigirSesion } from "@/identidad/sesion.ts";
 import { roundClp } from "@/comun/round_clp.ts";
-import { esUuid, normalizarUuid } from "@/comun/validacion.ts";
+import { esUuid, normalizarUuid, MAX_GRAMOS_LINEA, MAX_LINEAS_POR_DOCUMENTO } from "@/comun/validacion.ts";
 
 interface LineaEntrada {
   productoId: string;
@@ -38,6 +38,14 @@ export async function POST(request: NextRequest) {
   }
   if (!medioPago || !lineas?.length) {
     return NextResponse.json({ error: "Faltan campos" }, { status: 400 });
+  }
+  // AC-SEC-09: sin este techo, un POST directo podía mandar miles de líneas en una
+  // sola venta — nada lo topaba, ni cliente ni servidor ni BD.
+  if (lineas.length > MAX_LINEAS_POR_DOCUMENTO) {
+    return NextResponse.json(
+      { error: `Una venta admite hasta ${MAX_LINEAS_POR_DOCUMENTO} líneas` },
+      { status: 400 }
+    );
   }
   // AC-PAG-02 (decisión #5): el fiado del mesón — el vecino de toda la vida al que se
   // le anota — usa el MISMO cliente y el mismo saldo que el fiado mayorista. Cero
@@ -101,7 +109,16 @@ export async function POST(request: NextRequest) {
   // acumulador existe para tapar, reabierto por esa asimetría (red-team, ALTA).
   const gramosPorProducto = new Map<string, number>();
   for (const linea of lineas) {
-    if (!esUuid(linea.productoId) || !Number.isInteger(linea.gramos) || linea.gramos < 1) {
+    // AC-SEC-09: pesoValido() (comun/peso.ts) gatea el botón "Agregar" de /vender con
+    // este mismo techo, pero un POST directo lo saltaba — el CHECK de
+    // `pan.venta_lineas` lo frenaba igual, pero como error genérico de BD (23514) en
+    // vez de este mensaje explícito.
+    if (
+      !esUuid(linea.productoId) ||
+      !Number.isInteger(linea.gramos) ||
+      linea.gramos < 1 ||
+      linea.gramos > MAX_GRAMOS_LINEA
+    ) {
       return NextResponse.json({ error: "Línea de venta inválida" }, { status: 400 });
     }
     const clave = normalizarUuid(linea.productoId);

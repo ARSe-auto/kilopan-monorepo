@@ -400,7 +400,11 @@ sesión — no se duplicó.
 - [ ] (P0) [AC-DASH-08] — cola de entregas rechazadas/parciales cableada a una pantalla del dashboard — `specs/kilopan/07-dashboard-flota.md`
 - [x] (P0) [AC-SEC-10] — 500 crudos convertidos en 400 validados, 18 apariciones contadas en `apps/kilopan/src/app/api/` — `specs/kilopan/08-seguridad-rendimiento.md`
 - [x] (P1) [AC-DASH-09] — histórico con rango de fechas y exportación de la conciliación diaria — `specs/kilopan/07-dashboard-flota.md`
-- [ ] (P1) [AC-SEC-09] — auditoría de límites de negocio validados solo en el cliente, movidos a servidor+BD — `specs/kilopan/08-seguridad-rendimiento.md`
+- [x] (P1) [AC-SEC-09] — auditoría de límites de negocio validados solo en el cliente, movidos a servidor+BD — `specs/kilopan/08-seguridad-rendimiento.md`
+      — Cerrado 7-ago-2026: 3 huecos reales (techo de gramos en `/api/pedidos`, techo de
+      líneas en venta/pedido, techo de largo de 3 motivos de auditoría) cerrados con
+      validación de servidor + 7 tests HTTP (`e2e/seguridad-limites-negocio.spec.ts`);
+      pesajes ya estaba bien y quedó declarado sin arreglo. Detalle en la spec.
 
 ## Ola 4 — Robustez y accesibilidad (`docs/PROMPT_CORRECTIVO.md` §3, planificada 3-ago-2026)
 

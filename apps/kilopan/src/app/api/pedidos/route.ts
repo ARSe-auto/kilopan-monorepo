@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { clasificarError } from "@/comun/error-http.ts";
 import { obtenerDb } from "@/comun/db.ts";
 import { exigirRol } from "@/identidad/sesion.ts";
-import { esUuid } from "@/comun/validacion.ts";
+import { esUuid, MAX_GRAMOS_LINEA, MAX_LINEAS_POR_DOCUMENTO } from "@/comun/validacion.ts";
 import { roundClp } from "@/comun/round_clp.ts";
 
 interface LineaEntrada {
@@ -47,6 +47,14 @@ export async function POST(request: NextRequest) {
   if (!clienteId || !fechaEntrega || !lineas?.length) {
     return NextResponse.json({ error: "Faltan campos" }, { status: 400 });
   }
+  // AC-SEC-09: sin este techo, un POST directo podía mandar miles de líneas en un
+  // solo pedido — nada lo topaba, ni cliente ni servidor ni BD.
+  if (lineas.length > MAX_LINEAS_POR_DOCUMENTO) {
+    return NextResponse.json(
+      { error: `Un pedido admite hasta ${MAX_LINEAS_POR_DOCUMENTO} líneas` },
+      { status: 400 }
+    );
+  }
   // AC-DES-05: los bultos que F3 escanea nacen ACÁ, al cerrar el pedido — es el único
   // momento en que pan.generar_bultos() los acepta (exige 'confirmado'/'pesado'; una vez
   // la ruta parte el pedido pasa a 'en_ruta' y ya es tarde). Opcional y aditivo: un
@@ -75,7 +83,16 @@ export async function POST(request: NextRequest) {
     const resultado = await db.transaccion(async (tx) => {
       // Validar TODAS las líneas antes de escribir nada.
       for (const linea of lineas) {
-        if (!esUuid(linea.productoId) || !Number.isInteger(linea.gramosPedidos) || linea.gramosPedidos < 1) {
+        // AC-SEC-09: pesoValido() (comun/peso.ts) gatea el botón de /pedidos con este
+        // mismo techo, pero el propio archivo dice que eso "no valida de verdad" — un
+        // POST directo con sesión de admin pasaba cualquier gramaje hasta el techo de
+        // int4 sin que nada lo topara.
+        if (
+          !esUuid(linea.productoId) ||
+          !Number.isInteger(linea.gramosPedidos) ||
+          linea.gramosPedidos < 1 ||
+          linea.gramosPedidos > MAX_GRAMOS_LINEA
+        ) {
           throw Object.assign(new Error("linea_invalida"), { publico: "Línea de pedido inválida" });
         }
       }
