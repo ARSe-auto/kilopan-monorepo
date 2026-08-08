@@ -1510,3 +1510,22 @@ requiere su autorización explícita antes de tocar Railway.
 
 Gate `check.sh --full`: 14/14 OK, 0 fallos, 0 saltados. verde-20260808-122729.
 Avance: 76/98 ACs cerrados (78%).
+
+## 2026-08-08 · Desplegadas las 9 migraciones pendientes a producción (Railway)
+
+Por orden explícita del dueño. Diligencia previa: leídas las 8 migraciones completas
+(0017-0024), sin DROP/TRUNCATE/DELETE destructivo (solo 2 DROP INDEX, recreados en la
+misma transacción). Respaldo lógico de las 27 tablas pan.* ANTES de migrar (9 ventas,
+5 clientes, 6 usuarios — coincide exacto con el censo de la mañana). Aplicado con
+`db/migrar.mjs` (el runner oficial: una transacción atómica por archivo, aplica+
+registra o revierte completo) contra `DATABASE_PUBLIC_URL` pasada por variable de
+entorno del proceso — CERO cambios a `.env.local` (el dev local sigue intacto,
+apuntando donde siempre apuntó). Resultado: 9 migraciones nuevas aplicadas (0016 tenía
+otro nombre registrado; 25/25 en total), 0 errores. Verificación post-migración
+READ-ONLY: los 7 conteos de tablas clave idénticos al respaldo (nada se perdió),
+`pan.bultos` y `pan.turnos` existen, `ventas.saldado_at`/`anulada_at` existen,
+`saldo_cliente` responde $6.000 (mismo total de antes — confirma que no había fiado de
+mesón oculto). Credenciales descartadas al terminar; respaldo JSON conservado en
+`/private/tmp/.../scratchpad/respaldo-kilopan-prod-pre-9migraciones-08ago.json`
+(fuera del repo). Pendiente NO ejecutado: `railway up` (redeploy del código de la
+app) — el dueño pidió las migraciones, no el redeploy; son decisiones separadas.
