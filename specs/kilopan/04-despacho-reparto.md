@@ -13,16 +13,28 @@ retención del vehículo. Sin override, ni en BD ni en UI (§7).
 
 - [x] (P1) Bloqueo real de «Salir a ruta» sin DTE asociado: trigger en BD, sin override.
       Probado en ambos sentidos — sin guía rebota, con guía sale [AC-DES-02]
-- [ ] (P1) F2 Armar pedido: `/pedidos` con alta de cliente, pedido con precio de la
+- [x] (P1) F2 Armar pedido: `/pedidos` con alta de cliente, pedido con precio de la
       lista del cliente, registro de DTE y «Armar ruta y salir». El bloqueo del art. 55
       se ve en pantalla (pedidos sin documento en rojo) y está probado por HTTP: 409 sin
       guía, 200 con guía [AC-DES-03]
-      — **Anexo D (auditoría 2-ago-2026): HUECO.** El único e2e que ejercita «Armar ruta
-      y salir» de punta a punta es `camino-dorado.spec.ts:257` (test 8), el mismo test
-      que `AC-POD-04` ya declara INESTABLE (pasó, agotó 30 s, volvió a pasar sobre el
-      mismo commit). El invariante de BD del art. 55 sí está sólido
+      — **Anexo D (auditoría 2-ago-2026): HUECO.** El único e2e que ejercitaba «Armar ruta
+      y salir» de punta a punta era `camino-dorado.spec.ts` test 8, el mismo test
+      que `AC-POD-04` declaraba INESTABLE. El invariante de BD del art. 55 sí estaba sólido
       (`db/test-invariantes.mjs`, etiquetado `AC-DES-02`), pero la afirmación específica
-      de este AC —el flujo de pantalla completo— depende del mismo test flaky.
+      de este AC —el flujo de pantalla completo— dependía del mismo test flaky.
+      — **Cerrado 08-ago-2026 (sesión supervisada, rescate del tag
+      `archivo-wip/d-05-motor-wip-20260807-100610`):** evidencia PROPIA y REPETIBLE en
+      `e2e/despacho-armar-ruta.spec.ts` (2 tests, verdes), independiente del test 8 del
+      camino dorado. (1) Pantalla: alta de cliente desde `/pedidos`, pedido de 10 kg cuyo
+      total $16.500 sale de la LISTA del cliente (mayorista $1.650/kg — no un número
+      tecleado), el aviso rojo «Sin documento asociado» del art. 55 visible al nacer y
+      apagado al registrar la guía desde la propia pantalla (monto por el teclado GRANDE
+      propio de AC-H0-13, no un input del sistema). (2) HTTP: «Salir a ruta» rebota 409
+      con mensaje del art. 55 sin guía, y sale 200 `en_curso` con la guía registrada —
+      con repartidor PROPIO del test (`repartidorDespacho4` en `preparar-base.mjs`,
+      libre de `rutas_una_activa_por_repartidor_dia`). El motor escribió el test y lo
+      perdió al agotar presupuesto antes de comitear; el rescate lo adaptó al contrato
+      vigente de la pantalla y lo corrió de verdad.
 - [x] (P1) Capa de BD de la carga (partido 06-ago-2026: F3 completo no cabía en el
       sobre de una iteración — API → AC-DES-05, pantalla → AC-DES-06, escáner →
       AC-DES-07): `pan.bultos` con código determinista `P<correlativo>-<n>`, nacimiento

@@ -97,6 +97,18 @@ const repartidorDespacho3 = await uno(
    values ('Fabián Flete', '22.222.222-2', 'repartidor', $1) returning id`,
   [pinHashLuis]
 );
+// AC-DES-03: repartidor propio del e2e independiente de «Armar ruta y salir». El caso 200
+// (salir CON guía) deja la ruta en 'en_curso', que `rutas_una_activa_por_repartidor_dia`
+// (0011) cuenta como activa: sin un repartidor libre de los demás, chocaría con Diego/Eva/
+// Fabián o con Luis del camino dorado y pasaría según el orden. RUT con DV correcto.
+// Nombre «Gustavo Guía», NO «Gonzalo Guía»: ese nombre ya lo usa repartidorPod05 (más
+// abajo) — dos repartidores con el mismo nombre visible es una trampa para cualquier
+// selector futuro por label en vez de por id.
+const repartidorDespacho4 = await uno(
+  `insert into pan.usuarios (nombre, rut, rol, pin_hash)
+   values ('Gustavo Guía', '33.333.333-3', 'repartidor', $1) returning id`,
+  [pinHashLuis]
+);
 
 // El tramo de reparto necesita algo que repartir, y armarlo por la UI sería probar el
 // alta de pedidos dentro del test de entrega. Se siembra la antesala —cliente, pedido
@@ -249,6 +261,9 @@ const datos = {
   // distintos entre sí y de Diego, porque cada uno deja una ruta activa del día.
   repartidorDespacho2: { id: repartidorDespacho2.id },
   repartidorDespacho3: { id: repartidorDespacho3.id },
+  // AC-DES-03: repartidor propio del e2e de «Armar ruta y salir» (caso 200), libre de
+  // toda otra ruta del día.
+  repartidorDespacho4: { id: repartidorDespacho4.id },
   // AC-POD-05: repartidor con ruta sembrada para pod-rechazo-parcial.spec.ts. `paradas`
   // lleva el pedido_id de cada una en orden — el HTTP test necesita el de la parada 3.
   repartidorPod05: {
