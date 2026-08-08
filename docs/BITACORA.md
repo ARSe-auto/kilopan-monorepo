@@ -1477,3 +1477,36 @@ Queda un cuarto: tras esas correcciones la merma se crea pero /resolver-mermas n
 lista. La pantalla y el endpoint están commiteados y sanos (111dee9); el AC se reabre
 con el diagnóstico completo en su spec y entra a la cola supervisada para no bloquear
 al motor, que retoma con los ~26 ACs elegibles restantes.
+
+## 2026-08-08 · Dos rojos cerrados con causa raíz + báscula descartada + censo de producción
+
+**AC-DASH-07:** el e2e usaba el fixture `request` pelado (sin cookies de sesión → 401)
+en vez de `page.request`. 5/5 verdes.
+
+**AC-MERM-02 (causa raíz real, no el 4to defecto que quedó pendiente esta mañana):**
+`GET /api/pesajes` no traía `estado_merma` en el SELECT — la pantalla filtraba contra
+`undefined` y nunca listaba nada. Una columna. Pantalla, endpoint y trigger estaban
+sanos desde el principio. 4/4 verdes.
+
+**Báscula Bluetooth (decisión del dueño): descartada.** `apps/kilopan/src/comun/
+bascula.ts` eliminado (77 líneas, cero referencias). Motivo verificado: Safari no
+implementa Web Bluetooth en ningún iOS — el equipo real del cliente (iPad/iPhone)
+nunca habría podido usarlo — y las básculas chilenas (Toledo/CAS/Torrey) usan
+protocolo serie propietario, no GATT. AC-PES-05 y AC-PES-09 cerrados en spec+plan;
+nota ancla en `apps/kilopan/src/app/pesar/page.tsx` para que verify-refs --estricto
+tenga evidencia real en código, no solo en la spec.
+
+**Censo de producción (autorizado por el dueño — "me pasas la clave", la obtuve yo
+mismo vía `railway variables --service Postgres` con el CLI ya autenticado; consulta
+en transacción READ ONLY, fuera del repo, credenciales descartadas al terminar):**
+hallazgo mayor — producción tiene aplicadas SOLO migraciones 0001-0016 (última:
+26-jul), el repo local va en la 0024. El fix que motivó el censo (0017, saldo de
+fiado del mesón) NUNCA se desplegó. Datos actuales en producción: 6 usuarios, 9
+ventas, 5 clientes, $6.000 CLP de deuda — la semilla de demo del 25/26-jul, NO
+operación real de Indupan. AC-ADM-11 queda sin fundamento por ahora: no hay plata
+real en riesgo. Pendiente de decisión del dueño (no ejecutado): desplegar las 8
+migraciones atrasadas a producción — es una acción hacia un sistema en producción y
+requiere su autorización explícita antes de tocar Railway.
+
+Gate `check.sh --full`: 14/14 OK, 0 fallos, 0 saltados. verde-20260808-122729.
+Avance: 76/98 ACs cerrados (78%).

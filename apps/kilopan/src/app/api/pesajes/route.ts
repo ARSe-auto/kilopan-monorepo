@@ -13,6 +13,10 @@ type FilaHistorial = Record<string, unknown> & {
   gramos: number;
   destino: string;
   motivo_merma: string | null;
+  // 08-ago-2026: faltaba en el SELECT. /resolver-mermas filtra por este campo
+  // (destino==='merma' && estado_merma==='pendiente') y con undefined la lista
+  // salía siempre vacía — la merma se creaba bien, pero nadie la veía nunca.
+  estado_merma: string | null;
   foto_sha256: string | null;
   foto_estado: string | null;
   recibido_at: string;
@@ -55,7 +59,7 @@ export async function GET(request: NextRequest) {
 
   const db = await obtenerDb();
   const r = await db.query<FilaHistorial>(
-    `select pe.id, pe.gramos, pe.destino, pe.motivo_merma, pe.foto_sha256, pe.foto_estado,
+    `select pe.id, pe.gramos, pe.destino, pe.motivo_merma, pe.estado_merma, pe.foto_sha256, pe.foto_estado,
             pe.recibido_at, pr.nombre as producto_nombre, u.nombre as maestro_nombre
        from pan.pesajes pe
        join pan.productos pr on pr.id = pe.producto_id

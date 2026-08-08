@@ -30,12 +30,21 @@ F1 Pesar ≤4 toques; repetir producto: 2 toques.
       exactamente la clase de bug que ya pasó una vez con esta misma AC (nota de
       implementación abajo): un mutante que borre el bloque `exigeFoto` de `route.ts`
       no haría fallar ningún test existente.
-- [ ] (P2) Báscula conectada opcional (decisión #1, nivel 2): Web Bluetooth contra el
+- [x] (P2) Báscula conectada opcional (decisión #1, nivel 2): Web Bluetooth contra el
       perfil GATT Weight Scale, con degradación a manual. En iPhone este camino nunca se
       ofrece (Web Bluetooth no existe en Safari) [AC-PES-05]
-      — **Anexo D (auditoría 2-ago-2026): HUECO.** `bascula.ts` no tiene ningún test, y
-      el propio `AC-PES-09` (abierto) ya declara que esto "está escrito pero no
-      verificado contra hardware" — sin contradicción posible.
+      — **Descartado 08-ago-2026 (decisión del dueño, no construido).** El equipo real
+      del cliente (iPad/iPhone) NO soporta Web Bluetooth — Safari no lo implementa en
+      ningún iOS — así que esta vía nunca habría estado disponible en producción,
+      independiente de que funcionara. Se suma que las básculas comunes en panaderías
+      chilenas (Toledo, CAS, Torrey) usan protocolo serie propietario, no el perfil GATT
+      estándar contra el que estaba escrito: aun en un equipo Android habría requerido
+      reescritura para hablar con hardware real. `apps/kilopan/src/comun/bascula.ts`
+      (77 líneas, cero referencias en el árbol, cero tests) fue ELIMINADO — no quedaba
+      como código muerto simulando una función construida. La captura manual con
+      teclado propio (`AC-PES-02`) sigue siendo el único camino, tal como ya lo era en
+      los hechos. Reabrir solo si aparece un caso de negocio con tablets Android y una
+      báscula que hable GATT estándar.
 - [ ] (P2) Cola con reintento automático (decisión #4) en pesaje: respaldada en
       sessionStorage, reintento cada 15 s y al volver `online`, con chip «Sin conexión —
       N por subir». Un rechazo 4xx **no** se encola (es una respuesta que el operador
@@ -66,25 +75,26 @@ F1 Pesar ≤4 toques; repetir producto: 2 toques.
       — **Anexo D (auditoría 2-ago-2026): HUECO.** La propia evidencia citada es una
       lectura de archivo ("Verificado en pesar/page.tsx"), no un test automatizado —
       ningún unit ni e2e ejercita el estado `confirmar_outlier`.
-- [ ] (P2) Validar el camino GATT contra una báscula real antes de darlo por bueno. Las
+- [x] (P2) Validar el camino GATT contra una báscula real antes de darlo por bueno. Las
       marcas comunes en panaderías chilenas (Toledo, CAS, Torrey) suelen usar serie
       propietario, no GATT — `AC-PES-05` está escrito pero no verificado contra hardware
       [AC-PES-09]
-- [ ] (P2) UI de resolución de mermas al día siguiente: hoy la máquina de estados existe
+      — **Descartado 08-ago-2026, junto con AC-PES-05** (ver su nota): sin objeto validar
+      contra hardware un camino que el equipo real del cliente no puede ni ofrecer.
+- [x] (P2) UI de resolución de mermas al día siguiente: hoy la máquina de estados existe
       y la TCK la respeta, pero nadie puede mover una merma a `recuperada_con_venta`
       desde pantalla [AC-MERM-02]
-      — **Reabierto 08-ago-2026 (supervisado): el cierre fue prematuro.** La pantalla y el
-      endpoint EXISTEN y están commiteados (111dee9); lo que falla es su e2e. Tres
-      defectos del test ya corregidos en sesión supervisada: (a) `datos.productos` es
-      `Record<nombre, uuid>` en la semilla, no un array — `productos[0].id` era undefined;
-      (b) faltaba `fotoSha256` (la semilla trae `pesaje_foto_obligatoria=1`, el servidor
-      rechaza 400); (c) mermar exige stock previo del producto (Anexo B #1: «no se puede
-      mermar más de lo que hay», daba 409 con disponible 0 g) — se agregó
-      `pesarAMostrador()` antes de cada merma. **Queda por resolver:** tras esas tres, la
-      merma se crea pero `/resolver-mermas` no la lista (getByText del producto no
-      aparece) — falta diagnosticar si es el filtro de la pantalla, el `estado_merma` que
-      deja el trigger, o el rol del maestro en `autorizado`. Cerrar SOLO con los 4 e2e
-      verdes.
+      — **Cerrado de verdad 08-ago-2026 (supervisado).** El cierre del 7-ago fue
+      prematuro: pantalla y endpoint existían (111dee9) pero el e2e fallaba. Cuatro
+      defectos encontrados y corregidos: (a) `datos.productos` es `Record<nombre, uuid>`
+      en la semilla, no un array — `productos[0].id` era undefined; (b) faltaba
+      `fotoSha256` (la semilla trae `pesaje_foto_obligatoria=1`, el servidor rechaza
+      400); (c) mermar exige stock previo del producto (Anexo B #1: «no se puede mermar
+      más de lo que hay») — se agregó `pesarAMostrador()` antes de cada merma; (d) causa
+      raíz real: el `SELECT` de `GET /api/pesajes` no traía `estado_merma`, así que
+      `/resolver-mermas` filtraba `p.estado_merma === "pendiente"` contra `undefined` y
+      nunca listaba nada — la pantalla y el trigger estaban sanos, faltaba una columna en
+      la consulta. 4 e2e verdes (`e2e/resolver-mermas.spec.ts`).
       — Descripción del trabajo commiteado: pantalla `/resolver-mermas` filtra `destino=merma`
       `estado_merma='pendiente'` de `/api/pesajes`, cada fila ofrece botones para cambiar
       a 'confirmada_perdida' o 'recuperada_con_venta' via POST `/api/pesajes/resolver-merma`;

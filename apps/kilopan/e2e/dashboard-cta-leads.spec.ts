@@ -25,7 +25,7 @@ const datos = JSON.parse(
 // IP propia: cada spec aislada del cupo de limitador de intentos
 test.use({ extraHTTPHeaders: { "x-forwarded-for": "203.0.113.51" } });
 
-test("Dashboard: CTA lead_eauto funciona [AC-DASH-07]", async ({ page, request }) => {
+test("Dashboard: CTA lead_eauto funciona [AC-DASH-07]", async ({ page }) => {
   // Siembra el dispositivo y entra como admin al dashboard
   await sembrarDispositivo(page, datos.dispositivo);
   await ingresar(page, datos.usuarios.admin!.rut, datos.pin);
@@ -37,7 +37,7 @@ test("Dashboard: CTA lead_eauto funciona [AC-DASH-07]", async ({ page, request }
   if (repartidorId) {
     // Crea 21 rutas cerradas para que la tarjeta sea visible
     for (let i = 0; i < 21; i++) {
-      await request.post("/api/datos-prueba/crear-ruta-cerrada", {
+      await page.request.post("/api/datos-prueba/crear-ruta-cerrada", {
         data: { repartidorId },
       }).catch(() => {}); // Ignorar si el endpoint no existe
     }
@@ -73,7 +73,7 @@ test("Dashboard: CTA lead_eauto funciona [AC-DASH-07]", async ({ page, request }
   } else {
     // La tarjeta no es visible (menos de 20 rutas), pero el componente existe.
     // Renderiza el componente dinámicamente para probar vía request.
-    const respuesta = await request.post("/api/leads", {
+    const respuesta = await page.request.post("/api/leads", {
       data: {
         tipo: "eauto",
         contacto: "+56987654321",
@@ -90,14 +90,14 @@ test("Dashboard: CTA lead_eauto funciona [AC-DASH-07]", async ({ page, request }
   }
 });
 
-test("Dashboard: CTA lead_kiloruta funciona [AC-DASH-07]", async ({ page, request }) => {
+test("Dashboard: CTA lead_kiloruta funciona [AC-DASH-07]", async ({ page }) => {
   // Siembra el dispositivo y entra como admin al dashboard
   await sembrarDispositivo(page, datos.dispositivo);
   await ingresar(page, datos.usuarios.admin!.rut, datos.pin);
   await page.goto("/dashboard");
 
   // Prueba directa via request (sin necesidad de que la tarjeta sea visible)
-  const respuesta = await request.post("/api/leads", {
+  const respuesta = await page.request.post("/api/leads", {
     data: {
       tipo: "kiloruta",
       contacto: "dueno@panaderia.cl",
@@ -113,13 +113,13 @@ test("Dashboard: CTA lead_kiloruta funciona [AC-DASH-07]", async ({ page, reques
   expect(cuerpo.ok).toBe(true);
 });
 
-test("Dashboard: CTA rechaza sin consentimiento [AC-DASH-07]", async ({ page, request }) => {
+test("Dashboard: CTA rechaza sin consentimiento [AC-DASH-07]", async ({ page }) => {
   // Siembra el dispositivo y entra como admin al dashboard
   await sembrarDispositivo(page, datos.dispositivo);
   await ingresar(page, datos.usuarios.admin!.rut, datos.pin);
 
   // POST sin consentimiento debe fallar
-  const respuesta = await request.post("/api/leads", {
+  const respuesta = await page.request.post("/api/leads", {
     data: {
       tipo: "eauto",
       contacto: "+56987654321",
@@ -135,13 +135,13 @@ test("Dashboard: CTA rechaza sin consentimiento [AC-DASH-07]", async ({ page, re
   expect(cuerpo.error).toBeTruthy();
 });
 
-test("Dashboard: CTA rechaza sin contacto [AC-DASH-07]", async ({ page, request }) => {
+test("Dashboard: CTA rechaza sin contacto [AC-DASH-07]", async ({ page }) => {
   // Siembra el dispositivo y entra como admin al dashboard
   await sembrarDispositivo(page, datos.dispositivo);
   await ingresar(page, datos.usuarios.admin!.rut, datos.pin);
 
   // POST sin contacto debe fallar
-  const respuesta = await request.post("/api/leads", {
+  const respuesta = await page.request.post("/api/leads", {
     data: {
       tipo: "kiloruta",
       contacto: "", // ← rechazado (vacío)
@@ -157,13 +157,13 @@ test("Dashboard: CTA rechaza sin contacto [AC-DASH-07]", async ({ page, request 
   expect(cuerpo.error).toBeTruthy();
 });
 
-test("Dashboard: CTA rechaza tipo inválido [AC-DASH-07]", async ({ page, request }) => {
+test("Dashboard: CTA rechaza tipo inválido [AC-DASH-07]", async ({ page }) => {
   // Siembra el dispositivo y entra como admin al dashboard
   await sembrarDispositivo(page, datos.dispositivo);
   await ingresar(page, datos.usuarios.admin!.rut, datos.pin);
 
   // POST con tipo inválido debe fallar
-  const respuesta = await request.post("/api/leads", {
+  const respuesta = await page.request.post("/api/leads", {
     data: {
       tipo: "invalid", // ← rechazado
       contacto: "+56987654321",

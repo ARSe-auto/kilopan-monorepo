@@ -20,6 +20,16 @@ import { Pantalla } from "../Pantalla.tsx";
 import { Pasos } from "../Pasos.tsx";
 import { SiguientePaso, type AccionSiguiente } from "../SiguientePaso.tsx";
 
+// AC-PES-05 / AC-PES-09 (descartadas 08-ago-2026, decisión del dueño): se evaluó
+// conectar una báscula por Web Bluetooth (perfil GATT Weight Scale) para que el peso
+// llegue solo, sin teclearlo. Se descartó ANTES de intentar validarla contra hardware
+// real: Safari (iOS/iPadOS) no implementa Web Bluetooth, y el equipo del cliente es
+// iPad/iPhone — la vía nunca habría estado disponible en producción. Además las
+// básculas comunes en panaderías chilenas (Toledo, CAS, Torrey) usan protocolo serie
+// propietario, no el perfil GATT estándar contra el que se había escrito el código
+// (`apps/kilopan/src/comun/bascula.ts`, eliminado). La captura manual con el teclado
+// numérico propio de abajo sigue siendo el único camino — que es lo que ya era en los
+// hechos, sin código muerto simulando una función que no podía usarse.
 const PASOS_PESAR = ["Producto", "Peso y destino", "Confirmado"];
 
 interface Producto {

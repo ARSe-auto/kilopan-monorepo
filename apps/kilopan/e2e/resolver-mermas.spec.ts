@@ -97,7 +97,7 @@ test("AC-MERM-02: pesar una merma y resolverla desde /resolver-mermas", async ({
   await btnRecuperada.click();
 
   // Verificar que desaparece de la lista
-  await expect(page.getByText("Sin mermas pendientes")).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText("Todas las mermas han sido resueltas.")).toBeVisible({ timeout: 5_000 });
 
   // Verificar en BD que el estado cambió
   const verificacion = await page.request.get(`/api/pesajes?limite=5`);
@@ -138,7 +138,7 @@ test("AC-MERM-02: resolver una merma con 'Confirmar perdida'", async ({ page }) 
   await btnConfirmar.click();
 
   // Debe desaparecer
-  await expect(page.getByText("Sin mermas pendientes")).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText("Todas las mermas han sido resueltas.")).toBeVisible({ timeout: 5_000 });
 
   // Verificar en BD
   const verificacion = await page.request.get(`/api/pesajes?limite=5`);
@@ -209,7 +209,7 @@ test("AC-MERM-02: admin puede resolver cualquier merma", async ({ page }) => {
   await btnRecuperada.click();
 
   // Debe desaparecer
-  await expect(page.getByText("Sin mermas pendientes")).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText("Todas las mermas han sido resueltas.")).toBeVisible({ timeout: 5_000 });
 
   // Verificar en BD
   const verificacion = await page.request.get(`/api/pesajes?limite=5`);
