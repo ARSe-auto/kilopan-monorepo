@@ -10,13 +10,23 @@ Todo lo de esta spec es **solo rol `admin`** (regla de rol testeada, §5).
 
 ## Criterios de aceptación
 
-- [ ] (P1) Dar de alta, desactivar, cambiar de rol o resetear el PIN de una persona desde
+- [x] (P1) Dar de alta, desactivar, cambiar de rol o resetear el PIN de una persona desde
       la propia app (`/admin` + `POST/PATCH /api/usuarios`). Antes esto solo existía por
       SQL directo contra la BD [AC-ADM-01]
-      — **Anexo D (auditoría 2-ago-2026): HUECO.** El endpoint está implementado
+      — **Anexo D (auditoría 2-ago-2026): HUECO.** El endpoint estaba implementado
       (`exigirRol(["admin"])`, valida RUT/PIN/rol, candado de auto-desactivación), pero
-      ningún test (unit, e2e o invariante) llama `POST`/`PATCH /api/usuarios` — nadie lo
-      ejercita de forma automatizada.
+      ningún test (unit, e2e o invariante) llamaba `POST`/`PATCH /api/usuarios`.
+      — **Cerrado 08-ago-2026 (sesión supervisada):** `e2e/administracion-usuarios.spec.ts`
+      (3 tests, verdes), mismo patrón que AC-ADM-02. Alta por HTTP con sesión admin real
+      (RUT duplicado → 409; sin nombre, RUT con DV malo, rol inexistente o PIN corto →
+      400). La edición se prueba por sus EFECTOS, no por el 200: la persona creada entra
+      con su PIN por un equipo desechable enrolado en el propio test (nunca el de la
+      semilla — el relevo atómico de AC-ID-06 desplazaría la sesión admin de `page`);
+      desactivarla convierte su login en 401 y reactivarla lo devuelve; resetear el PIN
+      deja el viejo en 401 y el nuevo entra al tiro; el cambio de rol queda visible en
+      `?detalle=1`. El candado de auto-desactivación rebota 400 al admin que intenta
+      quitarse su propio acceso (activo=false o bajarse de rol), y un vendedor rebota
+      403 en POST y PATCH — decidido por el SERVIDOR.
 - [x] (P1) Dar de alta pan nuevo y editar precios desde la app (`/admin` +
       `POST/PATCH /api/productos`), respetando la vigencia histórica de `precios`: cambiar
       un precio crea una fila nueva, jamás edita la vigente [AC-ADM-02]
