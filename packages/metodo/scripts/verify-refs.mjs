@@ -45,17 +45,41 @@ if (!existsSync(dirSpecs)) {
 }
 
 // --- 1. Universo de definición: qué AC define cada spec, y con qué estado
-const definidos = new Map(); // id -> { estado, archivo }
-for (const f of readdirSync(dirSpecs).filter((x) => x.endsWith(".md"))) {
-  const texto = readFileSync(join(dirSpecs, f), "utf8");
-  let estado = null;
-  for (const linea of texto.split("\n")) {
-    const inicio = linea.match(/^- \[([ x])\]/);
-    if (inicio) estado = inicio[1];
-    else if (/^(#|- )/.test(linea)) estado = null;
-    if (estado === null) continue;
-    const id = linea.match(/\[(AC-[A-Z0-9]+-\d+)\]/)?.[1];
-    if (id && !definidos.has(id)) definidos.set(id, { estado, archivo: f });
+const definicionesDe = (dir) => {
+  const mapa = new Map(); // id -> { estado, archivo }
+  for (const f of readdirSync(dir).filter((x) => x.endsWith(".md"))) {
+    const texto = readFileSync(join(dir, f), "utf8");
+    let estado = null;
+    for (const linea of texto.split("\n")) {
+      const inicio = linea.match(/^- \[([ x])\]/);
+      if (inicio) estado = inicio[1];
+      else if (/^(#|- )/.test(linea)) estado = null;
+      if (estado === null) continue;
+      const id = linea.match(/\[(AC-[A-Z0-9]+-\d+)\]/)?.[1];
+      if (id && !mapa.has(id)) mapa.set(id, { estado, archivo: f });
+    }
+  }
+  return mapa;
+};
+
+// Definiciones de ESTA app: mandan sobre la regla 2 ([x] sin respaldo). Cada contrato
+// responde por sus propios cierres, no por los del vecino.
+const definidos = definicionesDe(dirSpecs);
+
+// Definiciones de TODAS las apps: mandan sobre la regla 1 (huérfano). El árbol es UNO
+// solo y el recorrido de abajo es global, pero `definidos` es de una app: con specs/flota/
+// poblado, las ~100 citas legítimas de KiloPan en apps/kilopan/** aparecían huérfanas al
+// correr --app=flota (y las de FLOTA al revés en cuanto apps/flota tenga código), y el
+// gate de la app nueva no podía ponerse verde JAMÁS. Un AC citado es huérfano solo si
+// NINGUNA spec de NINGUNA app lo define — así se sigue pillando el id inventado al vuelo,
+// que es lo que esta regla protege.
+const definidosGlobal = new Map(definidos);
+const dirSpecsRaiz = join(ROOT, "specs");
+for (const otra of readdirSync(dirSpecsRaiz)) {
+  const d = join(dirSpecsRaiz, otra);
+  if (otra === app || !existsSync(d) || !statSync(d).isDirectory()) continue;
+  for (const [id, def] of definicionesDe(d)) {
+    if (!definidosGlobal.has(id)) definidosGlobal.set(id, { ...def, app: otra });
   }
 }
 
@@ -83,7 +107,7 @@ recorrer(ROOT);
 
 // --- 3. Veredicto
 let fallo = false;
-const huerfanos = [...citas.keys()].filter((id) => !definidos.has(id)).sort();
+const huerfanos = [...citas.keys()].filter((id) => !definidosGlobal.has(id)).sort();
 if (huerfanos.length) {
   fallo = true;
   console.error(`GATE: ${huerfanos.length} AC citados que ninguna spec define:`);

@@ -496,6 +496,29 @@ node "$M/gate_specs.mjs" --app=kilopan >/dev/null 2>&1 && ok "vuelve a verde con
 rm -rf "$TMP"
 
 echo
+echo "== 4b. verify-refs no confunde las apps entre sí (8-ago-2026) =="
+# El recorrido del árbol es GLOBAL pero `definidos` era de UNA app: al nacer specs/flota/,
+# las ~100 citas legítimas de KiloPan en apps/kilopan/** salían «huérfanas» bajo
+# --app=flota y el gate de la app nueva no podía ponerse verde JAMÁS. Se ejerce con una
+# app de fixture para que la prueba no dependa de que specs/flota/ exista hoy.
+APP_FX="__prueba_arnes_app"
+mkdir -p "specs/$APP_FX"
+# Ids armados en tiempo de ejecución, por la misma razón que el fixture de arriba.
+FX1="AC-$(printf 'YYP')-01"; FX2="AC-$(printf 'YYP')-02"; FX3="AC-$(printf 'YYP')-03"
+printf '# fixture\nFuente: §4\n- [ ] uno [%s]\n- [ ] dos [%s]\n- [ ] tres [%s]\n' "$FX1" "$FX2" "$FX3" > "specs/$APP_FX/00-fixture.md"
+node "$M/verify-refs.mjs" --app="$APP_FX" --estricto >/dev/null 2>&1 \
+  && ok "el gate de una app nueva no se pone rojo por las citas legítimas de la otra" \
+  || no "verify-refs marcó como huérfanas las citas de otra app — el gate de la app nueva no puede ponerse verde"
+# Y el negativo: seguir pillando el AC inventado al vuelo, que es lo que la regla protege.
+AC_HUERFANO="AC-$(printf 'YYQ')-99"
+printf '// fixture %s\n' "$AC_HUERFANO" > "apps/kilopan/src/comun/__prueba-arnes-huerfano.ts"
+node "$M/verify-refs.mjs" --app="$APP_FX" --estricto >/dev/null 2>&1 \
+  && no "verify-refs dejó pasar un AC que NINGUNA spec define — la regla 1 quedó desactivada" \
+  || ok "sigue pillando el AC que ninguna spec de ninguna app define"
+rm -f "apps/kilopan/src/comun/__prueba-arnes-huerfano.ts"
+rm -rf "specs/$APP_FX"
+
+echo
 echo "== 5. Estructura del monorepo (AC-H0-01) =="
 [ -f pnpm-workspace.yaml ] && [ -d apps ] && [ -d packages ] && ok "pnpm workspace con apps/ y packages/" || no "estructura de monorepo ausente"
 for p in miga metodo nucleo-comun nucleo-identidad nucleo-pod nucleo-dte; do
