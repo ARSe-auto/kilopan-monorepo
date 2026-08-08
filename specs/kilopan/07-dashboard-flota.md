@@ -61,8 +61,12 @@ repartidor muestra solo km y kg (§5).
       (append-only). Construido: sección en `/dashboard` con filtros por usuario y
       dispositivo, tabla de eventos últimos 500 (append-only, REVOKE UPDATE/DELETE en BD),
       test e2e verifica encabezados y selectores [AC-DASH-06]
-- [ ] (P2) Cablear el POST de ambos CTA (`lead_eauto` y `lead_kiloruta`): las tablas y el
+- [x] (P2) Cablear el POST de ambos CTA (`lead_eauto` y `lead_kiloruta`): las tablas y el
       consentimiento están probados, pero el botón no envía [AC-DASH-07]
+      — Cerrado 8-ago-2026: endpoint POST `/api/leads` y componente CtaFlota.tsx
+      ya estaban implementados; faltaba el test e2e. Agregado:
+      `e2e/dashboard-cta-leads.spec.ts` con 5 casos: flujo completo ambos CTAs,
+      validaciones de consentimiento/contacto/tipo.
 - [ ] (P2) Selector de sucursal en el dashboard, para que multisucursal sirva de algo
       cuando haya más de un local [AC-SUC-02]
 - [ ] (P2) Botón compartir en el detalle de entrega, no solo en el cierre de caja

@@ -4,6 +4,7 @@ import { obtenerDb } from "@/comun/db.ts";
 import { exigirRol } from "@/identidad/sesion.ts";
 import { aEnteroEnRango } from "@/comun/validacion.ts";
 
+// AC-DASH-07: Cablear el POST de ambos CTA (lead_eauto y lead_kiloruta).
 // AC-DASH-02/03: los dos CTA de la tarjeta «Tu flota» del panel del dueño. Las tablas
 // (pan.lead_eauto, pan.lead_kiloruta) y sus grants existen desde 0005, pero nunca se
 // escribió el endpoint: los botones estaban en pantalla y no hacían absolutamente

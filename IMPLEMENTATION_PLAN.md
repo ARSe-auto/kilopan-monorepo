@@ -312,7 +312,11 @@ Quedan 16 reales. Cada AC cerrado hoy lleva su cita en el archivo que lo impleme
       registrado en auditoría. Test e2e (`e2e/resolver-mermas.spec.ts`) en 4 casos: resolver
       a 'recuperada_con_venta' y a 'confirmada_perdida', permiso de maestro limitado a su
       propia merma, y admin sin restricción. Gate --full verde.
-- [ ] (P2) Cablear el POST de ambos CTA (`lead_eauto` y `lead_kiloruta`): las tablas y el consentimiento están probados, pero el botón no envía — spec: `specs/kilopan/07-dashboard-flota.md` [AC-DASH-07]
+- [x] (P2) Cablear el POST de ambos CTA (`lead_eauto` y `lead_kiloruta`): las tablas y el consentimiento están probados, pero el botón no envía — spec: `specs/kilopan/07-dashboard-flota.md` [AC-DASH-07]
+      — Cerrado 8-ago-2026: endpoint POST `/api/leads` y componente CtaFlota.tsx
+      ya estaban implementados; faltaba el test e2e. Agregado:
+      `e2e/dashboard-cta-leads.spec.ts` con 5 casos (flujo completo ambos CTAs,
+      validaciones). Gate --full verde.
 - [ ] (P2) Selector de sucursal en el dashboard, para que multisucursal sirva de algo cuando haya más de un local — spec: `specs/kilopan/07-dashboard-flota.md` [AC-SUC-02]
 - [ ] (P2) Botón compartir en el detalle de entrega, no solo en el cierre de caja — spec: `specs/kilopan/07-dashboard-flota.md` [AC-SHARE-02]
 
