@@ -246,6 +246,33 @@ async function sembrarPesajes(nombreProducto, cantidad) {
 await sembrarPesajes("Frica", 10);
 await sembrarPesajes("Hallulla", 5);
 
+// AC-SUC-02: dos sucursales activas para que el selector del dashboard tenga algo que
+// elegir, y un dispositivo+pesaje propios de una de ellas para probar que elegirla
+// filtra de verdad. No se toca `dispositivo` (el del camino dorado): reasignarle una
+// sucursal cambiaría a qué local se atribuyen TODOS los demás e2e que pesan o venden
+// con él, y su `sucursal_id` sigue NULL a propósito (mismo caso que prueba AC-SUC-01
+// en db/test-invariantes.mjs).
+const sucursalCentro = await uno(`insert into pan.sucursales (nombre) values ('Local Centro') returning id`);
+const sucursalNunoa = await uno(`insert into pan.sucursales (nombre) values ('Local Ñuñoa') returning id`);
+const dispositivoNunoa = await uno(
+  `insert into pan.dispositivos (nombre, secreto_hash, sucursal_id, enrolado_por)
+   values ('Tablet Ñuñoa (seed)', 'seed-solo-db', $1, $2) returning id`,
+  [sucursalNunoa.id, usuarios.admin.id]
+);
+// pan.trg_exige_sesion (0001) exige una sesión viva del par (usuario, dispositivo) que
+// firma la fila — la misma regla que la antesala de pedidos, arriba. Se abre acá y se
+// cierra con el resto de las sesiones de siembra, antes de que el primer test escriba
+// su PIN.
+await db.query(
+  `insert into pan.sesiones_operador (dispositivo_id, usuario_id) values ($1,$2)`,
+  [dispositivoNunoa.id, usuarios.admin.id]
+);
+await db.query(
+  `insert into pan.pesajes (client_uuid, producto_id, gramos, destino, usuario_id, dispositivo_id, capturado_at)
+   values (gen_random_uuid(), $1, 4000, 'mostrador', $2, $3, now())`,
+  [productos.Frica, usuarios.admin.id, dispositivoNunoa.id]
+);
+
 await db.query(`delete from pan.sesiones_operador`);
 
 const datos = {
@@ -253,6 +280,10 @@ const datos = {
   pin: "1234",
   usuarios,
   productos,
+  sucursales: {
+    centro: { id: sucursalCentro.id, nombre: "Local Centro" },
+    nunoa: { id: sucursalNunoa.id, nombre: "Local Ñuñoa", gramosPesados: 4000 },
+  },
   cliente: { id: cliente.id, razonSocial: "Almacén Don Pepe" },
   pedido: { id: pedido.id, gramosPedidos: 20000 },
   // AC-DES-05: repartidor propio del test de carga, libre de la ruta del camino dorado.

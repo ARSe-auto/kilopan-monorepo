@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { obtenerDb } from "@/comun/db.ts";
 import { obtenerSesionActual } from "@/identidad/sesion.ts";
+import { esUuid } from "@/comun/validacion.ts";
 import { superficie, acentos, semantico } from "@kilopan/miga/tokens.ts";
 import { Copyright } from "@kilopan/miga/componentes/index.tsx";
 import { formatearKg, formatearClp } from "@/comun/formato.ts";
@@ -9,6 +10,7 @@ import { CtaFlota } from "./CtaFlota.tsx";
 import { MapaPodsDia } from "./MapaPodsDiaCliente.tsx";
 import { PantallaAuditoria } from "./PantallaAuditoria.tsx";
 import { HistoricoConciliacion } from "./HistoricoConciliacion.tsx";
+import { SelectorSucursal } from "./SelectorSucursal.tsx";
 import { Pantalla } from "../Pantalla.tsx";
 
 // Los agregados llegan como string desde Postgres (bigint/numeric no entran en un
@@ -26,7 +28,11 @@ type Conciliacion = Record<string, unknown> & {
 // AC-DASH-01: el panel del dueño. Todo sale de pan.conciliacion_diaria — una vista
 // sobre eventos, nunca un snapshot. Server Component: la sesión se valida acá y las
 // cifras nunca viajan al cliente sin pasar por el chequeo de rol.
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sucursal?: string }>;
+}) {
   // Antes esta pantalla reimplementaba la consulta de sesión a mano y se le había
   // olvidado el chequeo de expiración por inactividad (AC-ID-05) que sí tiene
   // obtenerSesionActual — una sesión vencida hacía "F5" acá y seguía viendo la plata.
@@ -45,13 +51,82 @@ export default async function DashboardPage() {
     );
   }
 
-  const conciliacion = await db.query<Conciliacion>(
-    `select fecha, g_pesados, g_venta, g_pod_ok, g_merma_tipificada, g_merma_recuperada, tck
-       from pan.conciliacion_diaria where fecha = current_date`
+  // AC-SUC-02: sucursales activas para el selector. Con 0 o 1 no se muestra —
+  // mismo criterio de "cero complejidad extra" de AC-SUC-01.
+  const sucursalesR = await db.query<{ id: string; nombre: string }>(
+    `select id, nombre from pan.sucursales where activa order by nombre`
   );
+  const sp = await searchParams;
+  const sucursalSeleccionada =
+    typeof sp.sucursal === "string" &&
+    esUuid(sp.sucursal) &&
+    sucursalesR.rows.some((s) => s.id === sp.sucursal)
+      ? sp.sucursal
+      : null;
+
+  // `pan.conciliacion_diaria` (0005) no distingue sucursal — filtrar por una exige una
+  // consulta propia. Se usa SOLO cuando hay filtro activo; sin filtro, el camino de
+  // siempre (la vista, fuente única de la fórmula) queda intacto. `pesajes` y `ventas`
+  // ya traen `sucursal_id` heredado del dispositivo (trigger de 0007); `entregas` no
+  // tiene esa columna, así que se llega a la sucursal por su dispositivo.
+  const conciliacion = sucursalSeleccionada
+    ? await db.query<Conciliacion>(
+        `with pesado as (
+           select sum(gramos)::bigint as g_pesados
+             from pan.pesajes
+            where capturado_at::date = current_date and sucursal_id = $1
+         ),
+         mostrador as (
+           select
+             sum(gramos) filter (
+               where destino = 'merma' and coalesce(estado_merma, 'pendiente') <> 'recuperada_con_venta'
+             )::bigint as g_merma_tipificada,
+             sum(gramos) filter (
+               where destino = 'merma' and estado_merma = 'recuperada_con_venta'
+             )::bigint as g_merma_recuperada
+             from pan.pesajes
+            where capturado_at::date = current_date and sucursal_id = $1
+         ),
+         vendido as (
+           select sum(vl.gramos)::bigint as g_venta
+             from pan.ventas v join pan.venta_lineas vl on vl.venta_id = v.id
+            where v.creado_at::date = current_date and vl.gramos is not null and v.sucursal_id = $1
+         ),
+         entregado as (
+           -- Misma llave de fecha que la vista pan.conciliacion_diaria (0005):
+           -- capturado_at::date, no recibido_at — así el TCK filtrado es idéntico al
+           -- de la fuente única, solo restringido a la sucursal.
+           select sum(e.gramos_entregados)::bigint as g_pod_ok
+             from pan.entregas e join pan.dispositivos d on d.id = e.dispositivo_id
+            where e.cerrada and e.supersede_id is null
+              and e.capturado_at::date = current_date and d.sucursal_id = $1
+         )
+         select
+           current_date::text as fecha,
+           coalesce(p.g_pesados, 0) as g_pesados,
+           coalesce(v.g_venta, 0) + coalesce(m.g_merma_recuperada, 0) as g_venta,
+           coalesce(en.g_pod_ok, 0) as g_pod_ok,
+           coalesce(m.g_merma_tipificada, 0) as g_merma_tipificada,
+           coalesce(m.g_merma_recuperada, 0) as g_merma_recuperada,
+           case
+             when coalesce(p.g_pesados, 0) = 0 then null
+             else round(
+               (coalesce(v.g_venta, 0) + coalesce(m.g_merma_recuperada, 0)
+                + coalesce(en.g_pod_ok, 0) + coalesce(m.g_merma_tipificada, 0))::numeric
+               / p.g_pesados, 4)
+           end as tck
+           from pesado p, mostrador m, vendido v, entregado en`,
+        [sucursalSeleccionada]
+      )
+    : await db.query<Conciliacion>(
+        `select fecha, g_pesados, g_venta, g_pod_ok, g_merma_tipificada, g_merma_recuperada, tck
+           from pan.conciliacion_diaria where fecha = current_date`
+      );
   const hoy = conciliacion.rows[0];
 
-  // Mapa de PODs del día — solo entregas cerradas con GPS válido (AC-DASH-05)
+  // Mapa de PODs del día — solo entregas cerradas con GPS válido (AC-DASH-05). El join
+  // con dispositivos es gratis cuando no hay sucursal elegida (AC-SUC-02): la condición
+  // del where la neutraliza sin cambiar el resultado de siempre.
   const pods = await db.query<{
     id: string;
     receptor_nombre: string;
@@ -62,10 +137,13 @@ export default async function DashboardPage() {
   }>(
     `select e.id, e.receptor_nombre, e.lat, e.lng, e.gramos_entregados, e.foto_estado
        from pan.entregas e
+       join pan.dispositivos d on d.id = e.dispositivo_id
       where e.cerrada = true
         and date(e.recibido_at) = current_date
         and e.supersede_id is null
-      order by e.recibido_at desc`
+        and ($1::uuid is null or d.sucursal_id = $1)
+      order by e.recibido_at desc`,
+    [sucursalSeleccionada]
   );
 
   const rutasCerradas = await db.query<{ n: string }>(
@@ -90,6 +168,12 @@ export default async function DashboardPage() {
 
   return (
     <Pantalla titulo={usuario.nombre} bajada="Panel del dueño · hoy" ancho={900}>
+      {sucursalesR.rows.length > 1 ? (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <SelectorSucursal sucursales={sucursalesR.rows} actual={sucursalSeleccionada} />
+        </div>
+      ) : null}
+
       <section
         style={{
           background: superficie.tarjeta,

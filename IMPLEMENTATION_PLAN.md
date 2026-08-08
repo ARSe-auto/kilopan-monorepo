@@ -317,7 +317,10 @@ Quedan 16 reales. Cada AC cerrado hoy lleva su cita en el archivo que lo impleme
       ya estaban implementados; faltaba el test e2e. Agregado:
       `e2e/dashboard-cta-leads.spec.ts` con 5 casos (flujo completo ambos CTAs,
       validaciones). Gate --full verde.
-- [ ] (P2) Selector de sucursal en el dashboard, para que multisucursal sirva de algo cuando haya más de un local — spec: `specs/kilopan/07-dashboard-flota.md` [AC-SUC-02]
+- [x] (P2) Selector de sucursal en el dashboard, para que multisucursal sirva de algo cuando haya más de un local — spec: `specs/kilopan/07-dashboard-flota.md` [AC-SUC-02]
+      — Cerrado 8-ago-2026: `SelectorSucursal.tsx` en `/dashboard`, visible con 2+
+      sucursales activas; elegir una filtra la conciliación del día por `sucursal_id`.
+      Probado: `e2e/dashboard-selector-sucursal.spec.ts` (3 casos). Gate --full verde.
 - [ ] (P2) Botón compartir en el detalle de entrega, no solo en el cierre de caja — spec: `specs/kilopan/07-dashboard-flota.md` [AC-SHARE-02]
 
 ## Auditoría Anexo D (Ola 1, 2-ago-2026) — ACs devueltos a abiertos

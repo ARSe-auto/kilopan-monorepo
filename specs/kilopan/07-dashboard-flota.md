@@ -67,8 +67,17 @@ repartidor muestra solo km y kg (§5).
       ya estaban implementados; faltaba el test e2e. Agregado:
       `e2e/dashboard-cta-leads.spec.ts` con 5 casos: flujo completo ambos CTAs,
       validaciones de consentimiento/contacto/tipo.
-- [ ] (P2) Selector de sucursal en el dashboard, para que multisucursal sirva de algo
+- [x] (P2) Selector de sucursal en el dashboard, para que multisucursal sirva de algo
       cuando haya más de un local [AC-SUC-02]
+      — Construido: `SelectorSucursal.tsx` (client component) en `/dashboard`, visible
+      solo con 2+ sucursales activas (mismo criterio de `AC-SUC-01`). Elegir una arma
+      `?sucursal=<uuid>` y recalcula la conciliación del día con una consulta propia
+      filtrada por `sucursal_id` (heredado por trigger en `pesajes`/`ventas`; `entregas`
+      se llega por su dispositivo), sin tocar `pan.conciliacion_diaria` cuando no hay
+      filtro. Probado (`dashboard-selector-sucursal.spec.ts`): el selector se ve con las
+      dos sucursales sembradas, elegir una filtra "Pesados" a lo pesado en ese local
+      (4 kg, dispositivo propio de Ñuñoa), y un id inexistente en la URL no rompe la
+      pantalla ni queda como filtro activo.
 - [ ] (P2) Botón compartir en el detalle de entrega, no solo en el cierre de caja
       [AC-SHARE-02]
 
