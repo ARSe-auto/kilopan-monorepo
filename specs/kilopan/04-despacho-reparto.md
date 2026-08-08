@@ -57,10 +57,25 @@ retención del vehículo. Sin override, ni en BD ni en UI (§7).
       0024 lo exige y él audita el evento—, en vez de un update pelado que rebotaba; (b)
       el modal por encima de `zIndex` 40; (c) el e2e registra la guía (DTE 52) del pedido,
       sin la cual el art. 55 rebota la salida. [AC-DES-06]
-- [ ] (P2) Escáner de cámara full-screen con linterna (48 px, alcanzable con pulgar) +
+- [x] (P2) Escáner de cámara full-screen con linterna (48 px, alcanzable con pulgar) +
       beep + vibración con zxing-js, como MEJORA PROGRESIVA sobre la captura manual de
       AC-DES-06 — que sigue siendo el camino primario en iOS (§7). Cámara denegada o
       sin soporte degrada a manual sin bloquear nada [AC-DES-07]
+      — cerrado 7-ago-2026: `EscanerBulto.tsx` (mismo patrón que `EscanerTed.tsx` de
+      AC-DTE-03) — `BrowserMultiFormatReader` de zxing-js sobre un stream propio de
+      `getUserMedia({facingMode:"environment"})`, overlay full-screen (`zIndex` 200, por
+      encima de la barra y de la modal de override de AC-DES-04/06), linterna 48 px vía
+      `applyConstraints({advanced:[{torch}]})` que solo aparece si `getCapabilities().torch`
+      existe, beep sintetizado con Web Audio (sin asset) y `navigator.vibrate(200)` al
+      decodificar. Botón «Escanear con cámara» agregado en `/cargar` junto al «Escanear
+      código» manual (AC-DES-06), reusando el mismo `escanear()` — mismo dedup/contador/
+      error. Si `getUserMedia` no existe el componente devuelve `null`: no hay botón, la
+      captura manual sigue siendo el único camino, sin bloqueo. Sin cámara real
+      disponible en el harness de CI, probado por contrato de código (mismo patrón que
+      `camara.test.ts` para AC-PERF-02): 7 tests en `EscanerBulto.test.ts` verifican
+      zxing-js, degradación sin cámara, overlay full-screen, linterna 48 px +
+      `applyConstraints`/`torch`, beep por `AudioContext`, `navigator.vibrate(200)`, y que
+      la cámara se abre solo in-app (nunca `<input type=file>`).
 
 ## Notas de implementación
 

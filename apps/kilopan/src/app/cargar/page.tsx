@@ -8,6 +8,7 @@ import {
 import { superficie, semantico, acentos, tabularNums } from "@kilopan/miga/tokens.ts";
 import { useEnLinea } from "@/comun/useEnLinea.ts";
 import { Pantalla } from "../Pantalla.tsx";
+import { EscanerBulto } from "../EscanerBulto.tsx";
 
 interface Bulto {
   id: string;
@@ -306,6 +307,10 @@ export default function CargarPage() {
             >
               Escanear código
             </button>
+
+            {/* AC-DES-07: mejora progresiva sobre el botón manual de arriba — reusa el
+                mismo `escanear()` (dedup, error, contador) que la captura por teclado. */}
+            <EscanerBulto onLeido={(codigo) => void escanear(codigo)} />
 
             {/* Botón Salir a ruta (AC-DES-04 override) */}
             <BotonPrimario
