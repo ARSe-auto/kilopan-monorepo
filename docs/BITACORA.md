@@ -1529,3 +1529,32 @@ mesón oculto). Credenciales descartadas al terminar; respaldo JSON conservado e
 `/private/tmp/.../scratchpad/respaldo-kilopan-prod-pre-9migraciones-08ago.json`
 (fuera del repo). Pendiente NO ejecutado: `railway up` (redeploy del código de la
 app) — el dueño pidió las migraciones, no el redeploy; son decisiones separadas.
+
+## 2026-08-08 · Barrido supervisado: 6 ACs atascados cerrados por rescate de archivo-wip/*
+
+Sesión supervisada en worktree propio (`kilopan-monorepo-barrido`), sin tocar el
+worktree del motor. Los 55 tags `archivo-wip/*` eran la mina: 3 de los 6 cierres
+salieron de trabajo que el motor YA había escrito y perdió por agotar presupuesto
+antes de commitear.
+
+**AC-DES-03** (rescate de `d-05`): `e2e/despacho-armar-ruta.spec.ts` — evidencia
+propia (pantalla + HTTP 409/200), independiente del test 8 flaky. El test del stash
+esperaba un `<input placeholder="Monto total">` que AC-H0-13 ya había reemplazado
+por el teclado grande; se adaptó al contrato vigente. **AC-POD-04** (diagnóstico de
+`d-09`/`d-10`): la causa raíz del flake era `test.setTimeout` — 70 s de esperas
+declaradas dentro del caso bajo el default de 30 s de Playwright; con 90 s, 7
+corridas consecutivas verdes (8/8 cada una). **AC-ADM-08** (rescate de `e-00`):
+revocar equipo (mata la sesión viva en la misma transacción) + desbloquear PIN
+(borra todos los bloqueos vigentes), 4 e2e verdes disparando el bloqueo real de
+AC-SEC-01. **AC-PES-08** y **AC-ADM-01**: e2e escritos de cero (outlier desde la
+pantalla verificando por red que la confirmación reusa el MISMO sha256; alta/edición
+de personal probada por sus efectos con login real). **AC-ADM-09** (la migración que
+el motor tenía vedada): `0025_quitar_pedido_de_ruta.sql` — estado `quitada` en
+`ruta_paradas` + `trg_ruta_exige_dte` partiendo de 0019 (la primera versión partió
+de 0004 y revivió el hueco de la NC 61: el test P0-5 la pilló ANTES de commitear —
+el arnés pagándose solo otra vez), endpoint con motivo+evento, filtros en `mi-ruta`
+y `api/sync` (un POD encolado offline de una parada quitada ya no la cierra).
+
+Gate final: `check.sh --full` 14/14 OK, 0 saltados, e2e 96/96, invariantes 83/83,
+marcador `verde-20260808-152820` (05fbf39). Avance: 82/98 ACs (84%). Un commit por
+AC. Los tags archivo-wip NO se tocaron.
