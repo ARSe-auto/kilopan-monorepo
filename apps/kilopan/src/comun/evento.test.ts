@@ -54,6 +54,7 @@ const OPERACIONES: { tipo: string; ruta: string }[] = [
   { tipo: "precio_cambiado", ruta: "productos/route.ts" },
   { tipo: "pin_reseteado", ruta: "usuarios/route.ts" },
   { tipo: "merma_registrada", ruta: "pesajes/route.ts" },
+  { tipo: "merma_resuelta", ruta: "pesajes/resolver-merma/route.ts" },
   { tipo: "ruta_cerrada", ruta: "rutas/route.ts" },
   { tipo: "ruta_salida_con_bultos_pendientes", ruta: "rutas/salir/route.ts" },
 ];

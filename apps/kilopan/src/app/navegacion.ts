@@ -31,6 +31,7 @@ export const DESTINOS_POR_ROL: Record<Rol, Destino[]> = {
   admin: [
     { href: "/pesar", etiqueta: "Pesaje", detalle: "Anotar las bandejas que salen del horno" },
     { href: "/historial", etiqueta: "Historial de pesaje", detalle: "Lo pesado por cada maestro, con fecha, hora y foto" },
+    { href: "/resolver-mermas", etiqueta: "Resolver mermas", detalle: "Mermas pendientes del día anterior" },
     { href: "/vender", etiqueta: "Venta mostrador", detalle: "Cobrar en el mesón" },
     { href: "/pedidos", etiqueta: "Despacho", detalle: "Pedidos de clientes y armar la ruta del furgón" },
     { href: "/caja", etiqueta: "Cierre de caja", detalle: "Contar la plata al final del turno" },
@@ -45,6 +46,7 @@ export const DESTINOS_POR_ROL: Record<Rol, Destino[]> = {
   maestro: [
     { href: "/pesar", etiqueta: "Pesaje", detalle: "Anotar las bandejas que salen del horno" },
     { href: "/historial", etiqueta: "Mi historial", detalle: "Lo que has pesado, con fecha, hora y foto" },
+    { href: "/resolver-mermas", etiqueta: "Resolver mermas", detalle: "Mermas pendientes del día anterior" },
     { href: "/pendientes", etiqueta: "Pendientes por revisar", detalle: "Lo que no se pudo subir al servidor, y por qué" },
   ],
   vendedor: [

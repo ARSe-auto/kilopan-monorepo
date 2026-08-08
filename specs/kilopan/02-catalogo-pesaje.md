@@ -70,9 +70,16 @@ F1 Pesar ≤4 toques; repetir producto: 2 toques.
       marcas comunes en panaderías chilenas (Toledo, CAS, Torrey) suelen usar serie
       propietario, no GATT — `AC-PES-05` está escrito pero no verificado contra hardware
       [AC-PES-09]
-- [ ] (P2) UI de resolución de mermas al día siguiente: hoy la máquina de estados existe
+- [x] (P2) UI de resolución de mermas al día siguiente: hoy la máquina de estados existe
       y la TCK la respeta, pero nadie puede mover una merma a `recuperada_con_venta`
       desde pantalla [AC-MERM-02]
+      — Cerrado 7-ago-2026: pantalla `/resolver-mermas` filtra `destino=merma`
+      `estado_merma='pendiente'` de `/api/pesajes`, cada fila ofrece botones para cambiar
+      a 'confirmada_perdida' o 'recuperada_con_venta' via POST `/api/pesajes/resolver-merma`;
+      maestro limitado a su propia merma, admin sin restricción; evento registrado en
+      `pan.eventos`. Test e2e (`e2e/resolver-mermas.spec.ts`) ejerce ambos estados, ambos
+      roles, y verifica que la merma desaparece del listado tras resolverse. Gate --full
+      verde, sin e2e saltados.
 
 ## Notas de implementación
 

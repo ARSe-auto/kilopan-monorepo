@@ -305,7 +305,13 @@ Quedan 16 reales. Cada AC cerrado hoy lleva su cita en el archivo que lo impleme
 - [ ] (P1) Foco visible + recorrido VoiceOver (F1/F4/F5) sin trampas — partido de `AC-H0-10` el 7-ago porque un e2e headless no puede ejercer ninguno de los dos; sesión supervisada — spec: `specs/kilopan/09-plataforma-miga.md` [AC-H0-14]
 - ~~[ ]~~ (P1) Estados obligatorios en todo listado: vacío accionable / skeleton / error con reintentar / sin conexión con **contador real de cola** («Sin conexión — N registros por subir» ámbar → … — spec: `specs/kilopan/09-plataforma-miga.md` [AC-H0-11] — fusionado 06-ago: el checkbox vigente de AC-H0-11 es el de Ola 2 (P0)
 - [ ] (P2) Validar el camino GATT contra una báscula real antes de darlo por bueno. Las marcas comunes en panaderías chilenas (Toledo, CAS, Torrey) suelen usar serie propietario, no GATT — `AC-… — spec: `specs/kilopan/02-catalogo-pesaje.md` [AC-PES-09]
-- [ ] (P2) UI de resolución de mermas al día siguiente: hoy la máquina de estados existe y la TCK la respeta, pero nadie puede mover una merma a `recuperada_con_venta` desde pantalla — spec: `specs/kilopan/02-catalogo-pesaje.md` [AC-MERM-02]
+- [x] (P2) UI de resolución de mermas al día siguiente: hoy la máquina de estados existe y la TCK la respeta, pero nadie puede mover una merma a `recuperada_con_venta` desde pantalla — spec: `specs/kilopan/02-catalogo-pesaje.md` [AC-MERM-02]
+      — Cerrado 7-ago-2026: pantalla `/resolver-mermas` con listado de mermas pendientes,
+      botones para cambiar estado a 'confirmada_perdida' o 'recuperada_con_venta', endpoint
+      POST `/api/pesajes/resolver-merma` con validación de permisos (admin/maestro), evento
+      registrado en auditoría. Test e2e (`e2e/resolver-mermas.spec.ts`) en 4 casos: resolver
+      a 'recuperada_con_venta' y a 'confirmada_perdida', permiso de maestro limitado a su
+      propia merma, y admin sin restricción. Gate --full verde.
 - [ ] (P2) Cablear el POST de ambos CTA (`lead_eauto` y `lead_kiloruta`): las tablas y el consentimiento están probados, pero el botón no envía — spec: `specs/kilopan/07-dashboard-flota.md` [AC-DASH-07]
 - [ ] (P2) Selector de sucursal en el dashboard, para que multisucursal sirva de algo cuando haya más de un local — spec: `specs/kilopan/07-dashboard-flota.md` [AC-SUC-02]
 - [ ] (P2) Botón compartir en el detalle de entrega, no solo en el cierre de caja — spec: `specs/kilopan/07-dashboard-flota.md` [AC-SHARE-02]

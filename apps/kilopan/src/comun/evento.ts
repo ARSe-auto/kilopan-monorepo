@@ -21,6 +21,7 @@ export type TipoEvento =
   | "pin_reseteado"
   | "equipo_revocado"
   | "merma_registrada"
+  | "merma_resuelta"
   | "dte_anulado"
   | "ruta_cerrada"
   | "ruta_salida_con_bultos_pendientes";
