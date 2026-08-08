@@ -614,7 +614,11 @@ ARNES_TMP="$(mktemp -d)"
 armar_sandbox () { # $1 = raíz del sandbox — árbol mínimo con TODO estubado
   local raiz="$1"
   rm -rf "$raiz"
-  mkdir -p "$raiz/node_modules" "$raiz/apps/kilopan" "$raiz/packages/metodo/scripts" "$raiz/bin"
+  # `specs/kilopan` va en el sandbox porque el repo real SIEMPRE lo tiene: check.sh aborta
+  # cuando no existe ni la app ni su contrato (app mal escrita en --app=), y un sandbox sin
+  # specs/ hacía fallar esta prueba por no modelar el repo, no por un defecto de check.sh.
+  mkdir -p "$raiz/node_modules" "$raiz/apps/kilopan" "$raiz/specs/kilopan" "$raiz/packages/metodo/scripts" "$raiz/bin"
+  printf '{"name":"kilopan"}\n' > "$raiz/apps/kilopan/package.json"
   printf '{}\n' > "$raiz/package.json"
   # check.sh invoca guardrail y prueba-arnes por ruta literal: estubados a exit 0 ⇒ ni
   # recursión ni red. (La prueba-arnes estubada es lo que corta el bucle infinito.)

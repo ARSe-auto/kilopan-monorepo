@@ -36,7 +36,7 @@ const IGNORAR = new Set([
 ]);
 const EXT = /\.(ts|tsx|js|jsx|mjs|cjs|sql|sh|md)$/;
 // El plan y la bitácora citan todos los ACs por diseño: no cuentan como respaldo.
-const NO_CUENTA = /^(IMPLEMENTATION_PLAN|docs\/BITACORA|docs\/PROMPT_MAESTRO|AGENTS\.md|CLAUDE\.md|TRASPASO)/;
+const NO_CUENTA = /^(IMPLEMENTATION_PLAN|docs\/BITACORA|docs\/PROMPT_MAESTRO|docs\/ARRANQUE|AGENTS\.md|CLAUDE\.md|TRASPASO)/;
 
 const dirSpecs = join(ROOT, "specs", app);
 if (!existsSync(dirSpecs)) {

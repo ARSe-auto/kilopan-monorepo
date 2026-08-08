@@ -15,7 +15,22 @@ for arg in "$@"; do
     *) echo "check.sh: argumento desconocido '$arg' (uso: [--full] [--app=kilopan|flota])"; exit 2 ;;
   esac
 done
-[ -d "apps/$APP" ] || { echo "check.sh: apps/$APP no existe"; exit 2; }
+# El contrato se verifica ANTES de que exista una línea de la app: eso es lo que
+# significa «sin contrato no se construye». Abortar aquí porque apps/<app> no existe
+# dejaba el gate de una app nueva sin poder correr JAMÁS hasta después del primer
+# commit de código — justo al revés del método. Sin app: corren los pasos del contrato
+# (gate_specs, verify-refs) y los de workspace; los que necesitan el árbol de la app
+# quedan SALTADOS explícitos, nunca OK por omisión.
+# La señal de que la app EXISTE es su package.json, no el directorio: tras revertir un
+# esqueleto quedan `.next/`, `node_modules/` y `tsconfig.tsbuildinfo` (gitignorados, el
+# revert no los toca) y el directorio sigue ahí. Con la prueba por directorio, `es-CL`
+# corría contra ese cascarón y devolvía OK sin haber mirado una línea de la app — el
+# verde vacuo que este gate existe para matar.
+HAY_APP=1
+[ -f "apps/$APP/package.json" ] || HAY_APP=0
+if [ "$HAY_APP" -eq 0 ] && [ ! -d "specs/$APP" ]; then
+  echo "check.sh: no existe apps/$APP ni specs/$APP — nada que verificar"; exit 2
+fi
 
 LOG_DIR="packages/metodo/panel"
 mkdir -p "$LOG_DIR"
@@ -82,8 +97,14 @@ else
     node packages/metodo/scripts/verify-refs.mjs "--app=$APP"
 fi
 
-run_step "es-CL ($APP): kg/CLP/fecha sin bypass, RUT validado al escribir, cero inglés (AC-H0-09)" \
-  node packages/metodo/scripts/verifica-es-cl.mjs "--app=$APP"
+if [ "$HAY_APP" -eq 1 ]; then
+  run_step "es-CL ($APP): kg/CLP/fecha sin bypass, RUT validado al escribir, cero inglés (AC-H0-09)" \
+    node packages/metodo/scripts/verifica-es-cl.mjs "--app=$APP"
+else
+  # Correrlo sobre un árbol inexistente daría VERDE sin haber mirado un archivo, que es
+  # el falso verde que este gate existe para matar.
+  skip_step "es-CL ($APP)" "apps/$APP todavía no existe (solo hay contrato)"
+fi
 # packages/metodo no es paquete de workspace (no tiene package.json) — "unit (workspace)"
 # de más abajo no lo alcanza. Sin esto, verifica-es-cl.test.mjs quedaría escrito y nunca
 # ejecutado, que es precisamente el defecto de AC-H0-05 que este gate existe para evitar.
@@ -97,8 +118,12 @@ run_step "build (workspace)" pnpm -r --if-present run build
 # El standalone de Next.js sirve 200 en TODA ruta aunque le falten los estáticos
 # (es SSR puro sin ellos) — un healthcheck normal no lo detecta. Sin esto, la app
 # "pasa el gate" y queda completamente muda al tocar cualquier botón en producción.
-run_step "build standalone incluye .next/static y public/ (si no, la app no hidrata)" \
-  bash -c "test -d apps/$APP/.next/standalone/apps/$APP/.next/static && test -f apps/$APP/.next/standalone/apps/$APP/public/sw.js"
+if [ "$HAY_APP" -eq 1 ]; then
+  run_step "build standalone incluye .next/static y public/ (si no, la app no hidrata)" \
+    bash -c "test -d apps/$APP/.next/standalone/apps/$APP/.next/static && test -f apps/$APP/.next/standalone/apps/$APP/public/sw.js"
+else
+  skip_step "build standalone de $APP" "apps/$APP todavía no existe (solo hay contrato)"
+fi
 run_step "audit (AC-SEC-03)" pnpm audit --audit-level=high
 
 if [ "$FULL" -eq 1 ]; then
