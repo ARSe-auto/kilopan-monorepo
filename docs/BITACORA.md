@@ -1464,3 +1464,16 @@ ningún ✘). Reproducción manual de check.sh --full: 14/14 OK, 0 fallos, 0 sal
 marcador verde-20260807-180830. El commit de AC-ADM-09 queda tal cual — segundo flake
 consecutivo del propio proceso de verificación (no del código), mismo patrón que el de
 esta tarde con 0019. Sin cambios de código.
+
+## 2026-08-08 · Motor destrabado tras 14h de pausa (AC-MERM-02 reabierto)
+
+El motor quedó pausado desde el 07-ago 21:19 por el rojo del gate independiente sobre
+AC-MERM-02 — rojo REAL (no flake): su e2e fallaba de verdad. Diagnóstico supervisado
+encontró 3 defectos del test, todos corregidos: (a) datos.productos es Record<nombre,
+uuid> y el spec lo trataba como array (productos[0].id undefined); (b) faltaba
+fotoSha256 con pesaje_foto_obligatoria=1 en la semilla (400); (c) mermar exige stock
+previo — Anexo B #1 — y daba 409 con disponible 0 g (se agregó pesarAMostrador()).
+Queda un cuarto: tras esas correcciones la merma se crea pero /resolver-mermas no la
+lista. La pantalla y el endpoint están commiteados y sanos (111dee9); el AC se reabre
+con el diagnóstico completo en su spec y entra a la cola supervisada para no bloquear
+al motor, que retoma con los ~26 ACs elegibles restantes.

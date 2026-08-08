@@ -70,10 +70,22 @@ F1 Pesar ≤4 toques; repetir producto: 2 toques.
       marcas comunes en panaderías chilenas (Toledo, CAS, Torrey) suelen usar serie
       propietario, no GATT — `AC-PES-05` está escrito pero no verificado contra hardware
       [AC-PES-09]
-- [x] (P2) UI de resolución de mermas al día siguiente: hoy la máquina de estados existe
+- [ ] (P2) UI de resolución de mermas al día siguiente: hoy la máquina de estados existe
       y la TCK la respeta, pero nadie puede mover una merma a `recuperada_con_venta`
       desde pantalla [AC-MERM-02]
-      — Cerrado 7-ago-2026: pantalla `/resolver-mermas` filtra `destino=merma`
+      — **Reabierto 08-ago-2026 (supervisado): el cierre fue prematuro.** La pantalla y el
+      endpoint EXISTEN y están commiteados (111dee9); lo que falla es su e2e. Tres
+      defectos del test ya corregidos en sesión supervisada: (a) `datos.productos` es
+      `Record<nombre, uuid>` en la semilla, no un array — `productos[0].id` era undefined;
+      (b) faltaba `fotoSha256` (la semilla trae `pesaje_foto_obligatoria=1`, el servidor
+      rechaza 400); (c) mermar exige stock previo del producto (Anexo B #1: «no se puede
+      mermar más de lo que hay», daba 409 con disponible 0 g) — se agregó
+      `pesarAMostrador()` antes de cada merma. **Queda por resolver:** tras esas tres, la
+      merma se crea pero `/resolver-mermas` no la lista (getByText del producto no
+      aparece) — falta diagnosticar si es el filtro de la pantalla, el `estado_merma` que
+      deja el trigger, o el rol del maestro en `autorizado`. Cerrar SOLO con los 4 e2e
+      verdes.
+      — Descripción del trabajo commiteado: pantalla `/resolver-mermas` filtra `destino=merma`
       `estado_merma='pendiente'` de `/api/pesajes`, cada fila ofrece botones para cambiar
       a 'confirmada_perdida' o 'recuperada_con_venta' via POST `/api/pesajes/resolver-merma`;
       maestro limitado a su propia merma, admin sin restricción; evento registrado en

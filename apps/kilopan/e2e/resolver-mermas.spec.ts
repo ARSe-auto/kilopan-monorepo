@@ -20,8 +20,27 @@ const datos = JSON.parse(
   dispositivo: { id: string; secreto: string; nombre: string };
   pin: string;
   usuarios: Record<string, { rut: string; id: string }>;
-  productos: Array<{ id: string; nombre: string }>;
+  productos: Record<string, string>; // { nombre: uuid } — así lo emite la semilla
 };
+
+// La semilla emite productos como { nombre: uuid }; estas dos constantes evitan
+// repetir Object.entries en cada test (07-ago: el spec lo trataba como array y
+// datos.productos[0].id era undefined — el e2e moría antes de la primera aserción).
+const PRODUCTOS = Object.entries(datos.productos).map(([nombre, id]) => ({ nombre, id }));
+// La semilla trae pesaje_foto_obligatoria=1 (el dueño puede exigir foto por pesaje,
+// AC-PES-04): el servidor rechaza 400 sin un sha256 válido, así que todo POST de
+// pesaje de este spec lo manda, igual que seguridad-tope-merma.spec.ts.
+const FOTO_FALSA = "a".repeat(64);
+
+// Mermar exige stock disponible del producto (Anexo B #1: «no se puede mermar más de
+// lo que hay»): cada merma de este spec pesa primero a mostrador. 07-ago: sin esto el
+// POST daba 409 «disponible: 0 g» y el spec entero moría en su primera línea.
+async function pesarAMostrador(page: Page, productoId: string, gramos: number) {
+  const r = await page.request.post("/api/pesajes", {
+    data: { clientUuid: crypto.randomUUID(), productoId, gramos, destino: "mostrador", fotoSha256: FOTO_FALSA },
+  });
+  expect(r.ok()).toBeTruthy();
+}
 
 async function ingresar(page: Page, rol: keyof typeof datos.usuarios) {
   await sembrarDispositivo(page, datos.dispositivo);
@@ -49,13 +68,15 @@ test("AC-MERM-02: pesar una merma y resolverla desde /resolver-mermas", async ({
   await ingresar(page, "maestro");
 
   // Pesar una merma: destino="merma", motivo="sobrante_dia" -> estado_merma="pendiente"
+  await pesarAMostrador(page, PRODUCTOS[0]!.id, 500);
   const pesaje = await page.request.post("/api/pesajes", {
     data: {
       clientUuid: crypto.randomUUID(),
-      productoId: datos.productos[0]!.id,
+      productoId: PRODUCTOS[0]!.id,
       gramos: 500,
       destino: "merma",
       motivoMerma: "sobrante_dia",
+      fotoSha256: FOTO_FALSA,
     },
   });
   expect(pesaje.ok()).toBeTruthy();
@@ -67,7 +88,7 @@ test("AC-MERM-02: pesar una merma y resolverla desde /resolver-mermas", async ({
   await expect(page).toHaveURL("/resolver-mermas", { timeout: 5_000 });
 
   // Debe listar la merma recién pesada
-  await expect(page.getByText(datos.productos[0]!.nombre)).toBeVisible();
+  await expect(page.getByText(PRODUCTOS[0]!.nombre)).toBeVisible();
   await expect(page.getByText("Sobrante del día")).toBeVisible();
 
   // Resolver con "Recuperada con venta"
@@ -89,13 +110,15 @@ test("AC-MERM-02: resolver una merma con 'Confirmar perdida'", async ({ page }) 
   await ingresar(page, "maestro");
 
   // Pesar otra merma: destino="merma", motivo="quemado"
+  await pesarAMostrador(page, PRODUCTOS[1]?.id || PRODUCTOS[0]!.id, 300);
   const pesaje = await page.request.post("/api/pesajes", {
     data: {
       clientUuid: crypto.randomUUID(),
-      productoId: datos.productos[1]?.id || datos.productos[0]!.id,
+      productoId: PRODUCTOS[1]?.id || PRODUCTOS[0]!.id,
       gramos: 300,
       destino: "merma",
       motivoMerma: "quemado",
+      fotoSha256: FOTO_FALSA,
     },
   });
   expect(pesaje.ok()).toBeTruthy();
@@ -127,13 +150,15 @@ test("AC-MERM-02: resolver una merma con 'Confirmar perdida'", async ({ page }) 
 test("AC-MERM-02: un maestro NO puede resolver una merma de otro maestro", async ({ page }) => {
   // Primer maestro: pesa una merma
   await ingresar(page, "maestro");
+  await pesarAMostrador(page, PRODUCTOS[0]!.id, 250);
   const pesaje = await page.request.post("/api/pesajes", {
     data: {
       clientUuid: crypto.randomUUID(),
-      productoId: datos.productos[0]!.id,
+      productoId: PRODUCTOS[0]!.id,
       gramos: 250,
       destino: "merma",
       motivoMerma: "otro",
+      fotoSha256: FOTO_FALSA,
     },
   });
   expect(pesaje.ok()).toBeTruthy();
@@ -157,13 +182,15 @@ test("AC-MERM-02: admin puede resolver cualquier merma", async ({ page }) => {
   await ingresar(page, "admin");
 
   // Pesar una merma (como admin, que tiene rol maestro implícitamente)
+  await pesarAMostrador(page, PRODUCTOS[0]!.id, 400);
   const pesaje = await page.request.post("/api/pesajes", {
     data: {
       clientUuid: crypto.randomUUID(),
-      productoId: datos.productos[0]!.id,
+      productoId: PRODUCTOS[0]!.id,
       gramos: 400,
       destino: "merma",
       motivoMerma: "devolucion_cliente",
+      fotoSha256: FOTO_FALSA,
     },
   });
   expect(pesaje.ok()).toBeTruthy();
