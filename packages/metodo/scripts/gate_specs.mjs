@@ -26,7 +26,7 @@ const ROOT = new URL("../../..", import.meta.url).pathname;
 
 const MAESTRO = {
   kilopan: "docs/PROMPT_MAESTRO.md",
-  flota: "docs/PROMPT_MAESTRO_KILORUTA.md",
+  flota: "docs/PROMPT_MAESTRO_FLOTA.md",
 };
 
 const args = process.argv.slice(2);
