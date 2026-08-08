@@ -250,12 +250,24 @@ test("7 · la caja se cuenta a ciegas: el vendedor no ve lo esperado antes de co
 });
 
 // AC-DES-03: «Armar ruta y salir» desde /pedidos, con la guía ya registrada — sin DTE
-// la BD no deja que la ruta pase a en_curso (art. 55 DL 825).
+// la BD no deja que la ruta pase a en_curso (art. 55 DL 825). Su evidencia PROPIA vive
+// ahora en despacho-armar-ruta.spec.ts (HTTP + pantalla, datos propios); este test 8
+// sigue ejercitando el mismo flujo dentro del camino dorado completo, pero ya no es la
+// única evidencia del AC.
 // AC-POD-03: la entrega exige foto in-app y GPS, y el acuse nombra al cliente.
 // AC-POD-04: el flujo POD ejercitado de punta a punta, que es lo que AC-POD-03 no tenía.
-// OJO: este test es INESTABLE (pasó, agotó 30 s, volvió a pasar sobre el mismo commit).
-// Un flaky dentro del gate lo pone rojo al azar y el watchdog revierte commits sanos.
 test("8 · el repartidor entrega el pedido con foto y GPS", async ({ page }) => {
+  // AC-POD-04: la causa real del "agotó los 30 s" no era el flujo (cámara/GPS/red)
+  // sino el presupuesto del test: dos logins con esperas de hasta 10 s cada uno más
+  // las esperas explícitas de este caso (15 s + 15 s + 20 s + 20 s = 70 s de
+  // presupuesto declarado en sus propias aserciones) corriendo bajo el timeout POR
+  // DEFECTO de Playwright de 30 s para el test completo — un techo que nunca se subió
+  // cuando se agregaron esos `{ timeout: … }` internos. En máquina descargada entraba
+  // igual (por eso "pasó"); bajo `check.sh --full` con el build y otros procesos
+  // compitiendo por CPU, el mismo flujo cruzaba los 30 s sin que nada estuviera roto.
+  // 90 s da margen real sobre el peor caso declarado sin ocultar una regresión de verdad.
+  test.setTimeout(90_000);
+
   // La ruta la arma despacho de un clic; el pedido y su guía vienen sembrados porque lo
   // que este caso prueba es la ENTREGA, no el alta del pedido.
   await ingresar(page, "admin");

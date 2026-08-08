@@ -339,7 +339,7 @@ esta misma auditoría — no queda como ítem abierto de la lista de abajo.
 - [ ] (P2) [AC-FIA-01] — el "índice único" de consolidación no existe (solo índice no-único); ver nota en `specs/kilopan/06-registro-dte.md`
 - [ ] (P2) [AC-FIA-02] — doble facturación 409 sin test — `specs/kilopan/06-registro-dte.md`
 - [ ] (P2) [AC-SUC-01] — sucursal_id probado en BD pero invisible en toda la UI — `specs/kilopan/07-dashboard-flota.md`
-- [ ] (P1) [AC-POD-04] — e2e flaky confirmado, no es evidencia repetible — `specs/kilopan/05-entrega-pod.md`
+- [x] (P1) [AC-POD-04] — cerrado 08-ago (barrido supervisado): causa raíz = timeout default de 30 s vs 70 s de esperas declaradas en el propio test; `test.setTimeout(90_000)` (fix rescatado de `archivo-wip/d-09`/`d-10`); 7 corridas consecutivas verdes — `specs/kilopan/05-entrega-pod.md`
 - [x] (P1) [AC-DES-03] — cerrado 08-ago (barrido supervisado): evidencia propia en `e2e/despacho-armar-ruta.spec.ts` (2 verdes, pantalla + HTTP), rescatada del tag `archivo-wip/d-05` — ya no depende del test 8 del camino dorado — `specs/kilopan/04-despacho-reparto.md`
 - [ ] (P2) [AC-DASH-04] — comparación con el facturador sin ningún test — `specs/kilopan/07-dashboard-flota.md`
 - [ ] (P2) [AC-SHARE-01] — degradación de `navigator.share()` sin test — `specs/kilopan/07-dashboard-flota.md`

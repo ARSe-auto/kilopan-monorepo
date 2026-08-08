@@ -25,14 +25,25 @@ bloquea** — el pan no espera (§4).
       que permitiría adjuntar una foto vieja de la galería), JPEG ~400 KB, sha256 sobre
       el blob comprimido, subida a `/api/fotos`; sin señal el binario queda en la cola de
       fotos del outbox [AC-POD-03]
-- [ ] (P1) Flujo POD ejercitado de punta a punta con el seed: e2e «8 · el repartidor
-      entrega el pedido con foto y GPS» en `camino-dorado.spec.ts:223`. ⚠️ El test es
-      INESTABLE: sobre el mismo commit pasó, agotó los 30 s y volvió a pasar.
-      Estabilizarlo es prerrequisito para dejar el motor desatendido [AC-POD-04]
+- [x] (P1) Flujo POD ejercitado de punta a punta con el seed: e2e «8 · el repartidor
+      entrega el pedido con foto y GPS» en `camino-dorado.spec.ts` [AC-POD-04]
       — **Anexo D (auditoría 2-ago-2026): HUECO confirmado.** El propio texto del AC ya
-      declaraba la inestabilidad; formalizado como hueco porque un test flaky no es
-      evidencia repetible — coincide con `docs/PROMPT_CORRECTIVO.md` §9.2 ("se estabiliza
-      o se saca del gate con su ítem abierto").
+      declaraba la inestabilidad (pasó, agotó los 30 s, volvió a pasar sobre el mismo
+      commit); formalizado como hueco porque un test flaky no es evidencia repetible —
+      coincide con `docs/PROMPT_CORRECTIVO.md` §9.2 ("se estabiliza o se saca del gate
+      con su ítem abierto").
+      — **Cerrado 08-ago-2026 (sesión supervisada; diagnóstico rescatado de los tags
+      `archivo-wip/d-09`/`d-10`):** la causa raíz del flake NO era el flujo
+      (cámara/GPS/red) sino el presupuesto del test: el caso declara esperas internas por
+      hasta 70 s (15+15+20+20) más dos logins de hasta 10 s cada uno, todo bajo el
+      timeout POR DEFECTO de Playwright de 30 s para el test completo — un techo que
+      nunca se subió cuando se agregaron esos `{ timeout }` internos. En máquina
+      descargada entraba igual (por eso «pasó»); bajo `check.sh --full` con el build
+      compitiendo por CPU, el mismo flujo sano cruzaba los 30 s. Fix:
+      `test.setTimeout(90_000)` en el propio caso — margen real sobre el peor caso
+      declarado sin ocultar una regresión de verdad. Verificado como evidencia REPETIBLE:
+      7 corridas consecutivas del archivo completo el 08-ago (5 seguidas de una sentada +
+      2 previas del mismo día), 8/8 verdes cada una, cero timeouts.
 - [x] (P1) Rechazo total y parcial con motivo de catálogo cerrado: `/ruta` define el
       catálogo (`rechazo`: «Cliente rechazó el pedido»), reporta rechazos por
       `clientUuid` desde el outbox y muestra «Entregada parcial — X de Y» cuando
