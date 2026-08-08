@@ -68,13 +68,24 @@ F1 Pesar ≤4 toques; repetir producto: 2 toques.
       alfabético (route.ts). e2e `frecuencia-pesar.spec.ts` siembra Frica=10, Hallulla=5,
       resto=0 y falla si la grilla no pone Frica antes que Hallulla y ambas antes que
       Dobladitas (que en alfabético iría primera). Gate --full verde, 0 saltados.
-- [ ] (P1-SEC) UI de re-confirmación explícita cuando `pan.es_outlier_pesaje()` devuelve
+- [x] (P1-SEC) UI de re-confirmación explícita cuando `pan.es_outlier_pesaje()` devuelve
       true: `/pesar` tiene el estado `confirmar_outlier` y conserva el sha256 de la foto
       entre las dos vueltas de `enviar()` — el maestro no fotografía dos veces la misma
-      bandeja. Verificado en `apps/kilopan/src/app/pesar/page.tsx` [AC-PES-08]
-      — **Anexo D (auditoría 2-ago-2026): HUECO.** La propia evidencia citada es una
+      bandeja [AC-PES-08]
+      — **Anexo D (auditoría 2-ago-2026): HUECO.** La evidencia citada entonces era una
       lectura de archivo ("Verificado en pesar/page.tsx"), no un test automatizado —
-      ningún unit ni e2e ejercita el estado `confirmar_outlier`.
+      ningún unit ni e2e ejercitaba el estado `confirmar_outlier`.
+      — **Cerrado 08-ago-2026 (sesión supervisada):** `e2e/pesar-outlier.spec.ts`
+      (2 tests, verdes) ejercita el estado desde la PANTALLA, no por HTTP directo, con un
+      producto propio del test cuya mediana se siembra en el mismo caso (3×500 g —
+      `es_outlier_pesaje` exige n≥3; apoyarse en la mediana de Frica/Hallulla dependería
+      de qué otros specs corrieron antes). (1) Pesar 5 kg (10× la mediana) con la foto
+      obligatoria de la semilla: el 409 «outlier» muestra la re-confirmación con producto
+      y peso exactos, y al confirmar, la RED comprueba la afirmación central — UNA sola
+      subida a `/api/fotos` y el segundo POST a `/api/pesajes` con `confirmarOutlier=true`
+      lleva el MISMO `fotoSha256` que el primero (nunca se vuelve a abrir la cámara).
+      (2) Cancelar no envía nada y la pantalla vuelve a «listo» para corregir el dedo
+      de más.
 - [x] (P2) Validar el camino GATT contra una báscula real antes de darlo por bueno. Las
       marcas comunes en panaderías chilenas (Toledo, CAS, Torrey) suelen usar serie
       propietario, no GATT — `AC-PES-05` está escrito pero no verificado contra hardware
