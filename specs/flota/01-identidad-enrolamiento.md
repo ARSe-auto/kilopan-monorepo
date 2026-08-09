@@ -319,12 +319,55 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       «Esperando aprobación» que consulta; ambos son de AC-FIDN-02 con su presupuesto de
       toques. Acá está el acto completo, probado contra la base y contra un aparato con claves
       de verdad — oráculo: CI [AC-FIDN-04]
-- [ ] (P1) El enrolamiento NO se completa sin display-mode standalone Y persist()
+- [x] (P1) El enrolamiento NO se completa sin display-mode standalone Y persist()
       concedido: con cualquiera de los dos ausente el dispositivo no queda operable y
       la UI lo dice (degradación visible, no silencio); `persist_denegado` se registra
       en `client_metric`; al concederse ambos, el dispositivo queda activo con
-      `is_standalone=true` y `storage_persisted=true` (§4.3, §5.4, §4.6) — oráculo: CI
-      [AC-FIDN-05]
+      `is_standalone=true` y `storage_persisted=true` (§4.3, §5.4, §4.6). Evidencia:
+      `db/migraciones-flota/tenant/0015_entorno_del_aparato.sql`,
+      `apps/flota/src/cliente/entorno.ts`, `apps/flota/src/servidor/entorno.ts`, la ruta
+      `POST /api/entorno`, la guía A2HS de «Esperando aprobación» y 3 pruebas de navegador en
+      `apps/flota/e2e/entorno.spec.ts`.
+      **DÓNDE VIVE EL ENTORNO, que es la decisión de fondo.** El aparato existe recién cuando el
+      dueño aprueba (AC-FIDN-04), y las dos condiciones se cumplen ANTES: es mientras la persona
+      mira «Esperando aprobación» cuando sigue la guía A2HS y agrega la app a su pantalla de
+      inicio. Por eso el entorno se declara sobre la SOLICITUD y de ahí viaja al aparato en la
+      misma aprobación. Guardarlo solo en `dispositivos` dejaría al dueño aprobando a ciegas
+      —sin saber si lo que habilita sirve para trabajar— y la comprobación ocurriría después de
+      emitido el secreto, que es tarde. Y se puede REDECLARAR mientras la solicitud está
+      pendiente: una sola foto al momento de solicitar dejaría en `false` a todo el que hizo las
+      cosas bien treinta segundos después.
+      **EL APARATO INCOMPLETO TIENE SESIÓN, y eso ES la degradación visible.** Negarle la sesión
+      sería el silencio que este AC prohíbe con esas palabras: no habría ninguna pantalla donde
+      decirle qué le queda pendiente. `GET /api/sesion` reporta `enrolamiento_completo: false`,
+      con las dos condiciones por separado, y la pantalla dice qué le queda, qué hacer y POR QUÉ
+      importa — en palabras y no en un ícono (§5.7). ALCANCE DECLARADO: el rechazo de la CAPTURA
+      de un aparato no operable lo exigen los endpoints de sync del módulo 04 (hito e), que es
+      donde nacen; acá está la condición y su visibilidad.
+      **`persist()` SE PIDE, NO SE CONSULTA**, y esa distinción decide el AC: en los navegadores
+      que lo implementan la concesión depende de que la app la solicite, así que un
+      `persisted()` a secas devuelve `false` en un aparato que jamás preguntó — y la pantalla
+      mostraría «denegado» sin que nadie hubiera negado nada. Lo mismo con standalone: se lee de
+      `matchMedia` de ESTA ventana y no de «la app está instalada», porque alguien puede tenerla
+      instalada y estar mirándola en una pestaña —donde el navegador sí la puede cerrar—; y se
+      mira además `navigator.standalone`, que es la vía de iOS, sin lo cual media flota quedaría
+      en rojo haciendo todo bien.
+      **LA MÉTRICA ES IDEMPOTENTE POR `client_uuid`**, uno por intento de enrolamiento y no uno
+      por chequeo: el operario vuelve a tocar «Revisar» hasta que el navegador conceda, y una
+      métrica por reintento convertiría «cuántos aparatos no consiguen persistencia» —la
+      pregunta que dice si la flota está a un vaciado de caché de perder trabajo— en «cuántas
+      veces alguien insistió». El test lo verifica reintentando. **Y un `false` por omisión no
+      se confunde con una medición**: `entorno_visto_en` distingue «nunca reportó» de «reportó
+      que no», y un CHECK impide la tercera lectura que dejaría a las dos anteriores idénticas.
+      **CÓMO SE PRUEBA ALGO QUE DEPENDE DEL NAVEGADOR:** ni el display-mode ni la concesión se
+      pueden forzar desde un test, así que se sustituyen las DOS respuestas del navegador y se
+      verifica qué hace NUESTRO código con cada una. Que Chrome conteste la verdad no es algo
+      que nos toque verificar.
+      **HALLAZGO DEL CAMINO, y estaba latente:** la guardia anti-vacuidad de `gate-pii.test.mjs`
+      comparaba contra `/0 migraciones/` sin anclar, y esa expresión también casa con «20
+      migraciones» — se rompió sola, con el gate sano, el día que el repo llegó a la vigésima
+      migración, que fue esta. Quedó anclada al separador. Una guardia que falla por contar bien
+      es peor que no tenerla: enseña a ignorarla — oráculo: CI [AC-FIDN-05]
 - [x] (P1) PIN de 4 dígitos hasheado argon2id server-side; 5 intentos fallidos bloquean
       AL USUARIO (`bloqueado_hasta` server-side), jamás al dispositivo: en el andén,
       con el usuario A bloqueado, el usuario B entra con su PIN sin fricción; el

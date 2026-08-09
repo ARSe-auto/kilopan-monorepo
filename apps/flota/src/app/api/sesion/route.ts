@@ -26,9 +26,18 @@ export async function GET() {
     return Response.json({ error: "sin_sesion", mensaje: "Tenés que volver a enrolar este equipo." }, { status: 401 });
   }
 
+  // El enrolamiento COMPLETO se informa acá y no se convierte en un 401 [AC-FIDN-05]: a un
+  // aparato al que le falta standalone o persist() hay que DECIRLE qué le falta, y sin sesión
+  // no hay pantalla donde decírselo. Negarle la sesión sería la degradación silenciosa que el
+  // AC prohíbe con esas palabras. Lo que no puede hacer es capturar en terreno, y eso lo
+  // exigen los endpoints de captura del módulo 04 (hito e) — ALCANCE DECLARADO, no olvido.
+  const { isStandalone, storagePersisted } = veredicto.sesion;
   return Response.json({
     rol: veredicto.sesion.rol,
     usuario_id: veredicto.sesion.usuarioId,
     dispositivo_id: veredicto.sesion.dispositivoId,
+    is_standalone: isStandalone,
+    storage_persisted: storagePersisted,
+    enrolamiento_completo: isStandalone && storagePersisted,
   });
 }

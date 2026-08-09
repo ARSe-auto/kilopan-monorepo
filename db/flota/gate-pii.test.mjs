@@ -22,7 +22,11 @@ const tabla = (nombre, columnas, clase = "PLANIFICACIÓN") =>
 test("[AC-FIDN-14] el repo real pasa el gate", () => {
   const salida = execFileSync("node", [`${RAIZ}/db/flota/gate-pii.mjs`], { encoding: "utf8" });
   assert.match(salida, /gate-pii: VERDE/);
-  assert.doesNotMatch(salida, /0 migraciones/, "el gate no revisó ninguna migración");
+  // ANCLADO al separador, y no es cosmética [AC-FIDN-05]: `/0 migraciones/` a secas también
+  // casa con «20 migraciones», así que esta guardia anti-vacuidad se rompió sola el día que el
+  // repo llegó a la vigésima migración — con el gate sano. Una guardia que falla por contar
+  // bien es peor que no tenerla: enseña a ignorarla.
+  assert.doesNotMatch(salida, /:\s0 migraciones\b/, "el gate no revisó ninguna migración");
 });
 
 // ─── Los identificadores inequívocos ─────────────────────────────────────────────────

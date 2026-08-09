@@ -41,6 +41,8 @@ type FilaSolicitud = {
   pin_hash: string;
   clave_publica: string;
   rol: string | null;
+  is_standalone: boolean;
+  storage_persisted: boolean;
 };
 
 /**
@@ -90,7 +92,8 @@ export async function aprobar(
     // posible porque manda a buscar el problema al lugar equivocado.
     const { rows } = await c.query<FilaSolicitud>(
       `select s.id, s.estado::text as estado, s.tipo::text as tipo, s.persona_id::text as persona_id,
-              s.rut_propuesto, s.nombre_propuesto, s.pin_hash, s.clave_publica, i.rol::text as rol
+              s.rut_propuesto, s.nombre_propuesto, s.pin_hash, s.clave_publica,
+              s.is_standalone, s.storage_persisted, i.rol::text as rol
          from solicitudes_acceso s
          left join invitaciones i on i.id = s.invitacion_id
         where s.id = $1
@@ -122,10 +125,14 @@ export async function aprobar(
 
       const secreto = secretoNuevo();
       const sobre = await sellar(solicitud.clave_publica, secreto);
+      // El entorno que el aparato declaró mientras esperaba viaja con él [AC-FIDN-05]: sin
+      // esto, un teléfono nuevo nacería siempre «no operable» aunque la persona hubiera hecho
+      // todo bien, y el enrolamiento se completaría dos pantallas después de que se completó.
       const { rows: nuevos } = await c.query<{ id: string }>(
-        `insert into dispositivos (tipo, persona_id, secreto_hash, enrolado_por, enrolado_en)
-         values ('personal', $1, $2, $3, now()) returning id::text as id`,
-        [personaId, hashDeSecreto(secreto), aprobadorId],
+        `insert into dispositivos
+           (tipo, persona_id, secreto_hash, enrolado_por, enrolado_en, is_standalone, storage_persisted)
+         values ('personal', $1, $2, $3, now(), $4, $5) returning id::text as id`,
+        [personaId, hashDeSecreto(secreto), aprobadorId, solicitud.is_standalone, solicitud.storage_persisted],
       );
 
       await c.query(
@@ -192,9 +199,10 @@ export async function aprobar(
     const sobre = await sellar(solicitud.clave_publica, secreto);
 
     const { rows: dispositivos } = await c.query<{ id: string }>(
-      `insert into dispositivos (tipo, persona_id, secreto_hash, enrolado_por, enrolado_en)
-       values ('personal', $1, $2, $3, now()) returning id::text as id`,
-      [personaId, hashDeSecreto(secreto), aprobadorId],
+      `insert into dispositivos
+         (tipo, persona_id, secreto_hash, enrolado_por, enrolado_en, is_standalone, storage_persisted)
+       values ('personal', $1, $2, $3, now(), $4, $5) returning id::text as id`,
+      [personaId, hashDeSecreto(secreto), aprobadorId, solicitud.is_standalone, solicitud.storage_persisted],
     );
 
     await c.query(

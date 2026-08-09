@@ -24,6 +24,12 @@ export type Sesion = {
   personaId: string;
   usuarioId: string;
   rol: string;
+  /** Las dos condiciones del §4.3 [AC-FIDN-05]. Un aparato al que le falte una TIENE sesión
+   *  —si no, no habría dónde decirle qué le falta, que es la degradación VISIBLE que el AC
+   *  pide— pero no está operable para capturar en terreno. Quien pregunte por lo segundo usa
+   *  `enrolamientoCompleto`, no el hecho de que la sesión resuelva. */
+  isStandalone: boolean;
+  storagePersisted: boolean;
 };
 
 export type VeredictoSesion =
@@ -53,13 +59,17 @@ export async function resolverSesion(pool: Pool, cabecera: string | null): Promi
     rol: string | null;
     revocado_at: Date | null;
     activo: boolean | null;
+    is_standalone: boolean;
+    storage_persisted: boolean;
   }>(
     `select d.id::text  as dispositivo_id,
             d.persona_id::text as persona_id,
             u.id::text  as usuario_id,
             u.rol::text as rol,
             d.revocado_at,
-            u.activo
+            u.activo,
+            d.is_standalone,
+            d.storage_persisted
        from dispositivos d
        left join usuarios u on u.persona_id = d.persona_id
       where d.secreto_hash = $1`,
@@ -83,6 +93,8 @@ export async function resolverSesion(pool: Pool, cabecera: string | null): Promi
       personaId: fila.persona_id,
       usuarioId: fila.usuario_id,
       rol: fila.rol!,
+      isStandalone: fila.is_standalone,
+      storagePersisted: fila.storage_persisted,
     },
   };
 }

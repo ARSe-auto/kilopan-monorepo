@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { TecladoNumerico, BotonPrimario, EstadoError } from "@kilopan/miga/componentes/index.tsx";
 import { tipografia, superficie, grilla } from "@kilopan/miga/tokens.ts";
 import { semantico } from "@kilopan/miga/estructura.ts";
@@ -8,6 +8,7 @@ import { formatearRut, rutValido, EJEMPLO_RUT } from "../../../../../packages/nu
 import { PIN } from "../../../../../packages/nucleo-comun/src/constants.ts";
 import { normalizarCodigo } from "../../dominio/codigo-corto.ts";
 import { parDelAparato, guardarPrivada, huellaDelAparato } from "../../cliente/aparato.ts";
+import { entornoDelAparato, pedirPersistencia } from "../../cliente/entorno.ts";
 
 // F-B del §5.4: «Solicitar acceso» [AC-FIDN-17] — §0, §4.2, §4.3, §5.4.
 //
@@ -47,6 +48,14 @@ export default function Solicitar() {
   const [pin, setPin] = useState("");
   const [pinConfirmado, setPinConfirmado] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // La clave pública identifica a este aparato ante `/api/entorno` mientras espera: el id de
+  // la solicitud no se devuelve a propósito (AC-FIDN-03), y esta ya viajó.
+  const [clavePublica, setClavePublica] = useState("");
+  // UNO por intento de enrolamiento, no uno por chequeo: la métrica `persist_denegado` se
+  // desduplica por él, y un uuid nuevo en cada reintento convertiría «cuántos aparatos» en
+  // «cuántas veces alguien insistió».
+  const [clientUuid] = useState(() => crypto.randomUUID());
+  const [entorno, setEntorno] = useState<{ isStandalone: boolean; storagePersisted: boolean } | null>(null);
 
   const rut = formatearRut(rutCrudo);
   const rutEsValido = rutValido(rut);
@@ -79,6 +88,7 @@ export default function Solicitar() {
         setPaso("confirmar");
         return;
       }
+      setClavePublica(aparato.publica);
       setPaso("esperando");
     } catch {
       setError("No se pudo enviar la solicitud. Revisá tu conexión e intentá de nuevo.");
@@ -93,6 +103,7 @@ export default function Solicitar() {
         <p style={cuerpo}>
           Le avisamos a quien administra la cuenta. En cuanto te apruebe, esta pantalla se abre sola.
         </p>
+        <Entorno clavePublica={clavePublica} clientUuid={clientUuid} entorno={entorno} onEntorno={setEntorno} />
       </main>
     );
   }
@@ -199,6 +210,124 @@ export default function Solicitar() {
         </Campo>
       )}
     </main>
+  );
+}
+
+/**
+ * La guía A2HS y la degradación VISIBLE del §5.4 [AC-FIDN-05].
+ *
+ * Va acá, en «Esperando aprobación», porque este es el rato en que la persona está mirando la
+ * pantalla sin nada que hacer — y porque las dos condiciones se cumplen ANTES de que el dueño
+ * apruebe: el entorno declarado viaja a la solicitud y de ahí al aparato, así que quien hizo
+ * las cosas bien queda operable en el mismo acto en que lo aprueban.
+ *
+ * LO QUE NO HACE ES CALLARSE. Un aparato al que le falta `standalone` o `persist()` no es un
+ * aparato con una advertencia menor: es uno que puede perder capturas del terreno el día que
+ * el sistema haga limpieza. Por eso cada condición se dice con TEXTO y con lo que hay que
+ * hacer, no con un ícono.
+ */
+function Entorno({
+  clavePublica,
+  clientUuid,
+  entorno,
+  onEntorno,
+}: {
+  clavePublica: string;
+  clientUuid: string;
+  entorno: { isStandalone: boolean; storagePersisted: boolean } | null;
+  onEntorno: (e: { isStandalone: boolean; storagePersisted: boolean }) => void;
+}) {
+  const revisar = useCallback(async () => {
+    // `persist()` se PIDE, no se consulta: en varios navegadores la concesión depende de que
+    // la app la solicite y de la interacción previa. Consultar `persisted()` a secas dejaría a
+    // todo el mundo en «denegado» sin haber preguntado nunca.
+    await pedirPersistencia();
+    const actual = await entornoDelAparato();
+    onEntorno(actual);
+    if (!clavePublica) return;
+    await fetch("/api/entorno", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        clave_publica: clavePublica,
+        client_uuid: clientUuid,
+        is_standalone: actual.isStandalone,
+        storage_persisted: actual.storagePersisted,
+        tz_offset_min: -new Date().getTimezoneOffset(),
+      }),
+    }).catch(() => undefined);
+  }, [clavePublica, clientUuid, onEntorno]);
+
+  useEffect(() => {
+    void revisar();
+  }, [revisar]);
+
+  const completo = entorno !== null && entorno.isStandalone && entorno.storagePersisted;
+
+  return (
+    <section
+      data-testid="entorno"
+      data-completo={completo ? "si" : "no"}
+      style={{ display: "grid", gap: semantico.espacio.entreControles, marginTop: semantico.espacio.entreTarjetas }}
+    >
+      <h2 style={{ ...cuerpo, margin: 0 }}>
+        {completo ? "Este teléfono queda listo" : "Falta un paso para que este teléfono sirva en terreno"}
+      </h2>
+      <Condicion
+        testid="condicion-standalone"
+        cumple={entorno?.isStandalone === true}
+        titulo="Agregar la app a la pantalla de inicio"
+        instruccion="Tocá «Compartir» en tu navegador y elegí «Agregar a la pantalla de inicio». Después abrí la app desde ese ícono."
+        porque="Abierta como pestaña, el navegador la cierra cuando necesita memoria — en medio del turno."
+      />
+      <Condicion
+        testid="condicion-persistencia"
+        cumple={entorno?.storagePersisted === true}
+        titulo="Permitir que guarde datos"
+        instruccion="Abrí la app desde el ícono de la pantalla de inicio y volvé a tocar «Revisar»."
+        porque="Sin permiso, el sistema puede borrar lo que capturaste y todavía no se envió."
+      />
+      <BotonPrimario onClick={() => void revisar()}>Revisar</BotonPrimario>
+    </section>
+  );
+}
+
+function Condicion({
+  testid,
+  cumple,
+  titulo: encabezado,
+  instruccion,
+  porque,
+}: {
+  testid: string;
+  cumple: boolean;
+  titulo: string;
+  instruccion: string;
+  porque: string;
+}) {
+  return (
+    <div
+      data-testid={testid}
+      data-cumple={cumple ? "si" : "no"}
+      style={{
+        padding: `${grilla.base}px`,
+        borderRadius: grilla.radio,
+        background: superficie.tarjeta,
+        border: `1px solid ${superficie.hairline}`,
+      }}
+    >
+      {/* El estado va en PALABRAS y no solo en un color o un ícono (§5.7): a pleno sol un
+          verde y un ámbar se ven iguales, y a quien no distingue colores no le dicen nada. */}
+      <p style={{ ...cuerpo, margin: 0, fontWeight: 600 }}>
+        {cumple ? "Listo" : "Falta"} · {encabezado}
+      </p>
+      {!cumple && (
+        <>
+          <p style={{ ...pie, marginTop: grilla.base, color: superficie.texto }}>{instruccion}</p>
+          <p style={{ ...pie, marginTop: 0, color: superficie.textoDim }}>{porque}</p>
+        </>
+      )}
+    </div>
   );
 }
 

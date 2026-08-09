@@ -14,6 +14,18 @@
       }
     },
     {
+      "ruta": "/api/entorno",
+      "archivo": "src/app/api/entorno/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Público y sin parámetros de ruta: el aparato se identifica con la clave pública que ya viajó en su solicitud, y esa clave es de la BD del tenant que el ruteo eligió — una clave de B contra el subdominio de A no encuentra ninguna solicitud pendiente y sale 404 sin tocar nada. El cruce que aplica es el genérico, y como el verbo MUTA enciende el comparador de huella de la BD de B. LÍMITE DECLARADO, igual que en /api/solicitudes: el caso autogenerado va sin payload y rebota 422 antes de tocar la base, así que la huella confirma «no escribió» de forma trivial; el cruce CON una clave pública válida de B lo prueba la suite del módulo (e2e/entorno.spec.ts), que sí sabe cómo se ve una."
+      }
+    },
+    {
       "ruta": "/api/gobierno/auditoria",
       "archivo": "src/app/api/gobierno/auditoria/route.ts",
       "metodos": [

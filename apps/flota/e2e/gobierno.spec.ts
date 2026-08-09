@@ -418,7 +418,14 @@ test("[AC-FIDN-12] el evento y la mutación entran juntos, o no entra ninguno", 
         codigo: "gobierno.tipo_que_no_existe" as CodigoDeEvento,
         objetoTabla: "invitaciones",
         objetoId: invitacionId,
-        sesion: { usuarioId: duena.usuarioId, personaId: duena.personaId, dispositivoId: operario.dispositivoId, rol: "admin_tenant" },
+        sesion: {
+          usuarioId: duena.usuarioId,
+          personaId: duena.personaId,
+          dispositivoId: operario.dispositivoId,
+          rol: "admin_tenant",
+          isStandalone: true,
+          storagePersisted: true,
+        },
       });
     }),
   ).rejects.toThrow(/catálogo/);
