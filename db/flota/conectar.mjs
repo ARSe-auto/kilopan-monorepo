@@ -47,6 +47,17 @@ export function rolDeTenant(slug) {
   return `app_${bdDeTenant(slug)}`;
 }
 
+/** El camino de vuelta: `t_<slug>` → `<slug>`. `null` si el nombre no es de un tenant. */
+export function slugDeBd(bd) {
+  const slug = /^t_(.+)$/.exec(bd)?.[1];
+  if (!slug) return null;
+  try {
+    return bdDeTenant(slug) === bd ? slug : null;
+  } catch {
+    return null;
+  }
+}
+
 function baseDelEntorno() {
   if (process.env.FLOTA_DATABASE_URL) return process.env.FLOTA_DATABASE_URL;
   if (existsSync(ENV_FILE)) {

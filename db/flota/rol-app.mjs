@@ -92,6 +92,30 @@ export async function acotarConexion(slug) {
       `alter default privileges for role ${ident(ROL_MIGRADOR)} in schema public ` +
         `grant select, insert, update, delete on tables to ${ident(rol)}`,
     );
+
+    // USAGE sobre las secuencias, o `nextval` rebota con 42501. La secuencia monotónica de
+    // `eventos` (§4.6) se alimenta de un DEFAULT, así que sin esto la app no puede insertar
+    // un hecho — y el rebote aparecería recién con el primer POD del hito (e).
+    await sql(`grant usage on all sequences in schema public to ${ident(rol)}`);
+    await sql(
+      `alter default privileges for role ${ident(ROL_MIGRADOR)} in schema public ` +
+        `grant usage on sequences to ${ident(rol)}`,
+    );
+
+    // Y se le quita UPDATE/DELETE en las tablas append-only del §7.4. Cuáles son NO se
+    // escribe acá: se deriva del catálogo, preguntando qué tablas llevan el trigger de
+    // rechazo. Una lista a mano en JavaScript se desincronizaría de la migración que agregue
+    // la próxima tabla de hechos, y el REVOKE que falta no se ve hasta que alguien edita un
+    // hecho en producción.
+    const apendOnly = await sql(
+      `select distinct c.relname from pg_trigger t
+         join pg_class c on c.oid = t.tgrelid
+         join pg_proc  p on p.oid = t.tgfoid
+        where p.proname = 'rechazar_mutacion_de_hecho' and not t.tgisinternal`,
+    );
+    for (const { relname } of apendOnly) {
+      await sql(`revoke update, delete on ${ident(relname)} from ${ident(rol)}`);
+    }
   });
 
   return { bd, rol };
@@ -102,6 +126,13 @@ export async function provisionarRolDeApp(slug, { clave = claveNueva() } = {}) {
   const { rol } = await asegurarRolDeApp(slug, { clave });
   await acotarConexion(slug);
   return { rol, clave, bd: bdDeTenant(slug) };
+}
+
+/** ¿Ya existe el rol de app de este tenant? */
+export async function tieneRolDeApp(slug) {
+  return con("postgres", async ({ sql }) =>
+    (await sql("select 1 from pg_roles where rolname = $1", [rolDeTenant(slug)])).length > 0,
+  );
 }
 
 /** Lo que el test de privilegios del AC mira: atributos, ownership y a qué bases alcanza. */

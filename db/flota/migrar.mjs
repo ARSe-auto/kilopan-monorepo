@@ -18,7 +18,14 @@
 // `verificar` es el modo que consume el deploy: no aplica NADA, solo responde si alguna base
 // quedó rezagada. `scripts/deploy.sh` lo llama ANTES de sustituir la versión servida (§9.1).
 import { pathToFileURL } from "node:url";
-import { con, BD_PLANTILLA, ROL_MIGRADOR, TENANT_CANARIO, bdDeTenant } from "./conectar.mjs";
+import {
+  con,
+  BD_PLANTILLA,
+  ROL_MIGRADOR,
+  TENANT_CANARIO,
+  bdDeTenant,
+  slugDeBd,
+} from "./conectar.mjs";
 import { aplicar, DIR_MIGRACIONES, versionEsperada } from "./aplicar.mjs";
 import {
   asegurarRolMigrador,
@@ -29,6 +36,7 @@ import {
   provisionar,
   versionesDe,
 } from "./provisionar.mjs";
+import { acotarConexion, tieneRolDeApp } from "./rol-app.mjs";
 
 /**
  * El orden en que el runner recorre las bases. PURA para poder probar el orden sin cluster:
@@ -100,7 +108,21 @@ export async function migrar({ dir = DIR_MIGRACIONES, usuario = ROL_MIGRADOR } =
   const orden = ordenDeMigracion(await basesDeTenant());
   const resultados = [];
   for (const bd of orden) resultados.push(await migrarUna(bd, { dir, usuario }));
-  return { orden, resultados };
+
+  // Después de migrar, los permisos del rol de app se vuelven a asentar. Una migración que
+  // agrega una tabla append-only la deja, por privilegios por omisión, con UPDATE y DELETE
+  // otorgados: sin este paso el REVOKE del §7.4 solo existiría en los tenants provisionados
+  // DESPUÉS de esa migración, y el deploy dejaría el agujero justo en los tenants viejos.
+  const reacotadas = [];
+  for (const bd of await basesDeTenant()) {
+    const slug = slugDeBd(bd);
+    if (slug && (await tieneRolDeApp(slug))) {
+      await acotarConexion(slug);
+      reacotadas.push(bd);
+    }
+  }
+
+  return { orden, resultados, reacotadas };
 }
 
 /** El modo que consume el deploy: mira y no toca. */
