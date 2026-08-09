@@ -63,6 +63,9 @@ test.beforeAll(async () => {
   await con(BD_A, async (c: Conexion) => {
     await c.sql("delete from solicitudes_acceso");
     await c.sql("delete from invitaciones");
+    // Antes que `usuarios`: `dispositivos.enrolado_por` apunta ahí desde AC-FIDN-04, y
+    // las suites comparten la base del fixture.
+    await c.sql("delete from dispositivos");
     await c.sql("delete from usuarios");
     await c.sql("delete from personas");
   });

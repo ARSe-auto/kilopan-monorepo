@@ -274,7 +274,7 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       encendió el comparador de huella de la BD de B — con su límite escrito en el manifiesto,
       porque el caso autogenerado no lleva payload y por eso el cruce CON datos válidos lo
       prueba la suite de este módulo — oráculo: CI [AC-FIDN-03]
-- [ ] (P1) La aprobación (1 toque) empareja persona+dispositivo+rol y RECIÉN AHÍ emite
+- [x] (P1) La aprobación (1 toque) empareja persona+dispositivo+rol y RECIÉN AHÍ emite
       el secreto UNA vez contra la clave pública registrada en la solicitud: en BD
       queda solo `secreto_hash`; una segunda petición de emisión para el mismo
       dispositivo rebota y no re-emite; el rechazo deja `rechazada` y no emite nada;
@@ -283,8 +283,42 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       cuyo RUT ya pertenece a una persona del tenant ⇒ 422 tipado y 0 filas nuevas, con la
       colisión IDENTIFICADA en la respuesta —quién es el titular actual— para que el dueño
       decida en 1 toque si es la misma persona con teléfono nuevo (F-E) o un homónimo; acá sí
-      se puede nombrar, porque quien aprueba es el `admin_tenant` y ya conoce su nómina —
-      oráculo: CI [AC-FIDN-04]
+      se puede nombrar, porque quien aprueba es el `admin_tenant` y ya conoce su nómina.
+      Evidencia: `apps/flota/src/dominio/secretos.ts` con 9 mutantes, la transacción en
+      `apps/flota/src/servidor/aprobacion.ts` con 7 pruebas contra el cluster real en
+      `apps/flota/e2e/aprobacion.spec.ts`, y la migración
+      `db/migraciones-flota/tenant/0012_sobre_de_emision.sql`. **EL SOBRE SELLADO**, que es la
+      decisión de fondo: el dueño aprueba desde SU teléfono y el trabajador espera en el suyo,
+      así que el secreto tiene que cruzar sin que exista un instante en que el servidor —o
+      quien mire una respuesta, un log o una fila— lo pueda leer. Se sella contra la clave
+      pública que el aparato registró al solicitar, con par efímero + ECDH P-256 +
+      HKDF-SHA256 + AES-256-GCM; el servidor tira su privada efímera al sellar, así que ni él
+      puede reabrirlo. P-256 y no RSA por una razón de terreno: el par lo genera la PWA en el
+      teléfono del trabajador y un RSA-2048 en un Android de galpón se come segundos que el
+      flujo de 90 s del §5.4 no tiene. Todo con `crypto.subtle`, la MISMA API del navegador,
+      de modo que el test abre el sobre con el código exacto que va a correr en el teléfono y
+      con la privada NO EXTRAÍBLE — «nunca salió del aparato» es una propiedad del navegador
+      verificada, no una promesa. Los mutantes cubren lo que importa: que otro aparato NO
+      abra, que el secreto no viaje a la vista ni en base64, que dos sobres del mismo secreto
+      difieran en sal, nonce y clave efímera (reusar el nonce de AES-GCM rompe el cifrado, no
+      es estética), y que tocar un byte lo invalide entero. DECISIONES DECLARADAS: (a) el
+      sobre se GUARDA en la solicitud —columna nueva— porque el §7.6 prohíbe depender de push
+      y el aparato pregunta; no contradice «en BD queda solo `secreto_hash`», porque lo
+      guardado es opaco sin la privada del teléfono y la credencial sigue viviendo como hash
+      en `dispositivos`; (b) es de UN SOLO USO, con un CHECK que hace imposible «hay sobre y
+      además dice que se retiró»: un sobre retirable dos veces es un secreto que viaja dos
+      veces, la segunda por un canal que ya nadie mira; (c) el rol sale de la INVITACIÓN y no
+      de quien aprueba — dejarlo elegir al aprobar convertiría un toque en una decisión de
+      permisos tomada sin mirar; (d) `for update` sobre la solicitud es lo que hace cierto el
+      «UNA vez» ante dos toques simultáneos. HALLAZGO DEL CAMINO: el retiro usaba
+      `RETURNING sobre`, que devuelve el valor NUEVO —el null que el propio UPDATE acaba de
+      escribir—, así que borraba el sobre sin entregarlo y el trabajador habría quedado
+      esperando una sesión que nunca iba a arrancar; se corrigió con `RETURNING OLD`, de
+      PostgreSQL 18, que el §0 ya exige por `uuidv7()`. ALCANCE DECLARADO: los endpoints HTTP
+      de aprobar, rechazar y retirar exigen sesión de `admin_tenant` y la pantalla
+      «Esperando aprobación» que consulta; ambos son de AC-FIDN-02 con su presupuesto de
+      toques. Acá está el acto completo, probado contra la base y contra un aparato con claves
+      de verdad — oráculo: CI [AC-FIDN-04]
 - [ ] (P1) El enrolamiento NO se completa sin display-mode standalone Y persist()
       concedido: con cualquiera de los dos ausente el dispositivo no queda operable y
       la UI lo dice (degradación visible, no silencio); `persist_denegado` se registra
