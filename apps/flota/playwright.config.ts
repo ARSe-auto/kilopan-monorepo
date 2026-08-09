@@ -11,6 +11,13 @@ const PUERTO = 3311;
 // paso. `next dev` reescribiría ese directorio en modo desarrollo y clavaría el gate en
 // rojo aunque la build de producción estuviera sana.
 const DIST_E2E = ".next-e2e";
+// Dominio base del e2e. `localhost` y no `flota.local` porque los navegadores mapean
+// `*.localhost` al loopback por especificación, sin tocar /etc/hosts ni pedir sudo: así el
+// navegador puede visitar el subdominio de un tenant de verdad. El ruteo por subdominio
+// (AC-FTEN-05) hace que un host SIN subdominio sea 404, así que sin esto el e2e del shell
+// estaría probando la página de «no encontrado».
+const DOMINIO = "localhost";
+const TENANT = "ruteo_activo";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -20,24 +27,27 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: [["list"]],
   use: {
-    baseURL: `http://localhost:${PUERTO}`,
+    baseURL: `http://${TENANT}.${DOMINIO}:${PUERTO}`,
     trace: "on-first-retry",
     // Terreno antes que escritorio: la app se opera en un teléfono, de pie, con una mano.
     // 390×844 es el viewport que `check.sh` rotula en este paso.
     ...devices["iPhone 13"],
   },
   webServer: {
-    // Contra un BUILD DE PRODUCCIÓN y su servidor standalone — el MISMO binario que se
-    // despliega—, jamás `next dev`. `next dev` compila cada ruta en su primera visita, y
+    // Contra un BUILD DE PRODUCCIÓN y el MISMO `servidor.mjs` que se despliega, jamás
+    // `next dev`. `next dev` compila cada ruta en su primera visita, y
     // dentro del gate completo esa compilación se come el timeout de un click: el mismo
     // commit pasa o falla según lo cargada que esté la máquina. Testear la compilación en
     // caliente no es testear el producto.
     command: [
+      // Los tenants del fixture de ruteo se siembran ANTES del build: si la base no está,
+      // conviene enterarse en el primer segundo y no después de dos minutos de compilar.
+      `node e2e/preparar-tenants.mjs`,
       `NEXT_DIST_DIR=${DIST_E2E} pnpm exec next build`,
-      `NEXT_DIST_DIR=${DIST_E2E} node scripts/copiar-estaticos-standalone.mjs`,
-      `PORT=${PUERTO} node ${DIST_E2E}/standalone/apps/flota/server.js`,
+      `NEXT_DIST_DIR=${DIST_E2E} NODE_ENV=production PORT=${PUERTO} node servidor.mjs`,
     ].join(" && "),
-    url: `http://localhost:${PUERTO}`,
+    env: { FLOTA_DOMINIO_BASE: DOMINIO },
+    url: `http://${TENANT}.${DOMINIO}:${PUERTO}`,
     // Nunca reusar: un servidor previo sirve un build viejo y el e2e verificaría código
     // que ya no es el del árbol.
     reuseExistingServer: false,

@@ -126,14 +126,16 @@ run_step "lint (workspace)" pnpm -r --if-present run lint
 run_step "typecheck (workspace)" pnpm -r --if-present run typecheck
 run_step "unit (workspace)" pnpm -r --if-present run test
 run_step "build (workspace)" pnpm -r --if-present run build
-# El standalone de Next.js sirve 200 en TODA ruta aunque le falten los estáticos
-# (es SSR puro sin ellos) — un healthcheck normal no lo detecta. Sin esto, la app
-# "pasa el gate" y queda completamente muda al tocar cualquier botón en producción.
+# Una app Next sirve 200 en TODA ruta aunque le falten los estáticos (es SSR puro sin
+# ellos) — un healthcheck normal no lo detecta. Sin esto, la app "pasa el gate" y queda
+# completamente muda al tocar cualquier botón en producción. El script conoce las dos
+# formas de servido del monorepo (standalone y servidor propio) y verifica la que
+# corresponda: exigirle a una la forma de la otra sería inventar defectos.
 if [ "$HAY_APP" -eq 1 ]; then
-  run_step "build standalone incluye .next/static y TODO public/ (si no, la app no hidrata)" \
-    bash packages/metodo/scripts/verifica-standalone.sh "$APP"
+  run_step "artefacto servido completo: estáticos donde el servidor los busca (si no, la app no hidrata)" \
+    bash packages/metodo/scripts/verifica-servido.sh "$APP"
 else
-  skip_step "build standalone de $APP" "apps/$APP todavía no existe (solo hay contrato)"
+  skip_step "artefacto servido de $APP" "apps/$APP todavía no existe (solo hay contrato)"
 fi
 run_step "audit (AC-SEC-03)" pnpm audit --audit-level=high
 

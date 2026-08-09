@@ -197,7 +197,28 @@ export const HTTP = {
   rebote_planificacion: 422,
   /** Flag con el que entra una captura de un módulo que se apagó con el turno abierto. */
   flag_modulo_apagado: "modulo_apagado",
+  /**
+   * Semántica de fallo del ruteo por subdominio, dictada por Alexis el 09-ago-2026
+   * (Pregunta 9 de la spec 00) y cableada en AC-FTEN-05:
+   *
+   *   subdominio sin tenant en `control` → 404 (no se revela si el subdominio existe)
+   *   tenant `suspendido`                → 503 con página propia en es-CL, cero acceso a su BD
+   *   tenant `archivado`                 → 404, como si no existiera
+   *
+   * El 404 de los dos extremos es el MISMO de `recurso_ajeno` a propósito: si el subdominio
+   * inexistente y el archivado respondieran distinto, la diferencia sería el oráculo que
+   * revela cuáles existen.
+   */
+  tenant_suspendido: 503,
 } as const;
+
+/**
+ * Estados de un tenant en `control.tenants` (§4.1). Enum CERRADO: el tipo vive en la BD
+ * (`tenant_estado`) y esta lista es su espejo en el código. Un cuarto estado es una decisión
+ * del dueño y una migración, jamás una cadena suelta en un `if`.
+ */
+export const TENANT_ESTADOS = ["activo", "suspendido", "archivado"] as const;
+export type TenantEstado = (typeof TENANT_ESTADOS)[number];
 
 /** Oráculo del k6 semanal, en pipeline aparte del gate de 10 min (§0, §9.2). */
 export const CAPACIDAD = {

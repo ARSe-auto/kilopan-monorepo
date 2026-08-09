@@ -16,6 +16,7 @@ como referencia histórica; `apps/flota` NO se construye contra él.
 |---|---|---|
 | **3310** | `dev` y `start` | `package.json` |
 | **3311** | e2e de Playwright | `playwright.config.ts` |
+| **54331** | cluster de PostgreSQL | `db/flota/cluster.sh` |
 
 No es un detalle de configuración. `next dev` a secas cae en **3000**, que es de eauto, y
 su motor lo reclama cada pocos minutos matando lo que encuentre: el servidor desaparece
@@ -28,11 +29,13 @@ La base de datos vive en su propio cluster: `bash db/flota/cluster.sh iniciar`
 
 ## Qué hay hoy, y qué no
 
-**Hay:** el shell servido por el **standalone real** —el mismo binario que se despliega—,
+**Hay:** el ruteo por subdominio (AC-FTEN-05) en `servidor.mjs` —el mismo proceso que se
+despliega, en desarrollo y en producción— y el shell que sirve detrás de él:
 en es-CL, con manifest de PWA, tokens estructurales de Miga (§5.1) y el estado vacío
 accionable que manda la regla de contracción del §5.5 cuando el manifest de navegación
-llega sin módulos. Su e2e (`e2e/esqueleto.spec.ts`) ejerce ese camino de punta a punta,
-que es el que esconde el defecto de «responde 200 y nunca hidrata».
+llega sin módulos. Sus e2e (`e2e/esqueleto.spec.ts` y `e2e/ruteo.spec.ts`) ejercen ese
+camino de punta a punta: el primero porque es el que esconde el defecto de «responde 200 y
+nunca hidrata», el segundo porque el ruteo se juega entero en la cabecera `Host`.
 
 **No hay** ninguna pantalla de terreno: recepción, apertura de turno, parada y cierre
 nacen en los hitos (c) a (e) con sus propios ACs y sus propios e2e con presupuesto de

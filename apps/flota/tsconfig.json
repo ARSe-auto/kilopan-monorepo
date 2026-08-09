@@ -2,7 +2,11 @@
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": false,
+    // Los scripts de operación de `db/flota/` y el fixture del e2e son .mjs de verdad, y el
+    // e2e de ruteo los importa para hablarle al mismo registro que el servidor. `allowJs` los
+    // deja resolver; `checkJs` queda apagado (su default) porque son de otro árbol y con su
+    // propio gate: chequearlos desde acá sería auditar código ajeno con las reglas de esta app.
+    "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
@@ -18,7 +22,8 @@
     "plugins": [{ "name": "next" }],
     "paths": {
       "@/*": ["./src/*"],
-      "@kilopan/miga/*": ["../../packages/miga/src/*"]
+      "@kilopan/miga/*": ["../../packages/miga/src/*"],
+      "@kilopan/nucleo-comun/*": ["../../packages/nucleo-comun/src/*"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "next-env.d.ts", ".next-e2e/types/**/*.ts"],
