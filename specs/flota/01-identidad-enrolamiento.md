@@ -291,7 +291,7 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       en `client_metric`; al concederse ambos, el dispositivo queda activo con
       `is_standalone=true` y `storage_persisted=true` (§4.3, §5.4, §4.6) — oráculo: CI
       [AC-FIDN-05]
-- [ ] (P1) PIN de 4 dígitos hasheado argon2id server-side; 5 intentos fallidos bloquean
+- [x] (P1) PIN de 4 dígitos hasheado argon2id server-side; 5 intentos fallidos bloquean
       AL USUARIO (`bloqueado_hasta` server-side), jamás al dispositivo: en el andén,
       con el usuario A bloqueado, el usuario B entra con su PIN sin fricción; el
       desbloqueo/rotación por el dueño reabre el acceso y queda en audit_trail. El
@@ -304,8 +304,39 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       espera es el turno. Scan de
       logs del gate (§9.2): cero PIN en cualquier forma, cero RUT sin máscara; cero
       secreto de dispositivo en logs — extensión derivada de §4.3 (en BD queda solo
-      `secreto_hash`), no requisito literal del maestro (§0, §5.4, §7.8, §9.2) —
-      oráculo: CI [AC-FIDN-06]
+      `secreto_hash`), no requisito literal del maestro (§0, §5.4, §7.8, §9.2). Evidencia:
+      `apps/flota/src/dominio/pin.ts` con 10 mutantes puros, `apps/flota/src/servidor/pin.ts`
+      con 8 pruebas contra el cluster real en `apps/flota/e2e/pin.spec.ts`, y el scan de logs
+      en `db/flota/gate-logs.mjs` con 8 mutantes, enganchado a `db/flota/gate.sh`. Reparto:
+      la CURVA y el conteo se prueban puros —sin cluster, sin reloj real y sin esperar un
+      cuarto de hora para ver el tope—, y contra la base se prueba lo que eso no puede dar:
+      que el estado sobreviva en la fila, que argon2id verifique de verdad y que en el andén
+      el bloqueo de un operario NO le cierre el aparato al siguiente, con DOS operarios sobre
+      el mismo aparato porque con uno solo eso sería cierto por no haber a quién bloquear.
+      DECISIONES DECLARADAS: (a) **la racha se cuenta sin agregarle una columna a la tabla** —
+      `intentos_fallidos` no se reinicia al bloquear, así que el bloqueo cae en cada múltiplo
+      del umbral y el número de bloqueo sale de ahí; (b) **durante el bloqueo el intento no se
+      cuenta ni se verifica el hash**: contarlo dejaría que quien ya no puede entrar siga
+      empujando la espera del legítimo hacia el tope —castigar al bloqueado por intentar es
+      castigar al operario que se confundió— y verificar gastaría un argon2id por golpe, que
+      es lo que el ataque quiere; un PIN correcto durante el bloqueo tampoco abre; (c) la
+      transacción usa `SELECT … FOR UPDATE` y no un `UPDATE … SET intentos = intentos + 1`,
+      porque la decisión depende del estado leído: sin el candado, cinco golpes en paralelo
+      leen todos «0 fallidos» y ninguno llega al umbral — el ataque exacto que el lockout
+      existe para frenar, y que un contador optimista deja pasar sin que nada se ponga rojo;
+      (d) el `audit_trail` del desbloqueo lo escribe el TRIGGER de la tabla y no la función,
+      para que quede auditado cualquier cambio de la fila y no solo el que pase por esa
+      puerta. El scan de logs es ESTÁTICO y no sobre la salida de los tests, con su razón
+      escrita: un scan del texto impreso solo ve las ramas que los tests recorrieron, y la
+      línea que filtra un PIN es casi siempre la del `catch` que nadie ejerció. El hash del
+      PIN cuenta COMO PIN —el espacio de un PIN tan corto se recorre en un rato de cómputo—,
+      y el RUT solo puede salir por `enmascararRut()` de `packages/nucleo-comun`, que deja el
+      cuerpo entero enmascarado y solo el dígito verificador: dejar los últimos dígitos, la
+      costumbre en otros documentos, acá sería un error porque el DV se DERIVA del cuerpo y el
+      espacio por probar bajaría a miles. La frontera de palabra de la regla tiene su propio
+      mutante, porque `ruteo` contiene «rut» y el `console.error("ruteo: …")` de `servidor.mjs`
+      es sano: un gate que lo marcara sería un gate apagado a la semana — oráculo: CI
+      [AC-FIDN-06]
 - [ ] (P1) Dispositivo de andén: enrolado por el admin como activo del tenant (tipo
       `anden`, sin persona dueña); los operarios rotan por PIN; al autenticarse otra
       identidad se purga SOLO el snapshot (re-descargable) y el outbox del usuario

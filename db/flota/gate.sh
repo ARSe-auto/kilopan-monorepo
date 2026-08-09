@@ -44,6 +44,12 @@ paso "reglas estáticas del §7.2: privilegio, SET de sesión, cross-database y 
 paso "documentos del contrato: runbook de brechas con sus secciones y sus exigencias" \
   node db/flota/gate-documentos.mjs
 
+# El scan de logs del §9.2: cero PIN en cualquier forma, cero RUT sin máscara, cero secreto
+# de dispositivo. Estático y no sobre la salida de los tests, porque la línea que filtra un
+# PIN es casi siempre la del `catch` que nadie ejerció. [AC-FIDN-06]
+paso "scan de logs: ni PIN, ni RUT sin máscara, ni secreto de dispositivo (§7.8, §9.2)" \
+  node db/flota/gate-logs.mjs
+
 paso "linter de migraciones: las cinco exigencias de toda tabla de dominio (§4.2, §9.2)" \
   node db/flota/lint-migraciones.mjs
 
