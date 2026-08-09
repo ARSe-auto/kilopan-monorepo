@@ -1806,9 +1806,14 @@ Módulo 00: **27 de 28**. Queda AC-FTEN-19, que va al final del hito por definic
 
 ## 09-ago-2026 (misma sesión, continuación) — Hito (b) arrancado: el servidor de identidad, entero
 
-Doce ACs en una sesión: AC-FTEN-26 (cierre del módulo 00) y once del módulo 01. El módulo 01
-pasó de **0 a 12 de 21**, y llegó a un límite que vale la pena nombrar: **todo lo que queda
+Trece ACs en una sesión: AC-FTEN-26 (cierre del módulo 00) y doce del módulo 01. El módulo 01
+pasó de **0 a 13 de 21**, y llegó a un límite que vale la pena nombrar: **todo lo que queda
 necesita o la PWA o una respuesta del dueño.** El servidor del hito (b) está completo.
+
+Y se verificó desde cero al cerrar: borradas las 8 bases del cluster —control, plantilla,
+canario y todos los fixtures—, el gate completo se reconstruyó desde el repo con los 14 pasos
+en verde. La sesión acumuló varias dependencias de orden entre suites y las fue arreglando; la
+corrida desde vacío es lo que prueba que no quedó ninguna.
 
 ### Las tres decisiones de fondo que se tomaron
 

@@ -14,11 +14,15 @@ saltado declarado.
 | | Antes | Ahora |
 |---|---|---|
 | Módulo 00 (tenancy) | 26 de 28 | **27 de 28** |
-| Módulo 01 (identidad) | 0 de 21 | **12 de 21** |
+| Módulo 01 (identidad) | 0 de 21 | **13 de 21** |
 | Preguntas al dueño de la spec 01 | 10 abiertas | **2 abiertas** (4 y 8, las dos P2) |
 
-Trece commits. Los doce ACs: **AC-FTEN-26** (cierra el módulo 00 salvo AC-FTEN-19) y
-**AC-FIDN-01, 03, 04, 06, 08, 09, 10, 11, 14, 19, 21**.
+Los trece ACs: **AC-FTEN-26** (cierra el módulo 00 salvo AC-FTEN-19) y **AC-FIDN-01, 03, 04,
+06, 08, 09, 10, 11, 14, 18, 19, 21**.
+
+**Verificado desde cero al cerrar:** se borraron las 8 bases del cluster —`control`, la
+plantilla, el canario y todos los fixtures— y el gate completo se reconstruyó desde el repo
+con los 14 pasos en verde. No hay estado escondido ni dependencia de orden entre suites.
 
 ## Lo que hay que saber para seguir, y no se lee del diff
 
@@ -55,6 +59,9 @@ aplicadas.
   secreto de dispositivo en un log.
 - `db/flota/gate-pii.mjs` — identificadores solo en `personas`, `empresas_cliente` y
   `solicitudes_acceso`; `nombre` prohibido en tablas de clase CAPTURA.
+- `break_glass` y `grants_soporte` viven en `control` y la lista de tablas de ese plano es
+  LITERAL (`db/flota/suite-bd/control.test.mjs`): una tabla nueva ahí pone el gate en rojo
+  hasta declararla. Pasó hoy y funcionó.
 - `db/flota/gate-ruts.mjs` — **todo RUT del árbol tiene que estar en
   `db/flota/ruts-sinteticos.mjs`**. Al escribir un test con un RUT nuevo, agregarlo ahí con su
   razón; si no, el gate frena. (Sí: también dentro del test que prueba que frena.)
@@ -73,10 +80,9 @@ aplicadas.
    (standalone + persist), 17 (validación de RUT en vivo) y 20 (sin consentimiento). Hoy
    `apps/flota` sirve el shell de Miga y cuatro rutas de API; no hay una sola pantalla del
    §5.4. Es el trabajo más grande que queda del hito (b).
-3. **AC-FIDN-18, break-glass** — desbloqueado hoy por la respuesta a la pregunta 7.
-4. **AC-FIDN-07, andén** — su centinela 9 necesita el outbox offline, que nace en el hito (e).
+3. **AC-FIDN-07, andén** — su centinela 9 necesita el outbox offline, que nace en el hito (e).
    Conviene dejarlo para entonces y declararlo, no adelantarlo a medias.
-5. **AC-FTEN-19** (matriz KiloRuta) sigue yendo al final del hito (a) por definición: su gate
+4. **AC-FTEN-19** (matriz KiloRuta) sigue yendo al final del hito (a) por definición: su gate
    exige que cada test referenciado EXISTA, y ahora existen muchos más que ayer.
 
 ## Preguntas al dueño que siguen abiertas
