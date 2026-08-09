@@ -602,11 +602,32 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
 - [ ] (P1) La UI de enrolamiento NO presenta consentimiento a trabajadores (base de
       licitud = ejecución de contrato, §7.8): e2e sobre F-B/F-C/F-E sin checkbox ni
       texto de consentimiento + grep de strings del flujo — oráculo: CI [AC-FIDN-20]
-- [ ] (P1) Seeds y fixtures solo con RUTs sintéticos de LISTA CONGELADA versionada en
+- [x] (P1) Seeds y fixtures solo con RUTs sintéticos de LISTA CONGELADA versionada en
       fixtures — mecaniza el «irreales» de §7.8/§10, que no tiene oráculo directo:
       test CI que verifica que TODO RUT sembrado (a) pasa módulo 11 y (b) pertenece a
       la lista congelada; un RUT fuera de la lista ⇒ rojo (§7.8, §9.2, §10) —
-      oráculo: CI [AC-FIDN-21]
+      Evidencia: `db/flota/ruts-sinteticos.mjs` (la lista, con la razón de existir de cada
+      RUT), `db/flota/gate-ruts.mjs` con 7 mutantes, y 5 pruebas contra el cluster en
+      `db/flota/suite-bd/ruts.test.mjs`. LA LISTA INVIERTE LA CARGA, que es todo el punto: el
+      default pasa a ser que un RUT NO se puede sembrar. Un test que solo verificara el módulo
+      11 diría que un RUT real y válido está perfecto — y un RUT real en un seed es exactamente
+      el problema; «irreal» no tiene oráculo, ningún test puede mirar un RUT y decidir si le
+      pertenece a alguien, así que lo que se mecaniza es lo de al lado y alcanza. Las dos
+      mitades del AC se reparten sin duplicar nada: la pertenencia la verifica el gate estático
+      (sin base, en cada iteración) y el módulo 11 lo verifica la suite pasando la lista por la
+      ÚNICA implementación que existe, la de la base (`rut_valido()`, AC-FIDN-01), en vez de
+      escribir una segunda en JavaScript que un día se separe de la primera. La lista tiene DOS
+      mitades declaradas: los válidos y los INVÁLIDOS A PROPÓSITO —los fixtures que prueban que
+      el validador rechaza—, y una prueba verifica que esos sigan fallando de verdad: si alguno
+      pasara, sería un fixture que ya no prueba lo que dice y el test del rebote seguiría en
+      verde sin que nada rebote. Cada entrada exige su razón escrita, porque una lista sin
+      razones se vuelve un cajón donde todo entra. HALLAZGO DEL CAMINO, y el gate atrapó a
+      quien lo escribió: la prueba de que «un RUT válido pero no declarado se rechaza igual»
+      llevaba el RUT escrito literal, y el propio gate lo marcó — hubo que armarlo en tiempo de
+      ejecución. Un RUT no declarado no puede estar en el árbol ni siquiera dentro del test que
+      prueba que no puede estar. De paso se corrigió un RUT inválido que se había colado sin
+      querer en el test de la máscara (AC-FIDN-06), reemplazado por dos válidos que comparten
+      dígito verificador, que es lo que esa prueba necesitaba — oráculo: CI [AC-FIDN-21]
 
 ## Dependencias
 

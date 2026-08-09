@@ -14,7 +14,9 @@ test("[AC-FIDN-06] la máscara no deja reconstruir el RUT", () => {
   // Dejar los últimos dígitos —la costumbre en otros documentos— acá sería un error: el DV se
   // DERIVA del cuerpo, así que con tres dígitos visibles el espacio por probar es de miles.
   // Esta prueba fija la propiedad: dos RUTs distintos con el mismo DV se ven IGUAL.
-  assert.equal(enmascararRut("12.345.678-5"), enmascararRut("11.111.116-5"));
+  // Dos RUTs VÁLIDOS distintos que comparten dígito verificador se ven idénticos al
+  // enmascararlos. Los dos están en la lista congelada de AC-FIDN-21.
+  assert.equal(enmascararRut("9.999.999-3"), enmascararRut("5.126.663-3"));
   for (const rut of ["12.345.678-5", "9.999.999-3", "20.347.878-K"]) {
     // Solo el CUERPO: el dígito verificador queda a propósito, así que buscarlo en la cadena
     // entera daría un falso rojo cada vez que el DV se repite dentro del cuerpo.
