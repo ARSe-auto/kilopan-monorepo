@@ -1670,13 +1670,19 @@ arranca en sesión limpia con Opus 5, desde `docs/ARRANQUE_FLOTA.md`.
 
 ---
 
-## 09-ago-2026 · FLOTA hito (a): de 4 a 19 ACs cerrados, y las 11 preguntas del dueño absorbidas
+## 09-ago-2026 · FLOTA hito (a): de 4 a 25 ACs cerrados, y las 11 preguntas del dueño absorbidas
 
 Sesión de construcción supervisada (Opus 5, esfuerzo alto; el §8 prohíbe delegar este hito a
-un motor). Arrancó absorbiendo `docs/HANDOFF.md` de la sesión anterior y cerró **quince ACs**
-del módulo 00: 02, 03, 04, 07, 08, 09, 11, 12, 17, 20, 21, 22, 23, 24 y 25. El módulo va
-**19 de 28**. `check.sh --app=flota --full` VERDE de punta a punta, con 61 pruebas contra el
-cluster real y tres suites pgTAP.
+un motor). Arrancó absorbiendo `docs/HANDOFF.md` de la sesión anterior y cerró **veintiún
+ACs** del módulo 00: 02, 03, 04, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 22, 23,
+24, 25 y 27. El módulo va **25 de 28**. `check.sh --app=flota --full` VERDE de punta a punta,
+con 82 pruebas contra el cluster real y siete suites pgTAP (157 asertos).
+
+**Los tres que quedan no se pueden cerrar todavía, y por qué:** AC-FTEN-05 (ruteo por
+subdominio) y AC-FTEN-26 (generador de la suite HTTP A-contra-B) necesitan que `apps/flota`
+exista —el primero para responder, el segundo para tener un manifiesto de rutas que leer—, y
+AC-FTEN-19 (matriz KiloRuta) va al final por definición: su gate exige que CADA test
+referenciado exista en el repo, y la mayoría nace en los módulos 01–08.
 
 **Lo que ahora existe y no existía.** La provisión completa (`tenant_template` → `t_<slug>`
 con su identidad horneada), el runner ×N con canario y rol `migrator` dueño del esquema, las
@@ -1686,7 +1692,7 @@ append-only por REVOKE y por trigger, la plantilla de vertical + el árbol de gr
 de control con sus entitlements y el centinela 14, el job exportador, el offboarding con
 restore verificado, el runbook de brechas y la instancia dedicada documentada.
 
-**Cuatro defectos reales que el trabajo destapó**, todos con su prueba en el mismo commit:
+**Seis defectos reales que el trabajo destapó**, todos con su prueba en el mismo commit:
 
 1. `t_canary` existía, estaba al día y NO tenía identidad: su `tenant_actual()` seguía en el
    centinela de la plantilla, así que cada CHECK de dominio comparaba contra él y PASABA. Lo
@@ -1701,6 +1707,15 @@ restore verificado, el runbook de brechas y la instancia dedicada documentada.
 4. Un UPDATE sobre tabla VACÍA no dispara un trigger FOR EACH ROW, así que el rebote de
    append-only se leía como verde. Las pruebas ahora asertan que la tabla no esté vacía antes
    de exigir el rechazo.
+5. **Toda fila SEMBRADA por una migración llegaba al tenant con el `tenant_id` centinela.** En
+   la plantilla `tenant_actual()` devuelve el centinela, y PostgreSQL no reevalúa un CHECK al
+   reemplazar la función, así que la fila quedaba atada a un tenant que no existe. Nadie se
+   enteraba hasta el primer `pg_dump` + restore, donde el COPY sí revalida y el restore muere
+   — lo destapó la suite de offboarding. La provisión ahora ADOPTA esas filas y verifica que
+   no quede ninguna ajena.
+6. Una base provisionada ANTES de la migración que agrega una constante de plataforma se
+   quedaba sin ella para siempre. El runner ahora las siembra después de migrar, igual que
+   reasienta los privilegios.
 
 **Las 11 preguntas al dueño quedaron respondidas y absorbidas.** Otra sesión levantó las
 respuestas (`docs/respuestas-dueno-2026-08-09.md`); ésta las metió en la spec con su razón,
