@@ -105,6 +105,7 @@ test("cada cifra vigilada dispara de verdad contra un texto que la contiene", ()
     "PIN.backoff_tope_segundos": (v) => `// backoff con tope de ${v} s`,
     "INVITACION.codigo_corto_largo": (v) => `// el codigo corto son ${v} caracteres`,
     "SESION.anden_inactividad_minutos": (v) => `// el anden cierra a los ${v} min`,
+    "REVOCACION.ventana_horas": (v) => `// la cuarentena de la revocacion dura ${v} horas`,
   };
   assert.equal(
     Object.keys(plantillas).length,

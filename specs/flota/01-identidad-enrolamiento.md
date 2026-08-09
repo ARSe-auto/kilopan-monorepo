@@ -383,12 +383,48 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       revocado_at); el constraint de 1 dispositivo personal activo por operario se
       cumple antes, durante y después (jamás 2 activos, jamás 0 tras aprobar) (§4.3,
       §5.4) — oráculo: CI [AC-FIDN-08]
-- [ ] (P1) Revocación soft con efecto inmediato server-side (siguiente request del
+- [x] (P1) Revocación soft con efecto inmediato server-side (siguiente request del
       dispositivo revocado: sesión inválida; el dueño lo hace en 1 toque desde el
       inventario). Capturas offline del dispositivo revocado — caso de degradación,
       JAMÁS rebote (§4.2): llegan ≤72 h ⇒ 2xx + cuarentena con flag `post_revocacion`;
       llegan >72 h ⇒ 2xx + flag `post_revocacion_tardia` + review_queue severidad alta
-      + evento; rechazos = 0 (centinela 4 §9.3) — oráculo: CI [AC-FIDN-09]
+      + evento; rechazos = 0 (centinela 4 §9.3). Evidencia:
+      `apps/flota/src/servidor/sesion.ts`, `apps/flota/src/dominio/revocacion.ts` con 6
+      mutantes puros, la ruta `GET /api/sesion` y 5 pruebas en `apps/flota/e2e/sesion.spec.ts`
+      —cuatro por HTTP contra el servidor de producción y una contra el cluster—. **QUÉ ES UNA
+      SESIÓN, que es la decisión de fondo y estaba sin tomar**: el secreto que la aprobación
+      emitió al aparato (AC-FIDN-04), presentado en cada request como `Authorization: Portador
+      <secreto>` y comparado por HASH. No hay cookie, no hay token con vencimiento propio, no
+      hay refresh — la sesión ES el aparato, y por eso el dueño la corta con un `UPDATE`. Es
+      la forma exacta que pide la respuesta del dueño a la pregunta 1 (sesión personal sin
+      caducidad mientras el dispositivo siga enrolado) y la ÚNICA que hace literal el «efecto
+      inmediato» del §5.4 F-F: un token con vencimiento propio tendría que caducar para que la
+      revocación surtiera efecto, y esa ventana es justo la que no puede existir cuando alguien
+      perdió el teléfono en la calle. El costo, declarado: una consulta por request contra la
+      BD del tenant, que ya está abierta. El corte se prueba en el REQUEST SIGUIENTE, con las
+      palabras del AC: 200, un UPDATE, 401 — sin reiniciar nada y sin lista de revocados que
+      sincronizar. Las CUATRO formas de no tener sesión —sin credencial, credencial
+      desconocida, aparato revocado y usuario desactivado por la anonimización (AC-FIDN-19)—
+      responden byte a byte lo mismo: a un teléfono robado no le sirve enterarse de que lo
+      dieron de baja, y la diferencia sería un oráculo, el mismo criterio con que AC-FTEN-05
+      hace idénticos el 404 del archivado y el del inexistente. El fixture ENROLA de verdad
+      —invitación → solicitud → aprobación → sobre abierto con la privada del aparato— en vez
+      de sembrar un `secreto_hash` a mano, que probaría la consulta y no el enrolamiento que la
+      produce. Hay además una prueba del centinela 2 con la credencial REAL, que el caso
+      autogenerado de AC-FTEN-26 no puede montar porque no sabe cómo se ve un secreto. Del lado
+      de la captura: la ventana se mide desde la revocación hasta que la captura LLEGA y con el
+      reloj del SERVIDOR —el del dispositivo es el único de los dos que se corre cambiando la
+      hora del teléfono, y un reloj atrasado convertiría una captura tardía en reciente, justo
+      la que hay que mirar—; las dos entran (rechazos = 0), cada una con su flag, y SOLO la
+      tardía abre `review_queue` con severidad alta, porque si cada captura demorada abriera
+      una fila la bandeja se llenaría de ruido el día que un camión pasa la noche en un valle
+      sin cobertura y la que importa se perdería entre ellas. ALCANCE DECLARADO: la parte de
+      captura se prueba contra la base y no por HTTP porque el endpoint de sync nace en el
+      módulo 04 (hito e) — acá están la clasificación, el flag, el evento y la fila de revisión
+      que ese endpoint va a escribir. La ventana entró al canónico §0 como `REVOCACION`; su
+      patrón de vigilancia exige la palabra de la revocación al lado, porque en el repo ya vive
+      OTRO 72 con otro significado —el plazo de aviso de brecha del AC-FTEN-25— y un patrón que
+      solo mirara el número los confundiría — oráculo: CI [AC-FIDN-09]
 - [ ] (P1) Firmas con significado según rol (enum {recibio_conforme, libero, rechazo,
       verifico, aprobo}): la firma puntual por PIN en dispositivo ajeno NO abre sesión
       ni desplaza la del titular — test centinela 12: chofer firma por PIN en el

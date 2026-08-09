@@ -312,6 +312,19 @@ export const INVITACION = {
 } as const;
 
 /**
+ * Revocación de un dispositivo (§4.3, §5.4 F-F, centinela 4 del §9.3).
+ *
+ * El efecto es INMEDIATO del lado del servidor, pero el aparato pudo estar sin señal y traer
+ * capturas de antes: esas entran igual —la captura del terreno JAMÁS rebota (§4.2)— y se
+ * clasifican por cuán vieja es la ventana. El corte lo fija el maestro en el §4.3.
+ */
+export const REVOCACION = {
+  ventana_horas: 72,
+  flag_dentro: "post_revocacion",
+  flag_fuera: "post_revocacion_tardia",
+} as const;
+
+/**
  * Sesiones (§4.3, §5.4). La regla la dictó Alexis el 09-ago-2026 (spec 01, pregunta 1).
  *
  * En el teléfono PERSONAL la sesión no caduca mientras el dispositivo siga enrolado y sin
@@ -466,4 +479,9 @@ export const CIFRAS_VIGILADAS = [
   { nombre: "PIN.backoff_tope_segundos", valor: 900, patron: String.raw`(?:backoff|tope)[^\n]{0,24}\b(?:900\s*s|15\s*min)` },
   { nombre: "INVITACION.codigo_corto_largo", valor: 8, patron: String.raw`c[oó]digo\s+corto[^\n]{0,24}\b8\b` },
   { nombre: "SESION.anden_inactividad_minutos", valor: 3, patron: String.raw`(?:inactividad|and[eé]n)[^\n]{0,24}\b3\s*min` },
+  // El patrón exige la palabra de la revocación al lado, y no es prolijidad: en el repo ya
+  // vive OTRO 72 con otro significado —el plazo de aviso de brecha que el dueño fijó para
+  // el runbook (AC-FTEN-25)—. Un patrón que solo mirara el número los confundiría, y
+  // «importá la constante» sería un consejo equivocado para la mitad de los casos.
+  { nombre: "REVOCACION.ventana_horas", valor: 72, patron: String.raw`(?:revocaci[oó]n|revocado|cuarentena|post_revocacion)[^\n]{0,40}\b72\b` },
 ] as const;

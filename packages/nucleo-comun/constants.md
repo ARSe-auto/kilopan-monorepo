@@ -29,6 +29,7 @@ escrito fuera del archivo canónico pone el build en rojo (`db/flota/gate-consta
 | `PIN` | digitos = 4 · hash = `argon2id` · intentos_hasta_bloqueo = 5 · ambito_del_bloqueo = `usuario` · backoff = `server-side` · backoff_inicial_segundos = 30 · backoff_factor = 2 · backoff_tope_segundos = 900 · backoff_se_resetea_con_acierto = true | PIN de operario (§0, §4.3). */ |
 | `PLAZOS_LEGALES` | pago_dias = 30 · reclamo_factura_dias = 8 · disputa_liquidacion_dias = 7 | Plazos legales chilenos (§0, Anexo A). Cableados: la app es para Chile. */ |
 | `RELOJ` | drift_max_minutos = 5 | Doble reloj: el del dispositivo y el del servidor (§0, §4.6). */ |
+| `REVOCACION` | ventana_horas = 72 · flag_dentro = `post_revocacion` · flag_fuera = `post_revocacion_tardia` | Revocación de un dispositivo (§4.3, §5.4 F-F, centinela 4 del §9.3). El efecto es INMEDIATO del lado del servidor, pero el aparato pudo estar sin señal y traer capturas de antes: esas entran igual —la captura del terreno JAMÁS rebota (§4.2)— y se clasifican por cuán vieja es la ventana. El corte lo fija el maestro en el §4.3. |
 | `ROLES` | `admin_tenant` · `operador` · `chofer` · `responsable_carga` · `responsable_tecnico` · `cliente` | Enum FIJO de roles. Los packs de vertical NO crean roles (§0, §4.3). */ |
 | `ROLES_SIN_DINERO` | `chofer` · `responsable_carga` | Roles que JAMÁS ven un peso: regla en la BD, no en la UI (§0, §4.8). */ |
 | `SEMAFORO` | tarjetas_max = 6 · umbrales_por_senal = `amarillo` · `rojo` · `recuperacion` · estados_excepcion = `nueva` · `reconocida` · `resuelta` · polling_segundos = min = 15 · max = 30 | Semáforo «Hoy» (§0, §5.6). */ |
@@ -81,3 +82,4 @@ código se desactiva solo a la semana.
 | `PIN.backoff_tope_segundos` | 900 | `(?:backoff|tope)[^\n]{0,24}\b(?:900\s*s|15\s*min)` |
 | `INVITACION.codigo_corto_largo` | 8 | `c[oó]digo\s+corto[^\n]{0,24}\b8\b` |
 | `SESION.anden_inactividad_minutos` | 3 | `(?:inactividad|and[eé]n)[^\n]{0,24}\b3\s*min` |
+| `REVOCACION.ventana_horas` | 72 | `(?:revocaci[oó]n|revocado|cuarentena|post_revocacion)[^\n]{0,40}\b72\b` |

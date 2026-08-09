@@ -14,6 +14,18 @@
       }
     },
     {
+      "ruta": "/api/sesion",
+      "archivo": "src/app/api/sesion/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Sin parámetros: el recurso que devuelve es SIEMPRE el del portador de la credencial, así que no hay identificador ajeno que pedirle. El cruce que aplica —y que acá pesa más que en ninguna otra ruta— es que la identidad de B inyectada por cabecera no cambie de quién habla la respuesta: si esta ruta cediera, todo el resto del producto quedaría hablando en nombre del tenant equivocado. El caso con credencial de B contra el subdominio de A lo cubre además la suite del módulo (e2e/sesion.spec.ts), que sí sabe cómo se ve un secreto."
+      }
+    },
+    {
       "ruta": "/api/solicitudes",
       "archivo": "src/app/api/solicitudes/route.ts",
       "metodos": [
