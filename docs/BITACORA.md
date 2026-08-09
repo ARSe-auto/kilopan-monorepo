@@ -1667,3 +1667,53 @@ liberar. FLOTA pasa a 3310/3311. Los tres arreglos con su caso en `prueba-arnes.
 
 **Lo que NO se construyó, a propósito:** ni una línea de `apps/flota`. La construcción
 arranca en sesión limpia con Opus 5, desde `docs/ARRANQUE_FLOTA.md`.
+
+---
+
+## 09-ago-2026 · FLOTA hito (a): de 4 a 19 ACs cerrados, y las 11 preguntas del dueño absorbidas
+
+Sesión de construcción supervisada (Opus 5, esfuerzo alto; el §8 prohíbe delegar este hito a
+un motor). Arrancó absorbiendo `docs/HANDOFF.md` de la sesión anterior y cerró **quince ACs**
+del módulo 00: 02, 03, 04, 07, 08, 09, 11, 12, 17, 20, 21, 22, 23, 24 y 25. El módulo va
+**19 de 28**. `check.sh --app=flota --full` VERDE de punta a punta, con 61 pruebas contra el
+cluster real y tres suites pgTAP.
+
+**Lo que ahora existe y no existía.** La provisión completa (`tenant_template` → `t_<slug>`
+con su identidad horneada), el runner ×N con canario y rol `migrator` dueño del esquema, las
+credenciales por tenant con `scram-sha-256` y CONNECT acotado, el DDL transversal del §4.6 con
+append-only por REVOKE y por trigger, la plantilla de vertical + el árbol de grupos sin ciclos
++ los parámetros, el tipado de dinero con `round_clp()` y el patrón de RLS del §4.8, el plano
+de control con sus entitlements y el centinela 14, el job exportador, el offboarding con
+restore verificado, el runbook de brechas y la instancia dedicada documentada.
+
+**Cuatro defectos reales que el trabajo destapó**, todos con su prueba en el mismo commit:
+
+1. `t_canary` existía, estaba al día y NO tenía identidad: su `tenant_actual()` seguía en el
+   centinela de la plantilla, así que cada CHECK de dominio comparaba contra él y PASABA. Lo
+   encontró la suite pgTAP de AC-FTEN-08, no las pruebas que ya existían. Ahora la provisión
+   se deshace sola si la siembra falla, y `migrar verificar` mira la identidad además del
+   rezago.
+2. El rol de app no tenía USAGE sobre secuencias: no podía insertar un evento, porque el
+   `nextval` del DEFAULT rebotaba con 42501. Habría aparecido con el primer POD del hito (e).
+3. `current_setting(…, true)` devuelve CADENA VACÍA —no NULL— cuando termina la transacción
+   del SET LOCAL. Sin el `nullif` sobre `''`, la transacción siguiente del pool heredaba el
+   permiso de ver dinero.
+4. Un UPDATE sobre tabla VACÍA no dispara un trigger FOR EACH ROW, así que el rebote de
+   append-only se leía como verde. Las pruebas ahora asertan que la tabla no esté vacía antes
+   de exigir el rechazo.
+
+**Las 11 preguntas al dueño quedaron respondidas y absorbidas.** Otra sesión levantó las
+respuestas (`docs/respuestas-dueno-2026-08-09.md`); ésta las metió en la spec con su razón,
+sacó las cláusulas BLOQUEADO de AC-FTEN-05, 10 y 25, y reescribió AC-FTEN-27 —que era el único
+bloqueado de punta a punta— con su oráculo doble. La P5 cerró `parametros` en ocho claves y
+obligó a corregir un CHECK que habría rebotado el valor que el propio dueño eligió
+(`bultos_max_sin_receptor = 0`, «siempre foto»).
+
+**Anotado como ítem, no como supuesto:** verificar que el Postgres gestionado de Railway (P2)
+dé PostgreSQL ≥ 18 y `CREATE DATABASE … TEMPLATE` a demanda. Si no, el §4.1 no se puede
+implementar ahí y la decisión vuelve al dueño.
+
+**Dos sesiones en el mismo árbol.** Durante esta sesión hubo otra trabajando en
+`~/kilopan-monorepo-flota` (la que entrevistó al dueño). No se pisaron porque tocaron archivos
+distintos, pero el CLAUDE.md dice «un builder por worktree» por algo: la coordinación fue por
+descubrimiento y no por acuerdo previo.
