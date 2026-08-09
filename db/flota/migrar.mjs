@@ -34,6 +34,7 @@ import {
   crearBaseDeControlSiFalta,
   crearPlantillaSiFalta,
   refrescarPlantilla,
+  asegurarConstantesDePlataforma,
   duenoDe,
   identidadesRotas,
   provisionar,
@@ -128,6 +129,7 @@ export async function migrar({ dir = DIR_MIGRACIONES, usuario = ROL_MIGRADOR } =
     const slug = slugDeBd(bd);
     if (slug && (await tieneRolDeApp(slug))) {
       await acotarConexion(slug);
+      await asegurarConstantesDePlataforma(bd);
       reacotadas.push(bd);
     }
   }

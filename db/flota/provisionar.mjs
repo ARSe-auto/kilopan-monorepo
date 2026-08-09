@@ -19,6 +19,7 @@ import { pathToFileURL } from "node:url";
 import { con, BD_CONTROL, BD_PLANTILLA, ROL_MIGRADOR, bdDeTenant, slugDeBd } from "./conectar.mjs";
 import { aplicar, aplicadasEn, migracionesDe, DIR_MIGRACIONES } from "./aplicar.mjs";
 import { provisionarRolDeApp } from "./rol-app.mjs";
+import { CONTRASTE } from "../../packages/nucleo-comun/src/constants.ts";
 
 /** El uuid que `tenant_actual()` devuelve en la plantilla: la plantilla no es un tenant. */
 export const UUID_CENTINELA_PLANTILLA = "00000000-0000-7000-8000-000000000000";
@@ -257,6 +258,7 @@ export async function provisionar(slug, { recrear = false } = {}) {
     // `app_t_<slug>` sería una base a la que solo llega el migrador o el superusuario, y el
     // primero que la necesitara la abriría con el rol equivocado (§4.1). [AC-FTEN-03]
     ({ rol, clave } = await provisionarRolDeApp(slug));
+    await asegurarConstantesDePlataforma(bd);
   } catch (e) {
     await con("postgres", ({ sql }) => sql(`drop database if exists ${ident(bd)} with (force)`));
     throw new Error(`el alta de ${slug} falló y se deshizo (${bd} borrada): ${e.message}`);
@@ -292,6 +294,29 @@ export function rezagosDeLaPlantilla({ enDisco = [], plantilla = [], tenants = [
         `tenant_template no tiene ${version}, que sí está en ${[...donde].sort().join(", ")}: ` +
         "un tenant nuevo nacería desactualizado",
     );
+}
+
+/**
+ * Siembra en una base las constantes de PLATAFORMA que el DDL no puede hornear sin duplicar
+ * la familia del §0 (grep-gate de AC-FTEN-01). Idempotente. [AC-FTEN-10]
+ *
+ * La corre la provisión Y el runner después de migrar: una base provisionada ANTES de la
+ * migración que agrega una constante se quedaría sin ella para siempre, y el rebote llegaría
+ * el día que alguien guarda un tema. Pasó exactamente así con `t_canary`.
+ */
+export async function asegurarConstantesDePlataforma(bd) {
+  return con(bd, async ({ sql }) => {
+    const [{ existe: hayTabla }] = await sql(
+      "select to_regclass('plataforma') is not null as existe",
+    );
+    if (!hayTabla) return false;
+    await sql(
+      "insert into plataforma (contraste_minimo) values ($1) " +
+        "on conflict (unica) do update set contraste_minimo = excluded.contraste_minimo",
+      [CONTRASTE.texto],
+    );
+    return true;
+  });
 }
 
 /**
