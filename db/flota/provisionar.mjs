@@ -201,6 +201,42 @@ export async function provisionar(slug, { recrear = false } = {}) {
         `(${fila.id}), horneado al provisionar (AC-FTEN-02).'`,
     );
 
+    // ADOPCIÓN DE LO QUE VENÍA EN LA PLANTILLA. Una migración puede sembrar catálogos —el
+    // registro de `ProveedorTelemetria` del §4.9, por ejemplo—, y esas filas nacieron en la
+    // plantilla con el `tenant_id` CENTINELA, porque ahí `tenant_actual()` devuelve el
+    // centinela. Al copiarse a la base del tenant quedan atadas a un tenant que no existe: el
+    // CHECK no las revalida (PostgreSQL no reevalúa constraints al reemplazar la función) y
+    // pasan desapercibidas hasta que alguien hace un `pg_dump` y un restore — que es
+    // exactamente como se descubrió, con la suite de offboarding de AC-FTEN-17.
+    const conTenantId = await sql(
+      `select c.relname from pg_class c
+         join pg_namespace n on n.oid = c.relnamespace
+         join pg_attribute a on a.attrelid = c.oid and a.attname = 'tenant_id' and a.attnum > 0
+        where n.nspname = 'public' and c.relkind = 'r'`,
+    );
+    for (const { relname } of conTenantId) {
+      await sql(
+        `update ${ident(relname)} set tenant_id = $1::uuid where tenant_id = $2::uuid`,
+        [fila.id, UUID_CENTINELA_PLANTILLA],
+      );
+    }
+
+    // Y se verifica que no quedó ninguna. Adoptar en silencio sería tapar el mismo agujero
+    // con otra manta: si una tabla append-only trajera filas de la plantilla, el UPDATE de
+    // arriba rebota y hay que enterarse acá, no en producción.
+    for (const { relname } of conTenantId) {
+      const [{ n }] = await sql(
+        `select count(*)::int as n from ${ident(relname)} where tenant_id <> $1::uuid`,
+        [fila.id],
+      );
+      if (n > 0) {
+        throw new Error(
+          `${relname} quedó con ${n} fila(s) de otro tenant tras provisionar ${slug}: ` +
+            "algo sembrado en la plantilla no se pudo adoptar",
+        );
+      }
+    }
+
     const [{ ok }] = await sql("select tenant_coherente() as ok");
     if (!ok) {
       throw new Error(

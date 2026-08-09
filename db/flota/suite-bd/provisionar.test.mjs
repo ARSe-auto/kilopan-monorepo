@@ -138,6 +138,27 @@ test("[AC-FTEN-02] con una conexión abierta contra la plantilla, la provisión 
   }
 });
 
+test("[AC-FTEN-02] lo que la plantilla trae sembrado se ADOPTA con el id del tenant nuevo", async () => {
+  // Una migración puede sembrar catálogos —el registro de `ProveedorTelemetria` del §4.9 lo
+  // hace—, y esas filas nacen en la plantilla con el `tenant_id` CENTINELA, porque ahí
+  // `tenant_actual()` devuelve el centinela. Al copiarse quedaban atadas a un tenant que no
+  // existe, y el CHECK no las revalidaba: PostgreSQL no reevalúa constraints al reemplazar la
+  // función. Pasaban desapercibidas hasta el primer `pg_dump` + restore, que es exactamente
+  // como se descubrió (suite de offboarding, AC-FTEN-17).
+  const t = await provisionar("gate_adopcion", { recrear: true });
+  try {
+    const filas = await con(t.bd, ({ sql }) =>
+      sql("select tenant_id::text as tenant_id, fuente from proveedor_telemetria"),
+    );
+    assert.ok(filas.length > 0, "la plantilla dejó de traer filas sembradas: la prueba quedó vacua");
+    for (const f of filas) {
+      assert.equal(f.tenant_id, t.id, `${f.fuente} quedó atada al centinela de la plantilla`);
+    }
+  } finally {
+    await borrar("gate_adopcion");
+  }
+});
+
 test("[AC-FTEN-02] un alta que falla a mitad NO deja la base en pie", async () => {
   // Una base creada y sin sembrar es peor que ninguna: parece provisionada, `tenant_actual()`
   // devuelve el centinela de la plantilla y todo lo que se escriba ahí queda atado a un tenant

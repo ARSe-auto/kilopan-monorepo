@@ -317,3 +317,33 @@ test("[AC-FTEN-14] los ganchos vivos nacen SIN seeds: ni de frío, ni de carga, 
     assert.equal(n, 0, `${tabla} nace con ${n} filas sembradas en la plantilla`);
   }
 });
+
+test("[AC-FTEN-15] `disposition` es append-only también para la app: UPDATE/DELETE ⇒ 42501", async () => {
+  // El §9.3.6 pide el rebote con el rol `app_t_<slug>`, que es el sujeto real: el REVOKE se le
+  // aplica a él y no al superusuario con el que corre pgTAP.
+  await app.sql(
+    `insert into disposition (objeto_tabla, objeto_id, estado, motivo)
+     values ('lot', uuidv7(), 'retenida', 'temperatura fuera de rango en la recepción')`,
+  );
+  const [{ n }] = await app.sql("select count(*)::int as n from disposition");
+  assert.equal(n, 1, "la disposición no entró: el rebote de abajo no probaría nada");
+
+  await assert.rejects(() => app.sql("update disposition set estado = 'liberada'"), {
+    code: "42501",
+  });
+  await assert.rejects(() => app.sql("delete from disposition"), { code: "42501" });
+});
+
+test("[AC-FTEN-15] los ganchos DDL-only nacen sin seeds en la plantilla", async () => {
+  for (const tabla of ["thermal_profile", "alarm_rule", "excursion", "disposition"]) {
+    const [{ n }] = await con(BD_PLANTILLA, ({ sql }) =>
+      sql(`select count(*)::int as n from ${tabla}`),
+    );
+    assert.equal(n, 0, `${tabla} nace con ${n} filas sembradas`);
+  }
+  // La única fila declarada del §4.9: la interfaz ProveedorTelemetria con su implementación.
+  const proveedores = await con(BD_PLANTILLA, ({ sql }) =>
+    sql("select fuente, activo from proveedor_telemetria"),
+  );
+  assert.deepEqual(proveedores, [{ fuente: "declarada", activo: true }]);
+});
