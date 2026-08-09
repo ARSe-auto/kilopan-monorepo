@@ -1858,3 +1858,71 @@ La que más consecuencias tuvo: **el RUT ya registrado rebota al APROBAR y no al
 con el mismo criterio del `404 · 503 · 404` — quien tiene el link no está autenticado y el link
 viaja por WhatsApp. De ahí salen la respuesta indistinguible del endpoint de solicitud, la del
 re-enrolamiento, y el rebote nombrado del lado del dueño, que sí conoce su nómina.
+
+## 09-ago-2026, 17:15 → · Hito (b): el panel del dueño, y la PWA deja de no existir
+
+Cuatro ACs cerrados con el gate completo en verde después de cada uno: **AC-FIDN-12** (panel de
+gobierno), **AC-FIDN-17** (RUT en vivo), **AC-FIDN-20** (cero consentimiento) y **AC-FIDN-05**
+(standalone + persist). El módulo 01 pasa de 13 a 17 de 21; los cuatro que quedan son
+AC-FIDN-02 (P1, el único construible hoy), AC-FIDN-07 (bloqueado por el outbox del hito e) y
+los dos P2 bloqueados por preguntas abiertas.
+
+Al arrancar la sesión `apps/flota` servía un shell y cuatro rutas de API. Ahora sirve **18
+rutas**, con tres pantallas de verdad —solicitar acceso, esperando aprobación con guía A2HS, y
+«Ya tengo cuenta»— y el plano de control entero del dueño.
+
+### Las decisiones de fondo
+
+1. **Tres respuestas para el panel del dueño, y la asimetría es el diseño.** Sin sesión ⇒ 404
+   pelado; con sesión y rol distinto de `admin_tenant` ⇒ 403 y cero filas; recurso de otro
+   tenant ⇒ 404. El 401 se descarta a propósito: sobre `/api/gobierno/invitaciones/<id>`
+   confirma que ese uuid es una invitación real de alguien. El 403 sí se le dice al operador,
+   que SÍ es de la casa — esconderle la puerta lo deja reportando «no me anda» sobre algo que
+   funciona.
+
+2. **Los barridos de «cada acción de gobierno» salen del manifiesto**, no de una lista escrita
+   a mano. Una ruta de gobierno nueva entra sola a los dos barridos, o el gate la frena antes
+   por no tener cruce declarado. Y son las **primeras rutas de tipo `recurso` del producto**:
+   el «404 jamás 403» del centinela 2 pasó de juzgarse contra respuestas de laboratorio a
+   ejercerse contra la app.
+
+3. **El código puente no lleva plazo, y la ausencia es deliberada.** Ni el maestro ni la
+   respuesta del dueño fijan uno. Lo acotan un solo uso, uno vivo por usuario, y —sobre todo—
+   la sesión del propio operario: quien escuche el código dictado en un galpón no tiene el
+   aparato enrolado de esa persona. Encaja con la respuesta a la pregunta 1: la sesión personal
+   no caduca, así que quien olvidó el PIN sigue teniendo su teléfono adentro.
+
+4. **Dos implementaciones del módulo 11 son inevitables, así que se vigilan.** El §4.3 pide
+   validar al escribir, tecla a tecla y sin red: preguntarle a la base por cada dígito no es
+   una alternativa, es otro producto. La divergencia se cierra con un oráculo diferencial que
+   pasa la lista congelada entera por las dos y exige el mismo veredicto RUT por RUT.
+
+5. **El aparato incompleto TIENE sesión.** Negársela sería el silencio que AC-FIDN-05 prohíbe
+   con esas palabras: no habría pantalla donde decirle qué le queda pendiente. La sesión
+   informa `enrolamiento_completo` con las dos condiciones por separado.
+
+6. **El checkbox de consentimiento no sobra: hace daño.** La base de licitud es la ejecución
+   del contrato; pedirle consentimiento a alguien que necesita el teléfono para trabajar finge
+   una opción que no tiene y debilita al tenant bajo la 21.719. El alcance del grep se DERIVA
+   —las pantallas que llaman a los endpoints de enrolamiento— y no barre la app entera a
+   propósito: los términos del tenant sí existen y los acepta el admin en el wizard.
+
+### Los defectos que aparecieron, y uno estaba latente hace rato
+
+- **`tenant_info.id` y `control.tenants.id` NO coinciden.** El endpoint de grants es el primero
+  que necesita el id del plano de control —la FK de `grants_soporte` apunta ahí— y leerlo de
+  `tenant_info` habría dado violación de FK en el primer grant de PRODUCCIÓN, no en una prueba.
+  Es la deuda que el traspaso anterior ya listaba («la provisión no registra el tenant en
+  control.tenants») mordiendo por primera vez. Resuelto por slug contra `control`; la deuda de
+  fondo sigue abierta y ahora tiene un caso concreto.
+- **La guardia anti-vacuidad de `gate-pii.test.mjs` se rompió sola, con el gate sano.**
+  Comparaba contra `/0 migraciones/` sin anclar, y esa expresión también casa con «20
+  migraciones» — que es a donde llegó el repo esta sesión. Una guardia que falla por contar
+  bien enseña a ignorarla; quedó anclada al separador.
+- **El linter del §9.2 frenó la migración del código puente** por su segunda FK al mismo padre
+  sin índice que la encabece. Dos FK a `usuarios` por columnas distintas necesitan dos índices,
+  y es la clase de costo que no se ve hasta que la tabla tiene años.
+- **Ni `invitaciones.ts` ni `secretos.ts` se pueden importar desde el teléfono**: abren con
+  `node:crypto` y usan `Buffer`. Se PARTIÓ la parte pura (`dominio/codigo-corto.ts`) en vez de
+  copiarla, y la mitad del navegador vive en `cliente/`. Una segunda normalización del código
+  corto y un día el que la persona teclea se acepta en pantalla y rebota en el servidor.
