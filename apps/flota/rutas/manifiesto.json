@@ -218,6 +218,18 @@
         "tipo": "sin_recurso",
         "nota": "Pantalla F-B del §5.4. No recibe identificador de recurso —el código de la invitación llega por query o se teclea, y no es un id de la casa— así que el cruce que aplica es el genérico: identidad de B inyectada por los canales falsificables (host propio de A + cabeceras de tenant apuntando a B) y ni una cadena de B en el HTML servido. Importa más que en otras pantallas porque esta es la primera que un desconocido abre: si el shell filtrara el slug o la base del vecino, lo haría ante alguien que todavía no es de ninguna de las dos empresas."
       }
+    },
+    {
+      "ruta": "/ya-tengo-cuenta",
+      "archivo": "src/app/ya-tengo-cuenta/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla F-E del §5.4, el teléfono nuevo. Sin parámetro de ruta: quien entra se identifica con su RUT y su PIN dentro del formulario, y ninguno de los dos es un identificador de la casa que se pueda pedir por URL. El cruce que aplica es el genérico —identidad de B por los canales falsificables y ni una cadena de B en el HTML—. El caso con CREDENCIALES de B contra el subdominio de A lo cubre la suite del módulo (e2e/reenrolamiento.spec.ts), que sí sabe cómo se ve un RUT con su PIN; acá el endpoint que escribe es /api/reenrolamiento y tiene su propio caso declarado."
+      }
     }
   ]
 }

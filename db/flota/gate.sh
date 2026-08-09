@@ -55,6 +55,11 @@ paso "scan de logs: ni PIN, ni RUT sin máscara, ni secreto de dispositivo (§7.
 paso "PII estructural: cero identificadores fuera del plano de identidad (§7.8)" \
   node db/flota/gate-pii.mjs
 
+# La base de licitud es la EJECUCIÓN DEL CONTRATO y no el consentimiento del trabajador (§7.8):
+# ni checkbox ni «al continuar aceptás» en ninguna pantalla del enrolamiento. [AC-FIDN-20]
+paso "consentimiento: ninguna pantalla de enrolamiento se lo pide al trabajador (§7.8)" \
+  node db/flota/gate-consentimiento.mjs
+
 # Cero datos personales reales en seeds (§7.8): todo RUT del árbol tiene que estar en la lista
 # congelada. Que pase el módulo 11 NO alcanza — un RUT real y válido es justo el problema.
 paso "RUTs sembrados: solo los de la lista congelada de fixtures (§7.8, §10)" \

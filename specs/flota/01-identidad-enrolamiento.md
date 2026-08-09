@@ -755,9 +755,41 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       `personas` (el DELETE rebota 42501, que es justo lo que el §7.4 promete) y la base
       compartida queda inservible para todas. El aislamiento del ledger no puede volverse el
       problema de la suite siguiente — oráculo: CI [AC-FIDN-19]
-- [ ] (P1) La UI de enrolamiento NO presenta consentimiento a trabajadores (base de
+- [x] (P1) La UI de enrolamiento NO presenta consentimiento a trabajadores (base de
       licitud = ejecución de contrato, §7.8): e2e sobre F-B/F-C/F-E sin checkbox ni
-      texto de consentimiento + grep de strings del flujo — oráculo: CI [AC-FIDN-20]
+      texto de consentimiento + grep de strings del flujo. Evidencia:
+      `db/flota/gate-consentimiento.mjs` con 7 mutantes en su `.test.mjs` (dentro de
+      `db/flota/gate.sh` sin `--full`), la pantalla F-E `apps/flota/src/app/ya-tengo-cuenta/page.tsx`
+      —que nace acá— y 3 pruebas de navegador en `apps/flota/e2e/consentimiento.spec.ts`.
+      **EL CHECKBOX NO SOBRA: HACE DAÑO, y esa es la razón de fondo.** La base de licitud del
+      tratamiento de los datos de un trabajador es la EJECUCIÓN DEL CONTRATO. Pedirle
+      consentimiento le finge una opción que no tiene —necesita el teléfono para trabajar— y
+      bajo la Ley 21.719 un consentimiento que no se puede negar sin costo no es consentimiento:
+      es un vicio que además DEBILITA la posición del tenant, porque invita a discutir si el
+      tratamiento tenía base legal. No se trata de una casilla de más.
+      **EL ALCANCE DEL GREP SE DERIVA, NO SE ESCRIBE.** Una lista de pantallas a mano se queda
+      corta el día que alguien agrega la cuarta, y ese día el AC deja de estar probado sin que
+      nada se ponga rojo. El flujo de enrolamiento son LAS PANTALLAS QUE LLAMAN A LOS ENDPOINTS
+      DE ENROLAMIENTO (`/api/solicitudes`, `/api/reenrolamiento`): una pantalla que postea ahí
+      ES el flujo, la llame como la llame quien la escribió. Con un piso declarado de dos
+      pantallas, porque un gate que no encuentra qué revisar pasa en verde sin haber leído nada.
+      **Y NO BARRE LA APP ENTERA, a propósito:** los términos del tenant y el DPA del §3.E1.15
+      SÍ existen y sí se aceptan —los acepta el ADMIN en el wizard de alta (AC-FMIG-22, hito g),
+      que es una persona jurídica contratando un servicio, no un trabajador entregando su RUT
+      para poder trabajar—. Un gate que los marcara chocaría con ese AC y alguien lo apagaría;
+      su mutante lo fija.
+      **DOS ORÁCULOS QUE NO SE SOLAPAN.** El gate estático ve TODAS las ramas, incluidas las que
+      ningún test recorre; el navegador ve lo que la persona ve —un checkbox que llega dentro de
+      un componente importado, un texto armado por concatenación— que el grep no puede alcanzar.
+      La suite recorre F-B paso a paso, incluido el del NOMBRE, que es donde un formulario de
+      alta pone la casilla por costumbre, y termina en F-C «Esperando aprobación», la pantalla
+      más fácil de olvidar en una revisión. De paso se verifica CERO campo de correo (§5.4), que
+      es la otra cosa que un alta arrastra por costumbre. Y un tercer test comprueba que la
+      solicitud LLEGÓ a la base: sin él, los dos primeros pasarían igual con un botón que no
+      hace nada, y el AC estaría probado sobre un flujo que no funciona.
+      **La pantalla F-E nace en este AC** porque el texto lo exige por nombre y no existía: hasta
+      hoy «Ya tengo cuenta» era solo un endpoint. El §5.4 lo llama flujo de primera clase, así
+      que tiene pantalla propia y no un enlace en letra chica — oráculo: CI [AC-FIDN-20]
 - [x] (P1) Seeds y fixtures solo con RUTs sintéticos de LISTA CONGELADA versionada en
       fixtures — mecaniza el «irreales» de §7.8/§10, que no tiene oráculo directo:
       test CI que verifica que TODO RUT sembrado (a) pasa módulo 11 y (b) pertenece a
