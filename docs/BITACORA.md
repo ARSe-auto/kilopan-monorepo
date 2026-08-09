@@ -1732,3 +1732,49 @@ implementar ahí y la decisión vuelve al dueño.
 `~/kilopan-monorepo-flota` (la que entrevistó al dueño). No se pisaron porque tocaron archivos
 distintos, pero el CLAUDE.md dice «un builder por worktree» por algo: la coordinación fue por
 descubrimiento y no por acuerdo previo.
+
+---
+
+## 09-ago-2026, 11:36 → 16:10 — Hito 0 entregado: `apps/flota` existe, y con ella cuatro pasos del gate dejaron de estar saltados
+
+Tres piezas, en este orden: **AC-FMIG-01** (tokens estructurales de Miga), el **esqueleto de
+`apps/flota`** y **AC-FTEN-05** (ruteo por subdominio). `check.sh --app=flota --full` pasó de
+10 OK / 5 saltados a **14 OK · 0 fallados · 1 saltado** — el único saltado son los invariantes
+de BD, que para FLOTA corren en su propio `db/flota/gate.sh`.
+
+**Lo que enseñó meter `packages/miga` al grep-gate de constantes.** AC-FMIG-01 pide que un
+número mágico de la familia §0 escrito en `packages/miga` ponga el build en rojo. Al hacerlo
+efectivo aparecieron **39 duplicaciones vivas** dentro de los componentes —el 96/700 de la
+cifra operativa, el 56 del botón, el 64 de la tecla, el 48 del target, la grilla y los radios—.
+Ninguna se tapó relajando un patrón: cada componente pasó a leer su token. Y dos patrones
+resultaron no vigilar nada: `\b34\b` no muerde `font-size: 34px` porque entre dígito y letra
+no hay frontera de palabra. Lo pilló el test que ejerce cada patrón contra su propia muestra —
+el guardián del guardián, otra vez.
+
+**El ruteo no cabía en un middleware de Next.** Los tres desenlaces que dictó el dueño
+(404 · 503 · 404) son códigos HTTP, y elegirlos exige consultar `control` con el driver de
+Postgres. El middleware corre en el Edge y su runtime Node **no existe** en la versión
+instalada. Las dos alternativas eran peores: un layout no puede fijar el status —un tenant
+suspendido habría respondido 200 con un cartel, que para un monitor es «todo bien»—, y un
+middleware Edge consultando un endpoint interno convierte a ese endpoint en un oráculo de qué
+subdominios existen, justo lo que el 404-para-los-dos-casos vino a cerrar. Quedó un
+`servidor.mjs` propio, el mismo proceso en desarrollo y en producción. Eso obligó a sacarle
+`output: standalone` a esta app: arrancando dentro del standalone, Next se pone a **descargar
+el paquete de SWC**, o sea maquinaria de build que esa salida existe para no llevar.
+
+**El mutante que sobrevivió, y por qué importa.** El que hace que el servidor respete una
+cabecera `x-flota-tenant-bd` venida de afuera pasó la primera versión del test **en verde**:
+el caso pedía con un host inexistente, así que el 404 saltaba antes de llegar al código de las
+cabeceras. El ataque de verdad es otro — el atacante tiene su propia cuenta, manda un host
+VÁLIDO y apunta la cabecera a la base del vecino. Hizo falta un SEGUNDO tenant activo en el
+fixture para poder montarlo, y ese segundo activo destapó de paso otro verde por accidente:
+con un solo tenant, «el subdominio de A va a la base de A» lo cumple cualquier base, porque
+solo hay un slug posible. Un mutante que no muere vale más que diez tests que pasan.
+
+**Deuda anotada, no tapada:** `scripts/deploy.sh` del §9.1 sigue sin existir (es precondición
+de proceso, no ítem del plan, y por eso no tiene AC que lo reclame), la provisión no registra
+el tenant en `control.tenants` —lo hacen las suites y, en producción, el wizard del hito g— y
+en CI no corre un proceso PgBouncer, declarado dentro del propio AC.
+
+Módulo 00: **26 de 28**. Quedan AC-FTEN-26 (necesita decidir con Alexis dónde vive el
+manifiesto de rutas) y AC-FTEN-19 (va al final del hito por definición).
