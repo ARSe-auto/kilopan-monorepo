@@ -451,7 +451,7 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       patrón de vigilancia exige la palabra de la revocación al lado, porque en el repo ya vive
       OTRO 72 con otro significado —el plazo de aviso de brecha del AC-FTEN-25— y un patrón que
       solo mirara el número los confundiría — oráculo: CI [AC-FIDN-09]
-- [ ] (P1) Firmas con significado según rol (enum {recibio_conforme, libero, rechazo,
+- [x] (P1) Firmas con significado según rol (enum {recibio_conforme, libero, rechazo,
       verifico, aprobo}): la firma puntual por PIN en dispositivo ajeno NO abre sesión
       ni desplaza la del titular — test centinela 12: chofer firma por PIN en el
       dispositivo del responsable_carga (fixture sobre `objeto_ref` de custodia cuando
@@ -459,8 +459,29 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       hasta entonces, `objeto_ref` genérico sembrable: §9.3.12 solo exige «firma en
       dispositivo ajeno + PODs posteriores válidos», no custodia), la sesión del
       responsable sigue intacta y sus PODs posteriores sincronizan válidos; la firma llegada por sync de dispositivo
-      revocado entra 2xx con los flags de AC-FIDN-09 (clase CAPTURA) (§4.3, §9.3) —
-      oráculo: CI [AC-FIDN-10]
+      revocado entra 2xx con los flags de AC-FIDN-09 (clase CAPTURA) (§4.3, §9.3).
+      Evidencia: `apps/flota/src/servidor/firmas.ts` y 7 pruebas contra el cluster real en
+      `apps/flota/e2e/firmas.spec.ts`. LO QUE HACE CIERTO AL CENTINELA no es una comprobación
+      sino una AUSENCIA: `firmarConPin` devuelve una firma y nada más — no emite credencial, no
+      toca `dispositivos` y no tiene por dónde cambiar quién está autenticado, porque la sesión
+      es el secreto del aparato (AC-FIDN-09) y acá no se lee ni se escribe. El caso se monta
+      con el del terreno: el chofer firma «recibí conforme» en el aparato del responsable de
+      carga —dos personas distintas en la misma fila, que es lo que la parada necesita— y las
+      pruebas verifican las tres consecuencias: la sesión del titular sigue válida y con SU rol,
+      el chofer sigue sin aparato (firmar tampoco enrola), y lo que el responsable firma DESPUÉS
+      sigue atribuido a él. Sin eso, el responsable quedaría afuera de su propio teléfono a
+      mitad de un turno — o peor, seguiría trabajando mientras el sistema cree que es otro, y
+      sus capturas posteriores quedarían firmadas por la persona equivocada. El PIN es la única
+      comprobación que puede impedir una firma, y pasa por el MISMO lockout que el resto: sin
+      ella la firma no significaría nada, y el §4.5 hace que el significado sea quién responde
+      por la carga. ALCANCE DECLARADO, con el permiso del propio AC: el `objeto_ref` es genérico
+      —`paradas`— porque la custodia nace en el hito (d); el §9.3.12 exige «firma en dispositivo
+      ajeno + PODs posteriores válidos» y no custodia, y los PODs nacen en el hito (e), así que
+      la segunda mitad se ejerce con la firma, que es la evidencia de este módulo y tiene la
+      misma forma. La firma de un aparato REVOCADO entra igual con su flag (§4.2: la captura no
+      rebota — una firma hecha cuando el aparato estaba habilitado no deja de haber ocurrido
+      porque después lo dieran de baja), y el replay devuelve LA MISMA firma en vez de un
+      silencio, que haría al aparato reintentar para siempre — oráculo: CI [AC-FIDN-10]
 - [x] (P1) Soporte sin god-mode: sin grant vigente, el personal de plataforma tiene
       CERO visibilidad del tenant (0 filas, 0 rutas); el grant del dueño lleva alcance
       (solo-lectura|módulos) y expiración 24 h|7 d con caída AUTOMÁTICA al vencer (sin
