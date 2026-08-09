@@ -42,6 +42,22 @@ export const DOCUMENTOS = [
       { nombre: "que el alcance se evalúa por tenant", patron: /por tenant/i },
     ],
   },
+  {
+    ac: "AC-FTEN-23",
+    archivo: "docs/instancia-dedicada.md",
+    secciones: [
+      "Condición: DOCUMENTADA, no construida en el MVP",
+      "Qué es",
+      "Qué habría que construir cuando toque",
+    ],
+    // Las tres cosas que el AC nombra literalmente: misma plantilla, otro host, y que NO está
+    // construida. Sin la tercera, el documento se leería como una promesa de producto.
+    exigencias: [
+      { nombre: "que se provisiona desde la MISMA tenant_template", patron: /misma\s+`?tenant_template`?/i },
+      { nombre: "que corre en otro host", patron: /otro\s+host/i },
+      { nombre: "que NO se construye en el MVP", patron: /no se construye en E1|no construida en el MVP/i },
+    ],
+  },
 ];
 
 export function revisar(raiz = RAIZ_REPO, documentos = DOCUMENTOS) {
