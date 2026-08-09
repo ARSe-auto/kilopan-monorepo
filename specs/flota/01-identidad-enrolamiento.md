@@ -520,14 +520,81 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       impidió que el propio test falseara un vencimiento moviendo solo `expira_en` — hubo que
       simular un grant otorgado ocho días antes, corriendo las dos fechas. La restricción
       hizo su trabajo contra quien la escribió — oráculo: CI [AC-FIDN-11]
-- [ ] (P1) Panel de gobierno exclusivo del dueño: emitir/pausar/revocar invitaciones,
+- [x] (P1) Panel de gobierno exclusivo del dueño: emitir/pausar/revocar invitaciones,
       aprobar/rechazar solicitudes, inventario vivo de dispositivos, revocar 1 toque,
       rotar PIN/desbloquear, auditoría de accesos (incluidas sesiones de soporte),
       grants. Rebotes: cada acción de gobierno con rol `operador` (o cualquier rol no
       admin) ⇒ 403 y 0 filas; recurso de identidad de OTRO tenant ⇒ 404 siempre y BD
       ajena sin cambios (suite HTTP A-contra-B autogenerada, centinela 2); toda acción
-      de gobierno escribe audit_trail + evento (§0, §5.4, §9.3) — oráculo: CI
-      [AC-FIDN-12]
+      de gobierno escribe audit_trail + evento (§0, §5.4, §9.3). Evidencia:
+      `db/migraciones-flota/tenant/0014_gobierno_del_dueno.sql`,
+      `apps/flota/src/servidor/gobierno.ts`, **diez rutas** bajo `src/app/api/gobierno/**`
+      más `api/pin/puente`, 15 pruebas HTTP contra el cluster en
+      `apps/flota/e2e/gobierno.spec.ts` y 9 de catálogo en
+      `db/flota/pgtap/0009_gobierno_del_dueno.sql`.
+      **LOS DOS BARRIDOS SALEN DEL MANIFIESTO, no de una lista escrita a mano.** El AC dice
+      «CADA acción de gobierno», y una lista en el spec se queda corta el día que alguien
+      agrega la undécima ruta — ese día el rebote deja de estar probado sin que nada se ponga
+      rojo. El barrido lee `rutas/manifiesto.json` (AC-FTEN-26), que se deriva del árbol: una
+      ruta de gobierno nueva entra sola a los dos barridos, o el gate la frena antes por no
+      tener cruce declarado. Y cada caso va con un identificador REAL de la base: contra un
+      uuid inventado, un handler que mirara el recurso antes que el rol respondería 404 y el
+      barrido pasaría en verde sin haber probado el 403 que el AC pide.
+      **TRES RESPUESTAS Y NO UNA, y la asimetría es la decisión.** Sin sesión ⇒ **404 pelado**
+      (no 401): sobre `/api/gobierno/invitaciones/<id>` un 401 confirma que ese uuid es una
+      invitación real de alguien, que es el oráculo de enumeración que el §0 cierra con «404
+      jamás 403». Con sesión y rol distinto de `admin_tenant` ⇒ **403 y cero filas**, leídas
+      del catálogo tabla por tabla: el operador SÍ es de la casa, y esconderle la puerta lo
+      dejaría reportando «no me anda» sobre algo que funciona. Recurso de otro tenant ⇒ **404**,
+      y sale por construcción y no por una rama que lo contemple: cada tenant es su propia base
+      (§4.1) y el id del vecino no está ahí. Estas son las **PRIMERAS rutas de tipo `recurso`
+      del producto**: hasta hoy el «404 jamás 403» solo se juzgaba contra respuestas de
+      laboratorio en `veredicto.test.mjs`, y ahora la suite autogenerada lo ejerce de verdad
+      —por eso el fixture del vecino pasó a llevar identidad sembrada, sin la cual ese caso no
+      probaría nada—.
+      **EL CÓDIGO PUENTE NO LLEVA PLAZO, y la ausencia es deliberada.** La Pregunta 2 la
+      respondió Alexis el 09-ago-2026 —el dueño emite un código de un solo uso, se lo dicta, y
+      el operario define su PIN nuevo en SU aparato— pero no fija vencimiento, y ni el maestro
+      tampoco: inventar uno habría sido inventar la respuesta a una pregunta que nadie hizo. Se
+      acota por los tres ejes que sí están definidos: un solo uso, **uno vivo por usuario**
+      (índice único parcial; emitir otro anula el anterior, que es lo que hace que el segundo
+      intento del dueño no rebote contra una restricción) y sobre todo la SESIÓN del propio
+      operario — quien escuche el código dictado en un galpón no tiene el aparato enrolado de
+      esa persona, y sin él el código no abre nada. Encaja con la respuesta a la Pregunta 1: la
+      sesión personal no caduca, así que quien olvidó el PIN sigue teniendo su teléfono adentro.
+      El dueño JAMÁS conoce el PIN, y una prueba lo verifica sobre el hash: tras la rotación el
+      `pin_hash` sigue siendo el viejo hasta que el operario canjea.
+      **DOS ROLES NO SE INVITAN DESDE ACÁ**, y no es un olvido. `cliente` se emite desde la
+      ficha de la empresa con su id embebido (Pregunta 3), porque desde este panel nacería sin
+      empresa y el CHECK rebotaría recién al aprobar, con la persona esperando. Y `admin_tenant`
+      se transfiere con passkey (§5.4 F-H, AC-FIDN-13): si el panel pudiera fabricar un segundo
+      dueño con una invitación, esa ceremonia sería decorativa y el camino corto para tomar la
+      cuenta sería no usarla.
+      **EL EVENTO ENTRA EN LA MISMA TRANSACCIÓN QUE LA MUTACIÓN.** `audit_trail` lo escriben los
+      triggers de AC-FIDN-01; el evento lo escribe el acto, y para que la aprobación de
+      AC-FIDN-04 no quedara fuera se le agregó un gancho `registrar` que corre ANTES del commit.
+      Un evento escrito después del commit es un evento que un fallo de red deja sin escribir, y
+      una auditoría con menos filas de las que ocurrieron es peor que ninguna, porque se la lee
+      con confianza.
+      Se prueba sin esperar a un fallo real: se hace una mutación y se le pide un evento de un
+      tipo que no está en el catálogo — el acto entero se deshace. El ACTOR viaja en
+      `eventos.actor_id` y no en `audit_trail`, declarado: el trigger escribe la FILA, y hacerle
+      llegar la identidad de la sesión exigiría un GUC por transacción en cada puerta, o sea una
+      más que olvidar. Los grants son la única costura entre dos bases (`control` y el tenant) y
+      va con **compensación explícita**: si el registro falla, el grant se revoca — un rastro de
+      más se explica, uno de menos no se descubre.
+      **HALLAZGO DEL CAMINO, y es una deuda que recién muerde acá:** `tenant_info.id` y
+      `control.tenants.id` NO coinciden hoy. `provisionar()` genera el uuid dentro de la base
+      del tenant y el alta en `control` la hace otro con su propio default. Este es el primer
+      endpoint que necesita el id del plano de control —la FK de `grants_soporte` apunta ahí—
+      y leerlo de `tenant_info` habría dado una violación de FK en el primer grant emitido en
+      producción, no en una prueba. Se resuelve por slug contra `control`, y el slug tampoco
+      llega de afuera: lo sobrescribe `servidor.mjs` con el veredicto del ruteo. SEGUNDO
+      HALLAZGO: el linter del §9.2 frenó la migración por la segunda FK de `codigos_puente` sin
+      índice que la encabece — dos FK al mismo padre por columnas distintas necesitan dos
+      índices, y es la clase de costo que no se ve hasta que la tabla tiene años. **Queda
+      FUERA, con su AC:** transferir propiedad (AC-FIDN-13, bloqueado por la Pregunta 4) —
+      oráculo: CI [AC-FIDN-12]
 - [ ] (P2) Transferir propiedad del tenant exige passkey/WebAuthn del admin — única
       passkey del sistema (prohibido WebAuthn en cualquier otro flujo, grep del
       manifiesto de rutas): sin ceremonia passkey válida ⇒ rebote 422 y 0 cambios; con

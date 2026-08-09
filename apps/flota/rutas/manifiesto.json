@@ -14,6 +14,152 @@
       }
     },
     {
+      "ruta": "/api/gobierno/auditoria",
+      "archivo": "src/app/api/gobierno/auditoria/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La bitácora de accesos, incluidas las sesiones de soporte. Sin parámetro: el recurso que devuelve es siempre el del tenant del ruteo. El cruce genérico verifica que la auditoría de B no se pueda leer desde el host de A ni inyectando su identidad por cabecera — una auditoría que se lee desde afuera es peor que no tenerla."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/dispositivos",
+      "archivo": "src/app/api/gobierno/dispositivos/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Inventario de solo lectura con nombre de persona y estado de cada aparato. Mismo cruce genérico que el resto de las colecciones del panel: identidad de B por los canales falsificables, y ni una cadena de B en la respuesta."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/dispositivos/[id]",
+      "archivo": "src/app/api/gobierno/dispositivos/[id]/route.ts",
+      "metodos": [
+        "DELETE"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "dispositivos",
+          "columna": "id"
+        },
+        "nota": "Revocar el aparato de B desde A dejaría a un trabajador del vecino sin sesión en el request siguiente (§5.4 F-F): un DELETE cross-tenant acá es una interrupción de la operación ajena, no solo una fuga. Contrato 404 y huella de B intacta."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/grants",
+      "archivo": "src/app/api/gobierno/grants/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "ÚNICO endpoint del panel que toca la BD `control`, así que es el único donde el aislamiento no sale gratis de la separación física del §4.1. No recibe parámetro de ruta a propósito: el grant se nombra en el cuerpo y el tenant sale de `tenant_info` de la base del ruteo, nunca de afuera, y el UPDATE lo lleva en el WHERE. El caso genérico cubre el POST sin payload; el cruce CON payload —revocar el grant de B nombrando su uuid— lo prueba la suite del módulo, que sí sabe cómo se ve un grant."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/invitaciones",
+      "archivo": "src/app/api/gobierno/invitaciones/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Colección del panel del dueño: sin parámetro, así que no hay recurso de B que pedirle. El cruce que aplica es el genérico —host propio de A, cabeceras de tenant apuntando a B— y acá pesa doble porque el POST EMITE una credencial: la huella de la BD de B confirma que ninguna invitación nació del otro lado. Sin sesión de admin este endpoint responde 404 pelado, así que el cuerpo no puede traer ni un rol ni una fecha de A tampoco."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/invitaciones/[id]",
+      "archivo": "src/app/api/gobierno/invitaciones/[id]/route.ts",
+      "metodos": [
+        "PATCH"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "invitaciones",
+          "columna": "id"
+        },
+        "nota": "PRIMERA ruta de tipo recurso del producto: hasta hoy el «404 jamás 403» solo se juzgaba contra respuestas de laboratorio en veredicto.test.mjs. Se le pide la invitación de B con la identidad de B inyectada por cabecera, y tiene que dar 404 pelado — no 401 y no 403, que confirmarían que ese uuid es una invitación real de alguien. El 404 sale por construcción: la consulta corre contra la base que el ruteo eligió y el id de B no está ahí."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/solicitudes",
+      "archivo": "src/app/api/gobierno/solicitudes/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Colección de solo lectura, y la más delicada del panel: su cuerpo lleva RUT y nombre de personas. Si el aislamiento cediera, los datos personales del vecino saldrían literalmente en la respuesta. Sin sesión de admin responde 404 sin cuerpo, así que el caso genérico verifica que la lista de B no exista para A."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/solicitudes/[id]",
+      "archivo": "src/app/api/gobierno/solicitudes/[id]/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "solicitudes_acceso",
+          "columna": "id"
+        },
+        "nota": "Aprobar la solicitud de B desde A sería crear una persona y emitir un secreto en la base equivocada: el caso más caro de este módulo. Contrato 404, y como el verbo MUTA, además la huella de la BD de B tiene que quedar idéntica tabla por tabla."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/usuarios/[id]/pin",
+      "archivo": "src/app/api/gobierno/usuarios/[id]/pin/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "usuarios",
+          "columna": "id"
+        },
+        "nota": "Emitir un código puente contra el usuario de B sería habilitar a un tercero a fijarle el PIN a alguien de otra empresa. Contrato 404 y huella de B intacta: ni una fila en codigos_puente del otro lado. El parámetro va en medio de la ruta y no al final, que es justo la forma que un emisor de casos mal escrito se saltearía."
+      }
+    },
+    {
+      "ruta": "/api/pin/puente",
+      "archivo": "src/app/api/pin/puente/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Abierto a cualquier sesión del tenant y sin parámetros: el usuario cuyo PIN se define es SIEMPRE el de la credencial presentada, jamás uno nombrado en el cuerpo, así que no hay identificador ajeno que pedirle. El cruce genérico verifica que la identidad de B por cabecera no cambie de quién habla la respuesta. El canje con el código de B contra el subdominio de A lo cubre la suite del módulo, que sí sabe cómo se ve un código puente."
+      }
+    },
+    {
       "ruta": "/api/reenrolamiento",
       "archivo": "src/app/api/reenrolamiento/route.ts",
       "metodos": [

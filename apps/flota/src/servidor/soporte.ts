@@ -63,6 +63,44 @@ export async function revocar(control: Pool, grantId: string): Promise<boolean> 
 }
 
 /**
+ * Revocación desde el PANEL del dueño [AC-FIDN-12]. Es `revocar` con el `tenant_id` metido
+ * DENTRO del WHERE, y esa diferencia es todo el AC en una línea: el id del grant llega por la
+ * URL, o sea de afuera, y sin el filtro por tenant el dueño de A revocaría el grant de B
+ * escribiendo el uuid de B. El tenant no llega de afuera nunca: sale de `tenant_info` de la
+ * base que el ruteo eligió (§4.1).
+ *
+ * No reemplaza a `revocar`: aquella la usa el plano de plataforma, que sí opera sobre un grant
+ * ya identificado y no sobre uno que alguien nombró.
+ */
+export async function revocarDelTenant(
+  control: Pool,
+  tenantId: string,
+  grantId: string,
+): Promise<boolean> {
+  const { rowCount } = await control.query(
+    "update grants_soporte set revocado_en = now() where id = $1 and tenant_id = $2 and revocado_en is null",
+    [grantId, tenantId],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+/** Los grants de un tenant para la pantalla del dueño: los vivos y los que ya no. Sin `motivo`
+ *  recortado y sin filtrar los vencidos — el dueño necesita ver que soporte estuvo, no solo
+ *  que está. */
+export async function listarGrants(control: Pool, tenantId: string) {
+  const { rows } = await control.query(
+    `select id::text as id, otorgado_a, motivo, alcance::text as alcance,
+            otorgado_en, expira_en, revocado_en,
+            (revocado_en is null and expira_en > now()) as vigente
+       from grants_soporte
+      where tenant_id = $1
+      order by otorgado_en desc`,
+    [tenantId],
+  );
+  return rows;
+}
+
+/**
  * El grant vigente de un tenant, o null. **Esta función ES la caída automática**: compara
  * contra `now()` de la base en cada llamada, así que no hay estado que mantener ni proceso que
  * pueda fallar. Un grant vencido y uno revocado se ven exactamente igual desde acá — que es lo

@@ -43,6 +43,18 @@ type FilaSolicitud = {
   rol: string | null;
 };
 
+/**
+ * Gancho que corre DENTRO de la transacción del acto, justo antes del commit [AC-FIDN-12].
+ *
+ * Existe para que el evento de gobierno del panel del dueño entre o no entre junto con la
+ * aprobación, y no después. Un evento escrito tras el commit es un evento que un fallo de red
+ * deja sin escribir: la auditoría pasaría a decir menos actos de los que ocurrieron, que es la
+ * única forma en que una bitácora miente sin que nadie mienta. Es opcional porque la
+ * aprobación se puede invocar sin panel —así la ejercen las pruebas de AC-FIDN-04— y porque
+ * este módulo no debe saber qué es un evento de gobierno.
+ */
+export type Registrar = (c: PoolClient) => Promise<void>;
+
 async function enTransaccion<T>(pool: Pool, fn: (c: PoolClient) => Promise<T>): Promise<T> {
   const cliente = await pool.connect();
   try {
@@ -69,7 +81,7 @@ export async function aprobar(
   pool: Pool,
   solicitudId: string,
   aprobadorId: string,
-  opciones: { empresaClienteId?: string } = {},
+  opciones: { empresaClienteId?: string; registrar?: Registrar } = {},
 ): Promise<ResultadoAprobacion> {
   return enTransaccion(pool, async (c) => {
     // LEFT JOIN y no JOIN: el re-enrolamiento no viene de una invitación (AC-FIDN-08), y con
@@ -127,6 +139,7 @@ export async function aprobar(
         "select id::text as id from usuarios where persona_id = $1 limit 1",
         [personaId],
       );
+      await opciones.registrar?.(c);
       return {
         tipo: "aprobada",
         usuarioId: usuario[0]!.id,
@@ -191,6 +204,7 @@ export async function aprobar(
       [solicitudId, aprobadorId, JSON.stringify(sobre)],
     );
 
+    await opciones.registrar?.(c);
     return { tipo: "aprobada", usuarioId, dispositivoId: dispositivos[0]!.id, sobre };
   });
 }
@@ -200,6 +214,7 @@ export async function rechazar(
   pool: Pool,
   solicitudId: string,
   aprobadorId: string,
+  opciones: { registrar?: Registrar } = {},
 ): Promise<ResultadoAprobacion | { tipo: "rechazada" }> {
   return enTransaccion(pool, async (c) => {
     const { rows } = await c.query<{ estado: string }>(
@@ -215,6 +230,7 @@ export async function rechazar(
         where id = $1`,
       [solicitudId, aprobadorId],
     );
+    await opciones.registrar?.(c);
     return { tipo: "rechazada" };
   });
 }

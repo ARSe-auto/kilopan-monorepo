@@ -20,16 +20,79 @@ export const TENANTS = [
   // cumplir por accidente —cualquier base daría ese slug si solo hay una— y el ataque de
   // cabecera falsificada no se puede ni montar: hace falta una segunda base VIVA a la que
   // apuntar. El segundo activo es lo que convierte los dos casos en pruebas de verdad.
-  { slug: "ruteo_activo_b", estado: "activo" },
+  //
+  // `vecino` lo marca como el tenant B del centinela 2: el que recibe la identidad sembrada
+  // de abajo y del que salen los `ids_de_b` del manifiesto de rutas. Es una marca y no «el
+  // segundo de la lista» porque de acá salen identificadores REALES que otro archivo pide por
+  // nombre de tabla; el día que alguien reordene la lista, el que se rompa tiene que ser el
+  // orden, no la prueba.
+  { slug: "ruteo_activo_b", estado: "activo", vecino: true },
   { slug: "ruteo_susp", estado: "suspendido" },
   { slug: "ruteo_arch", estado: "archivado" },
+  // Base PROPIA para el panel de gobierno [AC-FIDN-12], y va al FINAL para no correr a los
+  // dos primeros activos, que media docena de suites toma por índice.
+  //
+  // La razón es la misma por la que `anonimizacion`, `firmas` y la segunda mitad de `sesion`
+  // tienen la suya: el gobierno escribe en tablas append-only —`eventos`, `audit_trail`— y
+  // deja `codigos_puente` con FK a `usuarios`. Compartiendo la base del primer activo, el
+  // `delete from usuarios` del `beforeAll` de otra suite rebotaría por esa FK, y el módulo que
+  // se pondría rojo sería el que no hizo nada.
+  { slug: "gobierno", estado: "activo" },
 ];
 
 /** Subdominio que jamás se registra. Nombrarlo acá evita que el test lo invente distinto. */
 export const SLUG_INEXISTENTE = "ruteo_fantasma";
 
+/** El tenant B del centinela 2, resuelto acá y no por índice en cada spec que lo necesita. */
+export const VECINO = TENANTS.find((t) => t.vecino);
+
+/**
+ * Identidad REAL en la base del vecino [AC-FIDN-12].
+ *
+ * Las rutas de gobierno con parámetro se declaran de tipo `recurso` en el manifiesto, y el
+ * caso que emite la suite del centinela 2 saca el identificador de la BD de B: le pide a A la
+ * invitación de B, el aparato de B, el usuario de B. Sin estas filas ese caso no probaría
+ * nada —la suite lo dice con esas palabras y se pone roja antes que pasar en falso—, así que
+ * la identidad del vecino es parte del fixture y no del test que la usa.
+ *
+ * Solo en el vecino. La base del primer activo la comparten las suites de cada módulo, que
+ * limpian identidad en su `beforeAll`; sembrarla ahí sería poner filas que otro archivo borra
+ * en el segundo siguiente, y encima disputarle el índice «un personal activo por operario».
+ *
+ * Los RUTs salen de la lista congelada de AC-FIDN-21 (`db/flota/ruts-sinteticos.mjs`).
+ */
+async function sembrarIdentidadDelVecino(slug) {
+  await con(bdDeTenant(slug), async ({ sql }) => {
+    const [persona] = await sql(
+      "insert into personas (rut, nombre) values ('11.111.111-1', 'Dueña del vecino') returning id::text as id",
+    );
+    const [usuario] = await sql(
+      "insert into usuarios (persona_id, rol) values ($1, 'admin_tenant') returning id::text as id",
+      [persona.id],
+    );
+    await sql(
+      `insert into dispositivos (tipo, persona_id, secreto_hash, enrolado_por, enrolado_en)
+       values ('personal', $1, 'hash-del-vecino-que-no-abre-nada', $2, now())`,
+      [persona.id, usuario.id],
+    );
+    const [invitacion] = await sql(
+      `insert into invitaciones (rol, token_hash, expira_at, creada_por)
+       values ('chofer', 'token-hash-del-vecino', now() + interval '7 days', $1)
+       returning id::text as id`,
+      [usuario.id],
+    );
+    await sql(
+      `insert into solicitudes_acceso
+         (invitacion_id, rut_propuesto, nombre_propuesto, pin_hash, clave_publica, huella_dispositivo)
+       values ($1, '7.654.321-6', 'Quien pide en el vecino', '$argon2id$del-vecino', 'clave-del-vecino', 'huella-del-vecino')`,
+      [invitacion.id],
+    );
+  });
+}
+
 export async function prepararTenants() {
   for (const { slug } of TENANTS) await provisionar(slug, { recrear: true });
+  for (const { slug, vecino } of TENANTS) if (vecino) await sembrarIdentidadDelVecino(slug);
 
   await con(BD_CONTROL, async (control) => {
     for (const { slug, estado } of TENANTS) {
