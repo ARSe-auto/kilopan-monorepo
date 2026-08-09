@@ -14,6 +14,8 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { VALIDOS, INVALIDOS_A_PROPOSITO } from "../ruts-sinteticos.mjs";
+// La implementación del CLIENTE, para el oráculo diferencial de AC-FIDN-17 del final.
+import { rutValido as rutDelCliente } from "../../../packages/nucleo-comun/src/rut.ts";
 import { con, conectar, ROL_MIGRADOR, bdDeTenant } from "../conectar.mjs";
 import { provisionar } from "../provisionar.mjs";
 import { borrarRolDeApp } from "../rol-app.mjs";
@@ -91,4 +93,44 @@ test("[AC-FIDN-21] un RUT REAL cualquiera no está en la lista: el default es qu
   const noDeclarado = `${1}.${"111"}.${"111"}-${4}`;
   assert.equal(await valida(noDeclarado), true, "el RUT de esta prueba tiene que ser válido");
   assert.equal(declarado(noDeclarado), false, "un RUT válido pero no declarado se coló en la lista");
+});
+
+// ─── El oráculo diferencial: la del cliente y la de la base dicen LO MISMO [AC-FIDN-17] ──
+//
+// El §4.3 pide validación módulo 11 «al escribir», o sea en el teléfono y sin red: preguntarle
+// a la base por cada dígito no es una alternativa, es otro producto. Así que hay una segunda
+// implementación (`packages/nucleo-comun/src/rut.ts`) y el AC-FIDN-21 tenía razón en que dos
+// algoritmos se separan — por eso acá están las dos, frente a frente, sobre la lista entera.
+//
+// Que corra sobre la LISTA CONGELADA no es comodidad: es la misma lista que el gate obliga a
+// mantener, así que crece con cada caso raro que alguien agregue, y este oráculo crece con ella.
+
+test("[AC-FIDN-17] cliente y base dan el MISMO veredicto sobre cada RUT de la lista", async () => {
+  const todos = [...Object.keys(VALIDOS), ...Object.keys(INVALIDOS_A_PROPOSITO)];
+  assert.ok(todos.length > 0, "sin RUTs no hay oráculo: el verde sería vacuo");
+  for (const rut of todos) {
+    assert.equal(
+      rutDelCliente(rut),
+      await valida(rut),
+      `«${rut}»: el módulo 11 del cliente y el de la base ya no dicen lo mismo`,
+    );
+  }
+});
+
+test("[AC-FIDN-17] también coinciden en lo que NO es un RUT, que es donde se separan", async () => {
+  // Los válidos son los que cualquier implementación acierta. Donde dos algoritmos empiezan a
+  // diferir es en los bordes: la forma pelada, el cuerpo cortado, el dígito verificador de
+  // más. Se arman en tiempo de ejecución para no dejar RUTs sin declarar en el árbol.
+  const canonico = Object.keys(VALIDOS)[0];
+  const bordes = [
+    "",
+    canonico.replace(/\./g, ""),
+    canonico.replace("-", ""),
+    canonico.slice(0, -2),
+    `${canonico}9`,
+    canonico.toLowerCase(),
+  ];
+  for (const caso of bordes) {
+    assert.equal(rutDelCliente(caso), await valida(caso), `«${caso}»: veredictos distintos en el borde`);
+  }
 });

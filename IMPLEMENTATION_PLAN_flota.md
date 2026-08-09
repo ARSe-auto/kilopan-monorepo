@@ -113,7 +113,7 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 - [x] (P1) 21.719 estructural: whitelist CERRADA de columnas PII (solo `personas` y `empresas_cliente`); cualquier otra tabla con nombre/rut/contacto ⇒ linter rojo — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-14]
 - [ ] (P2) Export ARCO por persona sin datos de terceros, registrado en la bitácora (actor/formato condicionados a pregunta 8) — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-15]
 - [ ] (P2) Enrolamiento real de punta a punta <5 min en teléfono real con guía A2HS (oráculo humano — DONE-adopción, no bloquea el loop) — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-16]
-- [ ] (P1) RUT inválido: 422 tipado en servidor con 0 filas + validación módulo 11 EN LÍNEA en el cliente sobre RUT auto-formateado — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-17]
+- [x] (P1) RUT inválido: 422 tipado en servidor con 0 filas + validación módulo 11 EN LÍNEA en el cliente sobre RUT auto-formateado — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-17]
 - [x] (P1) Break-glass: doble control + notificación forzosa + registro inmutable (test BLOQUEADO por pregunta 7; entra al build al responderse) — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-18]
 - [x] (P1) Anonimización 21.719 sin tocar el ledger: `anonimizada_en` + campos nulos con counts de eventos/PODs/firmas intactos — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-19]
 - [ ] (P1) La UI de enrolamiento NO presenta consentimiento a trabajadores (base de licitud = ejecución de contrato); e2e + grep — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-20]

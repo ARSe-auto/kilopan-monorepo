@@ -646,12 +646,54 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       real de un trabajador de punta a punta — emisión, solicitud (~90 s), aprobación,
       sesión activa — en <5 min total, en un teléfono real con guía A2HS seguida sin
       ayuda (§5.4) — oráculo: humano [AC-FIDN-16]
-- [ ] (P1) Rebote de PLANIFICACIÓN por RUT inválido (§4.2): POST de solicitud de
+- [x] (P1) Rebote de PLANIFICACIÓN por RUT inválido (§4.2): POST de solicitud de
       acceso con RUT que no pasa módulo 11 ⇒ 422 tipado en servidor y 0 filas en
       `solicitudes_acceso` y `personas`; y e2e de que el cliente valida módulo 11 EN
       LÍNEA sobre el RUT auto-formateado `12.345.678-5` y no envía mientras sea
       inválido (el 422 del servidor se ejercita por request directo, saltándose el
-      cliente) (§0, §4.2, §4.3, §5.4) — oráculo: CI [AC-FIDN-17]
+      cliente) (§0, §4.2, §4.3, §5.4). Evidencia:
+      `packages/nucleo-comun/src/rut.ts` con 8 mutantes puros en `rut.test.ts`, la PRIMERA
+      pantalla de la PWA (`apps/flota/src/app/solicitar/page.tsx`, F-B del §5.4),
+      `apps/flota/src/cliente/aparato.ts`, y 3 pruebas de navegador en
+      `apps/flota/e2e/rut.spec.ts` más 2 contra el cluster en `db/flota/suite-bd/ruts.test.mjs`.
+      **DOS IMPLEMENTACIONES DEL MÓDULO 11, Y ES LO CORRECTO — pero no de a gratis.**
+      AC-FIDN-21 dejó escrito que hay UNA y vive en la base, para que dos algoritmos no se
+      separen; este AC pide validar «al escribir», o sea tecla a tecla y sin red. Preguntarle a
+      la base por cada dígito no es una alternativa: es otro producto. Así que la divergencia se
+      cierra con un ORÁCULO en vez de con una promesa — la suite pasa la lista congelada ENTERA
+      por las dos implementaciones y exige el mismo veredicto RUT por RUT, más los bordes donde
+      dos algoritmos se separan de verdad (la forma pelada, el cuerpo cortado, el dígito de
+      más). El día que alguien toque una sola, el gate dice en cuál RUT difieren. Y como la
+      lista crece con cada caso raro que el gate obliga a declarar, el oráculo crece con ella.
+      **EL RUT NO ES UN `input`, Y ESO ES LA MITAD DE LA PANTALLA.** El §5.4 exige teclado
+      PROPIO; un `<input>` abriría el del sistema al enfocarlo, con autocorrector y sugerencias
+      del navegador sobre un identificador nacional. Va en un `output` alimentado por el teclado
+      de Miga, y el test lo verifica leyendo el `tagName` — sin eso, «teclado propio» es una
+      intención que la primera refactorización se lleva puesta. El teclado ganó `permitirK` con
+      la misma forma que `permitirGuion` ya tenía: sin esa tecla, quien tiene K de dígito
+      verificador no puede tipear su propio RUT y la pantalla tendría que abrir el teclado del
+      sistema justo donde el maestro lo prohíbe.
+      **EL VEREDICTO SE DICE CON TEXTO Y NO SOLO CON COLOR** (§5.7): a pleno sol un borde rojo
+      no se ve, y a quien no distingue rojo de verde no le dice nada. La prueba negativa va con
+      su POSITIVO en el mismo test —se corrige el dígito verificador y la pantalla deja seguir—
+      porque un botón que nunca se habilita pasaría el negativo solo. Y se cuenta que NO salió
+      ni un request: «no envía mientras sea inválido» se verifica interceptando la red, no
+      mirando el botón.
+      **LAS DOS CAPAS NO SE REEMPLAZAN.** El 422 del servidor se ejercita por request DIRECTO,
+      salteándose el cliente: con solo la prueba de pantalla, borrar la validación del servidor
+      dejaría todo verde. Se cuentan cero filas también en `personas`, que este endpoint no toca
+      nunca — el día que alguien mueva la creación de la persona a la solicitud, que es el atajo
+      obvio, esa línea es la que se pone roja.
+      **HALLAZGO DEL CAMINO:** `dominio/invitaciones.ts` abre con `import … from "node:crypto"`,
+      así que la pantalla no podía usar su `normalizarCodigo` sin arrastrar un polyfill de Node
+      al bundle que el teléfono baja con señal de galpón. Se PARTIÓ en `dominio/codigo-corto.ts`
+      —puro— en vez de copiarse: una segunda normalización en el cliente y un día el código que
+      la persona teclea se acepta en pantalla y rebota en el servidor. Lo mismo con las claves
+      del aparato: `dominio/secretos.ts` es del servidor y usa `Buffer`, así que la mitad del
+      navegador vive en `cliente/aparato.ts`, con la privada NO EXTRAÍBLE en IndexedDB — que es
+      lo que convierte «nunca salió del teléfono» en una propiedad del navegador y no en una
+      promesa nuestra. **Queda FUERA, con su AC:** el conteo de toques del flujo completo y la
+      pantalla de espera que abre sesión sola (AC-FIDN-02) — oráculo: CI [AC-FIDN-17]
 - [x] (P1) Break-glass de soporte (§4.3, §7.9): doble control + notificación forzosa
       + registro inmutable. DESBLOQUEADO el 09-ago-2026 (respuesta a la pregunta 7: dos
       personas de la PLATAFORMA, y aviso por correo + panel persistente hasta reconocerlo)

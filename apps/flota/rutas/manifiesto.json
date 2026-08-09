@@ -206,6 +206,18 @@
         "tipo": "sin_recurso",
         "nota": "Devuelve la identidad del tenant leída de tenant_info de SU base, así que es la ruta donde una fuga se vería a simple vista: si el aislamiento cediera, el slug y el nombre de la BD de B saldrían literalmente en el cuerpo. Sin parámetros hasta el módulo 01; el día que reciba uno, pasa a tipo recurso y el gate lo exige."
       }
+    },
+    {
+      "ruta": "/solicitar",
+      "archivo": "src/app/solicitar/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla F-B del §5.4. No recibe identificador de recurso —el código de la invitación llega por query o se teclea, y no es un id de la casa— así que el cruce que aplica es el genérico: identidad de B inyectada por los canales falsificables (host propio de A + cabeceras de tenant apuntando a B) y ni una cadena de B en el HTML servido. Importa más que en otras pantallas porque esta es la primera que un desconocido abre: si el shell filtrara el slug o la base del vecino, lo haría ante alguien que todavía no es de ninguna de las dos empresas."
+      }
     }
   ]
 }

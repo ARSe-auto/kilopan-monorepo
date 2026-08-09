@@ -12,6 +12,7 @@ export function TecladoNumerico({
   permitirDecimal = false,
   permitirCeroInicial = false,
   permitirGuion = false,
+  permitirK = false,
 }: {
   valor: string;
   onCambiar: (nuevoValor: string) => void;
@@ -28,6 +29,13 @@ export function TecladoNumerico({
    *  coma decimal por «−» en la misma celda (un código no tiene decimales, nunca
    *  coexisten). El prefijo «P» lo agrega la pantalla, no este teclado. */
   permitirGuion?: boolean;
+  /** AC-FIDN-17: el RUT chileno. Sustituye la coma decimal por «K» en la misma celda —un
+   *  RUT no tiene decimales, así que nunca coexisten—. Sin esto, el 10% largo de la
+   *  población cuyo dígito verificador es K no puede tipear su propio RUT con el teclado
+   *  PROPIO que el §5.4 exige, y la pantalla tendría que abrir el del sistema justo en el
+   *  campo donde el maestro lo prohíbe. Los puntos y el guion los pone el formateador de
+   *  `packages/nucleo-comun/src/rut.ts`, no este teclado: acá solo se entra el alfabeto. */
+  permitirK?: boolean;
 }) {
   function tocar(tecla: string) {
     if (tecla === "⌫") {
@@ -38,6 +46,10 @@ export function TecladoNumerico({
     // que espera la BD en el código P<correlativo>-<n> — dos glifos, un solo carácter real.
     if (permitirGuion && tecla === "−") {
       onCambiar(valor + "-");
+      return;
+    }
+    if (permitirK && tecla === "K") {
+      onCambiar(valor + "K");
       return;
     }
     if (tecla === ",") {
@@ -59,7 +71,7 @@ export function TecladoNumerico({
         // esta tecla se mostraba apagada y sin poder tocarse — un botón
         // muerto ocupando espacio, con contraste bajo el mínimo. Si no aplica, no se
         // pinta: se deja el hueco vacío para no correr "0" y "⌫" de lugar.
-        if (tecla === "," && !permitirDecimal && !permitirGuion) {
+        if (tecla === "," && !permitirDecimal && !permitirGuion && !permitirK) {
           return (
             <div
               key={tecla}
@@ -68,7 +80,8 @@ export function TecladoNumerico({
             />
           );
         }
-        const etiqueta = tecla === "," && permitirGuion ? "−" : tecla;
+        const etiqueta =
+          tecla === "," ? (permitirGuion ? "−" : permitirK ? "K" : tecla) : tecla;
         return (
           <button
             key={tecla}

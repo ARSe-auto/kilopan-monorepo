@@ -21,9 +21,11 @@ import { INVITACION } from "../../../../packages/nucleo-comun/src/constants.ts";
 // `admin_tenant`, que nace con AC-FIDN-04. Las operaciones existen como funciones de dominio
 // con su prueba contra la BD; sus endpoints y su presupuesto de toques son de AC-FIDN-02.
 
-/** El alfabeto y el largo son del canónico §0: acá no se elige nada, se lee. */
-const ALFABETO = INVITACION.codigo_corto_alfabeto;
-const LARGO = INVITACION.codigo_corto_largo;
+// El alfabeto, el largo y la normalización viven en `codigo-corto.ts`, que es PURO y por eso
+// lo puede importar la pantalla del teléfono. Se reexportan para que quien ya los pedía acá no
+// tenga que cambiar de puerta, y para que siga habiendo UNA sola implementación.
+export { normalizarCodigo } from "./codigo-corto.ts";
+import { ALFABETO, LARGO } from "./codigo-corto.ts";
 
 /**
  * Un código nuevo. `randomInt` y no `Math.random()` ni un módulo sobre bytes: el primero es
@@ -34,24 +36,6 @@ export function codigoNuevo(): string {
   let codigo = "";
   for (let i = 0; i < LARGO; i++) codigo += ALFABETO[randomInt(ALFABETO.length)];
   return codigo;
-}
-
-/**
- * Normaliza lo que tecleó una persona. Se dicta en voz alta en un galpón y se escribe con
- * guantes: llega en minúscula, con espacios de más o con guiones que alguien puso para
- * leerlo. Nada de esto cambia QUÉ código es, así que rechazarlo sería castigar la forma.
- *
- * Lo que NO se hace es «corregir» caracteres ambiguos mapeando O→0 o l→1: el alfabeto del §0
- * ya los excluye, así que una O no es un cero mal escrito — es un carácter que no existe en
- * ningún código, y aceptarlo mapeándolo abriría códigos que nadie emitió.
- */
-export function normalizarCodigo(crudo: string): string | null {
-  const limpio = String(crudo ?? "")
-    .toUpperCase()
-    .replace(/[\s-]/g, "");
-  if (limpio.length !== LARGO) return null;
-  for (const c of limpio) if (!ALFABETO.includes(c)) return null;
-  return limpio;
 }
 
 /** En la BD queda solo el hash: la invitación no se puede leer de la base y reusar. */
