@@ -461,14 +461,44 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       responsable sigue intacta y sus PODs posteriores sincronizan válidos; la firma llegada por sync de dispositivo
       revocado entra 2xx con los flags de AC-FIDN-09 (clase CAPTURA) (§4.3, §9.3) —
       oráculo: CI [AC-FIDN-10]
-- [ ] (P1) Soporte sin god-mode: sin grant vigente, el personal de plataforma tiene
+- [x] (P1) Soporte sin god-mode: sin grant vigente, el personal de plataforma tiene
       CERO visibilidad del tenant (0 filas, 0 rutas); el grant del dueño lleva alcance
       (solo-lectura|módulos) y expiración 24 h|7 d con caída AUTOMÁTICA al vencer (sin
       acción humana) y revocación anticipada; registro en `control` (§4.1) y begin/end
       de cada acceso en la auditoría visible del tenant; NO existe endpoint de
       impersonación (verificado contra el manifiesto de rutas) (§0, §4.3, §7.9). El
       break-glass se verifica aparte en AC-FIDN-18: su mecánica depende de Preguntas
-      al dueño #7 y no cabe todavía en un oráculo CI — oráculo: CI [AC-FIDN-11]
+      al dueño #7 y no cabe todavía en un oráculo CI. Evidencia:
+      `db/migraciones-flota/control/0004_alcance_del_soporte.sql`,
+      `apps/flota/src/servidor/soporte.ts`, 8 pruebas contra el cluster en
+      `apps/flota/e2e/soporte.spec.ts` y 3 contra el manifiesto de rutas en
+      `apps/flota/rutas/impersonacion.test.mjs`. **La caída al vencer es LITERAL**: no hay job
+      de expiración, no hay barrido nocturno, no hay nada que se pueda olvidar de correr —
+      `vigente()` compara contra el reloj de la base en cada consulta, así que un grant vencido
+      deja de servir en el instante exacto en que vence aunque nadie toque nada nunca más. Un
+      vencimiento que depende de un proceso es un vencimiento que un día no ocurre. El estado
+      por omisión es CERO y al revés de como suele estar: no hay un permiso que se pueda
+      quitar, no hay permiso. Las dos duraciones del §4.3 se cierran con un CHECK sobre la
+      DIFERENCIA de fechas y no con un campo aparte —que podría decir «24h» y vencer en un
+      año—, y el alcance es un enum sin ningún valor que signifique «todo»: eso sería el
+      god-mode que este AC existe para que no exista. Extender un acceso obliga a otorgar otro
+      grant, que queda registrado; con un campo libre, el día que alguien tenga apuro va a
+      poner un año y nadie va a mirar esa fila. El begin/end se espeja en el `audit_trail` del
+      TENANT y no solo en `control`: si viviera solo del lado de la plataforma, el dueño
+      tendría que pedirle a la plataforma el listado de las veces que la plataforma lo miró, y
+      eso no es una auditoría sino un favor — y una prueba verifica que esas filas no se pueden
+      borrar ni con el rol dueño de la base (§7.4). La AUSENCIA del endpoint de impersonación
+      se prueba contra el manifiesto de rutas, que es la primera vez que se usa como oráculo lo
+      que AC-FTEN-26 construyó: derivado del árbol, «no hay una ruta que haga esto» no es
+      compatible con «alguien la agregó y no la declaró». Los patrones son de FORMA y no de
+      nombre exacto —quien agregue una ruta así no va a llamarla `/api/impersonar` sino
+      `/api/soporte/entrar-como`— y tienen su propio mutante contra seis nombres plausibles,
+      más el positivo de que las rutas legítimas no disparan. El §7.9 no pide que la
+      impersonación esté apagada: pide que no exista, porque una ruta apagada por una bandera
+      es una ruta que alguien enciende. HALLAZGO DEL CAMINO: el CHECK de duración cerrada
+      impidió que el propio test falseara un vencimiento moviendo solo `expira_en` — hubo que
+      simular un grant otorgado ocho días antes, corriendo las dos fechas. La restricción
+      hizo su trabajo contra quien la escribió — oráculo: CI [AC-FIDN-11]
 - [ ] (P1) Panel de gobierno exclusivo del dueño: emitir/pausar/revocar invitaciones,
       aprobar/rechazar solicitudes, inventario vivo de dispositivos, revocar 1 toque,
       rotar PIN/desbloquear, auditoría de accesos (incluidas sesiones de soporte),
