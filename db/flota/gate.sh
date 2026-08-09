@@ -27,6 +27,11 @@ paso () {
 saltar () { echo "  SALTADO: $1 ($2)"; SKIPPED+=("$1"); }
 
 # --- Estático (sin BD) ---------------------------------------------------------------
+# Primero de todo, «antes de cada iteración» como pide el §7.1: si hay un secreto suelto o
+# la BD de desarrollo apunta afuera, nada de lo que venga después importa. [AC-FTEN-28]
+paso "guardrail (§7.1): DATABASE_URL local, secretos en .env.local, cero cáscaras" \
+  bash db/flota/guardrail.sh
+
 paso "lista congelada de criterios KiloRuta" \
   node db/flota/gate-criterios-kiloruta.mjs
 
