@@ -166,7 +166,7 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
 
 ## Criterios de aceptación
 
-- [ ] (P1) Esquema §4.3 completo en `tenant_template`: personas (rut UNIQUE por tenant
+- [x] (P1) Esquema §4.3 completo en `tenant_template`: personas (rut UNIQUE por tenant
       + CHECK módulo 11, anonimizada_en), usuarios (rol enum FIJO de 6 valores; CHECK
       `empresa_cliente_id NOT NULL` si rol=`cliente`; pin_hash argon2id), invitaciones,
       solicitudes_acceso, dispositivos (is_standalone, storage_persisted, revocado_at
@@ -175,7 +175,49 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       retention_policy (§3.E1.15 — solo DDL; plazos pendientes de Preguntas al dueño
       #8, ninguna purga activa sin esos valores). Todas con PK UUIDv7 de servidor, tenant_id + CHECK contra `tenant_info`, FK
       compuesta, índice y `COMMENT ON TABLE` PLANIFICACIÓN (CAPTURA solo `firmas`);
-      linter de esquema y pgTAP verdes (§0, §4.1, §4.2) — oráculo: CI [AC-FIDN-01]
+      linter de esquema y pgTAP verdes (§0, §4.1, §4.2). Evidencia:
+      `db/migraciones-flota/tenant/0011_identidad_y_enrolamiento.sql`, con el linter de
+      AC-FTEN-06 en verde sobre sus 7 tablas, 33 pruebas pgTAP en
+      `db/flota/pgtap/0008_identidad_y_enrolamiento.sql` y 11 contra el cluster real con el
+      rol `app_t_<slug>` en `db/flota/suite-bd/identidad.test.mjs`. El reparto no es
+      cosmético: al catálogo —enums con sus valores exactos, el predicado del índice parcial,
+      los CHECK por nombre, la clase de cada COMMENT— se le pregunta desde DENTRO de la base,
+      que es lo único que no puede quedar desfasado de la base; el append-only y el
+      aislamiento se prueban con el rol de app REAL, porque pgTAP corre como superusuario y a
+      un superusuario un REVOKE no le aplica nunca — probarlo ahí sería un verde que no
+      ejerció ninguna de las dos capas del §7.4. **El RUT se valida por módulo 11 en la BD**
+      (`rut_valido(text)` IMMUTABLE) y no solo en el formulario: la app valida AL ESCRIBIR
+      (§4.3) para que la persona lo vea antes de enviar, pero un RUT inválido que llega por un
+      script, una carga masiva o un endpoint futuro es igual de inválido y la BD es la
+      autoridad sobre las reglas de negocio. Se exige el formato canónico EXACTO del §0
+      (`12.345.678-5`): aceptar además la forma pelada guardaría dos representaciones de la
+      misma persona y `UNIQUE (tenant_id, rut)` dejaría de significar «una persona». DECISIONES
+      DECLARADAS: (a) la anonimización de la 21.719 es un CHECK de todo-o-nada —una fila con
+      `anonimizada_en` que conserva el RUT no está anonimizada, es una fila con una fecha
+      puesta; y una persona viva sin RUT ni nombre no se puede volver a identificar—, y al
+      anonimizar el RUT vuelve a quedar disponible porque el UNIQUE no queda tomado por una
+      fila sin identificadores; (b) la pausa de la invitación es un `pausada_at` nullable y no
+      un enum de estado, porque el §5.4 pide que reanudar NO altere `expira_at` y una marca de
+      tiempo es exactamente eso —con un enum habría que decidir qué pasa al reanudar una
+      vencida, y la respuesta ya está: vence igual, porque la pausa nunca movió la fecha—;
+      (c) `invitaciones.expira_at` NO lleva DEFAULT con el plazo horneado: el número es del
+      canónico §0 (`INVITACION.expira_dias`) y escribirlo también en el DDL sería la segunda
+      copia de una cifra canónica, que es lo que el gate de constantes existe para impedir;
+      (d) el índice de «un personal activo por operario» es PARCIAL (`WHERE tipo='personal' AND
+      revocado_at IS NULL`) y su predicado se verifica, no solo su existencia: uno total
+      pasaría un `has_index` y bloquearía el teléfono nuevo (F-E), que es un flujo de primera
+      clase y no una excepción; (e) `retention_policy` nace vacía y con la purga apagada POR
+      CONSTRUCCIÓN —un CHECK, no una promesa: una política activa sin plazo no se puede ni
+      insertar—, y su lista de registros purgables es cerrada y excluye lo append-only, porque
+      del ledger no se purga nada (§7.4). ALCANCE DECLARADO, no olvido:
+      `usuarios.empresa_cliente_id` lleva el CHECK del §4.3 pero **no** su FK, porque
+      `empresas_cliente` nace en el módulo de encargos; la FK compuesta se agrega en la
+      migración de ese módulo, que es cuando existe la tabla a la que apuntar. El enum
+      `rol_usuario` se compara valor a valor contra `ROLES` de `packages/nucleo-comun/src/constants.ts`
+      desde la suite de node —dos listas iguales escritas en dos lenguajes se separan el día
+      que alguien toca una sola— y en la BD es un TIPO y no una tabla de catálogo, para que
+      agregar un rol sea una migración visible y no un INSERT de madrugada — oráculo: CI
+      [AC-FIDN-01]
 - [ ] (P1) e2e del flujo feliz §5.4 contando ACCIONES (convención §5.3): dueño emite
       invitación por rol en ≤4 toques (QR + link firmado + código corto fallback);
       trabajador completa RUT auto-formateado `12.345.678-5` + nombre + PIN ×2 con
