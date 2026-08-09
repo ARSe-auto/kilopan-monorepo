@@ -12,9 +12,12 @@
 
 select no_plan();
 
--- Las tablas de dominio de esta base. `schema_migrations` es la contabilidad del runner y
--- `tenant_info` la fila que DEFINE al tenant: las dos están exentas también en el linter de
--- migraciones (AC-FTEN-06), y a `tenant_info` se la verifica aparte más abajo.
+-- QUÉ ES UNA TABLA DE DOMINIO: la que lleva `tenant_id`. Nada más. Empezó siendo una lista
+-- negra de nombres (`schema_migrations`, `tenant_info`) y esa lista se quedó vieja con la
+-- primera tabla de mecanismo que llegó después —`config_versionada`, de AC-FTEN-13—, que puso
+-- esta suite en rojo por tener un PK de texto. El criterio es el mismo que usa el linter de
+-- migraciones y no hay que mantenerlo en dos lados: si tiene `tenant_id`, es de dominio.
+-- `tenant_info` no lo lleva (define al tenant, no le pertenece) y se verifica aparte más abajo.
 create temporary table pk_de_dominio on commit drop as
 select c.relname                                  as tabla,
        a.attname                                  as columna,
@@ -28,7 +31,10 @@ select c.relname                                  as tabla,
   left join pg_attrdef d on d.adrelid = c.oid and d.adnum = a.attnum
  where n.nspname = 'public'
    and c.relkind = 'r'
-   and c.relname not in ('schema_migrations', 'tenant_info');
+   and exists (
+     select 1 from pg_attribute ta
+      where ta.attrelid = c.oid and ta.attname = 'tenant_id' and ta.attnum > 0
+        and not ta.attisdropped);
 
 select cmp_ok(
   (select count(*)::int from pk_de_dominio), '>', 0,
