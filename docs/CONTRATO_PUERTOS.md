@@ -37,10 +37,41 @@ CWD real del proceso. Ya no es un riesgo.)
 | **8778** | **KiloPan** | panel, si algún día se sirve |
 | 8100 · 8200 | **eauto** | pdf-svc / mail-worker |
 | 8777 | **eauto** | panel del motor |
-| 54329 | **eauto** | Postgres local |
+| 54329 | **eauto** | Postgres local (Postgres.app 18) |
+| **54331** | **FLOTA** | **cluster Postgres de `apps/flota`** — `db/flota/cluster.sh` |
 
 KiloPan usa **PGlite embebido** (`@electric-sql/pglite`), sin servidor de base de datos: por
 ese lado no hay conflicto posible.
+
+## El cluster de FLOTA (54331)
+
+FLOTA **no puede** correr sobre PGlite: el §4.1 del maestro exige `CREATE DATABASE …
+TEMPLATE`, una base por tenant con rol `app_t_<slug>` que solo tiene `CONNECT` a la suya, y
+`uuidv7()` nativo (PostgreSQL ≥ 18). Eso pide un servidor de verdad.
+
+En esta máquina ya hay uno: **Postgres.app 18.4**, sirviendo el cluster de eauto en el 54329.
+De esa instalación FLOTA reutiliza **solo los binarios** (lectura pura). Todo lo demás es
+propio y no se cruza con eauto en nada:
+
+| | eauto | FLOTA |
+|---|---|---|
+| Puerto | 54329 | **54331** |
+| PGDATA | `~/Library/Application Support/Postgres/var-18` | `~/.flota-pg/var-18` |
+| Superusuario | (el de Postgres.app) | `flota_admin` |
+| Extensiones extra | — | pgTAP 1.3.3 vía `extension_control_path` → `~/.flota-pg/share` |
+
+**Nunca** se levanta FLOTA sobre el 54329 ni se crean bases `t_*` ahí: son cluster, datos y
+credenciales de otro proyecto. `cluster.sh destruir` mueve el PGDATA a un lado con marca de
+tiempo; jamás borra en firme.
+
+El cluster es **uno solo para todos los worktrees** —igual que el 3301 del e2e de KiloPan—,
+así que dos gates simultáneos comparten el recurso y quien lo consume toma el lock.
+
+```bash
+bash db/flota/cluster.sh iniciar   # initdb si hace falta, arranca y siembra pgTAP
+bash db/flota/cluster.sh estado
+bash db/flota/cluster.sh parar
+```
 
 ## Reglas
 
@@ -62,4 +93,4 @@ ese lado no hay conflicto posible.
    CWD del proceso, jamás por substring genérico como `next-server`. Un `pkill -f next-server`
    aquí mataría el motor de eauto y le rompería el gate en silencio.
 
-Última revisión: 2026-07-25.
+Última revisión: 2026-08-08 (alta del cluster de FLOTA en el 54331).
