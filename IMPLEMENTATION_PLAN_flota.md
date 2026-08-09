@@ -115,7 +115,7 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 - [ ] (P2) Enrolamiento real de punta a punta <5 min en teléfono real con guía A2HS (oráculo humano — DONE-adopción, no bloquea el loop) — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-16]
 - [ ] (P1) RUT inválido: 422 tipado en servidor con 0 filas + validación módulo 11 EN LÍNEA en el cliente sobre RUT auto-formateado — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-17]
 - [ ] (P1) Break-glass: doble control + notificación forzosa + registro inmutable (test BLOQUEADO por pregunta 7; entra al build al responderse) — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-18]
-- [ ] (P1) Anonimización 21.719 sin tocar el ledger: `anonimizada_en` + campos nulos con counts de eventos/PODs/firmas intactos — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-19]
+- [x] (P1) Anonimización 21.719 sin tocar el ledger: `anonimizada_en` + campos nulos con counts de eventos/PODs/firmas intactos — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-19]
 - [ ] (P1) La UI de enrolamiento NO presenta consentimiento a trabajadores (base de licitud = ejecución de contrato); e2e + grep — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-20]
 - [ ] (P1) Seeds/fixtures SOLO con RUTs de lista congelada versionada (módulo 11 + irreales); RUT fuera de lista ⇒ rojo — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-21]
 

@@ -479,11 +479,34 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       escribible; resuelta la pregunta, el test se parametriza con los dos controles
       y el canal concretos y el AC entra al plan del build — oráculo: CI
       (condicionado a Pregunta #7) [AC-FIDN-18]
-- [ ] (P1) Anonimización 21.719 sin tocar el ledger (§4.3, §7.8): anonimizar una
+- [x] (P1) Anonimización 21.719 sin tocar el ledger (§4.3, §7.8): anonimizar una
       persona con historial ⇒ `anonimizada_en` set y campos identificantes
       nulificados en `personas`, con el ledger INTACTO — mismos counts de eventos,
       PODs y firmas, todos válidos referenciando el ID opaco; centinela 6 no se
-      viola — oráculo: CI [AC-FIDN-19]
+      viola. Evidencia: `apps/flota/src/servidor/anonimizacion.ts` y 7 pruebas contra el
+      cluster real en `apps/flota/e2e/anonimizacion.spec.ts`, sobre una persona CON historial
+      —3 eventos y 2 firmas— porque sin hechos previos «el ledger quedó intacto» sería cierto
+      por no haber ledger, que es el verde vacuo más fácil de escribir en este AC. Lo que hace
+      intacto al ledger no es una promesa: es que la función NI SIQUIERA NOMBRA `eventos`,
+      `firmas`, `evidence` ni `audit_trail` — y una prueba aparte verifica que tampoco se
+      PODRÍAN tocar (UPDATE y DELETE ⇒ 42501), porque si el append-only se hubiera relajado
+      para que la supresión pasara, todo lo demás seguiría en verde y el ledger habría dejado
+      de ser prueba de nada. La otra mitad, que es la que le da sentido: los hechos siguen
+      apuntando al MISMO ID opaco y las FK siguen resolviendo — si la supresión cortara el
+      vínculo, el ledger estaría «intacto» y a la vez inservible para reconstruir una entrega,
+      que es para lo que existe. Suprimir no es borrar la fila. DECISIÓN DECLARADA: la
+      supresión además REVOCA los aparatos de esa persona y desactiva su usuario. El AC pide
+      la fila y el ledger; esto es la consecuencia que no se puede dejar afuera sin romper
+      algo — un aparato que siguiera capturando en nombre de una identidad suprimida
+      escribiría hechos nuevos atribuidos a alguien que ya no se puede nombrar. ALCANCE
+      DECLARADO: el historial se arma con `eventos` y `firmas`, las tablas de hechos que
+      existen hoy; los PODs que el AC también nombra nacen en el hito (e) y se suman a este
+      mismo conteo sin cambiar el mecanismo. NOTA DE ARNÉS: esta suite provisiona su PROPIA
+      base y no usa la del fixture de ruteo, porque escribe en tablas append-only — una vez
+      que hay firmas apuntando a una persona, ninguna otra suite puede volver a limpiar
+      `personas` (el DELETE rebota 42501, que es justo lo que el §7.4 promete) y la base
+      compartida queda inservible para todas. El aislamiento del ledger no puede volverse el
+      problema de la suite siguiente — oráculo: CI [AC-FIDN-19]
 - [ ] (P1) La UI de enrolamiento NO presenta consentimiento a trabajadores (base de
       licitud = ejecución de contrato, §7.8): e2e sobre F-B/F-C/F-E sin checkbox ni
       texto de consentimiento + grep de strings del flujo — oráculo: CI [AC-FIDN-20]
