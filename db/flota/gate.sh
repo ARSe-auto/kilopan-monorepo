@@ -38,6 +38,9 @@ paso "lista congelada de criterios KiloRuta" \
 paso "familia canónica de constantes: cero números mágicos duplicados (§0)" \
   node db/flota/gate-constantes.mjs
 
+paso "documentos del contrato: runbook de brechas con sus secciones y sus exigencias" \
+  node db/flota/gate-documentos.mjs
+
 paso "linter de migraciones: las cinco exigencias de toda tabla de dominio (§4.2, §9.2)" \
   node db/flota/lint-migraciones.mjs
 

@@ -16,7 +16,11 @@ const SLUG = "gate_export";
 // Reloj REAL y no una fecha fija: `eventos_ultima_hora` es «la última hora desde ahora» por
 // definición, así que una ventana de 2026 congelada la dejaría siempre en cero. La alineación
 // de la ventana, que sí es lógica pura, se fija con fechas literales en `exportar.test.mjs`.
-const AHORA = new Date();
+// Anclado al COMIENZO del tramo vigente, no a un instante cualquiera: la prueba del upsert
+// corre el job dos veces con 90 s de diferencia, y si el reloj cayera cerca del borde del
+// tramo la segunda corrida caería en el siguiente y crearía una fila legítima. Se puso rojo
+// en el gate justamente así.
+const AHORA = new Date(ventanaDe(new Date()).inicio.getTime() + 30_000);
 
 let control;
 let tenant;
