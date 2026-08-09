@@ -228,3 +228,124 @@ test("[AC-FTEN-04] un grant de soporte sin vencimiento no entra", async () => {
     await control.sql("delete from tenants where id = $1", [tenant.id]);
   }
 });
+
+// --- Resolución de entitlements ------------------------------------------------- [AC-FTEN-11]
+// La fórmula del §4.4 es LITERAL —`efectivo = override ?? plan`— y se prueba en AMBOS
+// sentidos, porque una implementación que solo mire el plan pasa la mitad de los casos.
+
+/** Arma un tenant con un plan que trae `enElPlan` y no trae `fueraDelPlan`. */
+async function escenarioDeEntitlements() {
+  await control.sql("delete from tenants where slug like 'gate_ent%'");
+  const [plan] = await control.sql(
+    "insert into planes (lookup_key, nombre) values ('gate_ent_plan', 'Gate') " +
+      "on conflict (lookup_key) do update set nombre = excluded.nombre returning id::text as id",
+  );
+  const feats = {};
+  for (const key of ["gate.en_el_plan", "gate.fuera_del_plan"]) {
+    const [f] = await control.sql(
+      "insert into features (lookup_key, module) values ($1, '00') " +
+        "on conflict (lookup_key) do update set module = excluded.module returning id::text as id",
+      [key],
+    );
+    feats[key] = f.id;
+  }
+  await control.sql("delete from plan_features where plan_id = $1", [plan.id]);
+  await control.sql("insert into plan_features (plan_id, feature_id) values ($1, $2)", [
+    plan.id,
+    feats["gate.en_el_plan"],
+  ]);
+  const [tenant] = await control.sql(
+    "insert into tenants (slug, bd, plan_id) values ('gate_ent', 't_gate_ent', $1) returning id::text as id",
+    [plan.id],
+  );
+  return { plan, feats, tenant };
+}
+
+const efectivo = async (tenantId, key) =>
+  (await control.sql("select entitlement_efectivo($1, $2) as e", [tenantId, key]))[0].e;
+
+test("[AC-FTEN-11] sin override, el efectivo ES el plan", async () => {
+  const { tenant } = await escenarioDeEntitlements();
+  try {
+    assert.equal(await efectivo(tenant.id, "gate.en_el_plan"), true);
+    assert.equal(await efectivo(tenant.id, "gate.fuera_del_plan"), false);
+    assert.equal(await efectivo(tenant.id, "gate.inexistente"), false, "una feature que no existe no está encendida");
+  } finally {
+    await control.sql("delete from tenants where id = $1", [tenant.id]);
+  }
+});
+
+test("[AC-FTEN-11] override OFF sobre una feature DEL plan ⇒ OFF", async () => {
+  const { feats, tenant } = await escenarioDeEntitlements();
+  try {
+    await control.sql(
+      "insert into tenant_feature_overrides (tenant_id, feature_id, enabled, motivo) " +
+        "values ($1, $2, false, 'apagada a pedido del cliente')",
+      [tenant.id, feats["gate.en_el_plan"]],
+    );
+    assert.equal(await efectivo(tenant.id, "gate.en_el_plan"), false);
+  } finally {
+    await control.sql("delete from tenant_feature_overrides where tenant_id = $1", [tenant.id]);
+    await control.sql("delete from tenants where id = $1", [tenant.id]);
+  }
+});
+
+test("[AC-FTEN-11] override ON sobre una feature FUERA del plan ⇒ ON: la fórmula es literal", async () => {
+  // El guard comercial que impide encender fuera de plan es de la pantalla «Funciones» del
+  // hito g (§5.5), no de la resolución. Mezclarlos haría imposible el piloto acordado con un
+  // cliente — que es justo por lo que el motivo del override es obligatorio.
+  const { feats, tenant } = await escenarioDeEntitlements();
+  try {
+    await control.sql(
+      "insert into tenant_feature_overrides (tenant_id, feature_id, enabled, motivo) " +
+        "values ($1, $2, true, 'piloto acordado, vence en marzo')",
+      [tenant.id, feats["gate.fuera_del_plan"]],
+    );
+    assert.equal(await efectivo(tenant.id, "gate.fuera_del_plan"), true);
+  } finally {
+    await control.sql("delete from tenant_feature_overrides where tenant_id = $1", [tenant.id]);
+    await control.sql("delete from tenants where id = $1", [tenant.id]);
+  }
+});
+
+test("[AC-FTEN-11] la vista y la función dicen SIEMPRE lo mismo, y la vista dice de dónde sale", async () => {
+  // Dos fuentes de verdad para la misma fórmula es la forma más cara de tener un bug: la
+  // prueba compara las dos sobre cada feature del tenant, no sobre una elegida a mano.
+  const { feats, tenant } = await escenarioDeEntitlements();
+  try {
+    await control.sql(
+      "insert into tenant_feature_overrides (tenant_id, feature_id, enabled, motivo) " +
+        "values ($1, $2, true, 'piloto acordado, vence en marzo')",
+      [tenant.id, feats["gate.fuera_del_plan"]],
+    );
+    const filas = await control.sql(
+      "select lookup_key, habilitada, por_override, motivo, " +
+        "entitlement_efectivo($1, lookup_key) as por_funcion " +
+        "from entitlements_efectivos where tenant_id = $1 order by lookup_key",
+      [tenant.id],
+    );
+    assert.ok(filas.length >= 2, "la vista no ejercitó ninguna feature");
+    for (const f of filas) {
+      assert.equal(f.habilitada, f.por_funcion, `la vista y la función discrepan en ${f.lookup_key}`);
+    }
+    const fuera = filas.find((f) => f.lookup_key === "gate.fuera_del_plan");
+    assert.equal(fuera.por_override, true, "la vista no dice que vino de un override");
+    assert.match(fuera.motivo, /piloto/, "la vista no trae el motivo del override");
+  } finally {
+    await control.sql("delete from tenant_feature_overrides where tenant_id = $1", [tenant.id]);
+    await control.sql("delete from tenants where id = $1", [tenant.id]);
+  }
+});
+
+test("[AC-FTEN-11] los límites cuantitativos son COLUMNAS del plan, no features", async () => {
+  // Un límite es un número, no un interruptor (§4.4). Si viviera como feature, «1 vehículo»
+  // y «300 entregas/mes» del plan Partida serían dos booleanos que no dicen cuánto.
+  const columnas = (
+    await control.sql(
+      "select a.attname from pg_attribute a where a.attrelid = 'planes'::regclass " +
+        "and a.attnum > 0 and not a.attisdropped",
+    )
+  ).map((f) => f.attname);
+  assert.ok(columnas.includes("limite_vehiculos"));
+  assert.ok(columnas.includes("limite_entregas_mes"));
+});
