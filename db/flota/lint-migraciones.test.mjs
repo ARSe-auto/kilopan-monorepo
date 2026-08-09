@@ -208,3 +208,31 @@ comment on table items is 'CAPTURA — el conteo real se hace en el punto.';
   assert.match(salida, /items: sin `CHECK \(tenant_id = tenant_actual\(\)\)`/);
   assert.doesNotMatch(salida, /paradas: sin/);
 });
+
+// --- Dinero (§0 fila Dinero, §4.8) --------------------------------------------------- [AC-FTEN-09]
+// El sufijo `_clp` ES la convención de una columna de monto. Un `numeric` ahí no es
+// precisión: en CLP no hay centavos, y el decimal aparece recién en el primer total que no
+// cuadra por un peso.
+const CON_MONTO = (tipo) => `
+create table tarifas (
+  id          uuid primary key default uuidv7(),
+  tenant_id   uuid not null check (tenant_id = tenant_actual()),
+  costo_clp   ${tipo} not null,
+  unique (tenant_id, id)
+);
+create index tarifas_tenant_idx on tarifas (tenant_id);
+comment on table tarifas is 'PLANIFICACIÓN — la tarifa se pacta con red y rebota.';
+`;
+
+test("[AC-FTEN-09] una columna `*_clp` en bigint pasa (el guard no es un no-op al revés)", () => {
+  const { codigo, salida } = correr({ "tenant/0001_x.sql": CON_MONTO("bigint") });
+  assert.equal(codigo, 0, salida);
+});
+
+for (const tipo of ["numeric", "numeric(12,2)", "double precision", "real", "money", "int"]) {
+  test(`[AC-FTEN-09] una columna de dinero en \`${tipo}\` ⇒ gate rojo`, () => {
+    const { codigo, salida } = correr({ "tenant/0001_x.sql": CON_MONTO(tipo) });
+    assert.equal(codigo, 1, salida);
+    assert.match(salida, /la columna de dinero `costo_clp`/);
+  });
+}

@@ -173,6 +173,28 @@ for (const ruta of archivos) {
       }
     }
 
+    // 3c. Dinero: toda columna `*_clp` es `bigint` entero (§0 fila Dinero, §4.8). [AC-FTEN-09]
+    //     El sufijo ES la convención: una columna de monto se llama `<algo>_clp`, y por eso
+    //     el mismo criterio sirve acá, en el catálogo de pgTAP y en la vista de quien lee.
+    //     Un `numeric` en dinero no es precisión: en CLP no hay centavos, y el decimal
+    //     aparece recién en el primer total que no cuadra por un peso.
+    //     El tipo se recorta hasta donde TERMINA el tipo (`double precision`, `numeric(12,2)`)
+    //     y no hasta la coma: leer «bigint not null» como tipo hacía fallar al positivo, que
+    //     es justo el mutante que impide que este guard sea un no-op al revés.
+    const TIPO = String.raw`[a-z][a-z0-9_]*(?:\s+precision)?(?:\s*\([^)]*\))?`;
+    for (const col of cuerpo.matchAll(
+      new RegExp(String.raw`^\s*([a-z_][a-z0-9_]*_clp)\s+(${TIPO})`, "gim"),
+    )) {
+      const tipo = col[2].trim().toLowerCase().replace(/\s+/g, " ");
+      if (tipo !== "bigint" && tipo !== "int8") {
+        err(
+          rel,
+          tabla,
+          `la columna de dinero \`${col[1]}\` es \`${tipo}\`: todo monto es CLP bigint entero (§0)`,
+        );
+      }
+    }
+
     // 4a. Ofrece (tenant_id, id) para que otras tablas la referencien compuesta.
     if (!/\b(?:primary\s+key|unique)\s*\(\s*tenant_id\s*,\s*id\s*\)/i.test(cuerpo)) {
       err(
