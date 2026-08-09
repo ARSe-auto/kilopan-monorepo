@@ -16,6 +16,10 @@ import { versionEsperada } from "../aplicar.mjs";
 /** El plano de control de E1, tabla por tabla. Agregar una acá es un acto, no un descuido. */
 const TABLAS = [
   "agregados_tecnicos",
+  // El registro de accesos de emergencia (AC-FIDN-18). Vive en `control` y no en el tenant
+  // porque lo abre la PLATAFORMA con doble control propio, justamente cuando el dueño no está
+  // disponible; lo que el tenant SÍ ve es el aviso forzoso en su bandeja.
+  "break_glass",
   "features",
   "grants_soporte",
   "invitaciones_tenant",

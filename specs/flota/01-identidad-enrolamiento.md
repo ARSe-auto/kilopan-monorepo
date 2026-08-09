@@ -585,14 +585,39 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       LÍNEA sobre el RUT auto-formateado `12.345.678-5` y no envía mientras sea
       inválido (el 422 del servidor se ejercita por request directo, saltándose el
       cliente) (§0, §4.2, §4.3, §5.4) — oráculo: CI [AC-FIDN-17]
-- [ ] (P1) Break-glass de soporte (§4.3, §7.9): doble control + notificación forzosa
+- [x] (P1) Break-glass de soporte (§4.3, §7.9): doble control + notificación forzosa
       + registro inmutable. DESBLOQUEADO el 09-ago-2026 (respuesta a la pregunta 7: dos
       personas de la PLATAFORMA, y aviso por correo + panel persistente hasta reconocerlo)
       (quiénes son los DOS controles y por qué canal llega la notificación sin
       depender de push, §7.6): contra actores y canal indefinidos no hay test
       escribible; resuelta la pregunta, el test se parametriza con los dos controles
-      y el canal concretos y el AC entra al plan del build — oráculo: CI
-      (condicionado a Pregunta #7) [AC-FIDN-18]
+      y el canal concretos y el AC entra al plan del build. Evidencia:
+      `db/migraciones-flota/control/0005_break_glass.sql`,
+      `apps/flota/src/servidor/breakglass.ts` y 7 pruebas contra el cluster en
+      `apps/flota/e2e/breakglass.spec.ts`. Las tres exigencias del §7.9 quedan como
+      RESTRICCIONES y no como costumbre: (1) el doble control es un CHECK
+      (`solicitado_por <> aprobado_por`) además del rebote tipado, porque si viviera solo en el
+      código que llama bastaría con invocar el INSERT desde otro lado para tener god-mode de
+      una persona; (2) la notificación es FORZOSA en el sentido literal — `aviso_id` es NOT
+      NULL y el aviso se escribe ANTES que la fila, así que no hay camino que abra el acceso y
+      notifique después, ni forma de olvidarse; si algo falla a mitad queda un aviso sin acceso
+      (ruido descartable) y jamás un acceso sin aviso; (3) el registro es append-only con las
+      dos capas del §7.4, porque lo que audita es el acceso de quien tiene todos los permisos y
+      un registro editable no auditaría nada. El aviso vive en `review_queue` del TENANT, que
+      ya tiene la forma exacta que el dueño pidió —persistente hasta reconocerlo, con estados
+      nueva → reconocida → resuelta— y la nota nombra a los dos y el motivo: un aviso que no
+      dice quién entró ni por qué obliga al dueño a pedir explicaciones, que es lo contrario de
+      notificar. DECISIÓN DECLARADA: la tabla **no tiene FK a `tenants`**, y no es un olvido —
+      con una FK, un tenant que alguna vez tuvo un acceso de emergencia quedaría imposible de
+      borrar para siempre, y el offboarding del §4.1 es un derecho del tenant, no un favor. El
+      registro tiene que SOBREVIVIR al tenant en vez de impedir que se vaya, y por eso viaja
+      también su slug: cuando la fila de `tenants` ya no esté, el registro tiene que seguir
+      siendo legible. Lo destapó el gate — el primer intento con FK dejó un tenant registrado
+      sin base que el exportador denunció, y después bloqueó la limpieza de otra suite.
+      ALCANCE DECLARADO: la mitad de CORREO del canal no se implementa: no hay proveedor de
+      correo en el proyecto y E1 no despliega, así que queda como ítem igual que en el runbook
+      de brechas. Lo construido y probado es la mitad que no depende de nadie — oráculo: CI
+      [AC-FIDN-18]
 - [x] (P1) Anonimización 21.719 sin tocar el ledger (§4.3, §7.8): anonimizar una
       persona con historial ⇒ `anonimizada_en` set y campos identificantes
       nulificados en `personas`, con el ledger INTACTO — mismos counts de eventos,
