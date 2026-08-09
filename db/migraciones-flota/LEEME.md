@@ -53,6 +53,14 @@ node db/flota/migrar.mjs aplicar     # recorre y aplica; termina verificando
 node db/flota/migrar.mjs verificar   # mira y no toca — el modo que consume el deploy
 ```
 
+## Quién es quién en el cluster
+
+| Rol | Qué puede | Cómo se autentica |
+|---|---|---|
+| `flota_admin` | superusuario: crea bases y roles (el alta de tenant) | `trust` desde 127.0.0.1 |
+| `migrator` | dueño del esquema: aplica migraciones | `trust` desde 127.0.0.1 |
+| `app_t_<slug>` | datos de SU base y nada más; cero ownership | `scram-sha-256`, clave propia |
+
 Las migraciones NO corren con el superusuario: corren con el rol `migrator`, que es además el
 dueño de `tenant_template` y de cada `t_<slug>` (§4.1). Desde PostgreSQL 15 el esquema
 `public` pertenece a `pg_database_owner`, así que fijar el dueño de la base al crearla ya le

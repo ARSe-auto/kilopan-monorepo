@@ -18,6 +18,7 @@
 import { pathToFileURL } from "node:url";
 import { con, BD_PLANTILLA, ROL_MIGRADOR, bdDeTenant } from "./conectar.mjs";
 import { aplicar, aplicadasEn, migracionesDe, DIR_MIGRACIONES } from "./aplicar.mjs";
+import { provisionarRolDeApp } from "./rol-app.mjs";
 
 /** El uuid que `tenant_actual()` devuelve en la plantilla: la plantilla no es un tenant. */
 export const UUID_CENTINELA_PLANTILLA = "00000000-0000-7000-8000-000000000000";
@@ -197,7 +198,12 @@ export async function provisionar(slug, { recrear = false } = {}) {
     return fila.id;
   });
 
-  return { slug, bd, id };
+  // Credenciales propias del tenant, en el mismo acto que la base: una BD de tenant sin su
+  // `app_t_<slug>` sería una base a la que solo llega el migrador o el superusuario, y el
+  // primero que la necesitara la abriría con el rol equivocado (§4.1). [AC-FTEN-03]
+  const { rol, clave } = await provisionarRolDeApp(slug);
+
+  return { slug, bd, id, rol, clave };
 }
 
 /**

@@ -51,6 +51,39 @@ sembrar_extensiones () {
   fi
 }
 
+# Autenticación del cluster [AC-FTEN-03].
+#
+# Con `trust` —lo que deja initdb— cualquiera que llegue al puerto es cualquier rol sin
+# probar nada, y el centinela 3 («credenciales de app del tenant A contra la BD de B son
+# rechazadas») no significaría nada: no habría credenciales. Los roles `app_t_<slug>` pasan a
+# `scram-sha-256` con contraseña propia.
+#
+# Los roles de operación (`flota_admin`, `migrator`) siguen en `trust` desde 127.0.0.1 a
+# propósito: son los del dueño de esta máquina, viven solo en el cluster de desarrollo y sin
+# eso cada script del repo tendría que cargar un secreto para hacer su trabajo — justo lo que
+# el §7.1 no quiere ver escrito en ningún lado. El bloque se ANTEPONE porque pg_hba resuelve
+# por primera coincidencia, e incluye la línea `local` para que el socket unix no sea una
+# puerta de atrás al rechazo que se está probando.
+MARCA_HBA="# --- FLOTA: autenticación por rol (db/flota/cluster.sh, AC-FTEN-03) ---"
+
+configurar_hba () {
+  local hba="$PGDATA/pg_hba.conf"
+  grep -qF "$MARCA_HBA" "$hba" 2>/dev/null && return 0
+  {
+    echo "$MARCA_HBA"
+    echo "local   all   $SUPER                          trust"
+    echo "local   all   migrator                        trust"
+    echo "local   all   all                             scram-sha-256"
+    echo "host    all   $SUPER      127.0.0.1/32        trust"
+    echo "host    all   migrator    127.0.0.1/32        trust"
+    echo "host    all   all         127.0.0.1/32        scram-sha-256"
+    echo "host    all   all         ::1/128             scram-sha-256"
+    echo "# --- fin FLOTA ---"
+    cat "$hba"
+  } >"$hba.nuevo" && mv "$hba.nuevo" "$hba"
+  echo "cluster.sh: pg_hba.conf con autenticación por rol (scram-sha-256 para los roles de app)"
+}
+
 iniciar () {
   mkdir -p "$FLOTA_PG_HOME" "$SOCKDIR"
   local mayor; mayor="$(version_mayor)"
@@ -66,6 +99,7 @@ iniciar () {
   fi
 
   sembrar_extensiones
+  configurar_hba
 
   if esta_arriba; then
     echo "cluster.sh: ya estaba arriba en 127.0.0.1:$PUERTO"
@@ -90,6 +124,10 @@ iniciar () {
     "$PGBIN/psql" -h 127.0.0.1 -p "$PUERTO" -U "$SUPER" -d postgres -tAc \
       "select pg_reload_conf()" >/dev/null 2>&1
   fi
+  # El pg_hba puede haber cambiado con el cluster ya arriba (primera corrida tras AC-FTEN-03):
+  # sin este reload las reglas nuevas quedarían escritas y no vigentes.
+  "$PGBIN/psql" -h 127.0.0.1 -p "$PUERTO" -U "$SUPER" -d postgres -tAc \
+    "select pg_reload_conf()" >/dev/null 2>&1
 }
 
 parar () {
