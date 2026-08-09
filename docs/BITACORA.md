@@ -1778,3 +1778,28 @@ en CI no corre un proceso PgBouncer, declarado dentro del propio AC.
 
 Módulo 00: **26 de 28**. Quedan AC-FTEN-26 (necesita decidir con Alexis dónde vive el
 manifiesto de rutas) y AC-FTEN-19 (va al final del hito por definición).
+
+## 09-ago-2026, 16:10 → · AC-FTEN-26: el manifiesto de rutas se deriva del árbol, y la suite A-contra-B sale de él
+
+Alexis cerró la pregunta que el traspaso anterior dejó abierta, y con el dato que la volvió
+fácil: el manifiesto **no es solo insumo de esta suite**. Es el oráculo de cuatro pruebas de
+AUSENCIA de otros módulos —cero endpoint de emisión de DTE (AC-FTAR-08, art. 97 N°4 CT), sin
+endpoint de línea manual (AC-FTAR-04), nada de `/cliente/*` en el endpoint de captura (07) e
+impersonación (01)—, y una ausencia solo prueba algo si el inventario no puede quedar
+incompleto. De ahí: **derivado de `src/app/**` y comiteado igual**, en `apps/flota/rutas/`.
+Lo generado es la lista; lo que se edita a mano es el `cruce` de cada ruta.
+
+Lo que NO se tapó: hoy no hay sesión (nace en el módulo 01) ni ninguna ruta con parámetro,
+así que el caso «404 jamás 403» no tiene qué ejercer todavía. En vez de declararlo verde, el
+juicio se separó del driver del e2e (`rutas/veredicto.mjs`) y se probó contra respuestas de
+laboratorio; el lector de la huella de la BD de B se ejerce contra el cluster real. Y la
+suite se probó contra una fuga de verdad: con el servidor mutado para respetar la cabecera
+`x-flota-tenant-bd`, `GET /api/tenant` se pone rojo nombrando las dos cadenas filtradas.
+
+Tres guardias contra el verde vacuo, que es el modo de falla natural de una suite
+autogenerada: cero casos emitidos ⇒ rojo; la identidad de B tiene que ser observable por la
+app; y ningún centinela de B puede ser subcadena de la identidad de A (el fixture tiene
+`ruteo_activo` y `ruteo_activo_b`: al revés, el centinela dispararía contra datos propios y
+el arreglo cómodo sería ablandarlo).
+
+Módulo 00: **27 de 28**. Queda AC-FTEN-19, que va al final del hito por definición.

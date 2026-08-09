@@ -1,0 +1,29 @@
+{
+  "//": "GENERADO por rutas/generar.mjs desde apps/flota/src/app/** [AC-FTEN-26]. La LISTA de rutas no se edita a mano: se regenera con `node rutas/generar.mjs --escribir` y el gate la compara contra el árbol. Lo que SÍ se edita a mano es el `cruce` de cada entrada, que es cómo se monta contra ella el caso «sesión de A con IDs de B».",
+  "rutas": [
+    {
+      "ruta": "/",
+      "archivo": "src/app/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "El shell no recibe identificador de recurso, así que no hay recurso de B que pedirle: el cruce que sí aplica es inyectarle la identidad de B por los canales falsificables (host propio de A + cabeceras de tenant apuntando a B) y exigir que la respuesta siga siendo la de A, sin una sola cadena de B."
+      }
+    },
+    {
+      "ruta": "/api/tenant",
+      "archivo": "src/app/api/tenant/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Devuelve la identidad del tenant leída de tenant_info de SU base, así que es la ruta donde una fuga se vería a simple vista: si el aislamiento cediera, el slug y el nombre de la BD de B saldrían literalmente en el cuerpo. Sin parámetros hasta el módulo 01; el día que reciba uno, pasa a tipo recurso y el gate lo exige."
+      }
+    }
+  ]
+}
