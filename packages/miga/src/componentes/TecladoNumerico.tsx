@@ -1,7 +1,9 @@
-import { tipografia } from "../tokens.ts";
+import { tipografia, grilla } from "../tokens.ts";
+import { componente } from "../estructura.ts";
 
 // Teclado numérico PROPIO — jamás el teclado del sistema (PROMPT_MAESTRO.md §5).
-// Teclas >=64px (manos con harina/guantes). Coma es-CL como separador decimal.
+// El tamaño de tecla sale de `componente.tecla`, que lo toma de la familia canónica del
+// §0 (manos con harina/guantes) [AC-FMIG-01]. Coma es-CL como separador decimal.
 const TECLAS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ",", "0", "⌫"] as const;
 
 export function TecladoNumerico({
@@ -50,15 +52,21 @@ export function TecladoNumerico({
     <div
       role="group"
       aria-label="Teclado numérico"
-      style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}
+      style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: componente.tecla.separacionPx }}
     >
       {TECLAS.map((tecla) => {
-        // Hallazgo menor de la auditoría: en /ingresar y /vincular (PIN de 4 dígitos,
-        // sin decimales) esta tecla se mostraba apagada y sin poder tocarse — un botón
+        // Hallazgo menor de la auditoría: en /ingresar y /vincular (PIN, sin decimales)
+        // esta tecla se mostraba apagada y sin poder tocarse — un botón
         // muerto ocupando espacio, con contraste bajo el mínimo. Si no aplica, no se
         // pinta: se deja el hueco vacío para no correr "0" y "⌫" de lugar.
         if (tecla === "," && !permitirDecimal && !permitirGuion) {
-          return <div key={tecla} aria-hidden="true" style={{ minHeight: 64, minWidth: 64 }} />;
+          return (
+            <div
+              key={tecla}
+              aria-hidden="true"
+              style={{ minHeight: componente.tecla.altoMinPx, minWidth: componente.tecla.anchoMinPx }}
+            />
+          );
         }
         const etiqueta = tecla === "," && permitirGuion ? "−" : tecla;
         return (
@@ -68,14 +76,15 @@ export function TecladoNumerico({
             onClick={() => tocar(etiqueta)}
             aria-label={etiqueta === "⌫" ? "Borrar" : etiqueta}
             style={{
-              minHeight: 64,
-              minWidth: 64,
-              // AC-H0-08: 24px no pertenecía a la escala tipográfica de Miga — "titulo"
-              // (22/600) es el peldaño correcto, y el peso ya coincidía con el token.
+              minHeight: componente.tecla.altoMinPx,
+              minWidth: componente.tecla.anchoMinPx,
+              // AC-H0-08: el tamaño que había acá no pertenecía a la escala tipográfica
+              // de Miga — "titulo" (22/600) es el peldaño correcto, y el peso ya coincidía
+              // con el token.
               fontSize: tipografia.titulo.tamano,
               fontWeight: tipografia.titulo.peso,
               fontVariantNumeric: "tabular-nums",
-              borderRadius: 12,
+              borderRadius: grilla.radio,
               border: "1px solid rgba(27,23,18,.14)",
               background: "#FFFFFF",
               color: "#1B1712",

@@ -3,8 +3,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { componente } from "../estructura.ts";
 
-const DIR = dirname(fileURLToPath(import.meta.url));
+// Mismo override que `cifras.test.ts` y `estructura.test.ts`: sin él, este archivo leía
+// una ruta FIJA y quedaba fuera del ejercicio de mutantes — un mutante sobre el árbol de
+// juguete lo dejaba pasar en verde, que es justo lo que el arnés existe para detectar.
+const DIR = process.env.MIGA_COMPONENTES_DIR ?? dirname(fileURLToPath(import.meta.url));
 const fuente = readFileSync(join(DIR, "EstadoListado.tsx"), "utf8");
 const codigo = fuente.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
 
@@ -38,10 +42,23 @@ test("el vacío es ACCIONABLE: acepta una acción, no solo un mensaje [AC-H0-11]
   assert.match(codigo, /accion/, "EstadoVacio no acepta una acción — un vacío sin salida deja al operador atascado");
 });
 
-test("el botón de reintentar respeta el mínimo táctil de 48 px [AC-H0-11]", () => {
-  // §5: el maestro toca con las manos enharinadas. Un botón de 32 px es un botón que no se
-  // acierta, y un reintento que no se acierta es lo mismo que no tenerlo.
-  assert.match(codigo, /minHeight:\s*48/, "el botón de reintentar queda bajo el mínimo táctil");
+test("el botón de reintentar respeta el mínimo táctil de la familia canónica [AC-H0-11]", () => {
+  // §5: el maestro toca con las manos enharinadas. Un botón bajo el mínimo es un botón que
+  // no se acierta, y un reintento que no se acierta es lo mismo que no tenerlo.
+  //
+  // Desde AC-FMIG-01 el componente NO escribe el número: lo lee de `componente.objetivoTactil`,
+  // que lo toma de `TACTIL.operativo_min`. Así que se aserta lo que de verdad protege el AC —
+  // que el alto salga del token y que el token siga por encima del piso WCAG—, y no la
+  // presencia de un literal que hoy sería, él mismo, una duplicación de la familia §0.
+  assert.match(
+    codigo,
+    /minHeight:\s*componente\.objetivoTactil\.altoMinPx/,
+    "el botón de reintentar no toma su alto del token táctil — un valor a mano se desincroniza"
+  );
+  assert.ok(
+    componente.objetivoTactil.altoMinPx >= componente.objetivoTactil.pisoAbsolutoPx,
+    "el objetivo táctil operativo quedó por debajo del piso WCAG"
+  );
 });
 
 test("los tres estados se exportan desde el barril de miga [AC-H0-11]", () => {

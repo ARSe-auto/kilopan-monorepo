@@ -1,4 +1,5 @@
-import { superficie, semantico, tipografia } from "../tokens.ts";
+import { superficie, semantico, tipografia, grilla, enfasis } from "../tokens.ts";
+import { componente } from "../estructura.ts";
 
 // AC-H0-11: los cuatro estados obligatorios de todo listado. El defecto que cierran no es
 // estético: hoy un error de red se ve IDÉNTICO a «no hay nada». El maestro lo dice con el
@@ -18,8 +19,10 @@ export function EstadoCargando({ filas = 3 }: { filas?: number }) {
         <div
           key={i}
           style={{
+            // Alto propio del skeleton: reserva el lugar de una fila de listado. No es el
+            // botón primario del §0 aunque hoy coincidan — por eso queda como valor local.
             height: 56,
-            borderRadius: 12,
+            borderRadius: grilla.radio,
             background: superficie.hairline,
             // Sin animación: `prefers-reduced-motion` obligaría a apagarla igual, y un
             // bloque quieto ya comunica «acá viene algo» sin costar batería en el galpón.
@@ -34,11 +37,11 @@ export function EstadoCargando({ filas = 3 }: { filas?: number }) {
  *  sin salida y es indistinguible de un error para quien no sabe leer la diferencia. */
 export function EstadoVacio({ mensaje, accion }: { mensaje: string; accion?: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "8px 0" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: `${grilla.base}px 0` }}>
       <p
         role="status"
-        // AC-H0-08: 15px no pertenecía a la escala tipográfica de Miga — "cuerpo" (17/400)
-        // es el peldaño correcto para texto de mensaje.
+        // AC-H0-08: el tamaño que había acá no pertenecía a la escala tipográfica de
+        // Miga — "cuerpo" es el peldaño correcto para texto de mensaje.
         style={{ margin: 0, color: superficie.textoFaint, fontSize: tipografia.cuerpo.tamano, fontWeight: tipografia.cuerpo.peso }}
       >
         {mensaje}
@@ -52,13 +55,13 @@ export function EstadoVacio({ mensaje, accion }: { mensaje: string; accion?: Rea
  *  noticia sin salida, y el operador cierra la app en vez de volver a intentar. */
 export function EstadoError({ mensaje, alReintentar }: { mensaje: string; alReintentar: () => void }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "8px 0" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: `${grilla.base}px 0` }}>
       {/* role="alert" y no "status": un error interrumpe al lector de pantalla, un vacío no. */}
       <p
         role="alert"
         // AC-H0-08: mismo peldaño "cuerpo" que el mensaje de EstadoVacio; el peso 600 se
         // mantiene como énfasis propio del error, no del token (mismo patrón que ChipOperador).
-        style={{ margin: 0, color: semantico.error, fontSize: tipografia.cuerpo.tamano, fontWeight: 600 }}
+        style={{ margin: 0, color: semantico.error, fontSize: tipografia.cuerpo.tamano, fontWeight: enfasis.medio }}
       >
         {mensaje}
       </p>
@@ -66,15 +69,15 @@ export function EstadoError({ mensaje, alReintentar }: { mensaje: string; alRein
         type="button"
         onClick={alReintentar}
         style={{
-          // 48px: el mínimo táctil del maestro (§5), con las manos enharinadas.
-          minHeight: 48,
+          // El mínimo táctil de la familia canónica (§0/§5), con las manos enharinadas.
+          minHeight: componente.objetivoTactil.altoMinPx,
           padding: "0 20px",
-          borderRadius: 12,
+          borderRadius: grilla.radio,
           border: `1px solid ${superficie.hairline}`,
           background: superficie.tarjeta,
           color: superficie.texto,
-          fontSize: 17,
-          fontWeight: 600,
+          fontSize: tipografia.cuerpo.tamano,
+          fontWeight: enfasis.medio,
           alignSelf: "flex-start",
         }}
       >

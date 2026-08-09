@@ -1,3 +1,5 @@
+import { tipografia, enfasis } from "../tokens.ts";
+
 // Estado obligatorio de todo listado con cola (PROMPT_MAESTRO.md §5): "Sin conexión —
 // N registros por subir" ámbar -> "Sincronizado hace Xs" verde. Nunca silencioso.
 //
@@ -23,8 +25,8 @@ export function ChipEstadoConexion({ pendientes, online = true }: { pendientes: 
         gap: 6,
         padding: "6px 12px",
         borderRadius: 100,
-        fontSize: 13,
-        fontWeight: 700,
+        fontSize: tipografia.pie.tamano,
+        fontWeight: enfasis.fuerte,
         background: alerta ? "rgba(180,83,9,.13)" : "rgba(21,128,61,.12)",
         color: alerta ? "#B45309" : "#15803D",
       }}

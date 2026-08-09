@@ -112,6 +112,39 @@ export const SOC = {
   capturas_max_por_turno: 3,
 } as const;
 
+/**
+ * Tipografía estructural de Miga (§5.1). NO configurable por el tenant: el tenant
+ * personaliza EXACTAMENTE tres cosas —logo, un acento y la terminología—, y ninguna es
+ * esta.
+ *
+ * La familia es la del SISTEMA, jamás una webfont: se pinta con el primer frame, sin
+ * bajar un byte. En un andén a las 5 AM con 4G malo, una webfont es una pantalla en
+ * blanco.
+ */
+export const TIPOGRAFIA = {
+  familia: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  /**
+   * Escala iOS del §5.1, en pt. Cinco peldaños, estrictamente descendente. La cifra
+   * operativa (96) NO es un peldaño de esta escala: es su propio token, porque no se
+   * usa como texto sino como instrumento de lectura a distancia (ver CIFRA_OPERATIVA).
+   */
+  escala_pt: {
+    titulo_grande: 34,
+    cuerpo: 17,
+    subtitulo: 15,
+    pie: 13,
+    minimo: 11,
+  },
+} as const;
+
+/** Grilla y esquinas (§5.1). Todo espacio es múltiplo de la base; cero valores sueltos. */
+export const GRILLA = {
+  base_px: 8,
+  radio_tarjeta_px: 12,
+  /** Los CONTROLES no llevan radio en px sino cápsula: radio = mitad de la altura. */
+  radio_control: "capsula",
+} as const;
+
 /** Targets táctiles, en px CSS (§0, §5.7). Terreno: guantes, frío, sol, apuro. */
 export const TACTIL = {
   operativo_min: 48,
@@ -318,9 +351,31 @@ export const CIFRAS_VIGILADAS = [
   { nombre: "CONTRASTE.texto", valor: 4.5, patron: String.raw`\b4\.5\s*:\s*1|\b4\.5\b(?=\s*[,;)\]])` },
   { nombre: "CIFRA_OPERATIVA.tamano_px", valor: 96, patron: String.raw`\b96\s*px\b|font-?[Ss]ize[^\n]{0,12}\b96\b` },
   { nombre: "CIFRA_OPERATIVA.peso", valor: 700, patron: String.raw`font-?[Ww]eight[^\n]{0,12}\b700\b` },
-  { nombre: "TACTIL.boton_primario", valor: 56, patron: String.raw`\b56\s*px\b` },
-  { nombre: "TACTIL.tecla_min", valor: 64, patron: String.raw`\b64\s*px\b` },
-  { nombre: "TACTIL.operativo_min", valor: 48, patron: String.raw`\b48\s*px\b` },
+  // AC-FMIG-01: los tokens estructurales del §5.1 entran a la vigilancia junto con
+  // `packages/miga`, que hasta hoy quedaba fuera del alcance del gate.
+  { nombre: "TIPOGRAFIA.familia", valor: TIPOGRAFIA.familia, patron: String.raw`-apple-system` },
+  // Un peldaño de la escala escrito a mano como tamaño de fuente. Se exige el contexto
+  // `fontSize`/`font-size` porque 34, 17, 15, 13 y 11 son números corrientes en cualquier
+  // otro lugar, y un guard que salta con cualquier 15 se apaga solo a la semana.
+  {
+    nombre: "TIPOGRAFIA.escala_pt",
+    valor: "34/17/15/13/11",
+    // El límite de la derecha es `(?!\d)` y no `\b`: entre dígito y letra NO hay frontera
+    // de palabra, así que `\b34\b` no mordía `font-size: 34px` — la forma más común de
+    // escribirlo a mano. Lo pilló el test que ejerce cada patrón contra su propia muestra.
+    patron: String.raw`font-?[Ss]ize[^\n]{0,14}(?<!\d)(?:34|17|15|13|11)(?!\d)`,
+  },
+  // La base de la grilla copiada como `8px` o como separación suelta (`gap`, `padding`,
+  // `margin`). Ambas formas son la misma duplicación con distinta ropa.
+  {
+    nombre: "GRILLA.base_px",
+    valor: 8,
+    patron: String.raw`\b8\s*px\b|(?:gap|padding|margin)[^\n]{0,14}\b8\b`,
+  },
+  { nombre: "GRILLA.radio_tarjeta_px", valor: 12, patron: String.raw`border-?[Rr]adius[^\n]{0,14}(?<!\d)12(?!\d)` },
+  { nombre: "TACTIL.boton_primario", valor: 56, patron: String.raw`\b56\s*px\b|min-?[Hh]eight[^\n]{0,14}\b56\b` },
+  { nombre: "TACTIL.tecla_min", valor: 64, patron: String.raw`\b64\s*px\b|min-?[HhWw](?:eight|idth)[^\n]{0,14}\b64\b` },
+  { nombre: "TACTIL.operativo_min", valor: 48, patron: String.raw`\b48\s*px\b|min-?[HhWw](?:eight|idth)[^\n]{0,14}\b48\b` },
   { nombre: "TACTIL.piso_wcag", valor: 24, patron: String.raw`\b24\s*px\b` },
   { nombre: "EV.umbrales_alerta_pct", valor: "30/20/15/10", patron: String.raw`\b30\s*,\s*20\s*,\s*15\s*,\s*10\b` },
   { nombre: "CAPACIDAD.p95_bootstrap_ms", valor: 400, patron: String.raw`p95[^\n]{0,24}\b400\b` },

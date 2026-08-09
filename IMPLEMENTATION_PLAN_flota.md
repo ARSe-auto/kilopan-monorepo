@@ -60,7 +60,7 @@ AC-FVEH-19 (p. 9), AC-FVEH-20 (p. 7).
 
 ## Hito 0 — `packages/miga` (precondición del §9.1; su AC vive en la spec 08)
 
-- [ ] (P1) Tokens estructurales de Miga en 3 capas desde `constants.ts` (escala, grilla, targets, botón 56px); test de cifra operativa 96/700/tabular-nums que FALLA si falta — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-01]
+- [x] (P1) Tokens estructurales de Miga en 3 capas desde `constants.ts` (escala, grilla, targets, botón 56px); test de cifra operativa 96/700/tabular-nums que se pone ROJO si esa propiedad no está — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-01]
 
 ## Hito (a) — Núcleo tenancy: `control` + `tenant_template` + runner canario + constantes + linter de migraciones + criterios KiloRuta congelados `[tenancy]`
 

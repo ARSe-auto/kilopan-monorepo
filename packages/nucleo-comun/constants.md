@@ -20,6 +20,7 @@ escrito fuera del archivo canónico pone el build en rojo (`db/flota/gate-consta
 | `EXPORTADOR` | cadencia_min = 5 · ventana_alineada_al_reloj = true · pendientes_hasta_su_hito = `eevd_semanal (hito c)` · `backlog_sync_max_min (hito e)` | Job exportador de agregados técnicos a la BD `control` (§4.1). La cadencia la dictó Alexis el 09-ago-2026 (Pregunta al dueño 8): cada 5 minutos. Con eso los «2 intervalos» del Anexo B son 10 minutos, coherentes con el otro umbral de esa misma tabla («errores >5% por 15 min»). Son agregados chicos por tenant: el costo es despreciable y el panel cross-tenant se siente vivo sin ser tiempo real. No lleva patrón en CIFRAS_VIGILADAS a propósito: un `5` suelto aparece en cualquier parte y una vigilancia así sería ruido que alguien apaga a la semana. |
 | `FORMATOS` | locale = `es-CL` · zona_horaria = `America/Santiago` · ejemplo_dinero = `$12.500` · ejemplo_fecha = `dd-mm-aaaa` · ejemplo_rut = `12.345.678-5` · validacion_rut = `modulo 11` | Formatos es-CL. Cero strings visibles en inglés (§0 Formatos, grep del gate). */ |
 | `GRANT_SOPORTE` | duraciones_horas = 24 · 168 · expiracion_automatica = true · encendido_por_defecto = false | Grant de soporte: soporte SIN god-mode (§0, §4.3, §7.9). */ |
+| `GRILLA` | base_px = 8 · radio_tarjeta_px = 12 · radio_control = `capsula` | Grilla y esquinas (§5.1). Todo espacio es múltiplo de la base; cero valores sueltos. */ |
 | `HTTP` | recurso_ajeno = 404 · modulo_apagado = 403 · sync_captura = 200 · rebote_planificacion = 422 · flag_modulo_apagado = `modulo_apagado` | Códigos HTTP con significado cerrado (§0, §7.2). */ |
 | `IDEMPOTENCIA` | columna = `client_uuid` · tipo = `uuid v7 generado en el dispositivo` · restriccion = `UNIQUE(tenant_id, client_uuid)` · al_reintentar = `ON CONFLICT DO NOTHING` · filas_tras_replay_doble = 1 | Idempotencia de toda mutación offline (§0, §4.7). */ |
 | `IDENTIDAD_DE_FILA` | generador = `uuidv7()` · version_uuid = 7 · prohibidos = `bigint (delata volumen y es adivinable)` · `uuid v4 (sin orden temporal)` | PK de toda tabla de dominio: UUIDv7 generado EN SERVIDOR — jamás bigint, jamás v4 (§0). */ |
@@ -35,6 +36,7 @@ escrito fuera del archivo canónico pone el build en rojo (`db/flota/gate-consta
 | `TACTIL` | operativo_min = 48 · tecla_min = 64 · boton_primario = 56 · piso_wcag = 24 | Targets táctiles, en px CSS (§0, §5.7). Terreno: guantes, frío, sol, apuro. */ |
 | `TARIFAS` | conceptos = `por_entrega` · `por_bulto` · `por_bloque_horas` · `por_devolucion` · `por_intento_fallido` · activos_max_por_empresa = 4 · zonas_max = 5 · modificadores = `zona` · `recargo_horario` | Tarificación: catálogo CERRADO (§0, §3.E1.8). Un concepto nuevo es cambio de contrato. */ |
 | `TENANCY` | patron_bd = `t_<slug>` · patron_rol_app = `app_t_<slug>` · rol_migraciones = `migrator` · tenant_canario = `t_canary` · plantilla = `tenant_template` · bd_control = `control` · tabla_identidad = `tenant_info` · funcion_constante_bd = `tenant_actual()` · instancia_dedicada_construida = false | Tenancy física: UNA base de datos por tenant (§0, §4.1). */ |
+| `TIPOGRAFIA` | familia = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif` · escala_pt = titulo_grande = 34 · cuerpo = 17 · subtitulo = 15 · pie = 13 · minimo = 11 | Tipografía estructural de Miga (§5.1). NO configurable por el tenant: el tenant personaliza EXACTAMENTE tres cosas —logo, un acento y la terminología—, y ninguna es esta. La familia es la del SISTEMA, jamás una webfont: se pinta con el primer frame, sin bajar un byte. En un andén a las 5 AM con 4G malo, una webfont es una pantalla en blanco. |
 | `UNDO` | ventana_ms = 8000 · estado_local = `pending_undo` · motivo_supersede = `undo` | Undo: la ÚNICA confirmación de una captura. Cero modales en terreno (§0, §4.7, §7.6). */ |
 | `UNIDADES` | energia = nombre = `Wh` · tipo_sql = `int` · temperatura = nombre = `centésimas de °C` · tipo_sql = `int` · factor = 100 · humedad = nombre = `décimas de %` · tipo_sql = `int` · factor = 10 · soc = nombre = `% entero` · tipo_sql = `smallint` · distancia = nombre = `km` · tipo_sql = `int` | Unidades enteras. Jamás float: un decimal flotante en una lectura es un bug esperando (§0). */ |
 
@@ -51,9 +53,13 @@ código se desactiva solo a la semana.
 | `CONTRASTE.texto` | 4.5 | `\b4\.5\s*:\s*1|\b4\.5\b(?=\s*[,;)\]])` |
 | `CIFRA_OPERATIVA.tamano_px` | 96 | `\b96\s*px\b|font-?[Ss]ize[^\n]{0,12}\b96\b` |
 | `CIFRA_OPERATIVA.peso` | 700 | `font-?[Ww]eight[^\n]{0,12}\b700\b` |
-| `TACTIL.boton_primario` | 56 | `\b56\s*px\b` |
-| `TACTIL.tecla_min` | 64 | `\b64\s*px\b` |
-| `TACTIL.operativo_min` | 48 | `\b48\s*px\b` |
+| `TIPOGRAFIA.familia` | `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif` | `-apple-system` |
+| `TIPOGRAFIA.escala_pt` | `34/17/15/13/11` | `font-?[Ss]ize[^\n]{0,14}(?<!\d)(?:34|17|15|13|11)(?!\d)` |
+| `GRILLA.base_px` | 8 | `\b8\s*px\b|(?:gap|padding|margin)[^\n]{0,14}\b8\b` |
+| `GRILLA.radio_tarjeta_px` | 12 | `border-?[Rr]adius[^\n]{0,14}(?<!\d)12(?!\d)` |
+| `TACTIL.boton_primario` | 56 | `\b56\s*px\b|min-?[Hh]eight[^\n]{0,14}\b56\b` |
+| `TACTIL.tecla_min` | 64 | `\b64\s*px\b|min-?[HhWw](?:eight|idth)[^\n]{0,14}\b64\b` |
+| `TACTIL.operativo_min` | 48 | `\b48\s*px\b|min-?[HhWw](?:eight|idth)[^\n]{0,14}\b48\b` |
 | `TACTIL.piso_wcag` | 24 | `\b24\s*px\b` |
 | `EV.umbrales_alerta_pct` | `30/20/15/10` | `\b30\s*,\s*20\s*,\s*15\s*,\s*10\b` |
 | `CAPACIDAD.p95_bootstrap_ms` | 400 | `p95[^\n]{0,24}\b400\b` |

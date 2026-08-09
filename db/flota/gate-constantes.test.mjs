@@ -72,6 +72,13 @@ test("cada cifra vigilada dispara de verdad contra un texto que la contiene", ()
     "UNDO.ventana_ms": (v) => `const espera = ${v};`,
     "EV.factor_consumo_default": (v) => `const factor = ${v};`,
     "CONTRASTE.texto": (v) => `if (ratio < ${v}) rechazar();`,
+    // AC-FMIG-01: los tokens estructurales del §5.1 entraron a la familia junto con
+    // `packages/miga`. Igual que el resto, la muestra se ARMA desde el valor real: escrito
+    // literal, el stack de fuentes y la escala harían de este archivo una copia más.
+    "TIPOGRAFIA.familia": (v) => `font-family: ${v};`,
+    "TIPOGRAFIA.escala_pt": (v) => `font-size: ${String(v).split("/")[0]}px;`,
+    "GRILLA.base_px": (v) => `gap: ${v}px;`,
+    "GRILLA.radio_tarjeta_px": (v) => `border-radius: ${v}px;`,
     "CIFRA_OPERATIVA.tamano_px": (v) => `font-size: ${v}px;`,
     "CIFRA_OPERATIVA.peso": (v) => `font-weight: ${v};`,
     "TACTIL.boton_primario": (v) => `height: ${v}px;`,

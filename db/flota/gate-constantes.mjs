@@ -9,9 +9,10 @@
 //      copia es una divergencia futura garantizada.
 //
 // ALCANCE DECLARADO (nunca silencioso, §10 «no silent caps»): se revisan los árboles que
-// hoy son de FLOTA. `packages/miga` queda FUERA a propósito: sus 96/700 son los tokens de
-// KiloPan y todavía no derivan de esta familia — eso lo hace AC-FMIG-01, y ese AC agrega
-// miga a esta lista en su propio commit. El gate imprime siempre qué miró y qué no.
+// hoy son de FLOTA. `packages/miga` entró el 09-ago-2026 con AC-FMIG-01, que publica los
+// tokens estructurales del §5.1 leyendo esta familia (`packages/miga/src/estructura.ts`)
+// y saca de los componentes los números que antes estaban escritos a mano. El gate
+// imprime siempre qué miró y qué no.
 //
 // Uso: node db/flota/gate-constantes.mjs [--raiz=<ruta>]
 // Exit: 0 verde · 1 número mágico duplicado o constants.md desactualizado.
@@ -26,8 +27,8 @@ const RAIZ = raizArg ?? RAIZ_REPO;
 const CANONICO = "packages/nucleo-comun/src/constants.ts";
 const GENERADO = "packages/nucleo-comun/constants.md";
 
-const ARBOLES = ["apps/flota", "db/flota", "db/migraciones-flota", "packages/nucleo-comun"];
-const PENDIENTES = ["packages/miga (entra con AC-FMIG-01)"];
+const ARBOLES = ["apps/flota", "db/flota", "db/migraciones-flota", "packages/nucleo-comun", "packages/miga"];
+const PENDIENTES = [];
 const EXTENSIONES = /\.(ts|tsx|js|jsx|mjs|cjs|sql|sh)$/;
 const IGNORAR = new Set(["node_modules", ".next", "dist", "build", ".git"]);
 
