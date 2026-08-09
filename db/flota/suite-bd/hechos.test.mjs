@@ -261,3 +261,59 @@ test("[AC-FTEN-24] `review_queue` no se puede resolver sin nota, y sus transicio
   const [{ estado }] = await app.sql("select estado from review_queue where id = $1", [fila.id]);
   assert.equal(estado, "resuelta");
 });
+
+// --- reading: append-only con el rol de app real --------------------------------- [AC-FTEN-14]
+// El §9.3.6 pide el 42501 con el rol `app_t_<slug>`, y eso no lo puede probar pgTAP: corre
+// como superusuario, a quien ni el REVOKE ni la RLS se le aplican.
+
+test("[AC-FTEN-14] la app INSERTA lecturas pero no puede editarlas ni borrarlas ⇒ 42501", async () => {
+  const [magnitud] = await migrador.sql(
+    "insert into magnitud (codigo, unidad) values ('soc', 'decimas_de_pct') returning id::text as id",
+  );
+
+  // La mitad positiva: la lectura entra, y entra FUERA de rango a propósito. `valor_int` no
+  // lleva CHECK (§0 fila SOC): una sonda descalibrada no puede rebotar la captura del chofer.
+  await app.sql(
+    `insert into reading (magnitud_id, valor_int, fuente, ts_dispositivo, tz_offset_min)
+     values ($1, 1350, 'sonda_vehiculo', now(), -240)`,
+    [magnitud.id],
+  );
+  const [{ n }] = await app.sql("select count(*)::int as n from reading");
+  assert.equal(n, 1, "la lectura fuera de rango no entró, y tenía que entrar con flag");
+
+  await assert.rejects(() => app.sql("update reading set valor_int = 100"), { code: "42501" });
+  await assert.rejects(() => app.sql("delete from reading"), { code: "42501" });
+});
+
+test("[AC-FTEN-14] la idempotencia doble de `reading` está viva, no solo declarada", async () => {
+  const [magnitud] = await migrador.sql("select id::text as id from magnitud where codigo = 'soc'");
+  const ts = new Date().toISOString();
+
+  await app.sql(
+    `insert into reading (magnitud_id, valor_int, fuente, instrumento_id, sensor, ts_dispositivo, tz_offset_min)
+     values ($1, 400, 'archivo_logger', '019fe400-0000-7000-8000-000000000001', 'sonda-1', $2, -240)`,
+    [magnitud.id, ts],
+  );
+  // El archivo de un logger reimportado no trae client_uuid: lo que lo hace idempotente es la
+  // tripleta (instrumento, sensor, ts_dispositivo).
+  await assert.rejects(
+    () =>
+      app.sql(
+        `insert into reading (magnitud_id, valor_int, fuente, instrumento_id, sensor, ts_dispositivo, tz_offset_min)
+         values ($1, 400, 'archivo_logger', '019fe400-0000-7000-8000-000000000001', 'sonda-1', $2, -240)`,
+        [magnitud.id, ts],
+      ),
+    { code: "23505" },
+  );
+});
+
+test("[AC-FTEN-14] los ganchos vivos nacen SIN seeds: ni de frío, ni de carga, ni de evidencia", async () => {
+  // El §4.9 y el §5.2 F4 son explícitos: las tablas nacen vacías y el primer vertical las
+  // llena. Un seed acá convertiría una decisión del tenant en una decisión nuestra.
+  for (const tabla of ["cargo_type", "attribute_definition", "stop_requirement", "lot", "reference_document"]) {
+    const [{ n }] = await con(BD_PLANTILLA, ({ sql }) =>
+      sql(`select count(*)::int as n from ${tabla}`),
+    );
+    assert.equal(n, 0, `${tabla} nace con ${n} filas sembradas en la plantilla`);
+  }
+});

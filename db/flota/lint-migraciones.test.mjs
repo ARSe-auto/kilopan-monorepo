@@ -236,3 +236,44 @@ for (const tipo of ["numeric", "numeric(12,2)", "double precision", "real", "mon
     assert.match(salida, /la columna de dinero `costo_clp`/);
   });
 }
+
+// --- reading.valor_int sin rango --------------------------------------------------- [AC-FTEN-14]
+const READING = (extra) => `
+create table reading (
+  id          uuid primary key default uuidv7(),
+  tenant_id   uuid not null check (tenant_id = tenant_actual()),
+  magnitud_id uuid not null,
+  valor_int   int  not null${extra},
+  unique (tenant_id, id),
+  foreign key (tenant_id, magnitud_id) references magnitud (tenant_id, id)
+);
+create index reading_tenant_magnitud_idx on reading (tenant_id, magnitud_id);
+comment on table reading is 'CAPTURA — la lectura entra siempre, con flag si viene rara.';
+`;
+
+test("[AC-FTEN-14] `reading` sin CHECK sobre valor_int pasa (el guard no es un no-op al revés)", () => {
+  const { codigo, salida } = correr({ "tenant/0001_x.sql": READING("") });
+  assert.equal(codigo, 0, salida);
+});
+
+for (const [nombre, extra] of [
+  ["un rango 0–100 en línea", " check (valor_int between 0 and 100)"],
+  ["un piso", " check (valor_int >= 0)"],
+  ["una restricción de tabla con nombre", ",\n  constraint reading_soc check (valor_int <= 100)"],
+]) {
+  test(`[AC-FTEN-14] ${nombre} sobre reading.valor_int ⇒ gate rojo`, () => {
+    const { codigo, salida } = correr({ "tenant/0001_x.sql": READING(extra) });
+    assert.equal(codigo, 1, salida);
+    assert.match(salida, /no puede llevar CHECK de rango/);
+  });
+}
+
+test("[AC-FTEN-14] el mismo CHECK en OTRA tabla no dispara: la regla es de `reading`", () => {
+  // `vehiculos.soc` SÍ lleva el CHECK 0–100 (hito c). Una regla que se disparara en todas
+  // partes obligaría a apagarla justo donde el maestro la exige.
+  const otra = READING("").replace(/\breading\b/g, "vehiculos");
+  const { codigo } = correr({
+    "tenant/0001_x.sql": otra.replace("valor_int   int  not null", "valor_int   int  not null check (valor_int between 0 and 100)"),
+  });
+  assert.equal(codigo, 0);
+});

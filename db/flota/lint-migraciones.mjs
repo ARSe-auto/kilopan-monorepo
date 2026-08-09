@@ -195,6 +195,22 @@ for (const ruta of archivos) {
       }
     }
 
+    // 3d. `reading.valor_int` NO lleva CHECK de rango (§0 fila SOC, §9.3.4). [AC-FTEN-14]
+    //     Es una decisión, no un olvido: una captura fuera de rango ENTRA con flag y se revisa
+    //     después; el CHECK 0–100 vive SOLO en la proyección `vehiculos.soc`. Un rango acá
+    //     haría que una sonda descalibrada rebotara la captura del chofer, que es justo lo
+    //     que el §4.2 prohíbe — y el §9.3.4 lo pone como centinela.
+    if (nombreCorto === "reading") {
+      for (const chk of cuerpo.matchAll(/check\s*\(([^)]*valor_int[^)]*)\)/gi)) {
+        err(
+          rel,
+          tabla,
+          `\`reading.valor_int\` no puede llevar CHECK de rango («${chk[1].trim()}»): la captura ` +
+            "fuera de rango entra con flag; el 0–100 vive solo en la proyección vehiculos.soc (§0)",
+        );
+      }
+    }
+
     // 4a. Ofrece (tenant_id, id) para que otras tablas la referencien compuesta.
     if (!/\b(?:primary\s+key|unique)\s*\(\s*tenant_id\s*,\s*id\s*\)/i.test(cuerpo)) {
       err(
