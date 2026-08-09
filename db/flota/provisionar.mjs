@@ -16,7 +16,7 @@
 // las dos no coincidan, los CHECK de la base estarían validando contra otro tenant: la fuga de
 // aislamiento más silenciosa posible. Por eso la provisión no termina sin `tenant_coherente()`.
 import { pathToFileURL } from "node:url";
-import { con, BD_PLANTILLA, ROL_MIGRADOR, bdDeTenant } from "./conectar.mjs";
+import { con, BD_PLANTILLA, ROL_MIGRADOR, bdDeTenant, slugDeBd } from "./conectar.mjs";
 import { aplicar, aplicadasEn, migracionesDe, DIR_MIGRACIONES } from "./aplicar.mjs";
 import { provisionarRolDeApp } from "./rol-app.mjs";
 
@@ -171,7 +171,11 @@ export async function provisionar(slug, { recrear = false } = {}) {
     await crearBase(sql, bd, BD_PLANTILLA);
   });
 
-  const id = await con(bd, async ({ sql }) => {
+  // Desde acá la base EXISTE pero todavía no es de nadie. Si la siembra falla, se borra: una
+  // base a medio provisionar es peor que ninguna, porque parece provisionada y `tenant_actual()`
+  // devuelve el centinela de la plantilla — todo lo que se escriba ahí queda atado a un tenant
+  // que no existe. Lo destapó `t_canary`, que quedó así tras un arranque en frío fallido.
+  const sembrar = async () => con(bd, async ({ sql }) => {
     // El uuid lo genera el SERVIDOR (§0: UUIDv7 server-side, jamás en el cliente).
     const [fila] = await sql(
       "insert into tenant_info (id, slug) values (uuidv7(), $1) returning id::text as id",
@@ -198,10 +202,19 @@ export async function provisionar(slug, { recrear = false } = {}) {
     return fila.id;
   });
 
-  // Credenciales propias del tenant, en el mismo acto que la base: una BD de tenant sin su
-  // `app_t_<slug>` sería una base a la que solo llega el migrador o el superusuario, y el
-  // primero que la necesitara la abriría con el rol equivocado (§4.1). [AC-FTEN-03]
-  const { rol, clave } = await provisionarRolDeApp(slug);
+  let id;
+  let rol;
+  let clave;
+  try {
+    id = await sembrar();
+    // Credenciales propias del tenant, en el mismo acto que la base: una BD de tenant sin su
+    // `app_t_<slug>` sería una base a la que solo llega el migrador o el superusuario, y el
+    // primero que la necesitara la abriría con el rol equivocado (§4.1). [AC-FTEN-03]
+    ({ rol, clave } = await provisionarRolDeApp(slug));
+  } catch (e) {
+    await con("postgres", ({ sql }) => sql(`drop database if exists ${ident(bd)} with (force)`));
+    throw new Error(`el alta de ${slug} falló y se deshizo (${bd} borrada): ${e.message}`);
+  }
 
   return { slug, bd, id, rol, clave };
 }
@@ -233,6 +246,46 @@ export function rezagosDeLaPlantilla({ enDisco = [], plantilla = [], tenants = [
         `tenant_template no tiene ${version}, que sí está en ${[...donde].sort().join(", ")}: ` +
         "un tenant nuevo nacería desactualizado",
     );
+}
+
+/**
+ * Identidades rotas en el cluster: bases de tenant sin fila en `tenant_info`, con un slug que
+ * no es el suyo, o con `tenant_actual()` divergiendo de la fila. [AC-FTEN-02]
+ *
+ * Es la comprobación más barata contra el peor de los errores callados: una base cuyo
+ * `tenant_actual()` todavía devuelve el centinela de la plantilla acepta filas de dominio sin
+ * quejarse —el CHECK compara contra el centinela y pasa— y esas filas quedan atadas a un
+ * tenant que no existe. Se descubrió con `t_canary` así, tras un arranque en frío fallido.
+ */
+export async function identidadesRotas() {
+  const motivos = [];
+  for (const bd of await basesDeTenant()) {
+    const slug = slugDeBd(bd);
+    try {
+      const [{ filas, coherente, slugEnBase }] = await con(bd, ({ sql }) =>
+        sql(
+          `select (select count(*)::int from tenant_info)  as filas,
+                  tenant_coherente()                       as coherente,
+                  (select slug from tenant_info)           as "slugEnBase"`,
+        ),
+      );
+      if (filas !== 1) {
+        motivos.push(
+          `${bd} tiene ${filas} filas en tenant_info: sin identidad, tenant_actual() devuelve ` +
+            "el centinela de la plantilla y todo lo que se escriba ahí queda atado a un tenant " +
+            "que no existe",
+        );
+        continue;
+      }
+      if (!coherente) motivos.push(`${bd}: tenant_actual() no concuerda con tenant_info.id`);
+      if (slugEnBase !== slug) {
+        motivos.push(`${bd} dice ser el tenant «${slugEnBase}» y no «${slug}»`);
+      }
+    } catch (e) {
+      motivos.push(`${bd} no se pudo revisar: ${e.message}`);
+    }
+  }
+  return motivos;
 }
 
 /** `rezagosDeLaPlantilla` leyendo el cluster real. */

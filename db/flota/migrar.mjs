@@ -33,6 +33,7 @@ import {
   crearPlantillaSiFalta,
   refrescarPlantilla,
   duenoDe,
+  identidadesRotas,
   provisionar,
   versionesDe,
 } from "./provisionar.mjs";
@@ -138,7 +139,10 @@ export async function verificar({ dir = DIR_MIGRACIONES } = {}) {
     }
     bases.push({ bd, version: (await versionesDe(bd)).at(-1) ?? null });
   }
-  return { esperada, bases, motivos: basesRezagadas({ esperada, bases }) };
+  // Al rezago se le suma la identidad: una base al día pero sin `tenant_info` sembrada está
+  // tan rota como una atrasada, y el deploy no puede declararse verde con ninguna de las dos.
+  const motivos = [...basesRezagadas({ esperada, bases }), ...(await identidadesRotas())];
+  return { esperada, bases, motivos };
 }
 
 // --- CLI -------------------------------------------------------------------------------

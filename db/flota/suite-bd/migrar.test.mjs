@@ -11,7 +11,12 @@ import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { migrar, verificar } from "../migrar.mjs";
-import { asegurarRolMigrador, basesDeTenant, duenoDe } from "../provisionar.mjs";
+import {
+  asegurarRolMigrador,
+  basesDeTenant,
+  duenoDe,
+  identidadesRotas,
+} from "../provisionar.mjs";
 import { con, BD_PLANTILLA, ROL_MIGRADOR, TENANT_CANARIO, bdDeTenant } from "../conectar.mjs";
 import { DIR_MIGRACIONES, versionEsperada } from "../aplicar.mjs";
 
@@ -110,6 +115,32 @@ test("[AC-FTEN-07] una base de dueño ajeno detiene el runner nombrándola, en v
   await assert.rejects(() => migrar(), new RegExp(`${AJENA}.*no puede`, "s"));
   await borrarAjena();
   assert.equal((await verificar()).motivos.length, 0, "el cluster no quedó como estaba");
+});
+
+test("[AC-FTEN-07] una base de tenant SIN identidad sembrada también deja el deploy en rojo", async () => {
+  // Al día pero sin `tenant_info` está tan rota como una atrasada: `tenant_actual()` devuelve
+  // el centinela de la plantilla, el CHECK de cada tabla de dominio compara contra él y pasa,
+  // y las filas quedan atadas a un tenant que no existe. `t_canary` estuvo así y ni el runner
+  // ni la auditoría de la plantilla lo veían.
+  assert.equal(cli("verificar").codigo, 0, "el cluster ya estaba roto antes de la prueba");
+
+  const sinIdentidad = "t_gate_sin_identidad";
+  await con("postgres", ({ sql }) =>
+    sql(`create database ${sinIdentidad} owner ${ROL_MIGRADOR} template ${BD_PLANTILLA}`),
+  );
+  try {
+    const motivos = await identidadesRotas();
+    assert.equal(motivos.length, 1);
+    assert.match(motivos[0], new RegExp(sinIdentidad));
+    assert.match(motivos[0], /0 filas en tenant_info/);
+
+    const rojo = cli("verificar");
+    assert.notEqual(rojo.codigo, 0, "el deploy se declaró verde con una base sin identidad");
+    assert.match(rojo.salida, new RegExp(sinIdentidad));
+  } finally {
+    await con("postgres", ({ sql }) => sql(`drop database if exists ${sinIdentidad} with (force)`));
+  }
+  assert.equal(cli("verificar").codigo, 0, "el cluster no volvió a su estado");
 });
 
 test("[AC-FTEN-07] CENTINELA 13: una migración que ninguna base tiene ⇒ exit ≠ 0", async () => {

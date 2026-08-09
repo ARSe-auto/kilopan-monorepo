@@ -138,6 +138,29 @@ test("[AC-FTEN-02] con una conexión abierta contra la plantilla, la provisión 
   }
 });
 
+test("[AC-FTEN-02] un alta que falla a mitad NO deja la base en pie", async () => {
+  // Una base creada y sin sembrar es peor que ninguna: parece provisionada, `tenant_actual()`
+  // devuelve el centinela de la plantilla y todo lo que se escriba ahí queda atado a un tenant
+  // que no existe. Pasó de verdad con `t_canary` tras un arranque en frío fallido, y lo
+  // encontró la suite pgTAP de AC-FTEN-08 — no esta.
+  //
+  // La falla se fuerza sembrando una identidad EN LA PLANTILLA: la copia nace con la fila
+  // puesta y el INSERT de la provisión choca con el «una sola fila, para siempre».
+  await con(BD_PLANTILLA, ({ sql }) =>
+    sql("insert into tenant_info (id, slug) values (uuidv7(), 'intruso_en_la_plantilla')"),
+  );
+  try {
+    await assert.rejects(() => provisionar("gate_a_medias", { recrear: true }), /se deshizo/);
+    const vivas = await basesDeTenant();
+    assert.ok(
+      !vivas.includes(bdDeTenant("gate_a_medias")),
+      "la base a medio provisionar quedó en pie",
+    );
+  } finally {
+    await con(BD_PLANTILLA, ({ sql }) => sql("delete from tenant_info"));
+  }
+});
+
 test("[AC-FTEN-02] CASO DE REBOTE: migración en un tenant y no en la plantilla ⇒ exit ≠ 0", async () => {
   // Antes de romper nada, el gate está verde: si no, el rojo de abajo no probaría nada.
   assert.equal(cli("auditar").codigo, 0, "el cluster ya estaba rezagado antes de la prueba");
