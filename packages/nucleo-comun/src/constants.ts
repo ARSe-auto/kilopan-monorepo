@@ -243,6 +243,19 @@ export const PIN = {
   /** POR USUARIO, jamás por dispositivo: en el andén rotan varios sobre el mismo aparato. */
   ambito_del_bloqueo: "usuario",
   backoff: "server-side",
+  /**
+   * La curva la dictó Alexis el 09-ago-2026 (spec 01, pregunta 9): la espera se DUPLICA a
+   * partir de medio minuto y se topa. Quien se equivoca de verdad es casi siempre el operario
+   * con guantes a las 4am, y una espera corta que crece sola lo frena sin dejarlo tirado.
+   *
+   * El tope no es cosmético: el bloqueo es por usuario, pero el que espera es el turno, y sin
+   * él un aparato de andén queda inutilizable toda la madrugada.
+   */
+  backoff_inicial_segundos: 30,
+  backoff_factor: 2,
+  backoff_tope_segundos: 900,
+  /** Un PIN correcto resetea el contador: la penalización castiga la racha, no la historia. */
+  backoff_se_resetea_con_acierto: true,
 } as const;
 
 /**
@@ -281,6 +294,40 @@ export const INVITACION = {
   multiuso: true,
   expira_dias: 7,
   revocable_en_toques: 1,
+  /**
+   * Distribución y código de respaldo, dictados por Alexis el 09-ago-2026 (spec 01,
+   * pregunta 5): el dueño comparte el link/QR desde SU teléfono con el share-sheet del
+   * sistema. Sin pasarela de SMS ni de WhatsApp — cero integraciones, y sin el modo de falla
+   * que un proveedor de mensajería mete en el camino crítico: el mensaje que no llegó.
+   */
+  distribucion: "share-sheet del dueño",
+  /**
+   * El código se dicta en voz alta en un galpón ruidoso y se teclea con guantes, así que el
+   * alfabeto no tiene los pares que se confunden al oído ni a la vista: sin 0/O, sin 1/I/L.
+   * Con 8 caracteres en este alfabeto hay del orden de 10^12 combinaciones, para un token
+   * que además expira y se revoca en 1 toque.
+   */
+  codigo_corto_largo: 8,
+  codigo_corto_alfabeto: "23456789ABCDEFGHJKMNPQRSTUVWXYZ",
+} as const;
+
+/**
+ * Sesiones (§4.3, §5.4). La regla la dictó Alexis el 09-ago-2026 (spec 01, pregunta 1).
+ *
+ * En el teléfono PERSONAL la sesión no caduca mientras el dispositivo siga enrolado y sin
+ * revocar: no se pide PIN al abrir la PWA. El aparato YA es el segundo factor —enrolado, con
+ * secreto propio, revocable en 1 toque con efecto inmediato— así que el PIN en cada apertura
+ * sumaría toques al presupuesto del §5.3 sin agregar seguridad que la revocación no dé; y la
+ * fricción empuja a dejar la app abierta todo el turno, que es lo que se quería evitar.
+ *
+ * El ANDÉN es otra cosa: es un aparato compartido donde rotan identidades, y ahí la sesión sí
+ * cierra por inactividad.
+ */
+export const SESION = {
+  personal_caduca: false,
+  /** El PIN queda para lo que significa algo: firmar, y rotar identidad en el andén. */
+  pin_para: ["firmar", "rotar identidad en el andén"],
+  anden_inactividad_minutos: 3,
 } as const;
 
 /**
@@ -412,4 +459,11 @@ export const CIFRAS_VIGILADAS = [
   { nombre: "TARIFAS.activos_max_por_empresa", valor: 4, patron: String.raw`(?:m[aá]x|max)[^\n]{0,16}\b4\s*(?:conceptos|activos)\b` },
   { nombre: "SEMAFORO.tarjetas_max", valor: 6, patron: String.raw`(?:m[aá]x|max)[^\n]{0,16}\b6\s*tarjetas\b` },
   { nombre: "SOC.capturas_max_por_turno", valor: 3, patron: String.raw`(?:m[aá]x|max)[^\n]{0,24}\b3\s*capturas\b` },
+  // Respuestas del dueño del 09-ago-2026 a la spec 01 (preguntas 9, 5 y 1). Entran acá y no
+  // solo al objeto de arriba porque el valor escrito de nuevo en un test o en un endpoint es
+  // el que se queda viejo: el AC los asierta contra la constante, jamás contra el número.
+  { nombre: "PIN.backoff_inicial_segundos", valor: 30, patron: String.raw`backoff[^\n]{0,24}\b30\b` },
+  { nombre: "PIN.backoff_tope_segundos", valor: 900, patron: String.raw`(?:backoff|tope)[^\n]{0,24}\b(?:900\s*s|15\s*min)` },
+  { nombre: "INVITACION.codigo_corto_largo", valor: 8, patron: String.raw`c[oó]digo\s+corto[^\n]{0,24}\b8\b` },
+  { nombre: "SESION.anden_inactividad_minutos", valor: 3, patron: String.raw`(?:inactividad|and[eé]n)[^\n]{0,24}\b3\s*min` },
 ] as const;

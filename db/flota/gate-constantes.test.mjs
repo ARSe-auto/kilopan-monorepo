@@ -99,6 +99,12 @@ test("cada cifra vigilada dispara de verdad contra un texto que la contiene", ()
     "TARIFAS.activos_max_por_empresa": (v) => `// max ${v} conceptos activos`,
     "SEMAFORO.tarjetas_max": (v) => `// max ${v} tarjetas`,
     "SOC.capturas_max_por_turno": (v) => `// max ${v} capturas por turno`,
+    // Respuestas del dueño del 09-ago-2026 a la spec 01. Mismas reglas que el resto: la
+    // muestra se ARMA desde el valor real, para que este archivo no sea él mismo una copia.
+    "PIN.backoff_inicial_segundos": (v) => `// backoff inicial de ${v} segundos`,
+    "PIN.backoff_tope_segundos": (v) => `// backoff con tope de ${v} s`,
+    "INVITACION.codigo_corto_largo": (v) => `// el codigo corto son ${v} caracteres`,
+    "SESION.anden_inactividad_minutos": (v) => `// el anden cierra a los ${v} min`,
   };
   assert.equal(
     Object.keys(plantillas).length,

@@ -149,7 +149,9 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
 - Lo que el maestro fija de sesiones: arranque automático post-aprobación (§5.4);
   la firma por PIN en dispositivo ajeno no abre ni desplaza sesión (§4.3); rotación
   por PIN en andén (§5.4); lockout 5 por usuario con backoff (§0). Duración y
-  re-autenticación NO están en el maestro → Preguntas al dueño #1.
+  re-autenticación las fijó Alexis el 09-ago-2026 (pregunta 1, absorbida en `SESION` del
+  canónico §0): sesión PERSONAL sin caducidad mientras el dispositivo siga enrolado y sin
+  revocar —cero PIN al abrir la PWA—, y ANDÉN con cierre por inactividad a los 3 minutos.
 - `set_config('app.current_role', …, true)` por transacción (SET LOCAL siempre, §4.1)
   se alimenta del rol de la sesión que este módulo establece; las políticas RLS de rol
   (§4.8) las implementa el módulo de datos/dinero.
@@ -232,16 +234,28 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       `expira_at`; revocar en 1 toque tiene efecto inmediato y NO afecta a usuarios ya
       aprobados por ese token. Entrada por código corto fallback (§5.4): una solicitud
       iniciada DIGITANDO el código —sin abrir link ni escanear QR— llega a «Esperando
-      aprobación» igual que por link/QR; el formato exacto del código queda
-      parametrizado por la respuesta a Preguntas al dueño #5. Solicitud nueva con RUT
-      ya registrado en el tenant: conducta pendiente de Preguntas al dueño #10 —
-      resuelta, se añade aquí su caso de rebote (§0, §4.3, §5.4) — oráculo: CI
-      [AC-FIDN-03]
+      aprobación» igual que por link/QR; el código es de 8 caracteres en el alfabeto sin
+      ambiguos que fija `INVITACION` del canónico §0 (respuesta del dueño del 09-ago-2026 a la
+      pregunta 5), y el test lo asierta contra la constante y no contra el número. La
+      invitación se comparte SOLO desde el teléfono del dueño con el share-sheet del sistema:
+      no hay pasarela de SMS ni de WhatsApp que testear ni que caerse. CASO DE REBOTE que
+      cierra la pregunta 10, respondida el 09-ago-2026: una solicitud NUEVA con un RUT que ya
+      está registrado en el tenant **ENTRA** —queda `pendiente` como cualquier otra— y el 422
+      sale recién al aprobar (AC-FIDN-04); el test lo prueba en los dos tiempos: la solicitud
+      responde 2xx y crea su fila, y ninguna respuesta del endpoint de solicitud permite
+      distinguir un RUT registrado de uno que no lo está —ni por código, ni por cuerpo, ni por
+      latencia declarada—, porque quien tiene el link no está autenticado y el link viaja por
+      WhatsApp (§0, §4.3, §5.4) — oráculo: CI [AC-FIDN-03]
 - [ ] (P1) La aprobación (1 toque) empareja persona+dispositivo+rol y RECIÉN AHÍ emite
       el secreto UNA vez contra la clave pública registrada en la solicitud: en BD
       queda solo `secreto_hash`; una segunda petición de emisión para el mismo
       dispositivo rebota y no re-emite; el rechazo deja `rechazada` y no emite nada;
-      aprobación de rol `cliente` sin `empresa_cliente_id` rebota 422 (§4.3) —
+      aprobación de rol `cliente` sin `empresa_cliente_id` rebota 422 (§4.3). Y el rebote
+      que la pregunta 10 trasladó hasta acá (respondida el 09-ago-2026): aprobar una solicitud
+      cuyo RUT ya pertenece a una persona del tenant ⇒ 422 tipado y 0 filas nuevas, con la
+      colisión IDENTIFICADA en la respuesta —quién es el titular actual— para que el dueño
+      decida en 1 toque si es la misma persona con teléfono nuevo (F-E) o un homónimo; acá sí
+      se puede nombrar, porque quien aprueba es el `admin_tenant` y ya conoce su nómina —
       oráculo: CI [AC-FIDN-04]
 - [ ] (P1) El enrolamiento NO se completa sin display-mode standalone Y persist()
       concedido: con cualquiera de los dos ausente el dispositivo no queda operable y
@@ -253,9 +267,13 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       AL USUARIO (`bloqueado_hasta` server-side), jamás al dispositivo: en el andén,
       con el usuario A bloqueado, el usuario B entra con su PIN sin fricción; el
       desbloqueo/rotación por el dueño reabre el acceso y queda en audit_trail. El
-      lockout a los 5 intentos es mecánico desde ya; el backoff se asierta contra la
-      curva que fije la respuesta a Preguntas al dueño #9 (constante en `constants.ts`,
-      §0): bloqueos sucesivos ⇒ `bloqueado_hasta` creciente según esa curva. Scan de
+      lockout a los 5 intentos es mecánico desde ya, y el backoff se asierta contra la curva
+      que fijó Alexis el 09-ago-2026 (pregunta 9, absorbida en `PIN` del canónico §0): la
+      espera se duplica desde medio minuto y se topa en un cuarto de hora, y un PIN correcto
+      resetea el contador. Bloqueos sucesivos ⇒ `bloqueado_hasta` creciente según esa curva,
+      y el test lee la constante en vez de repetir los números. El tope se prueba: la enésima
+      racha NO produce una espera mayor al tope, porque el bloqueo es por usuario pero el que
+      espera es el turno. Scan de
       logs del gate (§9.2): cero PIN en cualquier forma, cero RUT sin máscara; cero
       secreto de dispositivo en logs — extensión derivada de §4.3 (en BD queda solo
       `secreto_hash`), no requisito literal del maestro (§0, §5.4, §7.8, §9.2) —
@@ -395,9 +413,15 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
 
 ## Preguntas al dueño
 
-1. **Sesiones:** el maestro no fija duración ni caducidad de la sesión (personal ni
-   andén), ni política de re-autenticación (¿PIN en cada apertura de la PWA?, ¿timeout
-   de inactividad en el andén?). ¿Qué regla se cablea?
+1. ~~**Sesiones:** duración, caducidad y re-autenticación.~~ **RESPONDIDA** por Alexis el
+   09-ago-2026: en el teléfono PERSONAL la sesión no caduca mientras el dispositivo siga
+   enrolado y sin revocar — **no se pide PIN al abrir la PWA**—; el PIN queda para firmar y
+   para rotar identidad en el ANDÉN, que sí cierra sesión por inactividad (3 min). Razón: el
+   aparato personal YA es el segundo factor (enrolado, secreto propio, revocable en 1 toque
+   con efecto inmediato), así que el PIN en cada apertura sumaría toques al presupuesto del
+   §5.3 sin agregar seguridad que la revocación no dé — y la fricción empuja a dejar la app
+   abierta todo el turno, que es lo que se quería evitar. Absorbida en `SESION` del canónico
+   §0. Registro: `docs/respuestas-dueno-2026-08-09-spec01.md`.
 2. **«Rotar PIN»:** el maestro nombra la capacidad (§5.4) pero no la mecánica. Si el
    trabajador olvidó su PIN, ¿cómo se restablece sin que el dueño conozca el valor
    nuevo (argon2id, jamás en logs)? ¿Código puente de un solo uso mostrado al dueño y
@@ -410,10 +434,14 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
 4. **Passkey del admin:** ¿cuándo se registra (wizard de alta vs primer uso de
    «transferir propiedad») y cuál es la vía de recuperación si se pierde (¿break-glass
    §7.9)? El maestro no lo dice.
-5. **Distribución de la invitación:** ¿el link/QR se comparte solo desde el teléfono
-   del dueño (share-sheet/copiar — cero integraciones, consistente con FUERA de E1) o
-   se contrata pasarela de SMS/WhatsApp? Largo y formato del código corto fallback
-   tampoco están fijados.
+5. ~~**Distribución de la invitación** y formato del código corto.~~ **RESPONDIDA** por
+   Alexis el 09-ago-2026: **share-sheet del propio teléfono del dueño** (o copiar), SIN
+   pasarela de SMS ni de WhatsApp — cero integraciones, cero costo por mensaje, y sin meter en
+   el camino crítico del enrolamiento el modo de falla de un proveedor de mensajería: el
+   mensaje que no llegó. **Código corto de 8 caracteres en alfabeto sin ambiguos** (sin 0/O,
+   sin 1/I/L): se dicta en voz alta en un galpón ruidoso y se teclea con guantes; en ese
+   alfabeto son del orden de 10^12 combinaciones para un token que además expira a los 7 días
+   y se revoca en 1 toque. Absorbida en `INVITACION` del canónico §0.
 6. **Visibilidad de solicitudes pendientes:** ¿generan señal en el semáforo
    «Hoy»/«Por revisar» o solo badge dentro del panel de enrolamiento? El Anexo B no
    trae señal de enrolamiento y el maestro prohíbe depender de push.
@@ -427,15 +455,18 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
    `retention_policy` para invitaciones vencidas, solicitudes rechazadas,
    dispositivos revocados y grants expirados — el DDL de la tabla nace en este módulo
    (AC-FIDN-01) pero el maestro no fija valores.
-9. **Curva del backoff del PIN:** §0 solo fija «lockout 5 intentos por usuario,
-   backoff server-side», sin curva ni magnitudes. ¿Qué progresión de
-   `bloqueado_hasta` se cablea (p. ej. exponencial con base y tope)? La respuesta
-   entra como constante a `constants.ts` (§0) y AC-FIDN-06 asierta mecánicamente
-   contra ella.
-10. **Solicitud con RUT ya registrado en el tenant:** `personas.rut` es UNIQUE por
-    tenant (§4.3) y el endpoint de solicitud es PLANIFICACIÓN (rebota 422 tipado,
-    §4.2), pero el maestro no define la conducta ante una solicitud NUEVA (vía
-    invitación, no «Ya tengo cuenta») con RUT ya existente: ¿422 en el momento de la
-    solicitud con guía hacia «Ya tengo cuenta» (ojo: le confirma a un no autenticado
-    que ese RUT existe en el tenant), o rebote recién a la aprobación? Resuelta, se
-    añade el caso de rebote a AC-FIDN-03.
+9. ~~**Curva del backoff del PIN.**~~ **RESPONDIDA** por Alexis el 09-ago-2026: la espera se
+   DUPLICA a partir de medio minuto (30 s, 1, 2, 4, 8 min) y se topa en un cuarto de hora; un
+   PIN correcto resetea el contador a cero. Razón: quien se equivoca de verdad es casi siempre
+   el operario con guantes a las 4am, y una espera corta que crece sola lo frena sin dejarlo
+   tirado; el tope existe porque el bloqueo es por usuario pero **el que espera es el turno**,
+   y sin él un aparato de andén queda inutilizable toda la madrugada. Absorbida en `PIN` del
+   canónico §0 — AC-FIDN-06 asierta contra la constante, jamás contra el número.
+10. ~~**Solicitud con RUT ya registrado en el tenant.**~~ **RESPONDIDA** por Alexis el
+    09-ago-2026: **la solicitud ENTRA y el rebote 422 sale recién al APROBAR**; la colisión la
+    ve el dueño en su panel y decide si es la misma persona con teléfono nuevo o un homónimo.
+    Razón, y es la misma con que se eligió `404 · 503 · 404` en AC-FTEN-05: quien tiene el link
+    NO está autenticado y el link viaja por WhatsApp, así que un rebote inmediato le confirma a
+    cualquiera que ese RUT trabaja en la empresa — enumerar la nómina quedaría a un RUT por
+    intento. **Costo aceptado y explícito:** el trabajador se entera tarde, de modo que el
+    panel del dueño debe mostrar la colisión con lo necesario para decidir en un toque.
