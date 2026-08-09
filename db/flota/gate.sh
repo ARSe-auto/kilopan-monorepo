@@ -47,8 +47,14 @@ paso "unit (db/flota): mutantes de los guardianes" \
   node --test db/flota/*.test.mjs
 
 # --- Con base de datos ----------------------------------------------------------------
+# El cluster es un recurso real, no un mock: la provisión de un tenant es `CREATE DATABASE …
+# TEMPLATE` y no existe sin servidor (§4.1). Si no arranca, esto se pone ROJO — nunca saltado.
 if [ "$FULL" -eq 1 ]; then
-  saltar "suite de tenancy contra el cluster" "todavía no hay migraciones (hito (a) en curso)"
+  paso "cluster de FLOTA arriba (127.0.0.1:54331)" \
+    bash db/flota/cluster.sh iniciar
+
+  paso "suite de tenancy contra el cluster: plantilla, provisión ×2 y rezago (§4.1)" \
+    node --test db/flota/suite-bd/*.test.mjs
 else
   saltar "suite de tenancy contra el cluster" "correr con --full"
 fi
