@@ -52,7 +52,7 @@ AC-FSEM-24 (p. 2 — BLOQUEADO entero), AC-FSEM-25 (p. 12 — BLOQUEADO entero),
 (p. 9), AC-FTAR-04 (p. 11), AC-FTAR-06 (p. 4), AC-FTAR-08 (p. 10), AC-FTAR-14 (p. 12 —
 la aserción `por_bloque_horas` BLOQUEADA), AC-FTEN-04 (p. 3), AC-FTEN-05 (p. 9),
 AC-FTEN-10 (p. 7), AC-FTEN-14 (p. 11), AC-FTEN-24 (p. 5 de la spec 04), AC-FTEN-25
-(p. 10), AC-FTEN-27 (p. 12 — BLOQUEADO entero), AC-FVEH-06 (p. 6), AC-FVEH-07 (p. 12),
+(p. 10), AC-FTEN-27 (p. 12 — RESPONDIDA 09-ago, AC reescrito), AC-FVEH-06 (p. 6), AC-FVEH-07 (p. 12),
 AC-FVEH-11 (p. 8/13), AC-FVEH-12 (p. 14), AC-FVEH-13 (p. 3), AC-FVEH-17 (p. 1),
 AC-FVEH-19 (p. 9), AC-FVEH-20 (p. 7).
 
@@ -93,7 +93,7 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 - [x] (P1) DDL transversal del §4.6 en `tenant_template` al cierre del hito (a) — `eventos` (secuencia monotónica por tenant; `prev_hash` NO en E1), `evidence` (enum completo, sha256 write-once), `audit_trail`, `client_metric` (enum CERRADO, client_uuid UNIQUE) y `review_queue` —, todas con tenant_id + CHECK + FK compuesta + índice + COMMENT de clase y append-only donde §7.4 lo exige; la CONDUCTA es de los módulos 04/05 — spec: specs/flota/00-modelo-datos-tenancy.md [AC-FTEN-24]
 - [ ] (P1) Runbook de brechas (§7.8) versionado en `docs/runbook-brechas.md` con secciones mínimas (detección, contención, alcance POR TENANT, preservación de evidencia, comunicación, responsable) y test CI grep-able; plazos y canales BLOQUEADOS por la pregunta 10 de la spec — spec: specs/flota/00-modelo-datos-tenancy.md [AC-FTEN-25]
 - [ ] (P1) Generador de la suite HTTP A-contra-B AUTOGENERADA del manifiesto de rutas (§9.2, centinela 2): un caso por ruta ⇒ 404 sin cadenas centinela de B y BD de B intacta; corre en `check.sh --full`; ruta sin caso ni exención escrita ⇒ gate rojo; contador de exenciones como artefacto con tendencia — spec: specs/flota/00-modelo-datos-tenancy.md [AC-FTEN-26]
-- [ ] (P1) BLOQUEADO por la pregunta 12 — aplicación de la visibilidad por grupos jerárquicos (§3.E1.1): sin qué entidades se adscriben, qué superficies filtran y cómo compone con el rol, no se implementa membresía ni filtrado; el AC se reescribe antes de implementarse — spec: specs/flota/00-modelo-datos-tenancy.md [AC-FTEN-27]
+- [ ] (P1) Visibilidad por grupos jerárquicos, MECANISMO (§3.E1.1): adscripción de vehículos y usuarios, alcance «mi nodo y sus descendientes», intersección con el rol, política aplicable con una línea; oráculo doble (pgTAP con rol de app real + e2e en el módulo dueño de cada superficie) — spec: specs/flota/00-modelo-datos-tenancy.md [AC-FTEN-27]
 
 ## Hito (b) — Identidad, roles y enrolamiento gobernado por el dueño `[security]`
 

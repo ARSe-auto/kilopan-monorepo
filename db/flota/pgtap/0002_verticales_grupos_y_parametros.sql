@@ -133,4 +133,42 @@ select throws_ok(
   'un porcentaje de reserva fuera de 0–100 rebota'
 );
 
+-- La lista CERRADA de 8 claves para E1, dictada por el dueño el 09-ago-2026
+-- (docs/respuestas-dueno-2026-08-09.md §P5). Están las OCHO y ninguna de más.
+select bag_eq(
+  $$ select a.attname::text from pg_attribute a
+      where a.attrelid = 'parametros'::regclass and a.attnum > 0 and not a.attisdropped
+        and a.attname not in ('id', 'tenant_id', 'unica') $$,
+  $$ values ('reserva_pct'), ('factor_consumo'), ('tarifa_kwh_clp'),
+            ('precio_diesel_litro_clp'), ('bultos_max_sin_receptor'),
+            ('anticipacion_vencimiento_dias'), ('tolerancia_eta_minutos'),
+            ('periodicidad_liquidacion') $$,
+  'parametros tiene exactamente las 8 claves de la lista cerrada de E1 (P5)'
+);
+
+-- Consecuencia 1 de P5: el cero es el valor DICTADO («siempre foto»), no un vacío. El CHECK
+-- de la 0003 exigía > 0 y habría rebotado justo el valor que el dueño eligió.
+select lives_ok(
+  $$ update parametros set bultos_max_sin_receptor = 0 $$,
+  'bultos_max_sin_receptor = 0 es legítimo: significa «ningún bulto sin encuadre»'
+);
+
+-- Consecuencia 3 de P5: el piso de 15 min del Anexo B vive en el esquema; el valor, en el seed.
+select lives_ok(
+  $$ update parametros set tolerancia_eta_minutos = 20 $$,
+  'la tolerancia dictada (20 min) entra'
+);
+select throws_ok(
+  $$ update parametros set tolerancia_eta_minutos = 10 $$,
+  '23514',
+  null,
+  'una tolerancia por debajo del mínimo de 15 min del Anexo B rebota en la BD'
+);
+
+select is(
+  (select periodicidad_liquidacion from parametros),
+  'semanal',
+  'la periodicidad de liquidación nace en «semanal», el default que dictó el dueño'
+);
+
 select * from finish();
