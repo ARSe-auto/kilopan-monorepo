@@ -38,6 +38,9 @@ paso "lista congelada de criterios KiloRuta" \
 paso "familia canónica de constantes: cero números mágicos duplicados (§0)" \
   node db/flota/gate-constantes.mjs
 
+paso "reglas estáticas del §7.2: privilegio, SET de sesión, cross-database y wrapper" \
+  node db/flota/gate-reglas-estaticas.mjs
+
 paso "documentos del contrato: runbook de brechas con sus secciones y sus exigencias" \
   node db/flota/gate-documentos.mjs
 

@@ -40,6 +40,9 @@ export const DOCUMENTOS = [
       { nombre: "la remisión a la segregación por tenant (AC-FTEN-16)", patron: /AC-FTEN-16/ },
       { nombre: "el enmascarado de RUT y la ausencia de PIN en logs (§7.8)", patron: /RUT/ },
       { nombre: "que el alcance se evalúa por tenant", patron: /por tenant/i },
+      // Exigencia de AC-FTEN-16 que cae sobre este documento: «backups por BD tenant
+      // documentados en el runbook del repo».
+      { nombre: "los backups por BD tenant (AC-FTEN-16)", patron: /backups por BD tenant/i },
     ],
   },
   {
