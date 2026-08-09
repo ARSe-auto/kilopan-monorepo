@@ -50,6 +50,11 @@ paso "documentos del contrato: runbook de brechas con sus secciones y sus exigen
 paso "scan de logs: ni PIN, ni RUT sin máscara, ni secreto de dispositivo (§7.8, §9.2)" \
   node db/flota/gate-logs.mjs
 
+# 21.719 estructural: los identificadores viven en `personas` y los hechos la referencian por
+# ID opaco. Un RUT dentro de una tabla append-only hace imposible la supresión. [AC-FIDN-14]
+paso "PII estructural: cero identificadores fuera del plano de identidad (§7.8)" \
+  node db/flota/gate-pii.mjs
+
 paso "linter de migraciones: las cinco exigencias de toda tabla de dominio (§4.2, §9.2)" \
   node db/flota/lint-migraciones.mjs
 

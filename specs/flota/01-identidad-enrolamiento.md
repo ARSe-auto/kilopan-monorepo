@@ -421,7 +421,7 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       ella, el nuevo dueño queda `admin_tenant`, el anterior pierde el gobierno y todo
       queda en audit_trail; e2e con virtual authenticator (§5.4) — oráculo: CI
       [AC-FIDN-13]
-- [ ] (P1) 21.719 estructural: ninguna tabla de HECHOS lleva PII — las tablas de
+- [x] (P1) 21.719 estructural: ninguna tabla de HECHOS lleva PII — las tablas de
       hechos/append-only y operativas (eventos, reading, evidence, firmas,
       entregas_pod, custody_transfer, audit_trail, review_queue, client_metric)
       referencian ID opaco (§7.8); el linter lo mecaniza con whitelist CERRADA:
@@ -429,8 +429,32 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       `empresas_cliente` (§4.5 — rut/contacto de la persona jurídica contratante,
       MANDADOS por el maestro; jamás pueden poner el gate en rojo); cualquier otra
       tabla con esas columnas ⇒ rojo (§7.8, §4.5, §3.E1.15). La anonimización, la UI
-      sin consentimiento y los seeds se verifican aparte (AC-FIDN-19/20/21) —
-      oráculo: CI [AC-FIDN-14]
+      sin consentimiento y los seeds se verifican aparte (AC-FIDN-19/20/21). Evidencia:
+      `db/flota/gate-pii.mjs` con 11 mutantes en `gate-pii.test.mjs`, dentro de
+      `db/flota/gate.sh` sin `--full` — se mecaniza sobre las MIGRACIONES y no sobre el
+      cluster, porque el momento de atrapar una columna así es cuando se escribe y no diez
+      minutos después. DESVIACIÓN DECLARADA respecto del texto del AC, que nombra la whitelist
+      como «personas y empresas_cliente»: entra una tercera, `solicitudes_acceso`. Guarda el
+      RUT y el nombre de la persona PROPUESTA y tiene que guardarlos, porque el §4.3 hace que
+      la identidad se cree recién al aprobar (AC-FIDN-04) justamente para que cualquiera con
+      un link no pueda sembrar filas en `personas`; es plano de IDENTIDAD y no de hechos, y la
+      purga la alcanza por `retention_policy`. SEGUNDA DECISIÓN, y es la que hace que la regla
+      sirva: `nombre` NO se prohíbe en todas partes. Es la palabra más reusada del esquema
+      —la tienen los grupos, los tipos de carga y los planes, y ninguno es una persona— así
+      que prohibirla en bloque obligaría a declarar una exención por catálogo, y una regla con
+      doce exenciones es una regla que nadie lee y que alguien termina apagando. Se juzga por
+      la CLASE que la tabla ya declara en su `COMMENT ON TABLE`: un `nombre` en una tabla
+      CAPTURA es el de una persona dentro del ledger append-only, y ahí sí es rojo. La clase
+      no es una lista nueva que mantener: es la que AC-FTEN-06 ya obliga a escribir. Los
+      identificadores INEQUÍVOCOS —rut, contacto, teléfono, correo, dirección, apellido— sí
+      valen en cualquier tabla fuera del plano de identidad. El plano de `control` queda fuera
+      del alcance y se DICE en la salida del gate: guarda a los clientes de la plataforma, no
+      a las personas de la operación. Se cerró además la vía de escape obvia: un `ALTER TABLE
+      … ADD COLUMN` cuenta igual que una columna del `CREATE`, porque si no la forma de meter
+      un RUT en `eventos` sería escribir la migración siguiente. Las exenciones se declaran en
+      la propia migración (`-- pii: exenta <tabla>.<columna> — <razón>`), son de UNA columna y
+      no de la tabla entera, y el gate las CUENTA e imprime; hoy son cero — oráculo: CI
+      [AC-FIDN-14]
 - [ ] (P2) Export ARCO por persona: entrega los datos personales de UNA persona (fila
       de `personas` + sus vínculos de usuario y dispositivos) sin incluir datos de
       terceros; el acceso queda en la bitácora de accesos del admin (§3.E1.15, §7.8).
