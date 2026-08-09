@@ -14,6 +14,18 @@
       }
     },
     {
+      "ruta": "/api/solicitudes",
+      "archivo": "src/app/api/solicitudes/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Endpoint público y sin parámetros: no recibe identificador de recurso, así que el cruce que aplica es inyectarle la identidad de B por los canales falsificables. Es la primera ruta MUTANTE de la app y por eso enciende el comparador de huella de la BD de B, tabla por tabla. LÍMITE DECLARADO del caso autogenerado: el generador no conoce la forma del cuerpo de cada endpoint, así que manda el request sin payload y esta ruta rebota 422 antes de tocar la base — la huella confirma «no escribió», pero de forma trivial. El cruce CON payload válido, que es el que puede escribir, lo prueba la suite del propio módulo (e2e/invitaciones.spec.ts), y es la razón por la que cada módulo declara sus casos con datos en vez de confiar solo en el genérico."
+      }
+    },
+    {
       "ruta": "/api/tenant",
       "archivo": "src/app/api/tenant/route.ts",
       "metodos": [

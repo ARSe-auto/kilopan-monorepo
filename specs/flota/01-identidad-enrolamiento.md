@@ -227,7 +227,7 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       email; pantalla «Esperando aprobación» con guía A2HS; dueño aprueba en 1 toque y
       la sesión arranca sola. Selectores solo por data-testid/term_key; axe/targets §0
       verdes; cero strings en inglés — oráculo: CI [AC-FIDN-02]
-- [ ] (P1) La invitación da derecho a SOLICITAR, jamás a entrar: token válido nunca
+- [x] (P1) La invitación da derecho a SOLICITAR, jamás a entrar: token válido nunca
       abre sesión ni emite secreto, solo crea solicitud `pendiente`. Multi-uso: N
       solicitudes del mismo token ⇒ N filas. Rebotes 422 tipados (PLANIFICACIÓN §4.2):
       token expirado (>7 días), pausado o revocado. Pausar/reanudar no altera
@@ -245,7 +245,35 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       responde 2xx y crea su fila, y ninguna respuesta del endpoint de solicitud permite
       distinguir un RUT registrado de uno que no lo está —ni por código, ni por cuerpo, ni por
       latencia declarada—, porque quien tiene el link no está autenticado y el link viaja por
-      WhatsApp (§0, §4.3, §5.4) — oráculo: CI [AC-FIDN-03]
+      WhatsApp (§0, §4.3, §5.4). Evidencia: `apps/flota/src/dominio/invitaciones.ts` con 13
+      mutantes en su `.test.ts`, el endpoint público `POST /api/solicitudes` y 8 pruebas HTTP
+      contra el servidor y la base de verdad en `apps/flota/e2e/invitaciones.spec.ts`.
+      DECISIÓN DECLARADA — **una credencial en TRES envoltorios**: el §5.4 pide QR, link
+      firmado y código corto de respaldo, y la salida cómoda era tres secretos distintos, o
+      sea tres cosas que revocar, tres que expirar y tres que se desincronizan. Acá el código
+      corto ES la credencial: el link lo lleva como parámetro y el QR codifica el link. Lo
+      «firmado» lo da el propio código —8 caracteres del alfabeto del §0, del orden de 10^12
+      combinaciones, del que en la BD queda solo su SHA-256— así que nadie puede fabricar uno
+      válido ni leerlo de la base: exactamente lo que daría una firma, con una sola cosa que
+      revocar. El generador usa `randomInt` y no un módulo sobre bytes, porque 31 no divide a
+      256 y el sesgo le regala entropía a quien adivina; hay un mutante que verifica que el
+      alfabeto se use ENTERO, porque un borde corrido deja un carácter inalcanzable y los
+      códigos siguen pareciendo códigos. Al normalizar se aceptan minúsculas, espacios y
+      guiones —el código se dicta en un galpón y se teclea con guantes— pero NO se «corrige»
+      un carácter ambiguo mapeando O→0: el alfabeto ya los excluye, así que una O no es un
+      cero mal escrito sino un carácter que no existe en ningún código emitido, y aceptarlo
+      abriría códigos que nadie emitió. El módulo 11 tiene UNA implementación y vive en la BD
+      (AC-FIDN-01): el endpoint TRADUCE su rebote al 422 tipado en vez de repetir el algoritmo
+      y que los dos se separen. ALCANCE DECLARADO, no olvido: emitir, pausar y revocar desde
+      el panel exigen sesión de `admin_tenant`, que nace con AC-FIDN-04 — las tres operaciones
+      existen como funciones de dominio con sus mutantes (incluida la consecuencia que el
+      §5.4 pide de frente: pausada el día 6 y reanudada el día 9 está vencida, porque el plazo
+      acota la VENTANA y no cuenta tiempo de uso), y su presupuesto de toques es de
+      AC-FIDN-02. La ruta nueva puso a trabajar el arnés de AC-FTEN-26 en serio: el manifiesto
+      frenó el build hasta que se declaró su caso de cruce, y al ser la primera ruta MUTANTE
+      encendió el comparador de huella de la BD de B — con su límite escrito en el manifiesto,
+      porque el caso autogenerado no lleva payload y por eso el cruce CON datos válidos lo
+      prueba la suite de este módulo — oráculo: CI [AC-FIDN-03]
 - [ ] (P1) La aprobación (1 toque) empareja persona+dispositivo+rol y RECIÉN AHÍ emite
       el secreto UNA vez contra la clave pública registrada en la solicitud: en BD
       queda solo `secreto_hash`; una segunda petición de emisión para el mismo
