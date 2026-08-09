@@ -9,15 +9,21 @@ export function BotonPrimario({
   onClick,
   disabled,
   variante = "acento",
+  testid,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   variante?: "acento" | "neutro";
+  /** Ancla ESTABLE para los tests que cuentan acciones [AC-FIDN-02]. Un selector por texto se
+   *  rompe cuando alguien mejora una etiqueta, y ese día el presupuesto de toques del §5.3
+   *  deja de medirse por una razón que no tiene nada que ver con los toques. */
+  testid?: string;
 }) {
   return (
     <button
       type="button"
+      data-testid={testid}
       onClick={onClick}
       disabled={disabled}
       style={{

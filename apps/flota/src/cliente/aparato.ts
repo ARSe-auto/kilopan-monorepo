@@ -89,3 +89,75 @@ export function huellaDelAparato(): string {
   ];
   return partes.join(" · ");
 }
+
+// ─── Abrir el sobre, del lado del teléfono [AC-FIDN-02] ───────────────────────────────
+//
+// El gemelo de `dominio/secretos.ts::abrir()`, escrito contra las APIs del navegador. Los
+// parámetros son los MISMOS —P-256, HKDF-SHA256 con la sal del sobre y el propósito atado, y
+// AES-256-GCM— y no se pueden separar sin que se note: si divergieran, el sobre no abriría y
+// la sesión no arrancaría. Es la única mitad que el servidor no puede ejecutar, porque la
+// privada que hace falta no salió nunca de este teléfono.
+
+/** Ata la clave derivada a su propósito. Tiene que ser BYTE A BYTE el del servidor. */
+const PROPOSITO = new TextEncoder().encode("flota:secreto-de-dispositivo");
+
+export type Sobre = { efimera: string; sal: string; nonce: string; cifrado: string };
+
+/** Devuelve `ArrayBuffer` y no `Uint8Array`: es lo que WebCrypto pide como `BufferSource`, y
+ *  con la vista tipada TypeScript rechaza la llamada por el buffer genérico. */
+const deBase64 = (s: string): ArrayBuffer => {
+  const binario = atob(s);
+  const bytes = new Uint8Array(binario.length);
+  for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+  return bytes.buffer;
+};
+
+/** Abre el sobre con la privada guardada. Devuelve el secreto de sesión del aparato. */
+export async function abrirSobre(sobre: Sobre, privada: CryptoKey): Promise<string> {
+  const { subtle } = crypto;
+  const efimera = await subtle.importKey("spki", deBase64(sobre.efimera), CURVA, true, []);
+  const compartido = await subtle.deriveBits({ name: "ECDH", public: efimera }, privada, 256);
+  const material = await subtle.importKey("raw", compartido, "HKDF", false, ["deriveKey"]);
+  const clave = await subtle.deriveKey(
+    { name: "HKDF", hash: "SHA-256", salt: deBase64(sobre.sal), info: PROPOSITO },
+    material,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["decrypt"],
+  );
+  const abierto = await subtle.decrypt(
+    { name: "AES-GCM", iv: deBase64(sobre.nonce) },
+    clave,
+    deBase64(sobre.cifrado),
+  );
+  return new TextDecoder().decode(abierto);
+}
+
+// ─── La sesión, guardada en el aparato ────────────────────────────────────────────────
+//
+// El secreto vive en el MISMO IndexedDB que la privada y no en `localStorage`: es la credencial
+// del aparato, y `localStorage` lo lee cualquier script de la página. Además el §4.7 pide que
+// lo del aparato sobreviva a un cierre, y `persist()` (AC-FIDN-05) protege a IndexedDB.
+
+const SECRETO = "secreto-de-sesion";
+
+export async function guardarSecreto(secreto: string): Promise<void> {
+  await transaccion("readwrite", (almacen) => almacen.put(secreto, SECRETO));
+}
+
+export async function leerSecreto(): Promise<string | null> {
+  const guardado = await transaccion<string | undefined>("readonly", (almacen) => almacen.get(SECRETO));
+  return guardado ?? null;
+}
+
+/**
+ * `fetch` con la credencial del aparato. La sesión ES el aparato (AC-FIDN-09), así que esto es
+ * todo lo que hay: sin cookie, sin refresh, sin nada que renovar.
+ */
+export async function pedir(url: string, opciones: RequestInit = {}): Promise<Response> {
+  const secreto = await leerSecreto();
+  const cabeceras = new Headers(opciones.headers);
+  if (secreto) cabeceras.set("Authorization", `Portador ${secreto}`);
+  if (opciones.body && !cabeceras.has("content-type")) cabeceras.set("content-type", "application/json");
+  return fetch(url, { ...opciones, headers: cabeceras });
+}

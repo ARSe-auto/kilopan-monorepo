@@ -7,7 +7,15 @@ import { semantico } from "@kilopan/miga/estructura.ts";
 import { formatearRut, rutValido, EJEMPLO_RUT } from "../../../../../packages/nucleo-comun/src/rut.ts";
 import { PIN } from "../../../../../packages/nucleo-comun/src/constants.ts";
 import { normalizarCodigo } from "../../dominio/codigo-corto.ts";
-import { parDelAparato, guardarPrivada, huellaDelAparato } from "../../cliente/aparato.ts";
+import {
+  parDelAparato,
+  guardarPrivada,
+  huellaDelAparato,
+  leerPrivada,
+  abrirSobre,
+  guardarSecreto,
+  type Sobre,
+} from "../../cliente/aparato.ts";
 import { entornoDelAparato, pedirPersistencia } from "../../cliente/entorno.ts";
 
 // F-B del §5.4: «Solicitar acceso» [AC-FIDN-17] — §0, §4.2, §4.3, §5.4.
@@ -30,7 +38,7 @@ import { entornoDelAparato, pedirPersistencia } from "../../cliente/entorno.ts";
 // nacional. El nombre SÍ es un input, porque es texto libre y ahí el teclado del sistema es
 // el correcto.
 
-type Paso = "codigo" | "rut" | "nombre" | "pin" | "confirmar" | "enviando" | "esperando";
+type Paso = "codigo" | "rut" | "nombre" | "pin" | "confirmar" | "enviando" | "esperando" | "dentro";
 
 const TEXTO = {
   codigo: "Escribí el código que te pasaron",
@@ -48,6 +56,13 @@ export default function Solicitar() {
   const [pin, setPin] = useState("");
   const [pinConfirmado, setPinConfirmado] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // El código llega en el link que el dueño compartió (§5.4 F-A → F-B). Se PRECARGA y no se
+  // salta el paso: la persona tiene que poder ver y corregir lo que va a enviar, sobre todo
+  // cuando el link llegó reenviado tres veces por WhatsApp.
+  useEffect(() => {
+    const delLink = new URLSearchParams(location.search).get("codigo");
+    if (delLink) setCodigo(delLink.toUpperCase());
+  }, []);
   // La clave pública identifica a este aparato ante `/api/entorno` mientras espera: el id de
   // la solicitud no se devuelve a propósito (AC-FIDN-03), y esta ya viajó.
   const [clavePublica, setClavePublica] = useState("");
@@ -96,6 +111,15 @@ export default function Solicitar() {
     }
   }
 
+  if (paso === "dentro") {
+    return (
+      <main data-testid="sesion-activa">
+        <h1 style={titulo}>Listo, ya estás dentro</h1>
+        <p style={cuerpo}>Tu teléfono quedó enrolado. No hace falta que escribas nada más.</p>
+      </main>
+    );
+  }
+
   if (paso === "esperando") {
     return (
       <main data-testid="esperando-aprobacion">
@@ -103,6 +127,7 @@ export default function Solicitar() {
         <p style={cuerpo}>
           Le avisamos a quien administra la cuenta. En cuanto te apruebe, esta pantalla se abre sola.
         </p>
+        <EsperaLaAprobacion clavePublica={clavePublica} alEntrar={() => setPaso("dentro")} />
         <Entorno clavePublica={clavePublica} clientUuid={clientUuid} entorno={entorno} onEntorno={setEntorno} />
       </main>
     );
@@ -124,7 +149,7 @@ export default function Solicitar() {
             spellCheck={false}
             style={campoTexto}
           />
-          <BotonPrimario disabled={!codigoEsValido} onClick={() => setPaso("rut")}>
+          <BotonPrimario testid="continuar-codigo" disabled={!codigoEsValido} onClick={() => setPaso("rut")}>
             Continuar
           </BotonPrimario>
         </Campo>
@@ -150,7 +175,7 @@ export default function Solicitar() {
                 : "Todavía no es un RUT válido. Revisá el número y el dígito verificador."}
           </p>
           <TecladoNumerico valor={rutCrudo} onCambiar={setRutCrudo} permitirK permitirCeroInicial />
-          <BotonPrimario disabled={!rutEsValido} onClick={() => setPaso("nombre")}>
+          <BotonPrimario testid="continuar-rut" disabled={!rutEsValido} onClick={() => setPaso("nombre")}>
             Continuar
           </BotonPrimario>
         </Campo>
@@ -166,7 +191,7 @@ export default function Solicitar() {
             autoComplete="name"
             style={campoTexto}
           />
-          <BotonPrimario disabled={nombre.trim().length < 3} onClick={() => setPaso("pin")}>
+          <BotonPrimario testid="continuar-nombre" disabled={nombre.trim().length < 3} onClick={() => setPaso("pin")}>
             Continuar
           </BotonPrimario>
         </Campo>
@@ -178,7 +203,7 @@ export default function Solicitar() {
             {"•".repeat(pin.length)}
           </output>
           <TecladoNumerico valor={pin} onCambiar={setPin} permitirCeroInicial />
-          <BotonPrimario disabled={!pinEsValido} onClick={() => setPaso("confirmar")}>
+          <BotonPrimario testid="continuar-pin" disabled={!pinEsValido} onClick={() => setPaso("confirmar")}>
             Continuar
           </BotonPrimario>
         </Campo>
@@ -202,6 +227,7 @@ export default function Solicitar() {
           )}
           <TecladoNumerico valor={pinConfirmado} onCambiar={setPinConfirmado} permitirCeroInicial />
           <BotonPrimario
+            testid="solicitar-acceso"
             disabled={paso === "enviando" || pinConfirmado !== pin || !pinEsValido}
             onClick={enviar}
           >
@@ -211,6 +237,54 @@ export default function Solicitar() {
       )}
     </main>
   );
+}
+
+/**
+ * «La sesión arranca sola» del §5.4 F-C [AC-FIDN-02].
+ *
+ * EL APARATO PREGUNTA, no le avisan. El §7.6 prohíbe que ningún paso dependa de push, así que
+ * esta pantalla consulta cada pocos segundos si ya hay un sobre esperándola. En cuanto lo hay,
+ * lo abre con la privada que guardó al solicitar —la que nunca salió de este teléfono— y
+ * guarda el secreto: desde ahí tiene sesión, sin que la persona toque nada. Ese CERO toques es
+ * el punto: el §5.3 cuenta acciones, y esperar no es una.
+ *
+ * El sobre es de un solo uso, así que el intervalo no puede ser agresivo ni hace falta: el
+ * ciclo del §5.4 es de minutos, con el dueño presente.
+ */
+function EsperaLaAprobacion({ clavePublica, alEntrar }: { clavePublica: string; alEntrar: () => void }) {
+  useEffect(() => {
+    if (!clavePublica) return;
+    let vivo = true;
+    const intentar = async () => {
+      const respuesta = await fetch("/api/sobre", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ clave_publica: clavePublica }),
+      }).catch(() => null);
+      // 404 mientras no hay nada que retirar: todavía no aprobaron. No es un error y no se
+      // muestra como tal — la persona está esperando, que es lo que la pantalla ya dice.
+      if (!respuesta || !respuesta.ok) return false;
+      const { sobre } = (await respuesta.json()) as { sobre: Sobre };
+      const privada = await leerPrivada();
+      if (!privada) return false;
+      await guardarSecreto(await abrirSobre(sobre, privada));
+      if (vivo) alEntrar();
+      return true;
+    };
+    const reloj = setInterval(() => {
+      void intentar().then((listo) => {
+        if (listo) clearInterval(reloj);
+      });
+    }, 1000);
+    void intentar().then((listo) => {
+      if (listo) clearInterval(reloj);
+    });
+    return () => {
+      vivo = false;
+      clearInterval(reloj);
+    };
+  }, [clavePublica, alEntrar]);
+  return null;
 }
 
 /**
@@ -287,7 +361,7 @@ function Entorno({
         instruccion="Abrí la app desde el ícono de la pantalla de inicio y volvé a tocar «Revisar»."
         porque="Sin permiso, el sistema puede borrar lo que capturaste y todavía no se envió."
       />
-      <BotonPrimario onClick={() => void revisar()}>Revisar</BotonPrimario>
+      <BotonPrimario testid="revisar-entorno" onClick={() => void revisar()}>Revisar</BotonPrimario>
     </section>
   );
 }

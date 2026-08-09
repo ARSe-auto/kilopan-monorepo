@@ -220,13 +220,63 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       que alguien toca una sola— y en la BD es un TIPO y no una tabla de catálogo, para que
       agregar un rol sea una migración visible y no un INSERT de madrugada — oráculo: CI
       [AC-FIDN-01]
-- [ ] (P1) e2e del flujo feliz §5.4 contando ACCIONES (convención §5.3): dueño emite
+- [x] (P1) e2e del flujo feliz §5.4 contando ACCIONES (convención §5.3): dueño emite
       invitación por rol en ≤4 toques (QR + link firmado + código corto fallback);
       trabajador completa RUT auto-formateado `12.345.678-5` + nombre + PIN ×2 con
       teclado numérico PROPIO (jamás el del sistema) + «Solicitar acceso» sin campo de
       email; pantalla «Esperando aprobación» con guía A2HS; dueño aprueba en 1 toque y
       la sesión arranca sola. Selectores solo por data-testid/term_key; axe/targets §0
-      verdes; cero strings en inglés — oráculo: CI [AC-FIDN-02]
+      verdes; cero strings en inglés. Evidencia: la pantalla del dueño
+      `apps/flota/src/app/panel/page.tsx`, el codificador de QR propio
+      `packages/nucleo-comun/src/qr.ts` con 12 mutantes, `POST /api/sobre`, el store de sesión
+      y la apertura del sobre en `apps/flota/src/cliente/aparato.ts`, y 2 pruebas de navegador
+      en `apps/flota/e2e/enrolamiento.spec.ts`. **MEDIDO: F-A en 3 acciones (presupuesto 4),
+      F-B en 5 —una por paso del formulario— y F-C en 1. La sesión del trabajador arranca con
+      CERO acciones suyas.**
+      **EL PRESUPUESTO SE CUENTA, NO SE PROMETE.** Un contador envuelve cada toque que el test
+      le pide a la pantalla, así que agregar un paso al flujo sube el número solo — con un
+      número escrito a mano, el día que alguien meta una confirmación de más el test seguiría
+      diciendo lo de antes. Y los toques del TECLADO PROPIO no entran al presupuesto: los
+      dígitos de un RUT o de un PIN son el dato, no decisiones; contarlos convertiría un RUT
+      largo en un rebote de diseño.
+      **DÓNDE SE FUERON LOS TOQUES DE F-A.** «Invitar» (1) → el rol, que EMITE en ese mismo
+      toque (2) → «Compartir» (3). El paso de confirmación intermedio se sacó a propósito: una
+      invitación de más se revoca en 1 toque, así que confirmar protege menos de lo que cuesta.
+      Y aprobar es 1 acción porque el rol NO se elige al aprobar —sale de la invitación
+      (AC-FIDN-04)—: elegirlo ahí convertiría un toque en una decisión de permisos tomada sin
+      mirar.
+      **EL QR SE ESCRIBIÓ, NO SE INSTALÓ.** Decisión de Alexis (09-ago-2026) ante la
+      alternativa de agregar una dependencia: el QR vive en la pantalla del módulo que guarda
+      RUTs y PINs, y una librería de terceros ahí es superficie de cadena de suministro y peso
+      en el bundle que un teléfono baja con la señal de un galpón, a cambio de un algoritmo
+      cerrado desde 2006. Alcance declarado: modo byte, nivel M, versiones 1 a 6 — un texto que
+      no entra REBOTA con el máximo en el mensaje, porque un QR truncado escanea igual y lleva
+      a otro lado. **CÓMO SE VERIFICA ALGO QUE NO SE PUEDE LEER A OJO**, que fue el problema de
+      fondo: un QR mal codificado se ve idéntico a uno bueno, y comparar contra una matriz
+      escrita de memoria probaría la memoria de quien la escribió. Los 12 mutantes no llevan un
+      solo vector recordado: verifican PROPIEDADES —que el mensaje sea divisible por el
+      generador de Reed-Solomon (la definición del código), que α^255 vuelva a 1 en GF(256),
+      que los 32 formatos conserven la distancia de Hamming ≥ 7 del BCH(15,5), y que el zigzag
+      sea una permutación—. Lo único que ninguna propiedad puede probar son las tablas de
+      bloques por versión, que son datos de la norma: se validaron contra un decodificador
+      INDEPENDIENTE, el del sistema operativo, codificando y volviendo a leer —14 casos,
+      versiones 1 a 6, leídos idénticos— con
+      `packages/nucleo-comun/scripts/verificar-qr.mjs`, que NO está en el gate porque necesita
+      macOS y un paso que solo corre en una máquina en otra queda saltado.
+      **«LA SESIÓN ARRANCA SOLA» ES LITERAL Y EL §7.6 LA HACE ASÍ.** Nada puede depender de
+      push, así que el aparato PREGUNTA: la pantalla de espera consulta `/api/sobre` hasta que
+      hay algo, lo abre con la privada no extraíble que guardó al solicitar, y guarda el
+      secreto. El e2e lo prueba con DOS contextos de navegador —dos teléfonos de verdad—, y
+      comprueba que el secreto abierto es EL que la aprobación emitió comparando su hash contra
+      la fila del aparato: sin eso, «arrancó sola» podría ser una pantalla que cambia de estado
+      sola. El sobre se retira por CLAVE PÚBLICA y no por id de solicitud, porque ese id no se
+      le devuelve al aparato a propósito (AC-FIDN-03) — y lo que se lleva quien intercepte la
+      clave pública es un sobre que solo abre la privada del teléfono de la persona.
+      **HALLAZGO DEL CAMINO:** volver de «Compartir» al panel no recargaba la lista, y entre
+      compartir el link y volver a mirar pasa JUSTO el rato en que la persona completa sus
+      datos — el dueño veía «no hay nadie esperando» con alguien esperando. Lo destapó el e2e
+      del flujo completo, que es el único que recorre los dos teléfonos en orden — oráculo: CI
+      [AC-FIDN-02]
 - [x] (P1) La invitación da derecho a SOLICITAR, jamás a entrar: token válido nunca
       abre sesión ni emite secreto, solo crea solicitud `pendiente`. Multi-uso: N
       solicitudes del mismo token ⇒ N filas. Rebotes 422 tipados (PLANIFICACIÓN §4.2):

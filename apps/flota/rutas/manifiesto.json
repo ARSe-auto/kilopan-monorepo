@@ -196,6 +196,18 @@
       }
     },
     {
+      "ruta": "/api/sobre",
+      "archivo": "src/app/api/sobre/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Público y sin parámetros de ruta: el aparato se identifica con la clave pública que ya viajó en su solicitud, y esa clave vive en la BD del tenant que el ruteo eligió —una clave de B contra el subdominio de A no encuentra sobre y sale 404 sin tocar nada—. El verbo MUTA (el sobre es de un solo uso), así que enciende el comparador de huella de la BD de B. LÍMITE DECLARADO, igual que en /api/solicitudes: el caso autogenerado va sin payload y rebota 422 antes de tocar la base; el cruce CON una clave pública válida de B lo prueba la suite del módulo (e2e/enrolamiento.spec.ts)."
+      }
+    },
+    {
       "ruta": "/api/solicitudes",
       "archivo": "src/app/api/solicitudes/route.ts",
       "metodos": [
@@ -217,6 +229,18 @@
       "cruce": {
         "tipo": "sin_recurso",
         "nota": "Devuelve la identidad del tenant leída de tenant_info de SU base, así que es la ruta donde una fuga se vería a simple vista: si el aislamiento cediera, el slug y el nombre de la BD de B saldrían literalmente en el cuerpo. Sin parámetros hasta el módulo 01; el día que reciba uno, pasa a tipo recurso y el gate lo exige."
+      }
+    },
+    {
+      "ruta": "/panel",
+      "archivo": "src/app/panel/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla del dueño (F-A y F-C del §5.4). No recibe identificador por URL: todo lo que hace pasa por /api/gobierno/**, que ya tiene sus propios casos declarados, y el tenant sale del ruteo. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y acá pesa porque el HTML servido no puede traer ni el slug ni la base del vecino antes siquiera de que haya sesión: sin credencial la pantalla no pinta datos de nadie."
       }
     },
     {

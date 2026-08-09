@@ -268,3 +268,26 @@ export async function retirarSobre(pool: Pool, solicitudId: string): Promise<Sob
   );
   return rows[0]?.sobre ?? null;
 }
+
+/**
+ * El mismo retiro, pero identificando al aparato por su CLAVE PÚBLICA [AC-FIDN-02].
+ *
+ * POR QUÉ NO POR ID DE SOLICITUD. `POST /api/solicitudes` no devuelve el id a propósito
+ * (AC-FIDN-03): sería un identificador de la casa en manos de alguien que todavía no es de la
+ * casa. La clave pública ya viajó, ya está en la fila, y el aparato la tiene — y lo que se
+ * lleva quien la intercepte es un sobre que solo abre la privada no extraíble del teléfono de
+ * la persona. O sea: nada.
+ *
+ * De UN SOLO USO por la misma sentencia que el retiro por id, con `RETURNING OLD` para que el
+ * sobre salga en el mismo acto en que se vacía la columna.
+ */
+export async function retirarSobrePorClave(pool: Pool, clavePublica: string): Promise<Sobre | null> {
+  const { rows } = await pool.query<{ sobre: Sobre }>(
+    `update solicitudes_acceso
+        set sobre = null, sobre_retirado_en = now()
+      where clave_publica = $1 and sobre is not null
+      returning old.sobre as sobre`,
+    [clavePublica],
+  );
+  return rows[0]?.sobre ?? null;
+}

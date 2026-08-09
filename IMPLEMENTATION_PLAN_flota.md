@@ -98,7 +98,7 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 ## Hito (b) — Identidad, roles y enrolamiento gobernado por el dueño `[security]`
 
 - [x] (P1) Esquema §4.3 completo en `tenant_template` (personas RUT módulo 11, usuarios enum fijo + CHECK cliente, invitaciones, solicitudes_acceso, dispositivos con UNIQUE parcial, firmas append-only, retention_policy DDL) con linter y pgTAP verdes — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-01]
-- [ ] (P1) E2e del flujo feliz §5.4 contando acciones: emisión ≤4 toques, solicitud ~90 s sin email con teclado propio, aprobación 1 toque, sesión arranca sola — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-02]
+- [x] (P1) E2e del flujo feliz §5.4 contando acciones: emisión ≤4 toques, solicitud ~90 s sin email con teclado propio, aprobación 1 toque, sesión arranca sola — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-02]
 - [x] (P1) La invitación solo da derecho a SOLICITAR: multi-uso, expira 7 días, pausa sin alterar expira_at, revocación inmediata; rebotes 422 tipados; entrada por código corto (RUT duplicado pendiente pregunta 10) — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-03]
 - [x] (P1) Aprobación empareja persona+dispositivo+rol y emite el secreto UNA vez contra la clave pública (solo `secreto_hash` en BD); re-emisión rebota; cliente sin empresa 422 — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-04]
 - [x] (P1) Enrolamiento incompleto sin standalone + persist(): degradación visible, `persist_denegado` a client_metric; con ambos, dispositivo activo — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-05]
