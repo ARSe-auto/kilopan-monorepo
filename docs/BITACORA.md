@@ -1803,3 +1803,53 @@ app; y ningún centinela de B puede ser subcadena de la identidad de A (el fixtu
 el arreglo cómodo sería ablandarlo).
 
 Módulo 00: **27 de 28**. Queda AC-FTEN-19, que va al final del hito por definición.
+
+## 09-ago-2026 (misma sesión, continuación) — Hito (b) arrancado: el servidor de identidad, entero
+
+Doce ACs en una sesión: AC-FTEN-26 (cierre del módulo 00) y once del módulo 01. El módulo 01
+pasó de **0 a 12 de 21**, y llegó a un límite que vale la pena nombrar: **todo lo que queda
+necesita o la PWA o una respuesta del dueño.** El servidor del hito (b) está completo.
+
+### Las tres decisiones de fondo que se tomaron
+
+1. **El manifiesto de rutas se DERIVA del árbol** (AC-FTEN-26). Lo destapó rastrear quién lo
+   consume: no es insumo de una suite, es el oráculo de cuatro pruebas de AUSENCIA de otros
+   módulos. Una ausencia solo prueba algo si el inventario no puede quedar incompleto. Ya
+   trabajó tres veces en la sesión — frenó el build en cada ruta nueva — y AC-FIDN-11 lo usó
+   para probar que no existe endpoint de impersonación.
+
+2. **La sesión ES el aparato** (AC-FIDN-09). El secreto que la aprobación emitió, presentado
+   en cada request. Sin cookie, sin token con vencimiento, sin refresh. No es minimalismo: un
+   token con vencimiento propio tendría que caducar para que la revocación surta efecto, y esa
+   ventana es la que no puede existir cuando alguien perdió el teléfono en la calle.
+
+3. **El secreto viaja en un sobre sellado** (AC-FIDN-04). El dueño aprueba desde su teléfono y
+   el trabajador espera en el suyo; el secreto cruza cifrado contra la clave pública del
+   aparato, con ECDH P-256 y `crypto.subtle` — la MISMA API del navegador, así que el test lo
+   abre con el código exacto que va a correr en el teléfono y con la privada no extraíble.
+
+### Los defectos que los tests destaparon, y que en producción se habrían visto tarde
+
+- **`RETURNING sobre` devolvía el valor NUEVO** —el null que el propio UPDATE acababa de
+  escribir—, así que el retiro borraba el sobre sin entregarlo. El trabajador habría quedado
+  esperando una sesión que nunca iba a arrancar, y se habría visto en el primer enrolamiento
+  real. Corregido con `RETURNING OLD`, de PostgreSQL 18.
+- **El aislamiento del ledger se volvía el problema de la suite siguiente.** Con firmas
+  apuntando a una persona, ninguna otra suite podía limpiar `personas`: el DELETE rebota
+  42501, que es exactamente lo que el §7.4 promete. Las suites que escriben hechos ahora
+  provisionan su propia base.
+- **Dos gates atraparon a quien los escribió**: el CHECK de duración cerrada impidió que el
+  test de soporte falseara un vencimiento, y `gate-ruts.mjs` marcó el RUT literal que su
+  propio test llevaba escrito.
+
+### Ocho preguntas al dueño, respondidas en dos tandas
+
+Sesiones, backoff del PIN, distribución de la invitación y RUT repetido en la primera;
+rotar PIN, rol `cliente`, visibilidad de solicitudes y break-glass en la segunda. Registro en
+`docs/respuestas-dueno-2026-08-09-spec01.md`. Quedan abiertas la 4 (passkey) y la 8 (ARCO y
+plazos), las dos P2.
+
+La que más consecuencias tuvo: **el RUT ya registrado rebota al APROBAR y no al solicitar**,
+con el mismo criterio del `404 · 503 · 404` — quien tiene el link no está autenticado y el link
+viaja por WhatsApp. De ahí salen la respuesta indistinguible del endpoint de solicitud, la del
+re-enrolamiento, y el rebote nombrado del lado del dueño, que sí conoce su nómina.
