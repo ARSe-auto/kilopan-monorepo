@@ -1859,13 +1859,15 @@ con el mismo criterio del `404 · 503 · 404` — quien tiene el link no está a
 viaja por WhatsApp. De ahí salen la respuesta indistinguible del endpoint de solicitud, la del
 re-enrolamiento, y el rebote nombrado del lado del dueño, que sí conoce su nómina.
 
-## 09-ago-2026, 17:15 → · Hito (b): el panel del dueño, y la PWA deja de no existir
+## 09-ago-2026, 17:15 → · Hito (b) terminado, hito (a) cerrado, y la PWA deja de no existir
 
-Cuatro ACs cerrados con el gate completo en verde después de cada uno: **AC-FIDN-12** (panel de
-gobierno), **AC-FIDN-17** (RUT en vivo), **AC-FIDN-20** (cero consentimiento) y **AC-FIDN-05**
-(standalone + persist). El módulo 01 pasa de 13 a 17 de 21; los cuatro que quedan son
-AC-FIDN-02 (P1, el único construible hoy), AC-FIDN-07 (bloqueado por el outbox del hito e) y
-los dos P2 bloqueados por preguntas abiertas.
+Siete ACs cerrados con el gate completo en verde después de cada uno: **AC-FIDN-12** (panel de
+gobierno), **AC-FIDN-17** (RUT en vivo), **AC-FIDN-20** (cero consentimiento), **AC-FIDN-05**
+(standalone + persist), **AC-FTEN-19** (la matriz KiloRuta, que CIERRA el módulo 00 en 28 de
+28) y **AC-FIDN-02** (el flujo feliz entero contando acciones). El módulo 01 pasa de 13 a 18 de
+21, y los tres que quedan no son construibles hoy: AC-FIDN-07 espera el outbox del hito (e), y
+AC-FIDN-13 y AC-FIDN-15 esperan las preguntas 4 y 8. **El hito (b) está terminado en todo lo
+que no depende de otro hito ni de una respuesta.**
 
 Al arrancar la sesión `apps/flota` servía un shell y cuatro rutas de API. Ahora sirve **18
 rutas**, con tres pantallas de verdad —solicitar acceso, esperando aprobación con guía A2HS, y
@@ -1926,3 +1928,24 @@ rutas**, con tres pantallas de verdad —solicitar acceso, esperando aprobación
   `node:crypto` y usan `Buffer`. Se PARTIÓ la parte pura (`dominio/codigo-corto.ts`) en vez de
   copiarla, y la mitad del navegador vive en `cliente/`. Una segunda normalización del código
   corto y un día el que la persona teclea se acepta en pantalla y rebota en el servidor.
+
+### Y al final, el flujo feliz medido
+
+**F-A en 3 acciones (presupuesto 4), F-B en 5 —una por paso— y F-C en 1. La sesión del
+trabajador arranca con CERO acciones suyas.** El presupuesto del §5.3 se cuenta con un contador
+que envuelve cada toque: agregar un paso al flujo sube la cuenta sola, mientras que un número
+escrito a mano habría seguido diciendo lo de antes. Los toques del teclado propio no entran —
+los dígitos de un RUT o de un PIN son el dato, no decisiones.
+
+**El QR se escribió en vez de instalarse** (decisión de Alexis ante la alternativa concreta).
+Vive en la pantalla del módulo que guarda RUTs y PINs, y una librería de terceros ahí es
+superficie de cadena de suministro y peso en el bundle. El problema real fue el otro: un QR mal
+codificado se ve idéntico a uno bueno. Los mutantes no llevan un solo vector recordado —prueban
+la divisibilidad por el generador de Reed-Solomon, α^255=1 en GF(256), la distancia de Hamming
+del BCH(15,5), el zigzag como permutación— y las tablas de bloques, que no se derivan de nada,
+se validaron contra el decodificador del sistema operativo: 14 casos, versiones 1 a 6, leídos
+idénticos.
+
+Y el hallazgo que solo aparece recorriendo los dos teléfonos en orden: **volver de «Compartir»
+no recargaba la lista**, y entre compartir el link y volver a mirar pasa justo el rato en que la
+persona completa sus datos. El dueño veía «no hay nadie esperando» con alguien esperando.
