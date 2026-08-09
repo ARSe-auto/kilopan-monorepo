@@ -10,6 +10,59 @@ el aprendizaje contradice lo que creíamos. **Qué NO va:** el estado del plan (
 
 ---
 
+## 2026-08-09 · Arranca la construcción de FLOTA: hito (a), 4 ACs y tres defectos del arnés
+
+**Sesión supervisada** (Opus 5, esfuerzo alto, por orden de Alexis y por el §8: el hito (a)
+es decisión fundacional irreversible y no se delega a un motor). Rama `flota/specs-e1`.
+
+**Lo primero fue infraestructura, y era obligatorio.** El §4.1 pide `CREATE DATABASE …
+TEMPLATE`, un rol por tenant con `CONNECT` solo a su base y `uuidv7()` nativo: PGlite —lo que
+usa KiloPan— no da ninguna de las tres. En la máquina ya había PostgreSQL 18.4 (Postgres.app)
+sirviendo el cluster de eauto en el 54329; FLOTA reutiliza los BINARIOS y nada más, con
+cluster propio en 54331 y PGDATA `~/.flota-pg`. pgTAP 1.3.3 vendorizado en `vendor/pgtap/` y
+servido por `extension_control_path`, que es cómo se usa sin escribir dentro del bundle
+compartido con eauto. Todo verificado en vivo ANTES de comprometer diseño.
+
+**El hallazgo que cambia el DDL de toda la plataforma:** `CHECK (tenant_id = (SELECT id FROM
+tenant_info))`, tal como lo escribe el §4.1 literal, **es imposible en PostgreSQL** — «cannot
+use subquery in check constraint», verificado contra 18.4. Se implementa con
+`tenant_actual()`, función IMMUTABLE con el uuid del tenant HORNEADO como literal en la
+provisión. No es un rodeo: es lo único que sobrevive a `pg_restore`, donde las funciones se
+crean antes del COPY y un CHECK que leyera `tenant_info` fallaría fila por fila — y el
+offboarding del §2 (métrica 7) es justamente un dump y un restore.
+
+**Cerrados (4 de 28 del módulo 00):** AC-FTEN-18 (lista KR congelada con N=63, firmada por
+Alexis, que en el mismo acto resolvió las 7 decisiones abiertas — KR-29 y KR-41 entran a E1
+como AC-FRUT-22 y AC-FVEH-22, y el plan pasa a 197 ACs) · AC-FTEN-28 (guardrail §7.1, 9
+mutantes; sin la puerta de «remota intencional» que sí tiene KiloPan) · AC-FTEN-01 (familia
+canónica del §0 en `packages/nucleo-comun/src/constants.ts` + grep-gate, 21 pruebas) ·
+AC-FTEN-06 (linter de migraciones, 15 mutantes).
+
+**Tres defectos que los mutantes destaparon, ninguno teórico.** (1) El grep-gate de
+constantes cazó que un comentario del propio test repetía un número de la familia — y
+después que mordía DENTRO del uuid centinela `…-8000-…`, porque `\b` abre frontera en el
+guion. (2) La exigencia de índice del linter **no podía ponerse roja nunca**: `UNIQUE
+(tenant_id, id)`, que la exigencia 4 ya obliga, es un índice encabezado por `tenant_id`.
+Reescrita para exigir además que cada FK compuesta tenga índice que la encabece — Postgres
+no indexa las FK solo y un borrado en el padre haría scan completo del hijo.
+
+**Y dos del arnés, pedidos por el dueño** (`ac14b67`): el motor apuntaba a
+`claude-opus-4-8` mientras Sonnet y Haiku estaban al día, así que «regla dura ⇒ modelo tope»
+mandaba a una generación anterior — y envejeció invisible porque `prueba-arnes.sh` clavaba
+ese id literal en seis aserciones: la suite custodiaba el valor viejo. Ahora los ids se leen
+del selector. El anti-no-op del selector —la única aserción que el §8 pide por su nombre—
+era falso: contaba tres ids escritos a mano. Y `loop.sh` pasaba `--fallback-model sonnet`
+siempre, así que un AC de regla dura podía terminar escrito por un modelo menor sin que
+nadie se enterara; ahora no hay fallback cuando se pide el tope, y `detectar-degradado.mjs`
+revisa quién respondió de verdad después de cada build.
+
+**Lección de método, y es sobre mí:** le dije al dueño que iba a «seguir construyendo toda
+la noche» entre mensajes. Falso: en este arnés cada turno termina y espera. La sesión quedó
+tres horas ociosa. La continuidad real es el traspaso a sesión nueva, no una promesa de
+trabajo de fondo que el harness no puede cumplir.
+
+---
+
 ## 2026-08-07 · CI en rojo desde el 3-ago (15 corridas seguidas): CVE de nanoid sin override
 
 **Síntoma:** GitHub Actions en rojo casi sin excepción desde la corrida #33 (3cec1bd,
