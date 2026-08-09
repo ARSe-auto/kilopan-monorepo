@@ -1558,3 +1558,59 @@ y `api/sync` (un POD encolado offline de una parada quitada ya no la cierra).
 Gate final: `check.sh --full` 14/14 OK, 0 saltados, e2e 96/96, invariantes 83/83,
 marcador `verde-20260808-152820` (05fbf39). Avance: 82/98 ACs (84%). Un commit por
 AC. Los tags archivo-wip NO se tocaron.
+
+---
+
+## 8-ago-2026 (tarde/noche) — El contrato E1 de la Plataforma FLOTA, rehecho desde cero
+
+Alexis paró el proceso a mitad de vuelo: «rehaz el proceso inicial desde cero. Estás
+haciendo cosas que son incoherentes con el espíritu del prompt y que será muy difícil
+corregir después». Tenía razón dos veces. Primero, las specs se estaban encargando con un
+resumen del maestro en vez del maestro: «el rigor del documento debe transmitirse
+TOTALMENTE al agente». Segundo, un agente ya había commiteado a `main` un esqueleto de
+`apps/flota` y una migración del plano de control **sin que existiera una sola spec** —
+exactamente el orden que el método prohíbe. Ambos commits fueron **revertidos** (`31b32ff`);
+siguen consultables en la historia (`ebb85ea`, `db21644`), como referencia, no como fuente.
+
+**Cómo se rehizo.** Nueve redactores, uno por módulo, cada uno con el maestro COMPLETO
+(947 líneas, prohibido escribir sin leerlo entero) y alcance Chile-only explícito. Sobre
+cada spec, tres verificadores adversariales con lentes distintos —fidelidad al maestro,
+verificabilidad de cada AC, contaminación de etapas y ganchos §4.9— y un corrector que
+aplicó o rechazó cada hallazgo citando el § que lo respalda: 27 verificaciones, ~87
+correcciones aplicadas, cero rechazos infundados. Después, un consolidador halló 10
+problemas de coherencia global (piezas huérfanas y de doble dueño), un árbitro los resolvió
+contra el maestro —7 con dueño único, 3 elevados a decisión del dueño con el AC marcado
+BLOQUEADO en vez de inventar la respuesta— y una auditoría independiente verificó el
+resultado leyendo el texto, no los autorreportes.
+
+**Un bug propio, que el arnés de este método cazó.** El ruteo de ediciones a archivos usaba
+`ruta.includes("01")`, y la ruta del scratchpad contiene `claude-501`: las correcciones de
+siete módulos se enrutaron todas al aplicador del 01 y solo se aplicaron 2 de 9 archivos.
+No lo detectó una revisión humana: lo detectó la auditoría independiente de la fase
+siguiente, que verifica el TEXTO y no confía en el reporte de quien editó. Segunda ronda con
+el ruteo por nombre de archivo, más 3 hallazgos nuevos que esa misma auditoría encontró por
+su cuenta (`entregas_pod` sin creador declarado, §7.1 `guardrail.sh` sin AC, seis preguntas
+duplicadas entre specs). Los 4 residuales de la última pasada se cerraron a mano.
+
+**Resultado: 195 ACs en 9 specs**, todos abiertos, todos con oráculo (178 CI · 8 humano ·
+8 producción), ids únicos y contiguos, cero referencias cruzadas rotas, plan espejado uno a
+uno, y barrido de completitud verde contra la lista cerrada E1 del §3 (15/15), §4, §5, §7
+(7.1–7.9), §9.2 y los centinelas §9.3 (1–16, salvo el 8 que es E3 y así está declarado).
+`gate_specs --app=flota`: VERDE. `docs/compatibilidad-kiloruta-E1.md` mapea 63 criterios KR
+del primer tenant real contra spec y AC, con «pendiente» honesto donde lo hay.
+
+**Tres arreglos al arnés, que este trabajo destapó.** (1) `verify-refs` escaneaba el árbol
+entero pero solo conocía los ACs de `--app`: con `specs/flota/` poblado, las ~100 citas
+legítimas de KiloPan salían «huérfanas» y el gate de la app nueva no podía ponerse verde
+jamás. (2) `check.sh` abortaba si no existía `apps/<app>`, o sea el gate del contrato no
+podía correr antes del primer commit de código — al revés del método; y usar el directorio
+como señal de existencia daba VERDE VACUO en `es-CL` sobre el cascarón que deja un revert
+(`.next/`, `node_modules/`, gitignorados). Ahora la señal es el `package.json`. (3)
+`CONTRATO_PUERTOS.md` asignaba el 3301 a `apps/flota` mientras el `playwright.config.ts` de
+KiloPan ya lo tenía fijo para su e2e: dos dueños del mismo recurso escritos en el propio
+contrato que existe para evitarlo. Costó un agente esperando un puerto que no se iba a
+liberar. FLOTA pasa a 3310/3311. Los tres arreglos con su caso en `prueba-arnes.sh`
+(98 verde / 0 rojo), porque un guard sin prueba se vuelve a romper.
+
+**Lo que NO se construyó, a propósito:** ni una línea de `apps/flota`. La construcción
+arranca en sesión limpia con Opus 5, desde `docs/ARRANQUE_FLOTA.md`.
