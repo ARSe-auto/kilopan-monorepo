@@ -586,7 +586,8 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       inválido (el 422 del servidor se ejercita por request directo, saltándose el
       cliente) (§0, §4.2, §4.3, §5.4) — oráculo: CI [AC-FIDN-17]
 - [ ] (P1) Break-glass de soporte (§4.3, §7.9): doble control + notificación forzosa
-      + registro inmutable. BLOQUEADO hasta la respuesta a Preguntas al dueño #7
+      + registro inmutable. DESBLOQUEADO el 09-ago-2026 (respuesta a la pregunta 7: dos
+      personas de la PLATAFORMA, y aviso por correo + panel persistente hasta reconocerlo)
       (quiénes son los DOS controles y por qué canal llega la notificación sin
       depender de push, §7.6): contra actores y canal indefinidos no hay test
       escribible; resuelta la pregunta, el test se parametriza con los dos controles
@@ -696,15 +697,19 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
    §5.3 sin agregar seguridad que la revocación no dé — y la fricción empuja a dejar la app
    abierta todo el turno, que es lo que se quería evitar. Absorbida en `SESION` del canónico
    §0. Registro: `docs/respuestas-dueno-2026-08-09-spec01.md`.
-2. **«Rotar PIN»:** el maestro nombra la capacidad (§5.4) pero no la mecánica. Si el
-   trabajador olvidó su PIN, ¿cómo se restablece sin que el dueño conozca el valor
-   nuevo (argon2id, jamás en logs)? ¿Código puente de un solo uso mostrado al dueño y
-   PIN nuevo definido en el dispositivo enrolado?
-3. **Rol `cliente`:** ¿la invitación de rol `cliente` lleva `empresa_cliente_id`
-   embebido (emitida desde la ficha de la empresa contratante) o el dueño lo asigna al
-   aprobar? ¿El usuario del portal exige dispositivo enrolado standalone+persist como
-   los operarios, o basta sesión web (usará escritorio)? El maestro define el flujo
-   §5.4 solo para «trabajador».
+2. ~~**«Rotar PIN»:** la mecánica del restablecimiento.~~ **RESPONDIDA** por Alexis el
+   09-ago-2026: **código puente de un solo uso mostrado al dueño**, que se lo dicta al
+   operario; el operario lo tipea EN SU aparato enrolado y ahí define el PIN nuevo. Razón: si
+   el dueño eligiera el PIN, lo conocería — y una firma por PIN dejaría de probar quién firmó,
+   que es para lo que existe (§4.5). Reusa el mecanismo de código corto de AC-FIDN-03, ya
+   construido y probado. Se implementa en AC-FIDN-12.
+3. ~~**Rol `cliente`:** de dónde sale su empresa y con qué entra.~~ **RESPONDIDA** por Alexis
+   el 09-ago-2026: la invitación de rol `cliente` se emite DESDE la ficha de la empresa
+   contratante y lleva su id **embebido**, así que aprobar sigue siendo 1 toque y no una
+   decisión con un selector — justo donde el §5.4 cuenta toques. Y el contratante entra por
+   **sesión web**, sin PWA instalada ni `persist()`: esas exigencias existen porque el operario
+   captura offline en terreno, y el contratante solo lee su liquidación. Fija además que el
+   portal de la spec 07 no exige enrolamiento de aparato.
 4. **Passkey del admin:** ¿cuándo se registra (wizard de alta vs primer uso de
    «transferir propiedad») y cuál es la vía de recuperación si se pierde (¿break-glass
    §7.9)? El maestro no lo dice.
@@ -716,12 +721,20 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
    sin 1/I/L): se dicta en voz alta en un galpón ruidoso y se teclea con guantes; en ese
    alfabeto son del orden de 10^12 combinaciones para un token que además expira a los 7 días
    y se revoca en 1 toque. Absorbida en `INVITACION` del canónico §0.
-6. **Visibilidad de solicitudes pendientes:** ¿generan señal en el semáforo
-   «Hoy»/«Por revisar» o solo badge dentro del panel de enrolamiento? El Anexo B no
-   trae señal de enrolamiento y el maestro prohíbe depender de push.
-7. **Break-glass (§7.9):** ¿quiénes son los DOS controles (dos personas de la
-   plataforma, o plataforma + dueño del tenant) y por qué canal llega la «notificación
-   forzosa» al tenant sin depender de push (§7.6)?
+6. ~~**Visibilidad de solicitudes pendientes.**~~ **RESPONDIDA** por Alexis el 09-ago-2026:
+   **solo badge en el panel de enrolamiento**, nada en el semáforo «Hoy». El semáforo es de la
+   OPERACIÓN y tiene un máximo de 6 tarjetas (§0): meterle enrolamiento le quita el lugar a
+   algo que sí detiene un camión, y el día que entran cinco personas nuevas tapa el tablero. El
+   enrolamiento pasa cuando entra gente, no todos los días, y el ciclo del §5.4 es menor a 5
+   minutos con el dueño presente — quien invitó está esperando la solicitud.
+7. ~~**Break-glass (§7.9):** quiénes son los dos controles y por qué canal el aviso.~~
+   **RESPONDIDA** por Alexis el 09-ago-2026: **dos personas distintas de la PLATAFORMA** —hoy
+   Alexis y una segunda que él nombre—, no plataforma + dueño. La razón define al mecanismo: el
+   break-glass existe para cuando el dueño NO está disponible, así que exigirle uno de los dos
+   controles lo convierte en un grant normal con otro nombre y deja sin cubrir el único caso
+   que lo justifica. El aviso va por el mismo canal que las brechas (P10 de la spec 00):
+   **correo Y aviso persistente en el panel hasta que lo reconozca**, sin depender de push.
+   Con esto, AC-FIDN-18 deja de estar bloqueado.
 8. **ARCO y retención:** ¿QUIÉN acciona el export ARCO — solo `admin_tenant` como
    acto de gobierno (§5.4), o también autoservicio del titular? (el maestro solo dice
    «export ARCO» sin actor, §3.E1.15; bajo la Ley 21.719 el titular del derecho es la

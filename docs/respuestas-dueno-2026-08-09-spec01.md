@@ -5,10 +5,12 @@ Alexis respondió **cuatro** de las diez preguntas abiertas de
 del hito (b). Este archivo es el registro del acto; la absorción va en la spec, en el plan y
 en la familia canónica del §0.
 
-**Lo que no está acá no fue respondido y sigue sin inventarse.** Quedan abiertas las
-preguntas **2** (mecánica de rotar PIN), **3** (rol `cliente`), **4** (passkey del admin),
-**6** (visibilidad de solicitudes pendientes), **7** (break-glass) y **8** (ARCO y plazos de
-retención).
+**Segunda tanda, mismo día:** respondió además las preguntas **2**, **3**, **6** y **7**,
+cuando el módulo llegó al punto en que todo lo que quedaba necesitaba o la PWA o una respuesta.
+
+**Lo que no está acá no fue respondido y sigue sin inventarse.** Quedan abiertas la **4**
+(cuándo se registra la passkey del admin y cómo se recupera) y la **8** (quién acciona el
+export ARCO, en qué formato, y los plazos de `retention_policy`). Las dos son P2.
 
 ---
 
@@ -69,3 +71,63 @@ exactamente lo que se quería evitar.
 
 **Desbloquea:** la conducta de sesión de AC-FIDN-04 (la sesión arranca sola tras la
 aprobación) y el F-D del andén.
+
+
+---
+
+# Segunda tanda — 09-ago-2026, 15:55
+
+## P2 · Rotar PIN → **código puente de un solo uso, mostrado al dueño**
+
+El dueño toca «restablecer PIN» y su pantalla muestra un código corto de un solo uso, que le
+dicta al operario. El operario lo tipea EN SU aparato enrolado y ahí define el PIN nuevo.
+
+La razón: el PIN es argon2id y jamás sale en un log. **Si el dueño eligiera el PIN, lo
+conocería** — y una firma por PIN dejaría de probar quién firmó, que es para lo que existe
+(§4.5: el significado de la firma es quién responde por la carga). El código puente reusa el
+mismo mecanismo de código corto de la invitación, que ya está construido y probado
+(AC-FIDN-03).
+
+**Desbloquea:** el AC del panel de gobierno (AC-FIDN-12), donde vive «rotar PIN/desbloquear».
+
+## P3 · Rol `cliente` → **empresa embebida en la invitación; entra por sesión web**
+
+La invitación de rol `cliente` se emite DESDE la ficha de la empresa contratante y lleva su id
+adentro, así que aprobar sigue siendo 1 toque y no una decisión con un selector — justo donde
+el §5.4 cuenta toques.
+
+Y el contratante entra por **sesión web**, sin PWA instalada ni `persist()`. Esas dos
+exigencias existen porque el operario captura offline en terreno (§4.3, corrección del
+adversario); el contratante solo lee su liquidación, y pedirle instalar una app para eso es
+fricción sin contraparte.
+
+**Desbloquea:** AC-FIDN-04 ya rebota `cliente` sin empresa; esto define de dónde sale la
+empresa. Y fija que el portal del contratante (spec 07) no exige enrolamiento de aparato.
+
+## P6 · Solicitudes pendientes → **solo badge en el panel de enrolamiento**
+
+Nada en el semáforo «Hoy». El semáforo es de la OPERACIÓN —lo que está pasando con la carga
+ahora mismo— y tiene un máximo de 6 tarjetas (§0): meterle enrolamiento le quita el lugar a
+algo que sí detiene un camión, y el día que entran cinco personas nuevas tapa el tablero.
+
+El enrolamiento pasa cuando entra gente, no todos los días, y el ciclo completo del §5.4 es
+menor a 5 minutos con el dueño presente: **quien invitó está esperando la solicitud.**
+
+**Desbloquea:** AC-FIDN-12 (qué muestra el panel) y cierra la duda que la spec 05 tenía sobre
+si el semáforo llevaba una señal de enrolamiento.
+
+## P7 · Break-glass → **dos personas de la PLATAFORMA; aviso por correo y panel**
+
+Los dos controles son dos personas distintas de KiloRuta —hoy Alexis y una segunda que él
+nombre—, no la plataforma más el dueño del tenant.
+
+La razón es la que define al mecanismo: **el break-glass existe para cuando el dueño no está
+disponible.** Exigirle uno de los dos controles lo convierte en un grant normal con otro
+nombre, y deja sin cubrir el único caso que lo justifica (dueño incomunicado, madrugada,
+sistema caído).
+
+El aviso al tenant va por el mismo canal que el dueño ya fijó para las brechas (P10 de la
+spec 00): **correo Y aviso persistente en el panel hasta que lo reconozca**, sin depender de
+push (§7.6).
+
+**Desbloquea:** AC-FIDN-18, que estaba BLOQUEADO por esta pregunta.
