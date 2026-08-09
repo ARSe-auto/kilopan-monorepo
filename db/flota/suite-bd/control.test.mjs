@@ -19,6 +19,7 @@ const TABLAS = [
   "features",
   "grants_soporte",
   "invitaciones_tenant",
+  "modo_recorte",
   "plan_features",
   "planes",
   "schema_migrations",
@@ -348,4 +349,154 @@ test("[AC-FTEN-11] los límites cuantitativos son COLUMNAS del plan, no features
   ).map((f) => f.attname);
   assert.ok(columnas.includes("limite_vehiculos"));
   assert.ok(columnas.includes("limite_entregas_mes"));
+});
+
+// --- El modo como preset de entitlements ---------------------------------------- [AC-FTEN-22]
+// El §3 es explícito: los modos NO son código distinto. Por eso lo que se prueba acá es que el
+// recorte vive en la RESOLUCIÓN y no en filas borradas — y que conmutar dos veces no pierde
+// nada, que es la base del centinela 11.
+
+/** Las cuatro cosas del contratante que `mi_flota` apaga, según el mapeo cerrado del §3. */
+const RECORTE_MI_FLOTA = ["tarifas", "liquidacion_por_cliente", "portal_contratante", "facturacion"];
+
+async function tenantConTodoEnElPlan() {
+  await control.sql("delete from tenants where slug like 'gate_modo%'");
+  const [plan] = await control.sql(
+    "insert into planes (lookup_key, nombre) values ('gate_modo_plan', 'Completo') " +
+      "on conflict (lookup_key) do update set nombre = excluded.nombre returning id::text as id",
+  );
+  await control.sql("delete from plan_features where plan_id = $1", [plan.id]);
+  for (const key of [...RECORTE_MI_FLOTA, "operativo_puro"]) {
+    const [f] = await control.sql(
+      "insert into features (lookup_key, module) values ($1, '00') " +
+        "on conflict (lookup_key) do update set module = excluded.module returning id::text as id",
+      [key],
+    );
+    await control.sql("insert into plan_features (plan_id, feature_id) values ($1, $2)", [
+      plan.id,
+      f.id,
+    ]);
+  }
+  const [tenant] = await control.sql(
+    "insert into tenants (slug, bd, plan_id, modo) values ('gate_modo', 't_gate_modo', $1, 'daas') " +
+      "returning id::text as id",
+    [plan.id],
+  );
+  return tenant;
+}
+
+test("[AC-FTEN-22] con `daas` no hay recorte: el plan resuelve tal cual", async () => {
+  const tenant = await tenantConTodoEnElPlan();
+  try {
+    for (const key of [...RECORTE_MI_FLOTA, "operativo_puro"]) {
+      assert.equal(await efectivo(tenant.id, key), true, `${key} debería estar encendida en daas`);
+    }
+  } finally {
+    await control.sql("delete from tenants where id = $1", [tenant.id]);
+  }
+});
+
+test("[AC-FTEN-22] con `mi_flota` las CUATRO del contratante resuelven OFF y lo operativo queda", async () => {
+  const tenant = await tenantConTodoEnElPlan();
+  try {
+    await control.sql("update tenants set modo = 'mi_flota' where id = $1", [tenant.id]);
+    for (const key of RECORTE_MI_FLOTA) {
+      assert.equal(await efectivo(tenant.id, key), false, `${key} quedó encendida en mi_flota`);
+    }
+    assert.equal(
+      await efectivo(tenant.id, "operativo_puro"),
+      true,
+      "el recorte se llevó puesto lo operativo, y mi_flota es «lo operativo puro»",
+    );
+  } finally {
+    await control.sql("delete from tenants where id = $1", [tenant.id]);
+  }
+});
+
+test("[AC-FTEN-22] el recorte del modo gana sobre un override ON: «OFF y ocultos» no tiene matices", async () => {
+  // Si un override pudiera encender tarifas en un tenant `mi_flota`, el modo dejaría de
+  // significar algo y la pantalla del contratante aparecería a medias. Encenderlas se hace
+  // conmutando el modo — y como el recorte no borra nada, conmutar las devuelve intactas.
+  const tenant = await tenantConTodoEnElPlan();
+  try {
+    const [f] = await control.sql("select id::text as id from features where lookup_key = 'tarifas'");
+    await control.sql(
+      "insert into tenant_feature_overrides (tenant_id, feature_id, enabled, motivo) " +
+        "values ($1, $2, true, 'intento de encender tarifas en mi_flota')",
+      [tenant.id, f.id],
+    );
+    await control.sql("update tenants set modo = 'mi_flota' where id = $1", [tenant.id]);
+    assert.equal(await efectivo(tenant.id, "tarifas"), false);
+
+    // Y al conmutar a daas el override sigue ahí y vuelve a mandar: no se borró nada.
+    await control.sql("update tenants set modo = 'daas' where id = $1", [tenant.id]);
+    assert.equal(await efectivo(tenant.id, "tarifas"), true);
+  } finally {
+    await control.sql("delete from tenant_feature_overrides where tenant_id = $1", [tenant.id]);
+    await control.sql("delete from tenants where id = $1", [tenant.id]);
+  }
+});
+
+test("[AC-FTEN-22] CENTINELA 11 (base): mi_flota→daas→mi_flota no pierde una sola fila", async () => {
+  const tenant = await tenantConTodoEnElPlan();
+  const conteos = async () => {
+    const [f] = await control.sql(
+      `select
+         (select count(*)::int from plan_features)            as plan_features,
+         (select count(*)::int from tenant_feature_overrides) as overrides,
+         (select count(*)::int from features)                 as features,
+         (select count(*)::int from modo_recorte)             as recortes,
+         (select count(*)::int from tenants)                  as tenants`,
+    );
+    return f;
+  };
+  const efectivos = async () =>
+    control.sql(
+      "select lookup_key, habilitada from entitlements_efectivos where tenant_id = $1 order by lookup_key",
+      [tenant.id],
+    );
+
+  try {
+    await control.sql("update tenants set modo = 'mi_flota' where id = $1", [tenant.id]);
+    const antes = await conteos();
+    const resueltoAntes = await efectivos();
+    assert.ok(resueltoAntes.length > 0, "la vista no resolvió ninguna feature");
+
+    await control.sql("update tenants set modo = 'daas' where id = $1", [tenant.id]);
+    await control.sql("update tenants set modo = 'mi_flota' where id = $1", [tenant.id]);
+
+    assert.deepEqual(await conteos(), antes, "conmutar el modo borró filas");
+    assert.deepEqual(await efectivos(), resueltoAntes, "conmutar ida y vuelta no dejó todo igual");
+  } finally {
+    await control.sql("delete from tenants where id = $1", [tenant.id]);
+  }
+});
+
+test("[AC-FTEN-22] el mapeo del §3 es CERRADO y vive como filas, no como un condicional", async () => {
+  const filas = (
+    await control.sql("select feature_lookup_key from modo_recorte where modo = 'mi_flota' order by 1")
+  ).map((f) => f.feature_lookup_key);
+  assert.deepEqual(filas, [...RECORTE_MI_FLOTA].sort());
+
+  const [{ n }] = await control.sql("select count(*)::int as n from modo_recorte where modo = 'daas'");
+  assert.equal(n, 0, "daas no recorta nada: la ausencia de filas ES el mapeo");
+});
+
+test("[AC-FTEN-22] la vista dice CUÁL apagó el modo, para que la UI no tenga que adivinarlo", async () => {
+  const tenant = await tenantConTodoEnElPlan();
+  try {
+    await control.sql("update tenants set modo = 'mi_flota' where id = $1", [tenant.id]);
+    const filas = await control.sql(
+      "select lookup_key, habilitada, recortada_por_modo from entitlements_efectivos " +
+        "where tenant_id = $1 and lookup_key = any($2)",
+      [tenant.id, RECORTE_MI_FLOTA],
+    );
+    assert.equal(filas.length, RECORTE_MI_FLOTA.length);
+    for (const f of filas) {
+      assert.equal(f.recortada_por_modo, true, `${f.lookup_key} no dice que la apagó el modo`);
+      assert.equal(f.habilitada, false);
+    }
+  } finally {
+    await control.sql("delete from tenants where id = $1", [tenant.id]);
+  }
 });
