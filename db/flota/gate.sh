@@ -64,6 +64,11 @@ if [ "$FULL" -eq 1 ]; then
   paso "pgTAP contra el canario: catálogo de PKs UUIDv7 e idempotencia por client_uuid" \
     node db/flota/pgtap.mjs
 
+  # El job exportador de verdad, contra el cluster (§4.1: la ÚNICA vía por la que un dato sale
+  # de la BD de un tenant). [AC-FTEN-20]
+  paso "job exportador: agregados técnicos de cada tenant activo hacia control" \
+    node db/flota/exportar.mjs
+
   # En serie a propósito: las suites comparten UN cluster, y `node --test` corre los archivos
   # en paralelo por omisión — dos suites creando y borrando las mismas bases se pisan.
   paso "suite de tenancy contra el cluster: plantilla, provisión ×2 y rezago (§4.1)" \

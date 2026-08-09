@@ -229,6 +229,25 @@ export const INVITACION = {
   revocable_en_toques: 1,
 } as const;
 
+/**
+ * Job exportador de agregados técnicos a la BD `control` (§4.1).
+ *
+ * La cadencia la dictó Alexis el 09-ago-2026 (Pregunta al dueño 8): cada 5 minutos. Con eso
+ * los «2 intervalos» del Anexo B son 10 minutos, coherentes con el otro umbral de esa misma
+ * tabla («errores >5% por 15 min»). Son agregados chicos por tenant: el costo es despreciable
+ * y el panel cross-tenant se siente vivo sin ser tiempo real.
+ *
+ * No lleva patrón en CIFRAS_VIGILADAS a propósito: un `5` suelto aparece en cualquier parte y
+ * una vigilancia así sería ruido que alguien apaga a la semana.
+ */
+export const EXPORTADOR = {
+  cadencia_min: 5,
+  /** La ventana se alinea al reloj: dos corridas de la misma ventana actualizan una fila. */
+  ventana_alineada_al_reloj: true,
+  /** Campos sin fuente operativa al cierre del hito (a). NULL declarado, jamás cero inventado. */
+  pendientes_hasta_su_hito: ["eevd_semanal (hito c)", "backlog_sync_max_min (hito e)"],
+} as const;
+
 /** Grant de soporte: soporte SIN god-mode (§0, §4.3, §7.9). */
 export const GRANT_SOPORTE = {
   duraciones_horas: [24, 168],
