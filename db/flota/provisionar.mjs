@@ -16,7 +16,7 @@
 // las dos no coincidan, los CHECK de la base estarían validando contra otro tenant: la fuga de
 // aislamiento más silenciosa posible. Por eso la provisión no termina sin `tenant_coherente()`.
 import { pathToFileURL } from "node:url";
-import { con, BD_PLANTILLA, bdDeTenant } from "./conectar.mjs";
+import { con, BD_PLANTILLA, ROL_MIGRADOR, bdDeTenant } from "./conectar.mjs";
 import { aplicar, aplicadasEn, migracionesDe, DIR_MIGRACIONES } from "./aplicar.mjs";
 
 /** El uuid que `tenant_actual()` devuelve en la plantilla: la plantilla no es un tenant. */
@@ -49,6 +49,47 @@ async function conexionesA(sql, bd) {
   return n;
 }
 
+/**
+ * Crea el rol que corre las migraciones y es dueño de las bases [AC-FTEN-07].
+ *
+ * Idempotente: el deploy lo llama siempre, y en un cluster recién hecho tiene que quedar
+ * igual que en uno que ya lo tiene. NOSUPERUSER y NOBYPASSRLS son la mitad del punto: un
+ * `migrator` con superusuario no estaría separado de nada.
+ */
+export async function asegurarRolMigrador() {
+  return con("postgres", async ({ sql }) => {
+    const [rol] = await sql(
+      "select rolsuper, rolbypassrls, rolcreatedb, rolcanlogin from pg_roles where rolname = $1",
+      [ROL_MIGRADOR],
+    );
+    if (!rol) {
+      await sql(
+        `create role ${ident(ROL_MIGRADOR)} login nosuperuser nocreatedb nocreaterole nobypassrls`,
+      );
+      return { creado: true };
+    }
+    // Si alguien se lo subió a superusuario a mano, el deploy no sigue como si nada.
+    if (rol.rolsuper || rol.rolbypassrls) {
+      throw new Error(
+        `el rol ${ROL_MIGRADOR} tiene ${rol.rolsuper ? "SUPERUSER" : "BYPASSRLS"}: dejaría de ` +
+          "ser un rol separado y el §4.1 lo prohíbe.",
+      );
+    }
+    return { creado: false };
+  });
+}
+
+/** El dueño de una base, o `null` si la base no existe. */
+export async function duenoDe(bd) {
+  return con("postgres", async ({ sql }) => {
+    const [fila] = await sql(
+      "select pg_get_userbyid(datdba) as dueno from pg_database where datname = $1",
+      [bd],
+    );
+    return fila?.dueno ?? null;
+  });
+}
+
 async function crearBase(sql, bd, plantilla) {
   if (plantilla) {
     const abiertas = await conexionesA(sql, plantilla);
@@ -60,7 +101,13 @@ async function crearBase(sql, bd, plantilla) {
       );
     }
   }
-  await sql(`create database ${ident(bd)}${plantilla ? ` template ${ident(plantilla)}` : ""}`);
+  // Dueña `migrator` desde el nacimiento, no por un ALTER posterior: desde PostgreSQL 15 el
+  // esquema `public` pertenece a `pg_database_owner`, así que fijar el dueño de la base ya
+  // le da al migrador el permiso de crear tablas ahí — y a nadie más (§4.1).
+  await sql(
+    `create database ${ident(bd)} owner ${ident(ROL_MIGRADOR)}` +
+      (plantilla ? ` template ${ident(plantilla)}` : ""),
+  );
 }
 
 /** Las versiones aplicadas en una base, ordenadas. Base sin `schema_migrations` ⇒ vacío. */
@@ -86,13 +133,20 @@ export async function basesDeTenant() {
  * Se cierra la conexión antes de devolver (lo hace `con`) porque el paso siguiente de la
  * vida de la plantilla es que alguien la COPIE, y una conexión abierta lo impide.
  */
-export async function refrescarPlantilla({ dir = DIR_MIGRACIONES } = {}) {
-  const creada = await con("postgres", async ({ sql }) => {
+export async function crearPlantillaSiFalta() {
+  await asegurarRolMigrador();
+  return con("postgres", async ({ sql }) => {
     if (await existe(sql, BD_PLANTILLA)) return false;
     await crearBase(sql, BD_PLANTILLA, null);
     return true;
   });
-  const { aplicadas, yaEstaban } = await con(BD_PLANTILLA, (c) => aplicar(c, "tenant", { dir }));
+}
+
+export async function refrescarPlantilla({ dir = DIR_MIGRACIONES, usuario = ROL_MIGRADOR } = {}) {
+  const creada = await crearPlantillaSiFalta();
+  const { aplicadas, yaEstaban } = await con(BD_PLANTILLA, (c) => aplicar(c, "tenant", { dir }), {
+    usuario,
+  });
   return { creada, aplicadas, yaEstaban };
 }
 
@@ -104,6 +158,7 @@ export async function refrescarPlantilla({ dir = DIR_MIGRACIONES } = {}) {
  */
 export async function provisionar(slug, { recrear = false } = {}) {
   const bd = bdDeTenant(slug);
+  await asegurarRolMigrador();
 
   await con("postgres", async ({ sql }) => {
     if (await existe(sql, bd)) {

@@ -53,8 +53,15 @@ if [ "$FULL" -eq 1 ]; then
   paso "cluster de FLOTA arriba (127.0.0.1:54331)" \
     bash db/flota/cluster.sh iniciar
 
+  # El runner de verdad, no una simulación: recorre canario, plantilla y cada tenant vivo y
+  # se declara rojo si alguno queda rezagado (§4.1, centinela 13). [AC-FTEN-07]
+  paso "runner ×N: canario primero, plantilla y cada tenant, como rol migrator" \
+    node db/flota/migrar.mjs aplicar
+
+  # En serie a propósito: las suites comparten UN cluster, y `node --test` corre los archivos
+  # en paralelo por omisión — dos suites creando y borrando las mismas bases se pisan.
   paso "suite de tenancy contra el cluster: plantilla, provisión ×2 y rezago (§4.1)" \
-    node --test db/flota/suite-bd/*.test.mjs
+    node --test --test-concurrency=1 db/flota/suite-bd/*.test.mjs
 else
   saltar "suite de tenancy contra el cluster" "correr con --full"
 fi

@@ -47,3 +47,14 @@ Se declaran EN la migración y el linter las cuenta e imprime — nunca son sile
 
 `db/flota/migrar.mjs` (runner ×N, §4.1): primero el canario sintético `t_canary`, después
 la plantilla y cada BD de tenant. Una base rezagada deja el deploy en rojo.
+
+```bash
+node db/flota/migrar.mjs aplicar     # recorre y aplica; termina verificando
+node db/flota/migrar.mjs verificar   # mira y no toca — el modo que consume el deploy
+```
+
+Las migraciones NO corren con el superusuario: corren con el rol `migrator`, que es además el
+dueño de `tenant_template` y de cada `t_<slug>` (§4.1). Desde PostgreSQL 15 el esquema
+`public` pertenece a `pg_database_owner`, así que fijar el dueño de la base al crearla ya le
+da al migrador el permiso de crear tablas ahí, y a nadie más. Una base con otro dueño detiene
+el runner con su nombre en el mensaje: el rol de la app jamás tiene ownership.

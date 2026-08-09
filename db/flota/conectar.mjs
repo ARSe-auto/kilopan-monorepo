@@ -24,6 +24,13 @@ export const BD_PLANTILLA = "tenant_template";
 /** Tenant sintético al que el runner migra PRIMERO (§4.1, centinela 13). */
 export const TENANT_CANARIO = "canary";
 
+/**
+ * Rol que corre las migraciones y DUEÑO de las bases (§4.1: «rol `migrator` separado; la app
+ * no tiene ownership»). Separarlo del rol de app no es higiene: es lo que hace que un bug en
+ * el producto no pueda cambiar el esquema, y que un superusuario no ande suelto en el deploy.
+ */
+export const ROL_MIGRADOR = "migrator";
+
 /** `t_<slug>`: el único lugar donde se arma el nombre de la BD de un tenant (§0). */
 export function bdDeTenant(slug) {
   if (!/^[a-z][a-z0-9_]{1,40}$/.test(slug)) {
