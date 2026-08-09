@@ -31,6 +31,19 @@ ARBOLES=(apps/flota db/flota db/migraciones-flota)
 FALLO=0
 abortar () { echo "ABORT: $1"; FALLO=1; }
 
+# Directorios que NO son código escrito por nadie. `.next` a secas no alcanzaba: el e2e de
+# `apps/flota` construye en un distDir propio (`.next-e2e`, ver su playwright.config.ts) y
+# los chunks minificados de Next contienen literalmente las palabras que la regla 3 busca
+# —el gate se puso rojo por un artefacto de build, con el árbol sano, apenas nació el
+# esqueleto (09-ago-2026)—. El comodín cubre cualquier distDir presente y futuro.
+SIN_ARTEFACTOS=(
+  --exclude-dir=node_modules
+  --exclude-dir='.next*'
+  --exclude-dir=test-results
+  --exclude-dir=playwright-report
+  --exclude-dir=blob-report
+)
+
 # --- Regla 1: DATABASE_URL solo localhost en desarrollo (§7.1) -------------------------
 echo "== guardrail flota: DATABASE_URL solo localhost =="
 if [ -f "$ENV_FILE" ]; then
@@ -64,7 +77,7 @@ done < <(find . -name '.env*' -not -path './node_modules/*' -not -path './.git/*
 # insensibilidad el guard solo atrapaba la forma que nadie usa.
 if grep -RInEi "(api[_-]?key|secret|password|passwd|token)[[:space:]]*[:=][[:space:]]*['\"][A-Za-z0-9/+_-]{12,}" \
     --include='*.ts' --include='*.tsx' --include='*.js' --include='*.mjs' --include='*.sql' --include='*.sh' \
-    --exclude-dir=node_modules --exclude-dir=.next \
+    "${SIN_ARTEFACTOS[@]}" \
     "${ARBOLES[@]}" 2>/dev/null; then
   abortar "posible secreto escrito en el código de FLOTA (líneas arriba) — va a .env.local."
 fi
@@ -79,7 +92,7 @@ echo "== guardrail flota: cero cáscaras =="
 if grep -RInwE "TODO|FIXME|PLACEHOLDER|not implemented|lorem ipsum" \
     --include='*.ts' --include='*.tsx' --include='*.js' --include='*.mjs' --include='*.sql' --include='*.sh' \
     --exclude='guardrail.sh' \
-    --exclude-dir=node_modules --exclude-dir=.next \
+    "${SIN_ARTEFACTOS[@]}" \
     "${ARBOLES[@]}" 2>/dev/null; then
   abortar "cáscaras encontradas (líneas arriba) — escribir código real o achicar el corte."
 fi

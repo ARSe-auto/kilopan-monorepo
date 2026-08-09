@@ -22,6 +22,43 @@ importers:
         specifier: ^8.22.0
         version: 8.22.0
 
+  apps/flota:
+    dependencies:
+      next:
+        specifier: ^15.4.0
+        version: 15.5.21(@playwright/test@1.62.0)(@types/node@22.20.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: ^19.1.0
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@eslint/eslintrc':
+        specifier: ^3.2.0
+        version: 3.3.6(supports-color@7.2.0)
+      '@playwright/test':
+        specifier: ^1.62.0
+        version: 1.62.0
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      '@types/react':
+        specifier: ^19.1.0
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.1.0
+        version: 19.2.3(@types/react@19.2.17)
+      eslint:
+        specifier: ^9.17.0
+        version: 9.39.5(supports-color@7.2.0)
+      eslint-config-next:
+        specifier: ^15.4.0
+        version: 15.5.21(eslint@9.39.5(supports-color@7.2.0))(supports-color@7.2.0)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
   apps/kilopan:
     dependencies:
       '@zxing/library':

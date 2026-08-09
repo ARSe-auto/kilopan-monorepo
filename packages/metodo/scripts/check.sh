@@ -130,8 +130,8 @@ run_step "build (workspace)" pnpm -r --if-present run build
 # (es SSR puro sin ellos) — un healthcheck normal no lo detecta. Sin esto, la app
 # "pasa el gate" y queda completamente muda al tocar cualquier botón en producción.
 if [ "$HAY_APP" -eq 1 ]; then
-  run_step "build standalone incluye .next/static y public/ (si no, la app no hidrata)" \
-    bash -c "test -d apps/$APP/.next/standalone/apps/$APP/.next/static && test -f apps/$APP/.next/standalone/apps/$APP/public/sw.js"
+  run_step "build standalone incluye .next/static y TODO public/ (si no, la app no hidrata)" \
+    bash packages/metodo/scripts/verifica-standalone.sh "$APP"
 else
   skip_step "build standalone de $APP" "apps/$APP todavía no existe (solo hay contrato)"
 fi

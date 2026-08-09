@@ -1,0 +1,31 @@
+{
+  "name": "flota",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "//puertos": "3310 dev/start y 3311 e2e, pineados ACÁ y no solo en launch.json (docs/CONTRATO_PUERTOS.md, regla 2): `next dev` a secas cae en 3000, que es de eauto y su motor lo reclama cada pocos minutos matando lo que encuentre. El 3301 es del e2e de apps/kilopan: un esqueleto de esta app ya nació pineado ahí una vez (08-ago-2026) y dejó a otro agente esperando un puerto que no se iba a liberar.",
+  "//start": "El servidor real es el standalone, no `next start`: con output:\"standalone\" Next mismo advierte que `next start` no funciona, y el síntoma es mudo (responde, pero la app no hidrata). Se arranca el mismo binario que corre en producción.",
+  "scripts": {
+    "dev": "next dev --port 3310",
+    "build": "next build && node scripts/copiar-estaticos-standalone.mjs",
+    "start": "PORT=3310 node .next/standalone/apps/flota/server.js",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "next": "^15.4.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.2.0",
+    "@playwright/test": "^1.62.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "eslint": "^9.17.0",
+    "eslint-config-next": "^15.4.0",
+    "typescript": "^5.7.0"
+  }
+}

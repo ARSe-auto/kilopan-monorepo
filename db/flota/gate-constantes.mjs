@@ -30,7 +30,14 @@ const GENERADO = "packages/nucleo-comun/constants.md";
 const ARBOLES = ["apps/flota", "db/flota", "db/migraciones-flota", "packages/nucleo-comun", "packages/miga"];
 const PENDIENTES = [];
 const EXTENSIONES = /\.(ts|tsx|js|jsx|mjs|cjs|sql|sh)$/;
-const IGNORAR = new Set(["node_modules", ".next", "dist", "build", ".git"]);
+// `.next` a secas no alcanzaba: el e2e de `apps/flota` construye en un distDir propio
+// (`.next-e2e`) y el standalone lo anida otra vez adentro. Los chunks minificados de Next
+// contienen la ventana del undo, el contraste mínimo y el stack de fuentes del sistema
+// —el bundle arrastra lo que la app importa—, así que el gate se puso rojo por artefactos
+// de build con el árbol sano, apenas nació el esqueleto (09-ago-2026). Se
+// ignora por PREDICADO y no por lista exacta, para que un distDir futuro entre solo.
+const IGNORAR = new Set(["node_modules", "dist", "build", ".git"]);
+const esArtefacto = (nombre) => IGNORAR.has(nombre) || nombre.startsWith(".next");
 
 const { CIFRAS_VIGILADAS } = await import(`file://${join(RAIZ, CANONICO)}`);
 
@@ -68,7 +75,7 @@ const recorrer = (dir) => {
     return;
   }
   for (const entrada of entradas) {
-    if (IGNORAR.has(entrada)) continue;
+    if (esArtefacto(entrada)) continue;
     const ruta = join(dir, entrada);
     let st;
     try {
