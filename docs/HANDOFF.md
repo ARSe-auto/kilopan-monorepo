@@ -6,19 +6,19 @@ abajo), todo comiteado, `check.sh --app=flota --full` en VERDE con 14 OK · 0 fa
 saltado declarado.
 
 > Sesión nueva: retomá esto **sin re-preguntar nada**, armá tu propio despertador de 4h35m
-> (tarea Bash en background) y archivá este archivo en `docs/handoffs/2026-08-09-2200.md`
+> (tarea Bash en background) y archivá este archivo en `docs/handoffs/2026-08-09-2230.md`
 > al absorberlo.
 
 ## Dónde quedó todo
 
 | | Antes | Ahora |
 |---|---|---|
-| Módulo 00 (tenancy) | 27 de 28 | 27 de 28 (falta AC-FTEN-19) |
+| Módulo 00 (tenancy) | 27 de 28 | **28 de 28 — CERRADO** |
 | Módulo 01 (identidad) | 13 de 21 | **17 de 21** |
 | Rutas que sirve `apps/flota` | 5 | **18** |
 | Preguntas al dueño de la spec 01 | 2 abiertas | 2 abiertas (4 y 8, las dos P2) |
 
-Los cuatro ACs: **AC-FIDN-12** (panel de gobierno del dueño), **AC-FIDN-17** (RUT en vivo y la
+Los cinco ACs: **AC-FTEN-19** (la matriz KiloRuta, que cierra el módulo 00), **AC-FIDN-12** (panel de gobierno del dueño), **AC-FIDN-17** (RUT en vivo y la
 primera pantalla de la PWA), **AC-FIDN-20** (cero consentimiento + pantalla F-E) y
 **AC-FIDN-05** (standalone + persist).
 
@@ -60,6 +60,8 @@ se pone roja diciendo que el cruce no probaría nada.
 
 ## Gates nuevos que hay que respetar
 
+- `db/flota/gate-matriz-kiloruta.mjs` — cada criterio KiloRuta mapeado, y cada test
+  referenciado tiene que existir. Al cerrar un AC, convertí su fila de «pendiente» a test real.
 - `db/flota/gate-consentimiento.mjs` — ninguna pantalla que llame a `/api/solicitudes` o
   `/api/reenrolamiento` puede tener checkbox ni texto de consentimiento. El alcance se DERIVA
   de esos endpoints, con piso de 2 pantallas.
@@ -98,16 +100,12 @@ Está DISEÑADO y no empezado. Lo que hace falta, en orden:
 7. **e2e contando acciones** con la convención del §5.3, selectores solo por `data-testid`, y
    axe/targets. Ojo: el conteo de toques del dueño incluye el share-sheet.
 
-### 2. AC-FTEN-19 — la matriz KiloRuta cierra el módulo 00 (27 → 28).
+### 2. La matriz KiloRuta se va llenando sola con cada hito.
 
-`docs/matriz-kiloruta.md` como tabla MD `ID | tabla/constraint | test (ruta::nombre)` con gate
-de tres verificaciones. **La decisión que hay que tomar y declarar:** la mayoría de los 63
-criterios apuntan a ACs de los hitos c–g, cuyos tests todavía no existen, y el gate exige que
-«cada test REFERENCIADO exista». La lectura coherente es que una fila sin test referenciado se
-cuenta pero no se resuelve —con un marcador de pendiente declarado y contado, como las
-exenciones de rutas—, y las filas de los módulos 00 y 01 (44 ACs cerrados) sí llevan test real.
-El mapeo ID → AC ya está escrito en `docs/criterios-kiloruta.txt`: lo que la matriz agrega es
-la tabla/constraint y el test.
+`docs/matriz-kiloruta.md` ya existe con los 63 criterios: 11 con test verificado y 52 con su
+clase declarada. **Cada AC que se cierre de acá en adelante debería convertir su fila de
+«pendiente» a un test real**, en el mismo commit. El gate imprime la lista de pendientes en
+cada corrida, así que no hace falta buscarlas.
 
 ### 3. AC-FIDN-07 (andén) sigue esperando el outbox del hito (e). No adelantarlo a medias.
 
@@ -170,7 +168,7 @@ mirar `git log --oneline -5` antes de escribir.
 > Seguí construyendo la Plataforma FLOTA en `~/kilopan-monorepo-flota` (rama
 > `flota/specs-e1`), con Opus 5 y esfuerzo alto — el §8 exige el modelo tope para el hito y
 > prohíbe delegarlo a un motor. Leé `docs/HANDOFF.md` completo, archivalo en
-> `docs/handoffs/2026-08-09-2200.md` y arrancá por «Próximos pasos». El módulo 00 va 27 de 28 y
+> `docs/handoffs/2026-08-09-2230.md` y arrancá por «Próximos pasos». El módulo 00 está CERRADO (28 de 28) y
 > el 01 va 17 de 21: la PWA ya tiene tres pantallas y el panel de gobierno del dueño está
 > entero. El próximo P1 es AC-FIDN-02, que está DISEÑADO en el handoff y no empezado — y trae
 > una decisión de dependencia (el QR) que hay que consultarle a Alexis antes de agregar nada.
