@@ -16,7 +16,7 @@
 // las dos no coincidan, los CHECK de la base estarían validando contra otro tenant: la fuga de
 // aislamiento más silenciosa posible. Por eso la provisión no termina sin `tenant_coherente()`.
 import { pathToFileURL } from "node:url";
-import { con, BD_PLANTILLA, ROL_MIGRADOR, bdDeTenant, slugDeBd } from "./conectar.mjs";
+import { con, BD_CONTROL, BD_PLANTILLA, ROL_MIGRADOR, bdDeTenant, slugDeBd } from "./conectar.mjs";
 import { aplicar, aplicadasEn, migracionesDe, DIR_MIGRACIONES } from "./aplicar.mjs";
 import { provisionarRolDeApp } from "./rol-app.mjs";
 
@@ -134,6 +134,16 @@ export async function basesDeTenant() {
  * Se cierra la conexión antes de devolver (lo hace `con`) porque el paso siguiente de la
  * vida de la plantilla es que alguien la COPIE, y una conexión abierta lo impide.
  */
+/** La BD `control`: una sola en el cluster, dueña `migrator` como todas (§4.1). [AC-FTEN-04] */
+export async function crearBaseDeControlSiFalta() {
+  await asegurarRolMigrador();
+  return con("postgres", async ({ sql }) => {
+    if (await existe(sql, BD_CONTROL)) return false;
+    await crearBase(sql, BD_CONTROL, null);
+    return true;
+  });
+}
+
 export async function crearPlantillaSiFalta() {
   await asegurarRolMigrador();
   return con("postgres", async ({ sql }) => {

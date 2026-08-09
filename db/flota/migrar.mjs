@@ -20,6 +20,7 @@
 import { pathToFileURL } from "node:url";
 import {
   con,
+  BD_CONTROL,
   BD_PLANTILLA,
   ROL_MIGRADOR,
   TENANT_CANARIO,
@@ -30,6 +31,7 @@ import { aplicar, DIR_MIGRACIONES, versionEsperada } from "./aplicar.mjs";
 import {
   asegurarRolMigrador,
   basesDeTenant,
+  crearBaseDeControlSiFalta,
   crearPlantillaSiFalta,
   refrescarPlantilla,
   duenoDe,
@@ -67,7 +69,7 @@ export function basesRezagadas({ esperada, bases = [] }) {
 }
 
 /** Migra una base como `migrator` y devuelve con qué usuario lo hizo (el aserto del AC). */
-async function migrarUna(bd, { dir, usuario }) {
+async function migrarUna(bd, { dir, usuario, destino = "tenant" }) {
   const dueno = await duenoDe(bd);
   if (dueno !== ROL_MIGRADOR) {
     throw new Error(
@@ -79,7 +81,7 @@ async function migrarUna(bd, { dir, usuario }) {
     bd,
     async (conexion) => {
       const [{ quien }] = await conexion.sql("select current_user as quien");
-      const r = await aplicar(conexion, "tenant", { dir });
+      const r = await aplicar(conexion, destino, { dir });
       return { bd, usuario: quien, ...r };
     },
     { usuario },
@@ -92,6 +94,13 @@ async function migrarUna(bd, { dir, usuario }) {
  */
 export async function migrar({ dir = DIR_MIGRACIONES, usuario = ROL_MIGRADOR } = {}) {
   await asegurarRolMigrador();
+
+  // `control` va aparte del recorrido de tenants: es UNA base compartida, no una BD por
+  // tenant, y su destino de migraciones es otro (§4.1). Va primero porque el ruteo la lee
+  // antes que a ninguna base de tenant. [AC-FTEN-04]
+  await crearBaseDeControlSiFalta();
+  const control = await migrarUna(BD_CONTROL, { dir, usuario, destino: "control" });
+
   await crearPlantillaSiFalta();
 
   // ARRANQUE EN FRÍO. El canario nace de la plantilla igual que cualquier tenant —si fuera
@@ -123,7 +132,7 @@ export async function migrar({ dir = DIR_MIGRACIONES, usuario = ROL_MIGRADOR } =
     }
   }
 
-  return { orden, resultados, reacotadas };
+  return { orden, resultados, reacotadas, control };
 }
 
 /** El modo que consume el deploy: mira y no toca. */
@@ -141,8 +150,24 @@ export async function verificar({ dir = DIR_MIGRACIONES } = {}) {
   }
   // Al rezago se le suma la identidad: una base al día pero sin `tenant_info` sembrada está
   // tan rota como una atrasada, y el deploy no puede declararse verde con ninguna de las dos.
-  const motivos = [...basesRezagadas({ esperada, bases }), ...(await identidadesRotas())];
-  return { esperada, bases, motivos };
+  // `control` se verifica contra SU destino y queda fuera de `bases`, que es el recorrido de
+  // tenants: mezclarlas haría que un rezago del plano de control se leyera como un tenant
+  // atrasado, y son dos deploys distintos (§9.1: «DOS despliegues, cero FK entre ellos»).
+  const esperadaControl = versionEsperada("control", dir);
+  const versionControl = (await duenoDe(BD_CONTROL)) === null
+    ? null
+    : (await versionesDe(BD_CONTROL)).at(-1) ?? null;
+  const motivosControl = basesRezagadas({
+    esperada: esperadaControl,
+    bases: [{ bd: BD_CONTROL, version: versionControl }],
+  });
+
+  const motivos = [
+    ...basesRezagadas({ esperada, bases }),
+    ...motivosControl,
+    ...(await identidadesRotas()),
+  ];
+  return { esperada, bases, control: { esperada: esperadaControl, version: versionControl }, motivos };
 }
 
 // --- CLI -------------------------------------------------------------------------------
@@ -156,7 +181,11 @@ async function principal(argv) {
   const orden = argv.find((a) => !a.startsWith("--")) ?? "aplicar";
 
   if (orden === "aplicar") {
-    const { resultados } = await migrar({ dir });
+    const { resultados, control } = await migrar({ dir });
+    console.log(
+      `migrar: ${control.bd} · ${control.aplicadas.length} aplicada(s) · ` +
+        `${control.yaEstaban.length} ya estaban · como ${control.usuario}`,
+    );
     for (const r of resultados) {
       console.log(
         `migrar: ${r.bd} · ${r.aplicadas.length} aplicada(s) · ${r.yaEstaban.length} ya estaban ` +

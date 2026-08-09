@@ -47,6 +47,14 @@ export async function aplicadasEn({ sql }) {
  */
 export async function aplicar(conexion, destino, { dir = DIR_MIGRACIONES } = {}) {
   const { sql } = conexion;
+  // La contabilidad del runner la crea el RUNNER, no una migración. Cuando la creaba
+  // `tenant/0001`, el destino `control` —que tiene sus propias migraciones y ninguna de
+  // ellas— se caía con «relation schema_migrations does not exist» en la primera corrida.
+  await sql(`create table if not exists schema_migrations (
+    version     text        not null primary key,
+    sha256      text        not null,
+    aplicada_en timestamptz not null default now()
+  )`);
   const pendientes = [];
   const yaEstaban = [];
   const migraciones = migracionesDe(destino, dir);
