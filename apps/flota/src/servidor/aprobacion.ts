@@ -21,17 +21,26 @@ export type Rebote =
   | "rut_ya_registrado";
 
 export type ResultadoAprobacion =
-  | { tipo: "aprobada"; usuarioId: string; dispositivoId: string; sobre: Sobre }
+  | {
+      tipo: "aprobada";
+      usuarioId: string;
+      dispositivoId: string;
+      sobre: Sobre;
+      /** Cuántos aparatos anteriores quedaron revocados EN ESTE MISMO acto (§5.4 F-E). */
+      dispositivosRevocados?: number;
+    }
   | { tipo: "rebote"; motivo: Rebote; titularActual?: { personaId: string; nombre: string } };
 
 type FilaSolicitud = {
   id: string;
   estado: string;
+  tipo: string;
+  persona_id: string | null;
   rut_propuesto: string;
   nombre_propuesto: string;
   pin_hash: string;
   clave_publica: string;
-  rol: string;
+  rol: string | null;
 };
 
 async function enTransaccion<T>(pool: Pool, fn: (c: PoolClient) => Promise<T>): Promise<T> {
@@ -63,11 +72,15 @@ export async function aprobar(
   opciones: { empresaClienteId?: string } = {},
 ): Promise<ResultadoAprobacion> {
   return enTransaccion(pool, async (c) => {
+    // LEFT JOIN y no JOIN: el re-enrolamiento no viene de una invitación (AC-FIDN-08), y con
+    // un JOIN interno esas solicitudes sencillamente no existirían para esta función — la
+    // aprobación devolvería «no existe» sobre una fila que está ahí, que es el peor rebote
+    // posible porque manda a buscar el problema al lugar equivocado.
     const { rows } = await c.query<FilaSolicitud>(
-      `select s.id, s.estado::text as estado, s.rut_propuesto, s.nombre_propuesto,
-              s.pin_hash, s.clave_publica, i.rol::text as rol
+      `select s.id, s.estado::text as estado, s.tipo::text as tipo, s.persona_id::text as persona_id,
+              s.rut_propuesto, s.nombre_propuesto, s.pin_hash, s.clave_publica, i.rol::text as rol
          from solicitudes_acceso s
-         join invitaciones i on i.id = s.invitacion_id
+         left join invitaciones i on i.id = s.invitacion_id
         where s.id = $1
           for update of s`,
       [solicitudId],
@@ -79,6 +92,49 @@ export async function aprobar(
     // simultáneas: la segunda espera, lee `aprobada` y rebota. Sin él, dos toques a la vez
     // emitirían dos secretos para el mismo aparato y el segundo pisaría al primero.
     if (solicitud.estado !== "pendiente") return { tipo: "rebote", motivo: "ya_resuelta" };
+
+    // ─── Teléfono nuevo: la persona YA existe y solo cambia de aparato (§5.4 F-E) ─────
+    //
+    // Todo pasa en ESTA transacción, que es lo que el AC pide con esas palabras: el anterior
+    // queda revocado y el nuevo activo en el mismo acto. Partirlo en dos dejaría una ventana
+    // —corta, pero real— con dos aparatos activos o con ninguno, y el índice único parcial de
+    // AC-FIDN-01 rebotaría la mitad de las veces según cuál escritura llegara primero.
+    if (solicitud.tipo === "reenrolamiento") {
+      const personaId = solicitud.persona_id!;
+      // Primero revocar, después crear: al revés, el índice `un personal activo por operario`
+      // rebotaría el INSERT antes de que el UPDATE llegue a liberar el lugar.
+      const { rowCount: revocados } = await c.query(
+        "update dispositivos set revocado_at = now() where persona_id = $1 and tipo = 'personal' and revocado_at is null",
+        [personaId],
+      );
+
+      const secreto = secretoNuevo();
+      const sobre = await sellar(solicitud.clave_publica, secreto);
+      const { rows: nuevos } = await c.query<{ id: string }>(
+        `insert into dispositivos (tipo, persona_id, secreto_hash, enrolado_por, enrolado_en)
+         values ('personal', $1, $2, $3, now()) returning id::text as id`,
+        [personaId, hashDeSecreto(secreto), aprobadorId],
+      );
+
+      await c.query(
+        `update solicitudes_acceso
+            set estado = 'aprobada', resuelta_por = $2, resuelta_en = now(), sobre = $3::jsonb
+          where id = $1`,
+        [solicitudId, aprobadorId, JSON.stringify(sobre)],
+      );
+
+      const { rows: usuario } = await c.query<{ id: string }>(
+        "select id::text as id from usuarios where persona_id = $1 limit 1",
+        [personaId],
+      );
+      return {
+        tipo: "aprobada",
+        usuarioId: usuario[0]!.id,
+        dispositivoId: nuevos[0]!.id,
+        sobre,
+        dispositivosRevocados: revocados ?? 0,
+      };
+    }
 
     if (solicitud.rol === "cliente" && !opciones.empresaClienteId) {
       // El CHECK de la tabla lo impediría igual (AC-FIDN-01), pero rebotar acá da el motivo
@@ -112,7 +168,7 @@ export async function aprobar(
     const { rows: usuarios } = await c.query<{ id: string }>(
       `insert into usuarios (persona_id, rol, empresa_cliente_id, pin_hash)
        values ($1, $2::rol_usuario, $3, $4) returning id::text as id`,
-      [personaId, solicitud.rol, opciones.empresaClienteId ?? null, solicitud.pin_hash],
+      [personaId, solicitud.rol!, opciones.empresaClienteId ?? null, solicitud.pin_hash],
     );
     const usuarioId = usuarios[0]!.id;
 

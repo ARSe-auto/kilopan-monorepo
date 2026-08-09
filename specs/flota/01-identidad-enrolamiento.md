@@ -377,12 +377,38 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       anterior persiste firmado por el enrolamiento y se replayea al volver la red —
       test centinela 9: A captura 3 mutaciones offline, B se autentica, vuelve la red,
       count=3 filas de A (§4.3, §4.7, §5.4, §9.3) — oráculo: CI [AC-FIDN-07]
-- [ ] (P1) Re-enrolamiento como flujo normal: «Ya tengo cuenta» → RUT+PIN → solicitud
+- [x] (P1) Re-enrolamiento como flujo normal: «Ya tengo cuenta» → RUT+PIN → solicitud
       de enrolamiento del teléfono nuevo; la aprobación del dueño revoca el dispositivo
       anterior EN EL MISMO ACTO (transacción única: nuevo activo + anterior con
       revocado_at); el constraint de 1 dispositivo personal activo por operario se
       cumple antes, durante y después (jamás 2 activos, jamás 0 tras aprobar) (§4.3,
-      §5.4) — oráculo: CI [AC-FIDN-08]
+      §5.4). Evidencia: la migración `db/migraciones-flota/tenant/0013_reenrolamiento.sql`, el
+      endpoint público `POST /api/reenrolamiento`, la rama de re-enrolamiento de
+      `apps/flota/src/servidor/aprobacion.ts` y 6 pruebas en
+      `apps/flota/e2e/reenrolamiento.spec.ts`. La marca en la fila (`tipo`) no es burocracia:
+      sin ella, el mismo hecho —un RUT que YA está registrado— pediría dos conductas opuestas.
+      En una solicitud NUEVA es un homónimo o un error y rebota al aprobar (AC-FIDN-04,
+      pregunta 10); en un re-enrolamiento TIENE que estar, porque la persona ya trabaja acá y
+      solo cambió de teléfono. La invitación deja de ser obligatoria para este camino: exigirla
+      habría obligado a inventar una invitación fantasma por cada teléfono nuevo, filas que
+      nadie emitió y que el dueño vería en su panel sin poder explicar. Se entra con RUT + PIN
+      —lo que la persona ya sabe— y el PIN pasa por el MISMO camino que el resto (AC-FIDN-06),
+      con su lockout: sin eso, «Ya tengo cuenta» sería la puerta sin candado para probar PINs
+      de a diez mil por más que la otra tuviera candado; hay una prueba que lo ejerce hasta el
+      429. RUT desconocido y PIN equivocado responden EXACTAMENTE lo mismo, byte a byte, por la
+      misma razón que la pregunta 10: si difirieran, este endpoint sería un buscador de RUTs de
+      la empresa. La aprobación revoca y crea en UNA transacción —revocar primero, porque al
+      revés el índice único parcial de AC-FIDN-01 rebotaría el INSERT antes de que el UPDATE
+      libere el lugar— y las pruebas cubren el invariante en los tres momentos: uno antes, uno
+      después, y jamás cero. El índice hace imposible que sean dos; lo que este AC agrega es
+      que no queden cero, que es la falla que dejaría a alguien sin poder trabajar. El aparato
+      viejo queda REVOCADO y no borrado: su historia es lo que permite clasificar una captura
+      post-revocación en vez de descartarla (AC-FIDN-09), y su sesión muere en el request
+      siguiente. El secreto del aparato nuevo es OTRO — reusar el del perdido sería no haber
+      cambiado nada. Una segunda solicitud de cambio no se apila sobre la pendiente: con varias,
+      aprobar una dejaría a las otras apuntando a un aparato que ya no es el activo y el dueño
+      tendría que resolver una cola que él no creó. ALCANCE DECLARADO: la pantalla «Ya tengo
+      cuenta» y su presupuesto de toques son de AC-FIDN-02 — oráculo: CI [AC-FIDN-08]
 - [x] (P1) Revocación soft con efecto inmediato server-side (siguiente request del
       dispositivo revocado: sesión inválida; el dueño lo hace en 1 toque desde el
       inventario). Capturas offline del dispositivo revocado — caso de degradación,

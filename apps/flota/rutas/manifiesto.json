@@ -14,6 +14,18 @@
       }
     },
     {
+      "ruta": "/api/reenrolamiento",
+      "archivo": "src/app/api/reenrolamiento/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Público y sin parámetros, pero NO anónimo: se entra con RUT y PIN. El cruce que aplica es el genérico —identidad de B por los canales falsificables, y la BD de B intacta—, y acá el comparador de huella importa de verdad porque este endpoint escribe. El caso con credenciales de B contra el subdominio de A lo cubre la suite del módulo, que sí sabe cómo se ve un RUT con su PIN."
+      }
+    },
+    {
       "ruta": "/api/sesion",
       "archivo": "src/app/api/sesion/route.ts",
       "metodos": [
