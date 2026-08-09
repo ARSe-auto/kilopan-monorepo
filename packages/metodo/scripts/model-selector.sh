@@ -15,7 +15,15 @@
 set -uo pipefail
 cd "$(dirname "$0")/../../.."
 
-OPUS="claude-opus-4-8"
+# LOS TRES IDS, EN UN SOLO LUGAR. Subir de generación es editar acá y nada más.
+#
+# 8-ago-2026: esto decía `claude-opus-4-8` mientras Sonnet y Haiku ya estaban al día. O sea
+# que cuando el selector decidía «esto es regla dura, va al modelo tope», NO mandaba al
+# modelo tope. Envejeció sin que nadie lo notara porque `prueba-arnes.sh` clavaba el mismo
+# id literal en seis aserciones: la suite confirmaba el valor viejo en vez de vigilarlo.
+# Ahora la suite lee los ids DE ACÁ (`model-selector.sh ids`) y verifica la familia y que
+# los tres difieran; el número de generación se cambia en esta línea y en ninguna otra.
+OPUS="claude-opus-5"
 SONNET="claude-sonnet-5"
 HAIKU="claude-haiku-4-5"   # alias estable: inmune al retiro del snapshot fechado
 
@@ -29,6 +37,10 @@ case "$FASE" in
   plan|verify) echo "${PLAN_MODEL:-$SONNET}"; exit 0 ;;   # leen mucho, deciden poco
   juez)        echo "${JUEZ_MODEL:-$OPUS}";   exit 0 ;;   # mandato de refutar
   build)       : ;;
+  # Los ids, para quien necesite compararse contra ellos sin volver a escribirlos: la suite
+  # del arnés y el detector de degradado. Escribirlos dos veces es cómo el de Opus envejeció.
+  ids)         printf 'OPUS=%s\nSONNET=%s\nHAIKU=%s\n' "$OPUS" "$SONNET" "$HAIKU"; exit 0 ;;
+  modelo-tope) echo "$OPUS"; exit 0 ;;
   *)           echo "$SONNET"; exit 0 ;;
 esac
 

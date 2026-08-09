@@ -250,13 +250,44 @@ Reglas duras:
   inventes trabajo ni marques nada como [x]."
 
 mkdir -p "$LOG_DIR"
+
+# EL FALLBACK NO PUEDE DEGRADAR UNA REGLA DURA (8-ago-2026). Esto llamaba SIEMPRE con
+# `--fallback-model sonnet`: si el modelo pedido no estaba disponible o la iteración topaba
+# el presupuesto, el CLI bajaba a Sonnet solo y sin avisar, y el commit quedaba idéntico a
+# uno sano. Un AC ruteado a Opus por ser regla dura —RLS, migración, trigger, invariante—
+# terminaba escrito por un modelo menor, que es justo lo que el §8 prohíbe.
+#
+# Regla: si el selector pidió el modelo TOPE, no hay red de contención. Vale más una
+# iteración fallida y reintentada que un commit fundacional escrito por otro modelo. Para
+# todo lo demás el fallback sigue, porque ahí sí es preferible avanzar a detenerse.
+MODELO_PEDIDO="$(bash packages/metodo/scripts/model-selector.sh build "$APP" "$AC_ID")"
+MODELO_TOPE="$(bash packages/metodo/scripts/model-selector.sh modelo-tope)"
+FALLBACK=(--fallback-model sonnet)
+if [ "$MODELO_PEDIDO" = "$MODELO_TOPE" ]; then
+  FALLBACK=()
+  echo "loop: ${AC_ID:-?} va al modelo tope ($MODELO_PEDIDO) — sin fallback, por el §8"
+fi
+
 claude -p "$PROMPT" \
   --output-format json \
   --max-budget-usd "$MAX_BUDGET_USD" \
   --permission-mode acceptEdits \
-  --model "$(bash packages/metodo/scripts/model-selector.sh build "$APP" "$AC_ID")" \
-  --fallback-model sonnet \
+  --model "$MODELO_PEDIDO" \
+  "${FALLBACK[@]}" \
   > "$LOG_DIR/ultimo-resultado.json" 2>>"$LOG_DIR/ultimo-loop.log"
+
+# Y la segunda mitad: mirar quién respondió DE VERDAD. Quitar el fallback evita el degradado
+# en el caso caro, pero no lo hace visible en los demás — y un degradado invisible es
+# indistinguible de un build sano hasta que alguien lee el código meses después.
+if ! node packages/metodo/scripts/detectar-degradado.mjs \
+       "$LOG_DIR/ultimo-resultado.json" "$MODELO_PEDIDO" >>"$LOG_DIR/ultimo-loop.log" 2>&1; then
+  RC_DEG=$?
+  if [ "$RC_DEG" = "4" ]; then
+    printf '%s %s pedido=%s\n' "$(date '+%F %T')" "${AC_ID:-?}" "$MODELO_PEDIDO" \
+      >> "$LOG_DIR/modelo-degradado.log"
+    echo "loop: DEGRADADO — ${AC_ID:-?} se pidió a $MODELO_PEDIDO y respondió otro modelo (ver $LOG_DIR/modelo-degradado.log)"
+  fi
+fi
 
 COMMITS_DESPUES=$(git rev-list --count HEAD 2>/dev/null || echo 0)
 node "$LOG_DIR/generar.mjs" >/dev/null 2>&1 || true

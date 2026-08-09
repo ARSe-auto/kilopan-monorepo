@@ -45,7 +45,7 @@ código se desactiva solo a la semana.
 
 | Constante | Valor | Patrón que la delata fuera del archivo canónico |
 |---|---|---|
-| `UNDO.ventana_ms` | 8000 | `\b8000\b` |
+| `UNDO.ventana_ms` | 8000 | `(?<![\w-])8000(?![\w-])` |
 | `EV.factor_consumo_default` | 0.85 | `\b0\.85\b` |
 | `CONTRASTE.texto` | 4.5 | `\b4\.5\s*:\s*1|\b4\.5\b(?=\s*[,;)\]])` |
 | `CIFRA_OPERATIVA.tamano_px` | 96 | `\b96\s*px\b|font-?[Ss]ize[^\n]{0,12}\b96\b` |

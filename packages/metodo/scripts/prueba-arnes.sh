@@ -740,9 +740,24 @@ echo "== 9. Selector de modelo (casilla 12) =="
 # a Opus quema la ventana en silencio». La prueba central no es que devuelva un id, es
 # que DIFERENCIE. Un no-op pasaría cualquier test que mire una sola línea.
 SEL="$M/model-selector.sh"
-[ "$(bash "$SEL" plan)"   = "claude-sonnet-5"   ] && ok "plan → Sonnet"  || no "plan no rutea a Sonnet"
-[ "$(bash "$SEL" verify)" = "claude-sonnet-5"   ] && ok "verify → Sonnet" || no "verify no rutea a Sonnet"
-[ "$(bash "$SEL" juez)"   = "claude-opus-4-8"   ] && ok "juez → Opus (mandato de refutar)" || no "juez no rutea a Opus"
+# LOS IDS SE LEEN DEL SELECTOR, NO SE CLAVAN ACÁ (8-ago-2026). Esta sección repetía
+# `claude-opus-4-8` literal en seis aserciones, así que cuando el id de Opus quedó una
+# generación atrás la suite lo CONFIRMABA en vez de delatarlo: el arnés custodiaba el valor
+# viejo. Lo que hay que vigilar es lo que el §8 pide de verdad —que los tres difieran, que
+# el tope sea de la familia Opus, y que el ruteo mande cada cosa a donde corresponde—, no un
+# número de generación que envejece solo.
+eval "$(bash "$SEL" ids)"
+[ -n "${OPUS:-}" ] && [ -n "${SONNET:-}" ] && [ -n "${HAIKU:-}" ] \
+  && ok "el selector publica sus tres ids ($OPUS · $SONNET · $HAIKU)" \
+  || no "el selector no publica sus ids: la suite tendría que clavarlos y volvería a envejecer"
+[ "$OPUS" != "$SONNET" ] && [ "$SONNET" != "$HAIKU" ] && [ "$OPUS" != "$HAIKU" ] \
+  && ok "los tres ids son distintos (un no-op que todo lo manda al mismo modelo quema la ventana)" \
+  || no "dos de los tres ids coinciden: el selector no diferencia"
+case "$OPUS" in claude-opus-*) ok "el modelo tope es de la familia Opus" ;; *) no "el modelo tope no es Opus, es $OPUS" ;; esac
+[ "$(bash "$SEL" modelo-tope)" = "$OPUS" ] && ok "modelo-tope coincide con el id de Opus" || no "modelo-tope no devuelve el id de Opus"
+[ "$(bash "$SEL" plan)"   = "$SONNET" ] && ok "plan → Sonnet"  || no "plan no rutea a Sonnet"
+[ "$(bash "$SEL" verify)" = "$SONNET" ] && ok "verify → Sonnet" || no "verify no rutea a Sonnet"
+[ "$(bash "$SEL" juez)"   = "$OPUS"   ] && ok "juez → Opus (mandato de refutar)" || no "juez no rutea a Opus"
 
 TMPP="$(mktemp -d)"; cp IMPLEMENTATION_PLAN.md "$TMPP/plan.bak"
 # HERMETICIDAD (2-ago-2026): estas pruebas de ruteo dan por sentado que el contador de
@@ -757,18 +772,20 @@ FX="AC-$(printf X)$(printf X)"   # id de fixture armado en runtime: escrito lite
                                   # archivo citaría ACs que ninguna spec define y verify-refs
                                   # pondría el gate en rojo por el andamio de su propia suite.
 FXS="AC-$(printf S)EC"
+RUTEOS=""   # lo que el selector devolvió de verdad, para el anti-no-op de más abajo
 probar_ruteo () { # $1 = linea de ítem · $2 = modelo esperado · $3 = descripción
   printf '# plan de prueba\n\n%s\n' "$1" > IMPLEMENTATION_PLAN.md
   got="$(bash "$SEL" build)"
-  [ "$got" = "$2" ] && ok "$3 → $(echo "$2" | sed 's/claude-//;s/-4-8//;s/-5//')" || no "$3 ruteó a $got, esperaba $2"
+  RUTEOS="$RUTEOS$got\n"
+  [ "$got" = "$2" ] && ok "$3 → $(echo "$2" | sed 's/claude-//;s/-[0-9-]*$//')" || no "$3 ruteó a $got, esperaba $2"
 }
-probar_ruteo '- [ ] (P0-SEC) bloqueo por PIN errado [${FXS}-99]'        "claude-opus-4-8"  "ítem -SEC"
-probar_ruteo '- [ ] (P1) migración que agrega un trigger [${FX}-99]'    "claude-opus-4-8"  "ítem que toca migración"
-probar_ruteo '- [ ] (P1) chip con el nombre del operador [${FX}-98]'    "claude-haiku-4-5" "ítem de UI"
-probar_ruteo '- [ ] (P1) cola con reintento automático [${FX}-97]'      "claude-sonnet-5"  "ítem estándar"
+probar_ruteo '- [ ] (P0-SEC) bloqueo por PIN errado [${FXS}-99]'        "$OPUS"   "ítem -SEC"
+probar_ruteo '- [ ] (P1) migración que agrega un trigger [${FX}-99]'    "$OPUS"   "ítem que toca migración"
+probar_ruteo '- [ ] (P1) chip con el nombre del operador [${FX}-98]'    "$HAIKU"  "ítem de UI"
+probar_ruteo '- [ ] (P1) cola con reintento automático [${FX}-97]'      "$SONNET" "ítem estándar"
 # Escalación de dos strikes sobre un ítem NO-duro
 mkdir -p .ralph; echo 2 > .ralph/build-fails
-probar_ruteo '- [ ] (P1) cola con reintento automático [${FX}-96]'      "claude-opus-4-8"  "2 strikes escala a"
+probar_ruteo '- [ ] (P1) cola con reintento automático [${FX}-96]'      "$OPUS"   "2 strikes escala a"
 
 # EL BUCLE DE MUERTE (bug real, 3-ago-2026): la regla de arriba dice «2 fallos en el MISMO
 # AC» pero leía `.ralph/build-fails`, que es GLOBAL y sólo vuelve a cero con un commit.
@@ -780,13 +797,13 @@ FXP="AC-$(printf P)ES"
 printf '# plan de prueba\n\n- [ ] (P1) cola con reintento automático [%s-95]\n' "$FXP" > IMPLEMENTATION_PLAN.md
 mkdir -p .ralph/fallos; echo 9 > .ralph/build-fails; rm -f ".ralph/fallos/${FXP}-95"
 got_sano="$(bash "$SEL" build kilopan "${FXP}-95")"
-[ "$got_sano" = "claude-sonnet-5" ] \
+[ "$got_sano" = "$SONNET" ] \
   && ok "un AC SIN fallos propios no hereda el contador global (el bucle de muerte no puede volver)" \
   || no "model-selector volvió a leer el contador GLOBAL: con global=9 y 0 fallos propios ruteó a $got_sano — es el bucle que quemó 9 iteraciones"
 # Y el control en negativo: el mismo AC, ahora CON sus propios strikes, sí debe escalar.
 echo 2 > ".ralph/fallos/${FXP}-95"
 got_malo="$(bash "$SEL" build kilopan "${FXP}-95")"
-[ "$got_malo" = "claude-opus-4-8" ] \
+[ "$got_malo" = "$OPUS" ] \
   && ok "y con 2 fallos PROPIOS sí escala a Opus (la escalación sigue viva, no se desactivó)" \
   || no "la escalación por AC no dispara: 2 fallos propios rutearon a $got_malo"
 rm -f ".ralph/fallos/${FXP}-95"
@@ -800,7 +817,7 @@ printf '# plan\n\n- [ ] (P0-SEC) item atascado que el motor NO va a tomar [%s-94
 printf '%s-94\n' "$FXS" > "$ATAS"
 rm -f .ralph/build-fails
 got_sal="$(bash "$SEL" build)"
-[ "$got_sal" = "claude-sonnet-5" ] \
+[ "$got_sal" = "$SONNET" ] \
   && ok "el selector saltea los ACs atascados igual que loop.sh (clasifica el que se va a construir)" \
   || no "el selector clasificó un AC ATASCADO que loop.sh no va a tomar: ruteó a $got_sal"
 if [ -f "$ATMP/atascados.bak" ]; then cp "$ATMP/atascados.bak" "$ATAS"; else rm -f "$ATAS"; fi
@@ -811,9 +828,48 @@ rm -rf "$ATMP"
 rm -f .ralph/build-fails
 [ -f "$TMPP/build-fails.bak" ] && cp "$TMPP/build-fails.bak" .ralph/build-fails
 cp "$TMPP/plan.bak" IMPLEMENTATION_PLAN.md; rm -rf "$TMPP"
-# El anti-no-op: los cuatro casos de arriba deben haber dado al menos 3 modelos distintos.
-distintos=$(printf '%s\n' "claude-opus-4-8" "claude-haiku-4-5" "claude-sonnet-5" | sort -u | wc -l | tr -d ' ')
-[ "$distintos" -ge 3 ] && ok "el selector DIFERENCIA (no es un no-op que manda todo a Opus)" || no "selector no-op"
+# EL ANTI-NO-OP, ahora sobre datos reales. Esta línea contaba tres ids ESCRITOS A MANO y
+# los pasaba por `sort -u`: siempre daba 3, dijera lo que dijera el selector. Era la única
+# aserción que el §8 pide explícitamente («se testea contra el caso normal») y era la única
+# que no probaba nada. Ahora cuenta lo que el selector DEVOLVIÓ en los casos de arriba.
+distintos=$(printf "$RUTEOS" | grep -c . >/dev/null && printf "$RUTEOS" | sort -u | grep -c .)
+[ "$distintos" -ge 3 ] \
+  && ok "el selector DIFERENCIA: los casos de arriba dieron $distintos modelos distintos" \
+  || no "selector no-op: los casos de arriba dieron solo $distintos modelo(s) distinto(s)"
+
+echo
+echo "== 9b. El fallback no puede degradar una regla dura (8-ago-2026) =="
+# `loop.sh` llamaba SIEMPRE con `--fallback-model sonnet`. Si el modelo pedido no estaba
+# disponible o la iteración topaba el presupuesto, el CLI bajaba a Sonnet solo y en silencio,
+# y el commit quedaba idéntico a uno sano: un AC de regla dura escrito por un modelo menor,
+# que es lo que el §8 existe para impedir.
+grep -q 'MODELO_PEDIDO" = "$MODELO_TOPE"' "$M/loop.sh" \
+  && ok "loop.sh quita el fallback cuando el AC va al modelo tope" \
+  || no "loop.sh sigue pasando --fallback-model incondicional: una regla dura puede caer a Sonnet sin aviso"
+grep -q 'detectar-degradado.mjs' "$M/loop.sh" \
+  && ok "y además comprueba QUIÉN respondió después de cada build" \
+  || no "nadie mira qué modelo respondió: el degradado sigue siendo invisible"
+
+# El detector, ejercido de verdad contra los tres casos que distingue.
+DEG="$M/detectar-degradado.mjs"; DTMP="$(mktemp -d)"
+printf '{"modelUsage":{"%s":{"inputTokens":10}}}' "$OPUS" > "$DTMP/sano.json"
+printf '{"modelUsage":{"%s":{"inputTokens":10}}}' "$SONNET" > "$DTMP/degradado.json"
+printf '{"result":"ok","total_cost_usd":0.1}' > "$DTMP/mudo.json"
+node "$DEG" "$DTMP/sano.json" "$OPUS" >/dev/null 2>&1 \
+  && ok "el detector deja pasar la corrida en que respondió el modelo pedido" \
+  || no "el detector marca degradado una corrida sana: sería ruido y lo apagarían"
+node "$DEG" "$DTMP/degradado.json" "$OPUS" >/dev/null 2>&1; [ "$?" = "4" ] \
+  && ok "detecta el degradado: se pidió el tope y respondió otro (exit 4)" \
+  || no "el detector NO ve el degradado — el problema sigue invisible"
+node "$DEG" "$DTMP/mudo.json" "$OPUS" >/dev/null 2>&1; [ "$?" = "3" ] \
+  && ok "y si el resultado no nombra modelo lo dice (exit 3), en vez de dar por bueno lo que no sabe" \
+  || no "el detector afirma que no hubo degradado sin tener con qué saberlo"
+# Un snapshot fechado del MISMO modelo no es un degradado.
+printf '{"modelUsage":{"%s-20260101":{"inputTokens":10}}}' "$OPUS" > "$DTMP/fechado.json"
+node "$DEG" "$DTMP/fechado.json" "$OPUS" >/dev/null 2>&1 \
+  && ok "un snapshot fechado del mismo modelo no cuenta como degradado" \
+  || no "el detector confunde un snapshot fechado con un modelo distinto: daría falsos positivos"
+rm -rf "$DTMP"
 
 echo
 echo "=================== RESUMEN ARNÉS ==================="

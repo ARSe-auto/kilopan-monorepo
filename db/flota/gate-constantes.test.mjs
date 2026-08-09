@@ -109,6 +109,17 @@ test("cada cifra vigilada dispara de verdad contra un texto que la contiene", ()
   }
 });
 
+test("un uuid que contiene una cifra vigilada NO dispara el gate", () => {
+  // Pasó de verdad: el centinela de `tenant_template` es
+  // 00000000-0000-7000-8000-000000000000 y el patrón `\b8000\b` mordía adentro, porque el
+  // guion abre frontera de palabra. Tres falsos positivos en la primera migración real.
+  const raiz = sandbox({
+    "db/flota/.fixture-uuid.mjs": "export const centinela = '00000000-0000-7000-8000-000000000000';\n",
+  });
+  const { codigo, salida } = correr(raiz);
+  assert.equal(codigo, 0, salida);
+});
+
 test("el gate se pone ROJO si la lista de cifras vigiladas queda vacía (verde vacuo)", () => {
   const raiz = sandbox();
   writeFileSync(join(raiz, CANONICO), "export const CIFRAS_VIGILADAS = [] as const;\n");

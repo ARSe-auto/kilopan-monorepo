@@ -290,7 +290,11 @@ export const DTE = {
  * código se desactiva solo a la semana.
  */
 export const CIFRAS_VIGILADAS = [
-  { nombre: "UNDO.ventana_ms", valor: 8000, patron: String.raw`\b8000\b` },
+  // El límite es `[\w-]` y no `\b`: con `\b8000\b` el patrón mordía DENTRO de un uuid
+  // (`00000000-0000-7000-8000-000000000000`, el centinela de `tenant_template`), porque el
+  // guion es un no-palabra y abre frontera. Un guard que se dispara con un uuid es un guard
+  // que alguien apaga a la semana.
+  { nombre: "UNDO.ventana_ms", valor: 8000, patron: String.raw`(?<![\w-])8000(?![\w-])` },
   { nombre: "EV.factor_consumo_default", valor: 0.85, patron: String.raw`\b0\.85\b` },
   { nombre: "CONTRASTE.texto", valor: 4.5, patron: String.raw`\b4\.5\s*:\s*1|\b4\.5\b(?=\s*[,;)\]])` },
   { nombre: "CIFRA_OPERATIVA.tamano_px", valor: 96, patron: String.raw`\b96\s*px\b|font-?[Ss]ize[^\n]{0,12}\b96\b` },
