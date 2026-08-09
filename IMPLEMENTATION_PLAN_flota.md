@@ -6,8 +6,11 @@ commit (`feat(flota/modulo): descripción [AC-XX-YY]`, §9.2). **Exactamente un 
 por AC** y **ningún AC de las specs falta** (cualquiera de las dos cosas pone el gate en
 rojo). TODOS los ítems parten en `[ ]`: nada está hecho.
 
-Reparto por módulo (suma 195): 00 = 28 · 01 = 21 · 02 = 21 · 03 = 21 · 04 = 24 ·
-05 = 25 · 06 = 15 · 07 = 17 · 08 = 23.
+Reparto por módulo (suma 197): 00 = 28 · 01 = 21 · 02 = 22 · 03 = 22 · 04 = 24 ·
+05 = 25 · 06 = 15 · 07 = 17 · 08 = 23. Los dos ACs por sobre los 195 originales nacen
+de la firma de la lista congelada de criterios KiloRuta el 08-ago-2026 (AC-FTEN-18):
+AC-FVEH-22 (KR-41, cierre forzado del turno) y AC-FRUT-22 (KR-29, candado
+entrega←manifiesto).
 
 **Precondiciones de proceso (criterio de entrada de E1, §9.1 — NO son ítems de este
 plan y el motor no puede saltárselas):** (0) hito 0 entregado (esqueleto +
@@ -63,7 +66,7 @@ AC-FVEH-19 (p. 9), AC-FVEH-20 (p. 7).
 
 El primer ítem del hito es la lista KR congelada (mandato del encabezado del maestro).
 
-- [ ] (P1) Extraer UNA vez `docs/criterios-kiloruta.txt` con IDs cerrados KR-01…KR-NN y N total explícito; lista aprobada por Alexis antes de continuar el hito (oráculo humano) — spec: specs/flota/00-modelo-datos-tenancy.md [AC-FTEN-18]
+- [x] (P1) `docs/criterios-kiloruta.txt` extraído UNA vez con IDs cerrados KR-01…KR-63 y N explícita (63); aprobado por Alexis el 08-ago-2026 con sus 7 decisiones firmadas; congelado custodiado por `db/flota/gate-criterios-kiloruta.mjs` en el gate — spec: specs/flota/00-modelo-datos-tenancy.md [AC-FTEN-18]
 - [ ] (P1) `docs/matriz-kiloruta.md` como tabla `ID | tabla/constraint | test (ruta::nombre)` con gate mecánico triple: count==N, cada ID exactamente una vez, cada test existe en el repo — spec: specs/flota/00-modelo-datos-tenancy.md [AC-FTEN-19]
 - [ ] (P1) `guardrail.sh` versionado y ejecutado antes de cada iteración con las TRES reglas del §7.1 (DATABASE_URL solo localhost, secretos solo en `.env.local` gitignored, grep bloqueante TODO/FIXME/PLACEHOLDER/not implemented/lorem ipsum), un fixture por regla ⇒ exit ≠ 0 y árbol limpio ⇒ 0 — spec: specs/flota/00-modelo-datos-tenancy.md [AC-FTEN-28]
 - [ ] (P1) `constants.ts` fuente única de la familia §0 (+`constants.md` generado); número mágico fuera del archivo canónico ⇒ grep-gate rojo — spec: specs/flota/00-modelo-datos-tenancy.md [AC-FTEN-01]
@@ -139,6 +142,7 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 - [ ] (P1) Máx 3 capturas de SOC por turno validado en el CLIENTE; exceso por sync 2xx + flag, jamás rebota (conteo exacto pendiente pregunta 9) — spec: specs/flota/02-vehiculos-energia-agenda.md [AC-FVEH-19]
 - [ ] (P1) Vista `eevd_semanal` nace aquí (creador ÚNICO), computada de eventos/turnos append-only; denominador verificable (2 turnos ⇒ vehiculos_dia=2; numerador 0 hasta hitos d/e) — spec: specs/flota/02-vehiculos-energia-agenda.md [AC-FVEH-20]
 - [ ] (P1) Cierre F5 ≤6 acciones: chequeo post + nota al siguiente turno (opcional) + odómetro/SOC + «¿Quedó enchufado?»; la nota reaparece en la apertura siguiente — spec: specs/flota/02-vehiculos-energia-agenda.md [AC-FVEH-21]
+- [ ] (P1) Cierre forzado administrativo del turno abierto (KR-41, decisión del dueño 08-ago-2026): `operador`/`admin_tenant` online, motivo tipado, audit + evento, resuelve la fila de `review_queue`; PLANIFICACIÓN (422 si ya está cerrado o sin motivo); no escribe `reading` ni mueve la proyección del vehículo; otros roles 403 y otro tenant 404 — spec: specs/flota/02-vehiculos-energia-agenda.md [AC-FVEH-22]
 
 ## Hito (d) — Encargos → paradas → ítems, rutas manuales y maestras, cadena de custodia multi-empresa
 
@@ -163,6 +167,7 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 - [ ] (P2) Telemetría `toques_flujo` de los flujos del módulo a `client_metric` en lote por el endpoint de sync; conteo coincide con el e2e — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-19]
 - [ ] (P2) Gancho `pin_destinatario` DDL-only: el tipo existe y NINGÚN seed E1 siembra stop_requirements de ese tipo — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-20]
 - [ ] (P1) `devoluciones` nace en ESTE módulo (creador ÚNICO), clase CAPTURA con tenant_id + CHECK + FK compuesta e idempotencia `client_uuid`: la clasificación táctil del descuadre de F5 escribe empresa/ítems/motivo, viaja por el motor de sync (2xx siempre, replay doble ⇒ 1 fila) y cuadra la ecuación por empresa; fixture del seed A «1 devolución» ⇒ 1 línea `por_devolucion` (origen adicional en F4 pendiente pregunta 9) — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-21]
+- [ ] (P1) Ninguna parada de entrega se abre sin el manifiesto de su carga confirmado (KR-29, ancla del art. 55, decisión del dueño 08-ago-2026): bloqueo EN EL CLIENTE contra el snapshot con texto que nombra la vía, jamás modal; en el servidor jamás rebota — POD sin manifiesto confirmado entra 2xx con flag `sin_manifiesto_confirmado` + evento + cola de severidad alta — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-22]
 
 ## Hito (e) — POD offline-first + motor de sync, y semáforo «Hoy» / visibilidad
 

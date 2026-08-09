@@ -97,6 +97,17 @@ else
     node packages/metodo/scripts/verify-refs.mjs "--app=$APP"
 fi
 
+# Gancho genérico: una app puede traer su propio gate (contrato, esquema, invariantes) en
+# `db/<app>/gate.sh`. Corre acá, junto al resto del contrato y antes del código, y decide
+# por sí mismo qué salta sin --full. KiloPan no tiene uno; FLOTA sí.
+if [ -f "db/$APP/gate.sh" ]; then
+  if [ "$FULL" -eq 1 ]; then
+    run_step "gate propio de $APP (completo)" bash "db/$APP/gate.sh" --full
+  else
+    run_step "gate propio de $APP" bash "db/$APP/gate.sh"
+  fi
+fi
+
 if [ "$HAY_APP" -eq 1 ]; then
   run_step "es-CL ($APP): kg/CLP/fecha sin bypass, RUT validado al escribir, cero inglés (AC-H0-09)" \
     node packages/metodo/scripts/verifica-es-cl.mjs "--app=$APP"
@@ -172,7 +183,13 @@ if [ "$FULL" -eq 1 ]; then
   else
     skip_step "e2e Playwright" "apps/$APP aún no tiene playwright.config.ts"
   fi
-  if [ -f db/migraciones/0001_identidad.sql ]; then
+  # `db/test-invariantes.mjs` y `db/migraciones/` son de KiloPan (schema `pan`, PGlite).
+  # Sin este guard, `check.sh --full --app=flota` corría la suite de OTRA app y la reportaba
+  # como paso propio: un verde que no dice nada de FLOTA y un rojo que tampoco sería suyo.
+  # Los invariantes de FLOTA viven en su `db/flota/gate.sh` (cluster real, §4.1).
+  if [ "$APP" != "kilopan" ]; then
+    skip_step "invariantes de BD" "son de KiloPan; los de $APP corren en db/$APP/gate.sh"
+  elif [ -f db/migraciones/0001_identidad.sql ]; then
     run_step "invariantes de BD (violar cada CHECK/trigger y esperar rebote)" \
       node db/test-invariantes.mjs
   else
