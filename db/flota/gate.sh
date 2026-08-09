@@ -35,6 +35,12 @@ paso "guardrail (§7.1): DATABASE_URL local, secretos en .env.local, cero cásca
 paso "lista congelada de criterios KiloRuta" \
   node db/flota/gate-criterios-kiloruta.mjs
 
+# El consumo MECÁNICO de esa lista: cada criterio mapeado a su constraint y a su test, y cada
+# test referenciado tiene que EXISTIR. Un criterio que apunta a un test borrado se lee como
+# cubierto, que es peor que uno sin mapear. [AC-FTEN-19]
+paso "matriz KiloRuta: N filas, IDs únicos y cada test referenciado existe" \
+  node db/flota/gate-matriz-kiloruta.mjs
+
 paso "familia canónica de constantes: cero números mágicos duplicados (§0)" \
   node db/flota/gate-constantes.mjs
 
