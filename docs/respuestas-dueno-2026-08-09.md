@@ -50,21 +50,41 @@ desde N punteros.
 
 **Desbloquea:** AC-FTEN-13 completo.
 
-## P5 · Claves de `parametros` → **las dicta el dueño; PENDIENTE de sus valores**
+## P5 · Claves de `parametros` → **DICTADAS por el dueño el 09-ago-2026. Lista CERRADA para E1**
 
-Alexis eligió dictarla él. **No inventar claves ni valores hasta que los dé.** Lo que ya está
-fijado por el maestro y no necesita su decisión:
+| Clave | Valor | Tipo | De dónde sale |
+|---|---|---|---|
+| `reserva_pct` | `15` | `smallint` | §0, fila EV — no es decisión del dueño, la fija el maestro |
+| `factor_consumo` | `0.85` | `numeric` | §0, fila EV — ídem |
+| `tarifa_kwh_clp` | `190` | `bigint` | **dueño**: tarifa comercial BT2/BT3 |
+| `precio_diesel_litro_clp` | `1260` | `bigint` | **dueño** (valor propio, más alto que las referencias que se le ofrecieron) |
+| `bultos_max_sin_receptor` | `0` | `smallint` | **dueño**: «siempre foto» |
+| `anticipacion_vencimiento_dias` | `30` | `smallint` | **dueño** |
+| `tolerancia_eta_minutos` | `20` | `smallint` | **dueño** (el maestro exige ≥ 15) |
+| `periodicidad_liquidacion` | `'semanal'` | `text` | **dueño**: parámetro POR TENANT, con `semanal` de default |
 
-| Clave | Valor | Fuente |
-|---|---|---|
-| `reserva_pct` | 15 | §0, fila EV |
-| `factor_consumo` | 0,85 | §0, fila EV |
+Los nombres de clave son los del §4.4 donde el maestro los nombra; los tres últimos se
+nombraron acá siguiendo la misma convención de sufijo (`_pct`, `_clp`, `_dias`, `_minutos`).
 
-Lo que sí es decisión suya y está esperando: `tarifa_kwh_clp`, `precio_diesel_litro_clp`,
-`bultos_max_sin_receptor`, la anticipación de los recordatorios de vencimiento
-(02 · AC-FVEH-17), la tolerancia de ETA del semáforo de entregas (Anexo B, mínimo 15 min) y
-la periodicidad de la liquidación (06 · pregunta 1). Mientras tanto los seeds del hito (g)
-no se cierran con cifras inventadas.
+**Tres consecuencias que hay que aplicar donde corresponda, no solo sembrar:**
+
+1. **`bultos_max_sin_receptor = 0` significa «cuántos bultos se pueden dejar SIN encuadre».**
+   Con 0, TODO `dejado_en_punto` exige foto. La semántica se fijó explícitamente porque el
+   valor 1 era ambiguo. **Esto mueve el presupuesto de toques:** el §5.2 F4 describe
+   `dejado_en_punto` como 3 acciones «con encuadre si bultos > umbral», y ahora el encuadre
+   es siempre ⇒ **4 acciones fijas**. Sigue bajo el techo de 4 del §5.3, pero sin margen: el
+   e2e de 04 · AC-FPOD-02 tiene que asertar 4 y no 3, y cualquier feature que agregue un
+   toque a ese camino ya no se puede mergear.
+2. **`periodicidad_liquidacion` es parámetro por TENANT, no por empresa cliente.** Todas las
+   empresas de un mismo operador cierran al mismo ritmo. Cierra la pregunta 1 de la spec 06;
+   el plazo de pago de 30 días (Ley 21.131) corre desde el cierre, sea cual sea el ritmo.
+3. **`tolerancia_eta_minutos = 20`**, no el mínimo de 15 del Anexo B. La regla del maestro
+   («mín. 15 min») se respeta como CHECK de la columna, no como valor sembrado.
+
+**Reporte de ahorro vs diésel** (02 · AC-FVEH-13), con estos dos números: a ~5 km/kWh reales
+del EV48, $190/kWh da ~38 CLP/km; un furgón diésel comparable a ~8 km/L con el litro a
+$1.260 da ~157 CLP/km. Ahorro del orden del 76%, coherente con el ~70% que promete el
+Anexo A y defendible frente a un cliente que lo verifique.
 
 ## P6 · Matriz feature×plan → **la deriva el builder, la revisa el dueño con los seeds**
 
@@ -151,5 +171,13 @@ superficie afectada.
 2. Reescribir el texto de **AC-FTEN-27** antes de implementarlo.
 3. Quitar las cláusulas «BLOQUEADO» de **AC-FTEN-05**, **AC-FTEN-10** y **AC-FTEN-25**.
 4. Propagar a las specs que dependían de una respuesta ajena: **05 · pregunta 3** (cadencia
-   del exportador, hereda P8).
-5. **P5 sigue abierta.** Los seeds del hito (g) no se cierran con cifras inventadas.
+   del exportador, hereda P8) y **06 · pregunta 1** (periodicidad de la liquidación, la
+   cierra P5).
+5. Sembrar las 8 claves de `parametros` con sus valores, y **aplicar las tres consecuencias
+   de P5** — sobre todo la del presupuesto de toques: `dejado_en_punto` pasa a 4 acciones y
+   el e2e de 04 · AC-FPOD-02 debe asertar 4.
+6. Anotar como ítem, no como supuesto, la verificación de P2: que el Postgres gestionado de
+   Railway ofrezca la versión 18 y `CREATE DATABASE … TEMPLATE` a demanda.
+
+**Ya no queda ninguna pregunta al dueño abierta en la spec 00.** Las 11 están respondidas y
+las dos de las specs 05 y 06 que dependían de estas quedan heredadas.
