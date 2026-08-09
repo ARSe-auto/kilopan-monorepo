@@ -2,5 +2,11 @@
   "name": "@kilopan/nucleo-comun",
   "private": true,
   "version": "0.0.0",
-  "type": "module"
+  "type": "module",
+  "exports": {
+    "./constants": "./src/constants.ts"
+  },
+  "scripts": {
+    "test": "node --test src/*.test.ts"
+  }
 }

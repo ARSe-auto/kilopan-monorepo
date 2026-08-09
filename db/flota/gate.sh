@@ -35,6 +35,9 @@ paso "guardrail (§7.1): DATABASE_URL local, secretos en .env.local, cero cásca
 paso "lista congelada de criterios KiloRuta" \
   node db/flota/gate-criterios-kiloruta.mjs
 
+paso "familia canónica de constantes: cero números mágicos duplicados (§0)" \
+  node db/flota/gate-constantes.mjs
+
 # Glob explícito: `node --test <directorio>` no descubre los .test.mjs, los trata como un
 # módulo único y muere con MODULE_NOT_FOUND.
 paso "unit (db/flota): mutantes de los guardianes" \
