@@ -435,3 +435,138 @@ async function sinPublicar(rutaId: string) {
     expect(r!.version).toBe("0");
   });
 }
+
+// ─── El bloque de recarga es una parada más [AC-FRUT-18] — §5.2 F4, §4.5 ─────────────
+//
+// El §5.2 F4 lo dice sin rodeos. No es una nota al margen ni un recordatorio en otra pantalla:
+// el chofer que a las once de la noche tiene que enchufar el camión lo tiene que ver en la MISMA
+// lista donde ve las entregas, o no lo ve.
+//
+// El módulo 02 PROVEE el bloque; la materialización la ejecuta este módulo al publicar. Los dos
+// casos que siguen son la conducta entera: que la parada aparezca, y que aparezca en el LUGAR
+// que le toca dentro del día — una recarga de mediodía entre la mañana y la tarde, no al final
+// por ser recarga.
+
+test("[AC-FRUT-18] el bloque de recarga del día aparece como parada de la ruta publicada", async ({
+  request,
+}) => {
+  await sembrar();
+
+  await con(BD_A, async (c: Conexion) => {
+    await c.sql(
+      `insert into bloques_agenda (vehiculo_id, tipo, empieza_en, termina_en, nota)
+       values ($1, 'recarga',
+               (now() at time zone 'America/Santiago')::date::timestamptz + interval '22 hours',
+               (now() at time zone 'America/Santiago')::date::timestamptz + interval '30 hours',
+               'Carga nocturna')`,
+      [vehiculoId],
+    );
+  });
+
+  const ruta = (await (
+    await request.post(`${EN_A}/api/rutas`, {
+      headers: comoOperador,
+      data: { nombre: "Ruta con carga nocturna", vehiculo_id: vehiculoId },
+    })
+  ).json()) as { ruta: { id: string } };
+  await request.post(`${EN_A}/api/rutas/${ruta.ruta.id}/asignar`, {
+    headers: comoOperador,
+    data: {
+      encargos: encargosDeHoy,
+      ventana: { desde: "2026-08-10T09:00:00.000Z", hasta: "2026-08-10T12:00:00.000Z" },
+    },
+  });
+
+  const publicada = await request.post(`${EN_A}/api/rutas/${ruta.ruta.id}/publicar`, {
+    headers: comoOperador,
+  });
+  expect(publicada.ok()).toBe(true);
+  // Una entrega agrupada + la recarga: el bloque se sumó al día, no lo reemplazó.
+  expect((await publicada.json()) as { paradas: number }).toMatchObject({ paradas: 2 });
+
+  const armada = (await (
+    await request.get(`${EN_A}/api/rutas/${ruta.ruta.id}`, { headers: comoOperador })
+  ).json()) as { paradas: { tipo: string; orden: number; destino: string | null }[] };
+
+  const recarga = armada.paradas.find((p) => p.tipo === "recarga");
+  expect(recarga, "el bloque de recarga no se materializó como parada").toBeTruthy();
+  // Sin destino: una recarga va a un enchufe, no a una dirección (CHECK de la 0037).
+  expect(recarga!.destino).toBeNull();
+  // Nocturna: va DESPUÉS de la entrega de la mañana.
+  expect(recarga!.orden).toBeGreaterThan(armada.paradas.find((p) => p.tipo === "entrega")!.orden);
+
+  await con(BD_A, async (c: Conexion) => {
+    const [ligada] = await c.sql<{ n: string }>(
+      `select count(*)::text as n from paradas p join bloques_agenda b on b.id = p.bloque_agenda_id
+        where p.ruta_id = $1 and b.tipo = 'recarga'`,
+      [ruta.ruta.id],
+    );
+    // La parada sabe DE QUÉ bloque salió: sin esa liga, mover el bloque y republicar dejaría dos
+    // paradas de recarga y nadie sabría cuál es la vigente.
+    expect(ligada!.n).toBe("1");
+  });
+});
+
+test("[AC-FRUT-18] una recarga de mediodía queda ENTRE las entregas, no al final", async ({
+  request,
+}) => {
+  await sembrar();
+
+  // El caso que distingue «se agrega al final» de «va en el orden que le corresponde»: si la
+  // implementación solo apendara, esta recarga quedaría después de la entrega de la tarde y el
+  // chofer llegaría a la última parada con la batería en el piso.
+  await con(BD_A, async (c: Conexion) => {
+    await c.sql(
+      `insert into bloques_agenda (vehiculo_id, tipo, empieza_en, termina_en)
+       values ($1, 'recarga',
+               (now() at time zone 'America/Santiago')::date::timestamptz + interval '13 hours',
+               (now() at time zone 'America/Santiago')::date::timestamptz + interval '14 hours')`,
+      [vehiculoId],
+    );
+  });
+
+  const ruta = (await (
+    await request.post(`${EN_A}/api/rutas`, {
+      headers: comoOperador,
+      data: { nombre: "Ruta partida por la recarga", vehiculo_id: vehiculoId },
+    })
+  ).json()) as { ruta: { id: string } };
+
+  // Una entrega a la mañana y otra a la tarde, cada una con su ventana.
+  const hoy = new Date().toISOString().slice(0, 10);
+  await request.post(`${EN_A}/api/rutas/${ruta.ruta.id}/asignar`, {
+    headers: comoOperador,
+    data: {
+      encargos: [encargosDeHoy[0]!],
+      ventana: { desde: `${hoy}T12:00:00.000Z`, hasta: `${hoy}T13:00:00.000Z` }, // 08:00 en Chile
+    },
+  });
+  // El segundo encargo va al MISMO destino, así que cae en la misma parada agrupada: para que
+  // haya dos paradas de entrega hace falta otro destino.
+  await con(BD_A, async (c: Conexion) => {
+    const [otro] = await c.sql<{ id: string }>(
+      "insert into destinos (nombre, comuna) values ('Local de la tarde', 'Santiago') returning id::text as id",
+    );
+    await c.sql("update encargos set destino_id = $1 where id = $2", [otro!.id, encargosDeHoy[1]!]);
+  });
+  await request.post(`${EN_A}/api/rutas/${ruta.ruta.id}/asignar`, {
+    headers: comoOperador,
+    data: {
+      encargos: [encargosDeHoy[1]!],
+      ventana: { desde: `${hoy}T21:00:00.000Z`, hasta: `${hoy}T22:00:00.000Z` }, // 17:00 en Chile
+    },
+  });
+
+  await request.post(`${EN_A}/api/rutas/${ruta.ruta.id}/publicar`, { headers: comoOperador });
+
+  const armada = (await (
+    await request.get(`${EN_A}/api/rutas/${ruta.ruta.id}`, { headers: comoOperador })
+  ).json()) as { paradas: { tipo: string; orden: number }[] };
+
+  const tipos = armada.paradas.sort((a, b) => a.orden - b.orden).map((p) => p.tipo);
+  expect(tipos, "la recarga de mediodía no quedó entre las dos entregas").toEqual([
+    "entrega",
+    "recarga",
+    "entrega",
+  ]);
+});

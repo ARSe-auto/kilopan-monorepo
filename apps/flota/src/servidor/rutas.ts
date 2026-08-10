@@ -381,8 +381,18 @@ export async function publicarRuta(
     );
     if (choque.length > 0) return { tipo: "agenda_solapada" };
 
+    // El bloque de recarga se convierte en parada ACÁ, antes de derivar y de congelar: si se
+    // materializara después, la parada nueva no tendría requisitos ni promesa (§5.2 F4).
+    const recargas = await materializarRecargas(c, rutaId, vehiculoId);
+    if (recargas > 0) await ordenarPorHora(c, rutaId);
+
+    const { rows: todas } = await c.query<{ id: string }>(
+      "select id::text as id from paradas where ruta_id = $1 order by orden",
+      [rutaId],
+    );
+
     let requisitos = 0;
-    for (const parada of paradas) requisitos += await derivarRequisitos(c, parada.id);
+    for (const parada of todas) requisitos += await derivarRequisitos(c, parada.id);
 
     // La promesa se congela desde la ventana comprometida, y solo donde la hubo.
     const { rowCount: promesas } = await c.query(
@@ -399,10 +409,84 @@ export async function publicarRuta(
       objetoTabla: "rutas",
       objetoId: rutaId,
       sesion,
-      payload: { paradas: paradas.length, requisitos, promesas: promesas ?? 0 },
+      payload: { paradas: todas.length, recargas, requisitos, promesas: promesas ?? 0 },
     });
-    return { tipo: "ok", paradas: paradas.length, requisitos, promesas: promesas ?? 0 };
+    return { tipo: "ok", paradas: todas.length, requisitos, promesas: promesas ?? 0 };
   });
+}
+
+/**
+ * El bloque de recarga del día se convierte en una parada más [AC-FRUT-18] — §5.2 F4, §4.5.
+ *
+ * El §5.2 F4 lo dice sin rodeos: un bloque de recarga ES una parada. No una nota al margen ni un
+ * recordatorio en otra pantalla — el chofer que a las once de la noche tiene que enchufar el
+ * camión lo tiene que ver en la MISMA lista donde ve las entregas, o no lo ve.
+ *
+ * El módulo 02 PROVEE el bloque —lo agenda el operador, o lo sugiere el tablero—; la
+ * materialización la ejecuta este módulo al publicar, que es cuando el día se congela. Antes no:
+ * un bloque agendado a las seis de la mañana todavía se puede mover.
+ *
+ * Se toman los bloques que TOCAN el día de servicio, no los que caen enteros adentro: una
+ * recarga de 22:00 a 06:00 empieza hoy y termina mañana, y es exactamente la forma que tiene una
+ * recarga nocturna. Pedir que quepa en el día calendario la dejaría fuera siempre.
+ */
+async function materializarRecargas(c: PoolClient, rutaId: string, vehiculoId: string): Promise<number> {
+  const { rows } = await c.query<{ id: string }>(
+    `insert into paradas (ruta_id, tipo, orden, ventana, bloque_agenda_id)
+     select $1, 'recarga',
+            coalesce((select max(orden) from paradas where ruta_id = $1), 0)
+              + row_number() over (order by b.empieza_en),
+            b.periodo, b.id
+       from bloques_agenda b, rutas r
+      where r.id = $1 and b.vehiculo_id = $2 and b.tipo = 'recarga'
+        and b.periodo && tstzrange(
+              (r.fecha_servicio::timestamp at time zone 'America/Santiago'),
+              (r.fecha_servicio::timestamp at time zone 'America/Santiago') + interval '1 day')
+        -- Publicar es una vez sola, pero el día que deje de serlo esto no duplica la parada.
+        and not exists (select 1 from paradas p where p.ruta_id = $1 and p.bloque_agenda_id = b.id)
+     returning id::text as id`,
+    [rutaId, vehiculoId],
+  );
+  return rows.length;
+}
+
+/**
+ * Deja las paradas en el orden que les corresponde DENTRO DEL DÍA [AC-FRUT-18].
+ *
+ * La recarga no va al final por ser recarga: va donde cae su hora. Una de mediodía queda entre
+ * las entregas de la mañana y las de la tarde, que es donde el chofer la va a hacer.
+ *
+ * A las paradas SIN ventana se les da una hora ficticia derivada de su posición, empezando a las
+ * 00:00 del día. Así conservan su orden relativo entre ellas —el que el operador les dio— y
+ * quedan antes que cualquier recarga nocturna, que es lo correcto: si se las ordenara por
+ * `ventana` a secas, un NULL las mandaría al fondo y el camión cargaría después de repartir.
+ *
+ * El reordenamiento va en dos pasadas porque `(ruta_id, orden)` es único y no admite diferir:
+ * primero todos los órdenes salen del rango en uso, después se asignan los definitivos. Hacerlo
+ * en una sola sentencia choca contra la restricción a mitad de camino.
+ */
+async function ordenarPorHora(c: PoolClient, rutaId: string): Promise<void> {
+  await c.query("update paradas set orden = orden + 10000 where ruta_id = $1", [rutaId]);
+  await c.query(
+    `with posicion as (
+       select p.id, p.ventana, r.fecha_servicio,
+              row_number() over (order by p.orden) as k
+         from paradas p join rutas r on r.id = p.ruta_id
+        where p.ruta_id = $1
+     ),
+     nuevo as (
+       select id,
+              row_number() over (
+                order by coalesce(
+                           lower(ventana),
+                           (fecha_servicio::timestamp at time zone 'America/Santiago')
+                             + (k * interval '1 minute')),
+                         k) as n
+         from posicion
+     )
+     update paradas set orden = nuevo.n from nuevo where paradas.id = nuevo.id`,
+    [rutaId],
+  );
 }
 
 /**
