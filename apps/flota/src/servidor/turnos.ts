@@ -46,6 +46,7 @@ export type AperturaDeTurno =
   | { tipo: "vehiculo_no_existe" }
   | { tipo: "vehiculo_inactivo" }
   | { tipo: "documento_vencido" }
+  | { tipo: "certificacion_vencida" }
   | { tipo: "turno_solapado" };
 
 const COLUMNAS = `id::text as id, vehiculo_id::text as vehiculo_id,
@@ -82,6 +83,17 @@ export async function abrirTurno(
           [vehiculoId],
         );
         if (vencidos[0]!.vencido) return { tipo: "documento_vencido" };
+      }
+
+      // El mismo patrón para las certificaciones del §4.9, con su PROPIA feature: una empresa
+      // puede querer que un permiso vencido detenga el camión y que una certificación de
+      // instrumento vencida no lo haga [AC-FVEH-14].
+      if (await entitlementVigente(c, slug, FEATURES.certificaciones_vencidas_bloquean)) {
+        const { rows: vencidas } = await c.query<{ vencida: boolean }>(
+          "select tiene_certificaciones_vencidas($1) as vencida",
+          [vehiculoId],
+        );
+        if (vencidas[0]!.vencida) return { tipo: "certificacion_vencida" };
       }
 
       const configVersionId = await versionVigente(c, slug);

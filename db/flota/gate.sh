@@ -57,6 +57,12 @@ paso "reglas estáticas del §7.2: privilegio, SET de sesión, cross-database y 
 paso "documentos del contrato: runbook de brechas con sus secciones y sus exigencias" \
   node db/flota/gate-documentos.mjs
 
+# Los ganchos del §4.9 en su ESTADO exacto, que se pierde de dos formas que ningún test de base
+# atrapa: una pantalla para un gancho DDL-only (su UI es de E3) o una segunda implementación de
+# telemetría (E1 solo admite `declarada`). Las dos entran sin tocar una migración. [AC-FVEH-14]
+paso "ganchos §4.9: DDL-only sin pantalla y una sola implementación de telemetría" \
+  node db/flota/gate-ganchos-e1.mjs
+
 # El scan de logs del §9.2: cero PIN en cualquier forma, cero RUT sin máscara, cero secreto
 # de dispositivo. Estático y no sobre la salida de los tests, porque la línea que filtra un
 # PIN es casi siempre la del `catch` que nadie ejerció. [AC-FIDN-06]

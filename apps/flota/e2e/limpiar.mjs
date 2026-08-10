@@ -67,6 +67,9 @@ export async function limpiarOperacion(sql) {
       where not exists (select 1 from chequeos c where c.turno_id = t.id)
         and not exists (select 1 from energy_entry e where e.turno_id = t.id)`,
   );
+  // `vehicle_certification` es PLANIFICACIÓN y se borra sin problema: desde AC-FVEH-14 tiene
+  // FK a `vehiculos`, así que va antes.
+  await sql("delete from vehicle_certification");
   await sql("delete from vehiculo_documentos");
   await sql(
     `delete from vehiculos v

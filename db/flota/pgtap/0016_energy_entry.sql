@@ -99,3 +99,35 @@ select is(
 );
 
 select finish();
+
+-- ─── Ganchos §4.9: `reading` acepta frío SIN seeds de frío [AC-FVEH-14] ─────────────
+--
+-- El §4.9 lo pide así: la tabla de condiciones VIVA, «sin seeds de frío». Las dos mitades
+-- importan y se prueban juntas — que acepte la magnitud (o el gancho estaría muerto) y que
+-- nadie la haya sembrado (o una decisión del tenant sería una decisión nuestra).
+
+select is(
+  (select count(*)::int from magnitud where codigo in ('temperatura', 'humedad')),
+  0,
+  'cero seeds de frío: las magnitudes de condición las siembra el vertical que las use (§4.9)'
+);
+
+insert into magnitud (codigo, unidad) values ('temperatura', 'centesimas_de_c');
+
+insert into reading (magnitud_id, valor_int, fuente, ts_dispositivo, tz_offset_min)
+  select id, -1850, 'declarada', now(), -240 from magnitud where codigo = 'temperatura';
+
+select is(
+  (select valor_int from reading r join magnitud m on m.id = r.magnitud_id
+    where m.codigo = 'temperatura'),
+  -1850,
+  '`reading` acepta temperatura en centésimas de °C, negativa incluida (§0, §4.9)'
+);
+
+-- Y sigue sin CHECK de rango, igual que para el SOC: una sonda descalibrada no rebota la
+-- captura del chofer (§0 fila SOC, §9.3.4).
+select is(
+  (select count(*)::int from excursion),
+  0,
+  'el trigger de excursion está VIVO pero INERTE: sin alarm_rules sembradas no deriva nada'
+);

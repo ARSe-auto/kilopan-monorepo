@@ -101,4 +101,5 @@ export async function entitlementVigente(
 export const FEATURES = {
   documentos_vencidos_bloquean: "documentos_vencidos_bloquean",
   modulo_vehiculos: "modulo_vehiculos",
+  certificaciones_vencidas_bloquean: "certificaciones_vencidas_bloquean",
 } as const;

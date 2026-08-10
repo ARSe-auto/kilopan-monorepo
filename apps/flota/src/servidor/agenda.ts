@@ -47,6 +47,7 @@ export type AltaDeBloque =
   | { tipo: "tipo_invalido" }
   | { tipo: "ventana_invalida" }
   | { tipo: "documento_vencido" }
+  | { tipo: "certificacion_vencida" }
   | { tipo: "bloque_solapado" };
 
 const COLUMNAS = `id::text as id, vehiculo_id::text as vehiculo_id, tipo::text as tipo,
@@ -79,6 +80,15 @@ export async function agendarBloque(
           [datos.vehiculoId],
         );
         if (vencidos[0]!.vencido) return { tipo: "documento_vencido" };
+      }
+
+      // Misma regla para las certificaciones del §4.9, con su propia feature [AC-FVEH-14].
+      if (await entitlementVigente(c, slug, FEATURES.certificaciones_vencidas_bloquean)) {
+        const { rows: vencidas } = await c.query<{ vencida: boolean }>(
+          "select tiene_certificaciones_vencidas($1) as vencida",
+          [datos.vehiculoId],
+        );
+        if (vencidas[0]!.vencida) return { tipo: "certificacion_vencida" };
       }
 
       const { rows } = await c.query<Bloque>(

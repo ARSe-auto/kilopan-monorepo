@@ -440,3 +440,63 @@ const rastroDeRevisiones = () =>
   con(BD_A, (c: Conexion) =>
     c.sql<{ n: string }>("select count(*)::text as n from review_queue where origen like 'lectura.%'"),
   ).then((r) => Number(r[0]!.n));
+
+// ─── Certificaciones del §4.9, con su PROPIA feature [AC-FVEH-14] ────────────────────
+//
+// El §4.9 pone `instrument` y `vehicle_certification` entre los ganchos VIVOS con una nota que
+// es la que importa: «rebote de planificación activo SOLO con feature ON». Son dos features y
+// no una porque son dos decisiones distintas: una empresa puede querer que un permiso de
+// circulación vencido detenga el camión y que una certificación de instrumento vencida no.
+
+async function featureDeCertificaciones(encendida: boolean) {
+  const tenantId = await tenantEnControl();
+  await control.query(
+    `insert into tenant_feature_overrides (tenant_id, feature_id, enabled, motivo)
+     select $1, f.id, $3, 'fixture del e2e de AC-FVEH-14' from features f where f.lookup_key = $2
+     on conflict (tenant_id, feature_id) do update set enabled = excluded.enabled`,
+    [tenantId, "certificaciones_vencidas_bloquean", encendida],
+  );
+  await sellarVersion(tenantId);
+}
+
+test("[AC-FVEH-14] la certificación vencida rebota SOLO con su feature, y con mensaje propio", async ({
+  request,
+}) => {
+  const [v] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ id: string }>(
+      "insert into vehiculos (patente, tipo) values ('CRT0001', 'furgón') returning id::text as id",
+    ),
+  );
+  await con(BD_A, (c: Conexion) =>
+    c.sql(
+      `insert into vehicle_certification (vehiculo_id, tipo, emitida_el, vence_el)
+       values ($1, 'calibración de sonda', current_date - 400, current_date - 1)`,
+      [v!.id],
+    ),
+  );
+
+  // Con la feature APAGADA no rebota nada — la mitad que se olvida.
+  await featureDeCertificaciones(false);
+  const conFeatureOff = await request.post("/api/turnos", {
+    headers: comoDuena,
+    data: { vehiculo_id: v!.id },
+  });
+  expect(conFeatureOff.status(), "con la feature apagada no puede rebotar (§4.9)").toBe(201);
+  await con(BD_A, (c: Conexion) =>
+    c.sql("update turnos set estado = 'cerrado', cerrado_en = now() where vehiculo_id = $1", [v!.id]),
+  );
+
+  await featureDeCertificaciones(true);
+  const conFeatureOn = await request.post("/api/turnos", {
+    headers: comoDuena,
+    data: { vehiculo_id: v!.id },
+  });
+  expect(conFeatureOn.status()).toBe(422);
+  const cuerpo = (await conFeatureOn.json()) as { error: string; mensaje: string };
+  // El error se DISTINGUE del documento vencido: quien lo lee tiene que saber qué papel
+  // renovar, y «documento» no le dice cuál.
+  expect(cuerpo.error).toBe("certificacion_vencida");
+  expect(cuerpo.mensaje).toContain("certificación");
+
+  await featureDeCertificaciones(false);
+});

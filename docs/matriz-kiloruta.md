@@ -92,7 +92,7 @@ clasificado, se corrige allá, con la firma del dueño, y acá se refleja.
 | KR-59 | tokens de Miga (§5.1) + teclado propio + botón primario | packages/miga/src/estructura.test.ts::la escala es la del §5.1, completa y estrictamente descendente |
 | KR-60 | estados obligatorios de listado + gate axe/targets | — (pendiente: AC-FMIG-10/11/20 · hito g) |
 | KR-61 | seed del tenant B «Rutapan» | — (pendiente: AC-FMIG-18 · hito g) |
-| KR-62 | reading.fuente='declarada' + ProveedorTelemetria | — (pendiente: AC-FVEH-05/14 · hito c) |
+| KR-62 | reading.fuente='declarada' + ProveedorTelemetria | db/flota/gate-ganchos-e1.test.mjs::cada fuente de E4 dispara si alguien la escribe como cadena |
 | KR-63 | devoluciones (clase CAPTURA, client_uuid idempotente) | — (pendiente: AC-FRUT-21 · hito d) |
 
 

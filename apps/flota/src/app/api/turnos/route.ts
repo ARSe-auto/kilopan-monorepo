@@ -83,6 +83,17 @@ export async function POST(peticion: Request) {
       { status: 422 },
     );
   }
+  if (apertura.tipo === "certificacion_vencida") {
+    // §4.9 con el feature encendido. Se distingue del documento vencido a propósito: quien lo
+    // lee tiene que saber qué papel renovar, y «documento» no le dice cuál.
+    return Response.json(
+      {
+        error: "certificacion_vencida",
+        mensaje: "Ese vehículo tiene una certificación vencida. Hay que renovarla antes de abrir la jornada.",
+      },
+      { status: 422 },
+    );
+  }
   if (apertura.tipo === "turno_solapado") {
     // El centinela 5, con un mensaje que se puede actuar: quien lo lee está de pie al lado del
     // camión, y «restricción violada» no le dice qué hacer.
