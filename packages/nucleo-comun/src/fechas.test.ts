@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { FORMATOS } from "./constants.ts";
-import { fechaEsCl, horaEsCl, diaDeSemanaEsCl, lunesDeLaSemana } from "./fechas.ts";
+import { fechaEsCl, horaEsCl, diaDeSemanaEsCl, lunesDeLaSemana, dineroEsCl } from "./fechas.ts";
 
 // Mutantes del formato es-CL [AC-FVEH-07] — §0 (Formatos).
 //
@@ -63,4 +63,26 @@ test("el lunes de un domingo es el lunes ANTERIOR, no el siguiente", () => {
   // del domingo salta seis días hacia adelante.
   const domingo = new Date("2026-04-05T18:00:00Z");
   assert.equal(fechaEsCl(lunesDeLaSemana(domingo)), "30-03-2026");
+});
+
+// ─── Dinero es-CL [AC-FVEH-13] ───────────────────────────────────────────────────────
+
+test("el dinero va con el separador de miles chileno, no con coma", () => {
+  // `$12,500` en Chile se lee como doce pesos con medio. El ejemplo canónico del §0 es el
+  // oráculo, y se compara contra ÉL y no contra una cadena escrita a mano.
+  const formateado = dineroEsCl(12_500);
+  assert.match(formateado, /12\.500/, formateado);
+  assert.ok(!formateado.includes("12,500"), formateado);
+  assert.match(formateado, /\$/, formateado);
+});
+
+test("no hay centavos: en CLP el decimal es un total que no cuadra", () => {
+  assert.equal(dineroEsCl(12_500.4).includes(","), false);
+  assert.match(dineroEsCl(12_500.6), /12\.501/);
+});
+
+test("el cero se muestra, no se esconde", () => {
+  // Un monto de cero es información —«esta semana no se cargó»— y ocultarlo se lee como un
+  // error de la app.
+  assert.match(dineroEsCl(0), /0/);
 });

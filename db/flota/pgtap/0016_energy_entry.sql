@@ -131,3 +131,35 @@ select is(
   0,
   'el trigger de excursion está VIVO pero INERTE: sin alarm_rules sembradas no deriva nada'
 );
+
+-- ─── TODA vista corre con los privilegios de quien consulta [AC-FVEH-13] ────────────
+--
+-- El defecto que este invariante impide repetir apareció con `energia_semanal`: una vista de
+-- PostgreSQL corre por omisión con los privilegios de su DUEÑO, así que sumaba filas que la RLS
+-- del §4.8 le negaba al chofer y le devolvía el total. El chofer no veía ninguna fila y veía el
+-- monto igual — la fuga exacta que el centinela 10 existe para impedir, con la política intacta.
+--
+-- Se exige para TODAS y no solo para las de dinero: la próxima vista sobre una tabla con RLS va
+-- a tener el mismo agujero, y dos criterios conviviendo es cómo se elige el equivocado.
+
+select is(
+  (select count(*)::int
+     from pg_class c
+     join pg_namespace n on n.oid = c.relnamespace
+    where c.relkind = 'v' and n.nspname = 'public'
+      -- Las vistas que trae la EXTENSIÓN pgtap no son nuestras y no llevan RLS de nadie: se
+      -- excluyen por dependencia de extensión y no por nombre, que envejecería con la versión.
+      and not exists (select 1 from pg_depend d where d.objid = c.oid and d.deptype = 'e')
+      and not ('security_invoker=true' = any (coalesce(c.reloptions, array[]::text[])))),
+  0,
+  'toda vista del tenant es security_invoker: si no, suma filas que la RLS le niega a quien pregunta'
+);
+
+-- Anti-vacuidad: el conteo de cero de arriba sería trivial en una base sin vistas.
+select cmp_ok(
+  (select count(*)::int from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where c.relkind = 'v' and n.nspname = 'public'
+      and not exists (select 1 from pg_depend d where d.objid = c.oid and d.deptype = 'e')),
+  '>', 0,
+  'hay vistas que vigilar: el invariante de arriba no pasa por falta de sujeto'
+);

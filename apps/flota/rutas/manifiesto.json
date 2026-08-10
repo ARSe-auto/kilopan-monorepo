@@ -93,6 +93,18 @@
       }
     },
     {
+      "ruta": "/api/energia",
+      "archivo": "src/app/api/energia/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Reporte de energía y costo por semana [AC-FVEH-13]. Sin parámetro: devuelve las semanas del tenant que eligió el ruteo. Es la ruta con más dinero por byte de toda la app —cuánto gasta en energía una flota, semana a semana— y por eso el cruce genérico pesa: leerla desde el host de A sería leer la estructura de costos del vecino. El filtro por rol no vive acá sino en la RLS de la base y en `security_invoker` de la vista, que es lo que hace que un `if` olvidado en una pantalla futura no abra el agujero."
+      }
+    },
+    {
       "ruta": "/api/entorno",
       "archivo": "src/app/api/entorno/route.ts",
       "metodos": [

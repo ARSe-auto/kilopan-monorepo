@@ -58,3 +58,22 @@ export function lunesDeLaSemana(cuando: Date): Date {
   const desfase = new Date(cuando.toLocaleString("en-US", CON_HUSO)).getTime() - cuando.getTime();
   return new Date(enChile.getTime() - desfase);
 }
+
+/**
+ * Dinero en es-CL: `$12.500` [AC-FVEH-13] — §0 (Formatos), §4.8.
+ *
+ * Vive en este módulo por la misma razón que las fechas: un solo lugar. Escrito a mano en cada
+ * pantalla, el separador de miles se convierte en coma en la primera que alguien copie de un
+ * ejemplo, y `$12,500` en Chile se lee como doce pesos con medio.
+ *
+ * Recibe un ENTERO porque en CLP no hay centavos (§0): el decimal aparece recién en el primer
+ * total que no cuadra por un peso. Quien tenga un `numeric` lo redondea antes, con `round_clp`
+ * en la base, que es donde el §4.8 pone el cálculo.
+ */
+export function dineroEsCl(pesos: number): string {
+  return new Intl.NumberFormat(FORMATOS.locale, {
+    style: "currency",
+    currency: "CLP",
+    maximumFractionDigits: 0,
+  }).format(Math.round(pesos));
+}

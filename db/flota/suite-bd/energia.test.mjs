@@ -121,3 +121,33 @@ test("[AC-FVEH-08] el replay del chofer no crea una segunda sesión, y NO rebota
   );
   assert.equal(n, 1, "el replay del outbox creó una segunda sesión de recarga");
 });
+
+// ─── El reporte semanal, y su invisibilidad por rol [AC-FVEH-13] ────────────────────
+//
+// El §4.8 con sujeto: el chofer no ve montos por NINGUNA vía, y una vista que suma sobre una
+// tabla con RLS hereda la política — que es exactamente por lo que el total se calcula en la
+// base y no en el servidor. Un `sum()` hecho en la app le llegaría al chofer aunque no viera
+// una sola fila.
+
+test("[AC-FVEH-13] el reporte suma en CLP entero y el operador lo ve", async () => {
+  const filas = await comoRol("operador", () =>
+    app.sql("select wh, costo_clp, sesiones_sin_costo from energia_semanal"),
+  );
+  assert.equal(filas.length, 1, "el reporte no tiene la semana con las sesiones cargadas");
+  // Las dos sesiones del fixture: 20.000 y 15.000 Wh, las dos a la tarifa del tenant.
+  assert.equal(Number(filas[0].wh), 35000);
+  assert.equal(Number(filas[0].costo_clp), (35000 / 1000) * TARIFA_KWH_CLP);
+  // Y se CUENTAN las que quedaron sin costo, en vez de sumarlas como cero: un total que las
+  // ignora en silencio dice de menos y quien lo lee no tiene forma de saberlo.
+  assert.equal(Number(filas[0].sesiones_sin_costo), 0);
+});
+
+for (const rol of ["chofer", "responsable_carga"]) {
+  test(`[AC-FVEH-13] con rol \`${rol}\` el reporte de montos sale VACÍO`, async () => {
+    // No es que se le esconda una columna: la vista suma sobre filas que ese rol no ve, así que
+    // no hay nada que sumar. La política se aplica a toda consulta, incluida la que no existe
+    // todavía.
+    const filas = await comoRol(rol, () => app.sql("select * from energia_semanal"));
+    assert.deepEqual(filas, [], `${rol} vio el reporte de energía en pesos`);
+  });
+}
