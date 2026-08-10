@@ -2153,3 +2153,63 @@ Los tres con su artefacto de baseline y su regresión bloqueante.
 `check.sh --app=flota --full` en VERDE: **14 OK · 0 fallados · 1 saltado declarado**. Última
 migración: `0035_vistas_security_invoker`. 43 rutas con su cruce declarado. Matriz KiloRuta: 23
 criterios con test verificado.
+
+---
+
+## 10-ago-2026 — Hito (d): el módulo 03 pasa la mitad (11 de 22)
+
+Diez commits, nueve ACs cerrados y un defecto propio corregido. La plataforma pasa de **69 a 78
+de 197**; el módulo 03 arranca la sesión en 2 de 22 y termina en **11**.
+
+### Lo que se construyó
+
+`rutas`, `paradas` e `items` —la columna vertebral del módulo— y con ellas la agrupación
+multi-empresa, la publicación del día en 6 clics, las rutas maestras, el catálogo de motivos, la
+empresa implícita del modo `mi_flota`, el bloque de recarga como parada y «repetir el día de
+ayer». Más el chequeo de seeds de `pin_destinatario` y el cierre de la cláusula que AC-FRUT-15
+tenía a medias esperando que `paradas` existiera.
+
+### Las tres decisiones que valen más que el código
+
+**1. La agrupación la garantiza la BD, no el servidor.** «N encargos de ≥2 empresas al mismo
+destino son UNA parada» podría vivir en un `group by`. Vive en un índice único parcial
+(`where tipo = 'entrega'`), porque un servidor correcto lo respeta hasta que otro camino inserte
+la segunda parada — y ese día el camión hace dos veces la misma cuadra y nadie se entera hasta
+que llama el chofer. Va parcial porque las de carga sí se repiten y las de recarga no tienen
+destino.
+
+**2. Derivar los `stop_requirement` es COPIAR, no traducir.** `cargo_type_requirement` nació con
+el MISMO shape que su destino a propósito. Si las columnas se separaran, entre plantilla y parada
+aparecerían reglas de traducción — que son exactamente los condicionales por vertical que el §4.6
+prohíbe con todas las letras. Una parada agrupada recibe la unión DEDUPLICADA por tipo de
+evidencia: dos firmas al mismo destinatario porque dos empresas mandaron cosas distintas se
+resuelven, en el andén, firmando cualquier cosa.
+
+**3. El defecto propio que salió preparando el AC siguiente.** Publicar escribía un bloque `ruta`
+en la agenda del vehículo y dejaba que el EXCLUDE decidiera el solape. Elegante, y equivocado:
+sin ventanas comprometidas ese bloque ocupa el día entero y choca con la recarga nocturna del
+propio camión. Con esa regla no se podía publicar el día de ningún vehículo que cargue de noche
+—que son todos— y AC-FRUT-18 habría sido imposible. Ahora el solape se pregunta explícitamente y
+solo por lo que IMPIDE operar (`mantencion`, `descanso`, otra ruta publicada), detrás de un
+`for update` sobre el vehículo que hace el trabajo de serialización que el EXCLUDE hacía gratis.
+
+### Lo que se respetó sin inventar
+
+La **pregunta 2** (copia vs referencia para el día-desde-maestra): se implementó COPIA y se
+declaró, porque es la que hace cierto «la maestra permanece intacta» sin maquinaria. La
+**pregunta 1** (máquina de estados) sigue bloqueando AC-FRUT-03 y el enum sigue con sus dos
+valores. Y apareció una **pregunta 10, NUEVA**: de dónde se siembra la lista de requisitos de
+cada cargo_type — el §4.6 dice «derivado del cargo_type» y el §4.9 «un vertical son filas», pero
+`cargo_type` es (codigo, nombre) y `vertical_template` trae los códigos sin sus evidencias.
+
+### Presupuestos de toques, medidos
+
+Publicar el día: **6 clics** contra un presupuesto de 15, recorriendo la secuencia F1 completa
+—bandeja → armar rutas → «Listos para salir» → publicar— con el tablero del módulo 02 INCLUIDO en
+el conteo, como el AC exige.
+
+### Estado
+
+`check.sh --app=flota --full` en VERDE: **14 OK · 0 fallados · 1 saltado declarado**. Última
+migración: `0039_empresa_implicita`. 60 rutas con su cruce declarado. pgTAP: 21 suites, la 0020
+con 34 casos.
