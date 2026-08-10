@@ -50,7 +50,7 @@ clasificado, se corrige allá, con la firma del dueño, y acá se refleja.
 | KR-17 | vertical_template.checklists[] | db/flota/pgtap/0002_verticales_grupos_y_parametros.sql::has_column('vertical_template', 'checklists') |
 | KR-18 | proyección vehiculos.soc + fórmula de rango del §0 | — (pendiente: AC-FVEH-09/10 · hito c) |
 | KR-19 | eventos + review_queue (confirmación de 1 toque) | apps/flota/e2e/apertura.spec.ts::un ítem fallado NO bloquea la apertura, y la pantalla lo dice |
-| KR-20 | cierre de turno (odómetro, SOC, defecto→issue) | — (pendiente: AC-FVEH-21 · hito c) |
+| KR-20 | cierre de turno (odómetro, SOC, defecto→issue) | apps/flota/e2e/apertura.spec.ts::el cierre entra en el presupuesto, con la nota adentro |
 | KR-21 | encargos (empresa + destino + bultos) | — (pendiente: AC-FRUT-01 · hito d) |
 | KR-22 | encargos (duplicar de ayer) | — (pendiente: AC-FRUT-17 · hito d) |
 | KR-23 | encargos.estado (finales por trigger de entregas) | — (pendiente: AC-FRUT-03 · hito d · cláusula en pregunta 03-1) |

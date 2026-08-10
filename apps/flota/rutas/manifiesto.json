@@ -63,6 +63,18 @@
       }
     },
     {
+      "ruta": "/api/chequeos/nota",
+      "archivo": "src/app/api/chequeos/nota/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La nota que el turno anterior dejó para el siguiente [AC-FVEH-21]. El vehículo viaja como parámetro de CONSULTA, así que el manifiesto la ve sin `[id]`: el caso genérico va sin credencial y la guardia contesta 404 pelado antes de mirarlo. Lo que se protege acá es lectura pura, pero de una nota escrita por un trabajador sobre el estado de un camión — leerla desde otro tenant es leer una conversación ajena."
+      }
+    },
+    {
       "ruta": "/api/defectos/[id]",
       "archivo": "src/app/api/defectos/[id]/route.ts",
       "metodos": [
@@ -386,6 +398,24 @@
       }
     },
     {
+      "ruta": "/api/turnos/[id]/cierre",
+      "archivo": "src/app/api/turnos/[id]/cierre/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "turnos",
+          "columna": "id"
+        },
+        "nota": "Cierre del turno (F5) [AC-FVEH-21]. El parámetro es el TURNO de B: cerrárselo desde A le termina una jornada que su chofer todavía está trabajando, y le deja respondida la pregunta del enchufe sin que nadie la haya mirado — lo que el Anexo B usa para decidir un rojo. Contrato 404 y huella de B intacta; el fixture del vecino siembra un turno abierto para que el id sea real."
+      }
+    },
+    {
       "ruta": "/api/turnos/[id]/cierre-forzado",
       "archivo": "src/app/api/turnos/[id]/cierre-forzado/route.ts",
       "metodos": [
@@ -401,6 +431,18 @@
           "columna": "id"
         },
         "nota": "Cierre forzado del turno (KR-41) [AC-FVEH-22]. El parámetro es el TURNO de B, y cerrarlo desde A es de las mutaciones más destructivas del módulo: le marca al vecino una jornada como cerrada por la fuerza —lo que su módulo de liquidación lee distinto de un cierre real— y le resuelve una fila de «Por revisar» que su operación todavía no atendió. Contrato 404 y huella de B intacta. El fixture del vecino siembra un turno abierto para que el id sea REAL: contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin probar nada."
+      }
+    },
+    {
+      "ruta": "/api/turnos/abierto",
+      "archivo": "src/app/api/turnos/abierto/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "El turno abierto del tenant, con la nota del anterior [AC-FVEH-21]. Sin parámetro: devuelve siempre el del tenant que eligió el ruteo. El cruce genérico verifica que la jornada en curso del vecino —qué camión salió y con quién— no se pueda leer desde el host de A ni inyectando su identidad por cabecera."
       }
     },
     {
@@ -449,6 +491,18 @@
       "cruce": {
         "tipo": "sin_recurso",
         "nota": "Pantalla de apertura del turno (F3) [AC-FVEH-10]. No recibe identificador por URL: el vehículo se elige con un chip de la propia flota y todo lo que hace pasa por /api/turnos, /api/chequeos y /api/lecturas, que tienen sus casos declarados. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y pesa especialmente acá: es la pantalla que un chofer abre a las cinco de la mañana, y una lista de vehículos del vecino le haría abrir turno sobre un camión que no es de su empresa."
+      }
+    },
+    {
+      "ruta": "/turno/cerrar",
+      "archivo": "src/app/turno/cerrar/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de cierre del turno (F5) [AC-FVEH-21]. No recibe identificador por URL: el turno abierto lo resuelve el servidor desde la sesión, y todo lo que hace pasa por /api/chequeos, /api/lecturas y /api/turnos/[id]/cierre. El cruce que aplica es el genérico — y pesa porque es la última pantalla del día: un turno ajeno acá se cerraría sin que nadie lo note hasta el día siguiente."
       }
     },
     {

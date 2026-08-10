@@ -141,7 +141,7 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 - [x] (P1) Config congelada por turno: cambios con turno abierto no lo alteran y aplican al siguiente; captura de módulo apagado 2xx + flag `modulo_apagado` + config_version_id — spec: specs/flota/02-vehiculos-energia-agenda.md [AC-FVEH-18]
 - [x] (P1) Máx 3 capturas de SOC por turno validado en el CLIENTE; exceso por sync 2xx + flag, jamás rebota (conteo exacto pendiente pregunta 9) — spec: specs/flota/02-vehiculos-energia-agenda.md [AC-FVEH-19]
 - [x] (P1) Vista `eevd_semanal` nace aquí (creador ÚNICO), computada de eventos/turnos append-only; denominador verificable (2 turnos ⇒ vehiculos_dia=2; numerador 0 hasta hitos d/e) — spec: specs/flota/02-vehiculos-energia-agenda.md [AC-FVEH-20]
-- [ ] (P1) Cierre F5 ≤6 acciones: chequeo post + nota al siguiente turno (opcional) + odómetro/SOC + «¿Quedó enchufado?»; la nota reaparece en la apertura siguiente — spec: specs/flota/02-vehiculos-energia-agenda.md [AC-FVEH-21]
+- [x] (P1) Cierre F5 ≤6 acciones: chequeo post + nota al siguiente turno (opcional) + odómetro/SOC + «¿Quedó enchufado?»; la nota reaparece en la apertura siguiente — spec: specs/flota/02-vehiculos-energia-agenda.md [AC-FVEH-21]
 - [x] (P1) Cierre forzado administrativo del turno abierto (KR-41, decisión del dueño 08-ago-2026): `operador`/`admin_tenant` online, motivo tipado, audit + evento, resuelve la fila de `review_queue`; PLANIFICACIÓN (422 si ya está cerrado o sin motivo); no escribe `reading` ni mueve la proyección del vehículo; otros roles 403 y otro tenant 404 — spec: specs/flota/02-vehiculos-energia-agenda.md [AC-FVEH-22]
 
 ## Hito (d) — Encargos → paradas → ítems, rutas manuales y maestras, cadena de custodia multi-empresa

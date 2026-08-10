@@ -65,11 +65,18 @@ function contador(page: Page) {
       acciones++;
       await page.getByTestId(testid).click();
     },
-    /** Un campo de teclado PROPIO = 1 acción, sin importar cuántos dígitos tenga (§5.3). */
-    async teclear(caracteres: string) {
+    /**
+     * Un campo de teclado PROPIO = 1 acción, sin importar cuántos dígitos tenga (§5.3).
+     *
+     * `dentroDe` acota a QUÉ teclado: el cierre muestra el del odómetro y el de la carga en la
+     * misma pantalla —a propósito, para que la nota entre en el presupuesto— y sin acotar, un
+     * «8» sería ambiguo entre los dos.
+     */
+    async teclear(caracteres: string, dentroDe?: string) {
       acciones++;
+      const alcance = dentroDe ? page.getByTestId(dentroDe) : page;
       for (const c of caracteres) {
-        await page.getByRole("button", { name: c, exact: true }).click();
+        await alcance.getByRole("button", { name: c, exact: true }).click();
       }
     },
   };
@@ -224,4 +231,97 @@ test("[AC-FVEH-10] el semáforo se dice con TEXTO, jamás solo con color", async
   expect(cifra!.variante, "la cifra baila al actualizarse: le falta tabular-nums").toContain(
     "tabular-nums",
   );
+});
+
+// ─── El cierre del turno (F5) [AC-FVEH-21] — §5.2-F5, §5.3, §7.6 ────────────────────
+//
+// ≤6 toques, y la NOTA tiene que caber adentro. El odómetro y la carga van en la misma pantalla
+// con un solo «Continuar» a propósito: separarlos costaba un toque más y dejaba la nota fuera
+// del presupuesto — y la nota es lo único de este flujo que le llega a otra persona.
+//
+// La cadena completa se verifica de punta a punta: se cierra dejando una nota, se abre el turno
+// siguiente del MISMO vehículo, y la nota TIENE que estar ahí. Sin esa mitad, escribir «el
+// freno de mano patina» sería escribirle a nadie.
+
+const PATENTE_CIERRE = "CIE0001";
+
+test("[AC-FVEH-21] el cierre entra en el presupuesto, con la nota adentro", async ({ page }) => {
+  await con(BD_A, (c: Conexion) =>
+    c.sql("insert into vehiculos (patente, tipo) values ($1, 'furgón')", [PATENTE_CIERRE]),
+  );
+  await sesionDe(page, SECRETO);
+
+  // Se abre un turno por la pantalla real: el cierre necesita uno abierto y montarlo por SQL
+  // dejaría sin probar que las dos pantallas se entienden.
+  await page.goto(`${EN_HECHOS}/turno/abrir`);
+  await page.getByTestId(`vehiculo-${PATENTE_CIERRE}`).click();
+  await page.getByTestId("todo-bien").click();
+  await page.getByRole("button", { name: "7", exact: true }).click();
+  await page.getByTestId("continuar-odometro").click();
+  await page.getByRole("button", { name: "6", exact: true }).click();
+  await page.getByTestId("continuar-carga").click();
+  await page.getByTestId("abrir-turno").click();
+  await expect(page.getByTestId("turno-abierto")).toBeVisible({ timeout: 15_000 });
+
+  const c = contador(page);
+  await page.goto(`${EN_HECHOS}/turno/cerrar`);
+  await expect(page.getByTestId("pantalla-cierre")).toBeVisible();
+
+  await c.tocar("dejar-nota"); // 1 · la nota es OPCIONAL: se abre solo si hay algo que decir
+  await page.getByTestId("nota").fill("El freno de mano patina en pendiente");
+  await c.tocar("continuar-chequeo-post"); // 2
+  await c.teclear("800", "teclado-odometro-post"); // 3 · odómetro (teclado propio = 1 acción)
+  await c.teclear("40", "teclado-carga-post"); // 4 · carga
+  await c.tocar("continuar-lecturas"); // 5
+  await c.tocar("enchufado-si"); // 6 · la respuesta ES el cierre
+  await expect(page.getByTestId("turno-cerrado")).toBeVisible({ timeout: 15_000 });
+
+  expect(c.acciones, "el cierre se pasó del presupuesto de 6 acciones del §5.3").toBeLessThanOrEqual(6);
+  const { baseline, acciones } = registrarBaseline({
+    flujo: "cierre-de-turno",
+    ac: "AC-FVEH-21",
+    acciones: c.acciones,
+  });
+  expect(acciones).toBeGreaterThan(0);
+  expect(
+    acciones,
+    `el cierre pasó de ${baseline} a ${acciones} acciones: una regresión no se mergea (§5.3)`,
+  ).toBeLessThanOrEqual(baseline);
+
+  // «¿Quedó enchufado?» quedó respondido en la fila del turno (§4.5): el rojo del Anexo B se
+  // apoya en poder distinguir «no quedó» de «nadie preguntó».
+  const [t] = await con(BD_A, (c2: Conexion) =>
+    c2.sql<{ estado: string; enchufado: string | null }>(
+      `select t.estado::text as estado, t.enchufado_confirmado::text as enchufado
+         from turnos t join vehiculos v on v.id = t.vehiculo_id
+        where v.patente = $1 order by t.abierto_en desc limit 1`,
+      [PATENTE_CIERRE],
+    ),
+  );
+  expect(t!.estado).toBe("cerrado");
+  expect(t!.enchufado, "el cierre no dejó respondida la pregunta del enchufe").toBe("true");
+});
+
+test("[AC-FVEH-21] la nota reaparece en «Tu turno de hoy» del turno siguiente", async ({ page }) => {
+  // La cadena que le da sentido a la nota: §5.2-F5 la captura, §5.2-F3 la muestra.
+  await sesionDe(page, SECRETO);
+  await page.goto(`${EN_HECHOS}/turno/abrir`);
+  await page.getByTestId(`vehiculo-${PATENTE_CIERRE}`).click();
+
+  const nota = page.getByTestId("nota-del-turno-anterior");
+  await expect(nota).toBeVisible({ timeout: 10_000 });
+  await expect(nota).toContainText("El freno de mano patina");
+});
+
+test("[AC-FVEH-21] sin turno abierto, la pantalla de cierre lo dice en vez de romperse", async ({
+  page,
+}) => {
+  // Estado vacío ACCIONABLE (§5.7): dice qué pasa y qué hacer. Una pantalla en blanco acá deja
+  // al chofer creyendo que la app se colgó.
+  await con(BD_A, (c: Conexion) =>
+    c.sql("update turnos set estado = 'cerrado', cerrado_en = now() where estado = 'abierto'"),
+  );
+  await sesionDe(page, SECRETO);
+  await page.goto(`${EN_HECHOS}/turno/cerrar`);
+  await expect(page.getByTestId("pantalla-cierre")).toContainText("No tenés ningún turno abierto");
 });

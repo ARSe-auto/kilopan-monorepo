@@ -214,3 +214,75 @@ export async function cerrarTurnoPorLaFuerza(
     return { tipo: "ok", turnoId };
   });
 }
+
+// ─── Cierre del turno (F5) [AC-FVEH-21] — §5.2-F5, §5.3, §4.5 ───────────────────────
+//
+// El cierre es PLANIFICACIÓN sobre el turno —cambia su estado, con red— pero lo que cuelga de
+// él es CAPTURA: el chequeo post, la nota al siguiente turno y las dos lecturas. Por eso esta
+// función solo cierra: las capturas van por sus propias puertas y, si alguna fallara, el turno
+// ya quedó cerrado y nadie tiene que volver a hacerlo.
+//
+// «¿QUEDÓ ENCHUFADO?» ES OBLIGATORIO Y TIENE TRES VALORES. `true` quedó, `false` no quedó,
+// `null` nadie preguntó — este último NO se puede llegar a él cerrando: el §5.2-F5 pone la
+// pregunta en el cierre y el rojo del Anexo B se apoya en poder distinguir «no quedó» de
+// «todavía no se preguntó».
+
+export type CierreDeTurno =
+  | { tipo: "ok"; turnoId: string }
+  | { tipo: "no_existe" }
+  | { tipo: "sin_respuesta_de_enchufe" }
+  | { tipo: "ya_no_esta_abierto" };
+
+export async function cerrarTurno(
+  pool: Pool,
+  sesion: Sesion,
+  turnoId: string,
+  datos: { enchufado: unknown },
+): Promise<CierreDeTurno> {
+  // Obligatorio, y con los dos valores explícitos: un `undefined` que se guardara como NULL
+  // dejaría el turno indistinguible de uno que nadie cerró, y el Anexo B no podría decidir.
+  if (typeof datos.enchufado !== "boolean") return { tipo: "sin_respuesta_de_enchufe" };
+
+  return enActo(pool, async (c) => {
+    const { rows: existe } = await c.query("select 1 from turnos where id = $1", [turnoId]);
+    if (existe.length === 0) return { tipo: "no_existe" };
+
+    const { rows } = await c.query<{ id: string }>(
+      `update turnos
+          set estado = 'cerrado', cerrado_en = now(), enchufado_confirmado = $2
+        where id = $1 and estado = 'abierto'
+        returning id::text as id`,
+      [turnoId, datos.enchufado],
+    );
+    if (!rows[0]) return { tipo: "ya_no_esta_abierto" };
+
+    await registrarEvento(c, {
+      codigo: EVENTOS_OPERACION.turno_cerrado,
+      objetoTabla: "turnos",
+      objetoId: turnoId,
+      sesion,
+      payload: { enchufado: datos.enchufado },
+    });
+    return { tipo: "ok", turnoId };
+  });
+}
+
+/**
+ * La nota que el turno ANTERIOR del mismo vehículo dejó para este (§5.2-F5 → §5.2-F3).
+ *
+ * Sale del campo `nota` del chequeo POST, que es donde el §1.3 de la spec la pone. `null`
+ * cuando no hay: la apertura no muestra un recuadro vacío, que enseñaría a ignorar el lugar
+ * donde algún día va a haber algo importante.
+ */
+export async function notaDelTurnoAnterior(pool: Pool, vehiculoId: string): Promise<string | null> {
+  const { rows } = await pool.query<{ nota: string | null }>(
+    `select c.nota
+       from chequeos c
+       join turnos t on t.id = c.turno_id
+      where t.vehiculo_id = $1 and c.momento = 'post' and c.nota is not null
+      order by c.record_time desc
+      limit 1`,
+    [vehiculoId],
+  );
+  return rows[0]?.nota ?? null;
+}

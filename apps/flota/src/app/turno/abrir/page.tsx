@@ -72,6 +72,8 @@ export default function AbrirTurno() {
   const [carga, setCarga] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [abierto, setAbierto] = useState(false);
+  /** Lo que le dejó dicho quien manejó antes ESTE vehículo (§5.2-F5 → §5.2-F3). */
+  const [nota, setNota] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     const respuesta = await pedir("/api/vehiculos").catch(() => null);
@@ -178,6 +180,10 @@ export default function AbrirTurno() {
                 onClick={() => {
                   setElegido(v);
                   setPaso("chequeo");
+                  void (async () => {
+                    const r = await pedir(`/api/chequeos/nota?vehiculo_id=${v.id}`).catch(() => null);
+                    if (r?.ok) setNota(((await r.json()) as { nota: string | null }).nota);
+                  })();
                 }}
                 style={chip}
               >
@@ -190,6 +196,14 @@ export default function AbrirTurno() {
 
       {paso === "chequeo" && (
         <section data-testid="paso-chequeo" style={bloque}>
+          {/* La nota del turno ANTERIOR de este mismo vehículo (§5.2-F5 → §5.2-F3). Solo
+              aparece si existe: un recuadro casi siempre vacío enseña a no mirarlo, y el día
+              que traiga algo importante nadie lo lee. */}
+          {nota && (
+            <p data-testid="nota-del-turno-anterior" style={textoNota}>
+              Del turno anterior: {nota}
+            </p>
+          )}
           <h2 style={subtitulo}>Antes de salir, ¿está todo bien?</h2>
           {/* OK-POR-DEFECTO (§5.2-F3): el camino feliz es UN toque. Marcar algo cuesta sus dos
               y no bloquea nada — si bloqueara, la persona aprendería a no marcar. */}
@@ -296,6 +310,15 @@ const chip = {
   fontWeight: enfasis.medio,
 };
 const chipMarcado = { ...chip, background: superficie.texto, color: superficie.tarjeta };
+const textoNota = {
+  ...cuerpo,
+  margin: 0,
+  padding: `${grilla.base}px`,
+  borderRadius: grilla.radio,
+  background: superficie.tarjeta,
+  border: `1px solid ${superficie.hairline}`,
+  fontWeight: enfasis.medio,
+};
 const textoAviso = { ...cuerpo, margin: 0, color: colorSemantico.alerta, fontWeight: enfasis.medio };
 /** El semáforo con TEXTO y color. El color acompaña; sin la frase, no se comunica nada. */
 const textoDelSemaforo = (estado: Semaforo) => ({
