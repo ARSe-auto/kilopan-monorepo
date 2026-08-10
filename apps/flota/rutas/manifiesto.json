@@ -264,6 +264,19 @@
       }
     },
     {
+      "ruta": "/api/gobierno/modo",
+      "archivo": "src/app/api/gobierno/modo/route.ts",
+      "metodos": [
+        "GET",
+        "PATCH"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "El selector de modo (§3) [AC-FRUT-14]. No recibe identificador por URL: el tenant sale del ruteo y el modo del cuerpo. MUTA en DOS bases —`control.tenants.modo` y la réplica del tenant—, así que enciende el comparador de huella de la BD de B: conmutarle el modo al vecino le apaga o le enciende módulos enteros de su operación (tarifas, portal del contratante, liquidación) sin que nadie de su casa lo haya decidido. Es además del DUEÑO: una sesión de A sin rol `admin_tenant` recibe 403 y una sin sesión, 404 pelado."
+      }
+    },
+    {
       "ruta": "/api/gobierno/solicitudes",
       "archivo": "src/app/api/gobierno/solicitudes/route.ts",
       "metodos": [

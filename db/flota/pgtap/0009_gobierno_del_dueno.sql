@@ -64,6 +64,9 @@ select is(
     'gobierno.invitacion_pausada',
     'gobierno.invitacion_reanudada',
     'gobierno.invitacion_revocada',
+    -- El selector de modo (§3) cambia qué módulos ve la operación entera: es un acto del dueño
+    -- y por eso vive en esta familia [AC-FRUT-14].
+    'gobierno.modo_conmutado',
     'gobierno.pin_definido',
     'gobierno.puente_emitido',
     'gobierno.solicitud_aprobada',
@@ -79,7 +82,7 @@ select is(
     'gobierno.vehiculo_editado',
     'gobierno.vehiculo_reactivado'
   ],
-  'catálogo de eventos de gobierno: los dieciocho actos, sin uno de menos'
+  'catálogo de eventos de gobierno: los diecinueve actos, sin uno de menos'
 );
 
 -- Y cada uno con su descripción escrita: un catálogo de códigos sin texto es un panel de
@@ -87,7 +90,7 @@ select is(
 select is(
   (select count(*)::int from evento_tipo
     where codigo like 'gobierno.%' and length(btrim(descripcion)) > 0),
-  18, 'cada tipo de evento de gobierno trae su descripción en es-CL'
+  19, 'cada tipo de evento de gobierno trae su descripción en es-CL'
 );
 
 select finish();

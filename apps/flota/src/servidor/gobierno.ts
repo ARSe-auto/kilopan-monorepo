@@ -68,6 +68,9 @@ export const EVENTOS = {
   vehiculo_reactivado: "gobierno.vehiculo_reactivado",
   documento_cargado: "gobierno.documento_cargado",
   documento_eliminado: "gobierno.documento_eliminado",
+  // El selector de modo (§3) cambia qué módulos ve la operación entera: es un acto del dueño y
+  // por eso su evento es `gobierno.*`, en la misma auditoría donde él lee los accesos.
+  modo_conmutado: "gobierno.modo_conmutado",
 } as const;
 
 /** Los eventos del TERRENO. No llevan el prefijo `gobierno.` y no es un detalle: la auditoría
