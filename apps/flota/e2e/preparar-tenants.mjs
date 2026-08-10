@@ -38,6 +38,15 @@ export const TENANTS = [
   // `delete from usuarios` del `beforeAll` de otra suite rebotaría por esa FK, y el módulo que
   // se pondría rojo sería el que no hizo nada.
   { slug: "gobierno", estado: "activo" },
+  // Base PROPIA para las suites que dejan HECHOS append-only [AC-FVEH-04, AC-FVEH-08].
+  //
+  // `chequeos` y `energy_entry` rebotan el DELETE incluso para el dueño del esquema (§7.4), y
+  // de ellos cuelgan turnos y vehículos que por lo tanto tampoco se pueden borrar. Compartiendo
+  // la base del primer activo, la suite del alta de vehículos —que necesita una flota VACÍA
+  // para probar el estado vacío accionable del §5.7— encontraría los camiones que dejó la de
+  // recargas, y la que se pondría roja sería la que no hizo nada. Va al FINAL por lo mismo que
+  // `gobierno`: media docena de suites toma los dos primeros activos por índice.
+  { slug: "hechos", estado: "activo" },
 ];
 
 /** Subdominio que jamás se registra. Nombrarlo acá evita que el test lo invente distinto. */

@@ -301,6 +301,18 @@
       }
     },
     {
+      "ruta": "/api/recargas",
+      "archivo": "src/app/api/recargas/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Cierre de sesión de recarga [AC-FVEH-08]. El vehículo viaja en el cuerpo y el tenant sale del ruteo, así que no hay parámetro de ruta: el caso genérico va sin credencial y la guardia contesta 404 pelado. El POST MUTA y enciende el comparador de huella de la BD de B — una recarga escrita en el vecino le inventa energía consumida, y con ella un costo que el trigger calcula desde SU tarifa: no es solo una fuga, le ensucia el reporte de ahorro vs diésel del Anexo A, que es su argumento de venta. El cruce CON un uuid de vehículo de B lo prueba la suite del módulo."
+      }
+    },
+    {
       "ruta": "/api/reenrolamiento",
       "archivo": "src/app/api/reenrolamiento/route.ts",
       "metodos": [

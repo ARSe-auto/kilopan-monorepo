@@ -49,15 +49,28 @@ export async function limpiarFixture(sql) {
   for (const tabla of TABLAS_DE_IDENTIDAD) await sql(`delete from ${tabla}`);
 }
 
-/** Solo la operación: para las suites que arman su identidad aparte y no quieren perderla. */
+/**
+ * Solo la operación: para las suites que arman su identidad aparte y no quieren perderla.
+ *
+ * LO QUE NO SE BORRA, Y POR QUÉ. Los hechos append-only del §7.4 —`chequeos`, `energy_entry`,
+ * `reading`, `eventos`— rebotan el DELETE incluso para el dueño del esquema. Lo que cuelga de
+ * ellos tampoco se puede borrar, así que un turno con chequeos o un vehículo con recargas se
+ * QUEDAN. Es la conducta correcta: esa jornada dejó un hecho firmado y la historia no se tira.
+ * Por eso acá se excluyen con un `not exists` en vez de intentar el borrado y morir con un
+ * error de restricción que no dice qué falta.
+ */
 export async function limpiarOperacion(sql) {
   await sql("delete from defectos");
   await sql("delete from bloques_agenda");
-  // Los turnos con chequeos NO se borran: el chequeo es append-only y su FK los sostiene. Es
-  // la conducta correcta —esa jornada dejó un hecho firmado y la historia no se tira— y por eso
-  // acá se excluyen en vez de intentar el borrado y morir con un error de restricción.
   await sql(
-    "delete from turnos t where not exists (select 1 from chequeos c where c.turno_id = t.id)",
+    `delete from turnos t
+      where not exists (select 1 from chequeos c where c.turno_id = t.id)
+        and not exists (select 1 from energy_entry e where e.turno_id = t.id)`,
   );
-  for (const tabla of ["vehiculo_documentos", "vehiculos"]) await sql(`delete from ${tabla}`);
+  await sql("delete from vehiculo_documentos");
+  await sql(
+    `delete from vehiculos v
+      where not exists (select 1 from energy_entry e where e.vehiculo_id = v.id)
+        and not exists (select 1 from turnos t where t.vehiculo_id = v.id)`,
+  );
 }

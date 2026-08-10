@@ -87,6 +87,7 @@ export const EVENTOS_OPERACION = {
   defecto_en_curso: "defecto.en_curso",
   defecto_resuelto: "defecto.resuelto",
   defecto_bloqueante: "defecto.bloqueante",
+  energia_sesion_cerrada: "energia.sesion_cerrada",
   agenda_bloque_creado: "agenda.bloque_creado",
   agenda_bloque_borrado: "agenda.bloque_borrado",
   agenda_semana_duplicada: "agenda.semana_duplicada",

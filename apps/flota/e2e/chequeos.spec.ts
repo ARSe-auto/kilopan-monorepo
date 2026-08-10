@@ -23,8 +23,15 @@ import { TENANTS } from "./preparar-tenants.mjs";
 // Lo que solo la base sostiene —append-only, el defecto que no se reasigna, la nota obligatoria
 // al resolver y de dónde sale «apto»— vive en `db/flota/pgtap/0015_chequeos_y_defectos.sql`.
 
-const A = TENANTS.filter((t) => t.estado === "activo")[0]!;
+// Base PROPIA: esta suite deja HECHOS append-only (§7.4) que no se pueden borrar, y con ellos
+// quedan turnos y vehículos que tampoco. En la base compartida, la suite del alta de vehículos
+// —que necesita la flota vacía— encontraría estos camiones y se pondría roja sin haber hecho
+// nada. Mismo criterio que el tenant `gobierno`.
+const A = TENANTS.find((t) => t.slug === "hechos")!;
 const BD_A = bdDeTenant(A.slug);
+/** El host del tenant propio. `baseURL` apunta al primer activo, así que las peticiones de esta
+ *  suite van con URL absoluta: el ruteo por subdominio (AC-FTEN-05) es quien elige la base. */
+const EN_HECHOS = `http://${A.slug}.localhost:3311`;
 type Conexion = { sql: <T = Record<string, string>>(t: string, p?: unknown[]) => Promise<T[]> };
 
 const RUT_CHOFER = Object.keys(VALIDOS)[2]!;
@@ -78,7 +85,7 @@ const chequear = (
   request: import("@playwright/test").APIRequestContext,
   datos: Record<string, unknown>,
 ) =>
-  request.post("/api/chequeos", {
+  request.post(`${EN_HECHOS}/api/chequeos`, {
     headers: comoChofer,
     data: {
       inspectable_tipo: "vehiculos",
@@ -113,7 +120,7 @@ test("[AC-FVEH-04] un ítem fallado deja su defecto y NO bloquea la apertura del
 
   // §5.2-F3 y §7.6, con esas palabras: «SOC bajo o ítem fallado JAMÁS bloquean la apertura».
   // Si el formulario pudiera detener un camión, la persona aprendería a no marcar nada.
-  const turno = await request.post("/api/turnos", {
+  const turno = await request.post(`${EN_HECHOS}/api/turnos`, {
     headers: comoChofer,
     data: { vehiculo_id: vehiculoId },
   });
@@ -182,7 +189,7 @@ test("[AC-FVEH-04] el ciclo del defecto: abierto → en curso → resuelto, con 
     ),
   );
 
-  const enCurso = await request.patch(`/api/defectos/${d!.id}`, {
+  const enCurso = await request.patch(`${EN_HECHOS}/api/defectos/${d!.id}`, {
     headers: comoOperador,
     data: { estado: "en_curso" },
   });
@@ -191,14 +198,14 @@ test("[AC-FVEH-04] el ciclo del defecto: abierto → en curso → resuelto, con 
 
   // Cerrar SIN decir cómo rebota: un defecto así vuelve a aparecer y nadie sabe qué se probó la
   // vez anterior (misma regla que `review_queue`, §5.6).
-  const sinNota = await request.patch(`/api/defectos/${d!.id}`, {
+  const sinNota = await request.patch(`${EN_HECHOS}/api/defectos/${d!.id}`, {
     headers: comoOperador,
     data: { estado: "resuelto" },
   });
   expect(sinNota.status()).toBe(422);
   expect((await sinNota.json()).error).toBe("resolucion_sin_nota");
 
-  const resuelto = await request.patch(`/api/defectos/${d!.id}`, {
+  const resuelto = await request.patch(`${EN_HECHOS}/api/defectos/${d!.id}`, {
     headers: comoOperador,
     data: { estado: "resuelto", nota: "se cambió la ampolleta" },
   });
@@ -214,7 +221,7 @@ test("[AC-FVEH-04] el `bloqueante` lo marca el OPERADOR, y recién ahí el vehí
       "select id::text as id from defectos where item = 'espejo derecho' order by abierto_en limit 1",
     ),
   );
-  const r = await request.patch(`/api/defectos/${d!.id}`, {
+  const r = await request.patch(`${EN_HECHOS}/api/defectos/${d!.id}`, {
     headers: comoOperador,
     data: { bloqueante: true },
   });
