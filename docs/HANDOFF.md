@@ -1,4 +1,23 @@
-# HANDOFF — El módulo 03 va en 12 de 22
+# HANDOFF — El MOTOR está al mando; el módulo 03 va en 14 de 22
+
+> **LO PRIMERO: hay un motor autónomo construyendo FLOTA.** No es una sesión más lo que sigue —
+> es supervisión. Antes de escribir una línea de código, mirá si está vivo:
+>
+> ```
+> ps -p $(cat packages/metodo/panel/motor-flota.pid) && tail -30 packages/metodo/panel/motor-flota.log
+> ```
+>
+> · **Vivo** → NO construyas: dos builders en el mismo worktree eligen el mismo AC y se pisan
+>   los commits. Supervisá, y si hace falta arreglá el arnés (que es lo que él no puede).
+> · **Detenido con `packages/metodo/panel/PAUSA-REVISION`** → algo se rompió y pidió que lo mire
+>   una persona. Leé `ultimo-loop.log`, arreglá LA CAUSA, borrá el marcador y relanzalo con
+>   `bash packages/metodo/scripts/arrancar-motor-flota.sh`.
+> · **Detenido sin marcador** → terminó su tanda de 20 iteraciones. Relanzalo igual.
+>
+> Arrancarlo NO necesita `launchctl`. El plist bajo launchd existe y está instalado
+> (`~/Library/LaunchAgents/com.flota.ralph-loop.plist`) por si algún día se puede cargar: agrega
+> el arranque tras reinicio. Los dos usan el mismo watchdog y los mismos frenos.
+
 
 **Traspaso de la sesión del 10-ago-2026 (05:20 →), rama `flota/specs-e1` en
 `~/kilopan-monorepo-flota`, Opus 5 esfuerzo alto.** Once commits, diez ACs cerrados, un defecto
@@ -14,15 +33,17 @@ saltado declarado**.
 
 | | Antes | Ahora |
 |---|---|---|
-| Módulo 03 (encargos, rutas, custodia) | 2 de 22 | **12 de 22** |
-| ACs cerrados de la plataforma | 69 de 197 | **79 de 197** |
+| Módulo 03 (encargos, rutas, custodia) | 2 de 22 | **14 de 22** |
+| ACs cerrados de la plataforma | 69 de 197 | **81 de 197** |
 | Rutas que sirve `apps/flota` | 48 | **60** |
-| Migraciones de tenant | 36 | **40** (última: `0040_confinamiento_del_cliente`) |
+| Migraciones de tenant | 36 | **42** (última: `0042_dte_gate`) |
 
 **Cerrados en esta sesión:** AC-FRUT-04 (agrupación multi-empresa), 05 (publicar el día en 6
 clics), 15 (destino sin geo), 18 (bloque de recarga como parada), 20 (seeds de
 `pin_destinatario`), 17 (repetir el día de ayer), 13 (motivos), 14 (empresa implícita y
-selector de modo), 06 (rutas maestras) y **12 (aislamiento y confinamiento del rol `cliente`)**.
+selector de modo), 06 (rutas maestras), 12 (aislamiento y confinamiento del rol `cliente`),
+**07 (sub-manifiesto del andén en 3 acciones)** y **08 (DTE gate y la vía de bajar del
+manifiesto)**.
 
 **Presupuesto medido:** publicar el día **6 clics** contra 15, recorriendo la secuencia F1
 COMPLETA con el tablero del módulo 02 incluido en el conteo. Baseline en
@@ -97,25 +118,26 @@ trigger de la empresa implícita pueda leerla sin cruzar bases (§7.2).
   `recurso` además su `ids_de_b` con la tabla de la que sale el identificador. Si la tabla es
   nueva, hay que sembrarle una fila al vecino en `preparar-tenants.mjs` o el caso no prueba nada.
 
-### 1. Lo que sigue: el bloque de CUSTODIA (AC-FRUT-07/08/09/10)
+### 1. Lo que sigue lo elige el MOTOR, no vos
 
-Es el más grande que queda y son cuatro ACs que se sostienen entre sí: traen `manifiestos`,
-`manifiesto_items` y `custody_transfer`, más la creación de filas en `reference_document` (cuya
-tabla ya existe, del módulo 00).
+Toma el siguiente AC abierto de `IMPLEMENTATION_PLAN_flota.md` por prioridad (P0 → P1 → P2),
+verifica con `check.sh --app=flota --full` antes de comitear, y publica solo lo que ese gate
+declaró verde. Su primer AC fue AC-FIDN-07.
 
-- **AC-FRUT-07** — sub-manifiesto por parada de carga y POR EMPRESA, ≤4 acciones, cifra en 96 px
-  con `tabular-nums` (test tipográfico que falla si falta), «Conforme» con undo de 8 s.
-- **AC-FRUT-08** — DTE gate: sin `reference_document` asociado no hay mercadería a bordo, con la
-  vía explícita «bajar del manifiesto». Incluye un grep-gate: cero rutas de emisión de DTE, XML,
-  TED o folios — la app JAMÁS emite.
-- **AC-FRUT-09 y 10** — custodia inmutable y la captura que jamás rebota. **Los dos dependen de
-  la pregunta 7** (si el `pin_hash` argon2id de OTRO usuario viaja en el snapshot del dispositivo
-  ajeno): sin esa respuesta, el oráculo offline de la firma no se puede fijar sin inventar el
-  mecanismo. Se puede construir todo lo demás y dejar esa cláusula declarada.
+**Tu trabajo es lo que él no puede hacer:** arreglar el ARNÉS cuando se rompe. Los dos fallos
+que ya costaron una pausa cada uno son de esa clase, y ninguno estaba en un AC:
 
-Cuando nazcan esas tablas, **la que lleve `empresa_cliente_id` tiene que llevar su política de
-confinamiento**: el invariante de `db/flota/suite-bd/confinamiento.test.mjs` se pone rojo solo si
-falta. No hace falta acordarse — hace falta no ignorarlo.
+- **`FALLBACK[@]: unbound variable`** (10-ago-2026, primer arranque). El bash de macOS es 3.2 y
+  ahí expandir un array VACÍO bajo `set -u` cuenta como variable no definida. Reventaba justo la
+  rama «sin fallback» que el §8 exige para el modelo tope — o sea, el motor podía construir
+  exactamente los ACs que no importan. Arreglado con `${A[@]+"${A[@]}"}`.
+- **El síntoma siempre engaña igual**: el gate corre VERDE, el loop elige bien su AC, anuncia el
+  modelo correcto, y recién ahí muere. El watchdog pausa por «3 sin avance», que es cierto y no
+  señala a dónde mirar. **Ante una pausa, sospechá del arnés antes que del AC.**
+
+Si el motor queda atascado en un AC concreto, se anota solo en
+`packages/metodo/panel/acs-atascados.txt` y sigue con el siguiente: ese archivo es la lista de
+lo que necesita una persona.
 
 ### 2. Lo que sigue después, en orden de dependencia
 
