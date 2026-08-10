@@ -373,6 +373,30 @@
       }
     },
     {
+      "ruta": "/api/tablero",
+      "archivo": "src/app/api/tablero/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Tablero «Listos para salir» (F1) [AC-FVEH-12]. Sin parámetro: devuelve la flota del tenant que eligió el ruteo. El cruce genérico verifica que el estado de carga de los camiones del vecino —cuántos tiene, cuánta batería les queda, cuáles no pueden salir— no se lea desde el host de A. Es información operativa completa de una empresa en una sola respuesta."
+      }
+    },
+    {
+      "ruta": "/api/tablero/sugerir-recarga",
+      "archivo": "src/app/api/tablero/sugerir-recarga/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "«1 clic sugiere la recarga nocturna» (§5.2-F1) [AC-FVEH-12]. El vehículo va en el cuerpo. El verbo MUTA en el manifiesto porque es POST, así que enciende el comparador de huella — y ahí está la mitad interesante: esta ruta NO escribe nada, y la huella intacta de B es también la prueba de que sugerir no es crear (pregunta 14, abierta). El caso genérico va sin credencial y la guardia contesta 404 pelado."
+      }
+    },
+    {
       "ruta": "/api/tenant",
       "archivo": "src/app/api/tenant/route.ts",
       "metodos": [
@@ -455,6 +479,18 @@
       "cruce": {
         "tipo": "sin_recurso",
         "nota": "Listado de la flota, la lectura que el §5.4 le reserva al operador para asignar [AC-FVEH-01]. Sin parámetro: devuelve siempre los vehículos del tenant que eligió el ruteo. El cruce genérico verifica que la flota de B no se pueda enumerar desde el host de A ni inyectando su identidad por cabecera — y acá el tamaño de la flota ajena ya es información, así que el contrato es 404 sin sesión y ni una patente de B en la respuesta."
+      }
+    },
+    {
+      "ruta": "/listos",
+      "archivo": "src/app/listos/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla del tablero (§5.2-F1) [AC-FVEH-12]. No recibe identificador por URL: la flota sale del ruteo y la sugerencia manda el vehículo en el cuerpo. Cruce genérico — identidad de B por los canales falsificables, y ni una patente del vecino en la respuesta."
       }
     },
     {

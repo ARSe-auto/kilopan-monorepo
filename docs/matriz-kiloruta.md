@@ -48,7 +48,7 @@ clasificado, se corrige allá, con la firma del dueño, y acá se refleja.
 | KR-15 | bloques_agenda (duplicar semana) | apps/flota/e2e/agenda.spec.ts::clona los bloques REALES de 7 días atrás |
 | KR-16 | turnos + chequeo pre (odómetro, SOC) | apps/flota/e2e/apertura.spec.ts::el turno quedó con su chequeo y sus dos lecturas colgando |
 | KR-17 | vertical_template.checklists[] | db/flota/pgtap/0002_verticales_grupos_y_parametros.sql::has_column('vertical_template', 'checklists') |
-| KR-18 | proyección vehiculos.soc + fórmula de rango del §0 | — (pendiente: AC-FVEH-09/10 · hito c) |
+| KR-18 | proyección vehiculos.soc + fórmula de rango del §0 | apps/flota/e2e/tablero.spec.ts::el tablero aplica la fórmula única y descuenta la reserva UNA vez |
 | KR-19 | eventos + review_queue (confirmación de 1 toque) | apps/flota/e2e/apertura.spec.ts::un ítem fallado NO bloquea la apertura, y la pantalla lo dice |
 | KR-20 | cierre de turno (odómetro, SOC, defecto→issue) | apps/flota/e2e/apertura.spec.ts::el cierre entra en el presupuesto, con la nota adentro |
 | KR-21 | encargos (empresa + destino + bultos) | — (pendiente: AC-FRUT-01 · hito d) |
