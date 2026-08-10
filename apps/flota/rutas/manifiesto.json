@@ -387,6 +387,19 @@
       }
     },
     {
+      "ruta": "/api/maestras",
+      "archivo": "src/app/api/maestras/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Rutas maestras (§3.E1.6) [AC-FRUT-06]. El GET lista las plantillas y el POST INSTANCIA el día a partir de una, así que enciende el comparador de huella de la BD de B: armarle el día al vecino desde una plantilla le crea una ruta con paradas que su operador no puso, y si no la ve, sale un camión con ella. El `maestra_id` viaja en el cuerpo y el caso con un id real de B lo prueba la suite del módulo."
+      }
+    },
+    {
       "ruta": "/api/motivos",
       "archivo": "src/app/api/motivos/route.ts",
       "metodos": [
@@ -500,6 +513,24 @@
           "columna": "id"
         },
         "nota": "Asignar encargos de A a una ruta de B, o encargos de B a una ruta de A: 404 y la BD de B sin cambios. MUTA, así que el comparador de huella pesa — un encargo asignado en el vecino le carga bultos ajenos a un camión suyo y le descuadra la ecuación de cierre de esa empresa (§3.E1.6, centinela 2)."
+      }
+    },
+    {
+      "ruta": "/api/rutas/[id]/paradas",
+      "archivo": "src/app/api/rutas/[id]/paradas/route.ts",
+      "metodos": [
+        "PATCH"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "rutas",
+          "columna": "id"
+        },
+        "nota": "Reordenar las paradas de una ruta de B desde una sesión de A: 404 y la BD de B sin cambios. Es la mutación más silenciosa del módulo —no crea ni borra nada, solo cambia el ORDEN— y por eso importa: un recorrido reordenado por un ajeno manda al camión a la última cuadra primero y nadie lo lee como un ataque, lo lee como un error propio."
       }
     },
     {
@@ -687,6 +718,18 @@
       "cruce": {
         "tipo": "sin_recurso",
         "nota": "Pantalla del tablero (§5.2-F1) [AC-FVEH-12]. No recibe identificador por URL: la flota sale del ruteo y la sugerencia manda el vehículo en el cuerpo. Cruce genérico — identidad de B por los canales falsificables, y ni una patente del vecino en la respuesta."
+      }
+    },
+    {
+      "ruta": "/maestras",
+      "archivo": "src/app/maestras/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de rutas maestras (§3.E1.6) [AC-FRUT-06]. No recibe identificador por URL: la plantilla se elige con un chip y todo lo que hace pasa por /api/maestras y /api/rutas/[id]/paradas, que tienen sus propios casos. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y pesa porque el HTML servido no puede traer el nombre de los recorridos del vecino ni el de sus destinos antes de que haya sesión."
       }
     },
     {

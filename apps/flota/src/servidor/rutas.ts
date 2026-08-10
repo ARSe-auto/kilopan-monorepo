@@ -296,6 +296,128 @@ export async function verRuta(
 // NULL: inventarle una —el día entero, la hora de publicación— sería fabricar un compromiso que
 // nadie hizo, y después medir el cumplimiento contra él.
 
+// ─── Rutas maestras: la plantilla y el día que nace de ella [AC-FRUT-06] — §3.E1.6, §4.5 ──
+//
+// ─── COPIA, Y ESTÁ DECLARADO ──────────────────────────────────────────────────────
+//
+// La **pregunta 2** de la spec 03 está abierta: si la ruta del día nace como COPIA o como
+// referencia a la maestra con overrides. El maestro pide maestras editables y rutas del día
+// versionadas (§3.E1.6, §4.5) sin cerrar el mecanismo, y el AC exige solo lo observable.
+//
+// Esta implementación copia, y la razón no es que sea más fácil: es la que hace cierto lo que el
+// AC sí fija —«la maestra permanece intacta tras editar el día»— sin ninguna maquinaria. Con
+// referencias más overrides, «intacta» pasa a depender de que cada edición del día se escriba en
+// el lugar correcto, y el día que una se escriba en el otro, doce rutas futuras cambian a la vez
+// y nadie lo nota hasta que un camión sale distinto. Si el dueño elige referencias, cambia esta
+// función; lo observable que el AC pide sigue igual.
+//
+// Lo que se copia son las PARADAS con su tipo, su orden y su ventana. Los ítems NO: cuelgan de
+// encargos de un día concreto y una plantilla no tiene encargos. La maestra dice por dónde se
+// pasa; el día dice qué se lleva.
+
+export type Instanciacion =
+  | { tipo: "ok"; ruta: Ruta; paradas: number }
+  | { tipo: "maestra_no_existe" }
+  | { tipo: "no_es_maestra" };
+
+export async function instanciarDesdeMaestra(
+  pool: Pool,
+  sesion: Sesion,
+  maestraId: string,
+  datos: { vehiculoId: string | null; fechaServicio: string | null },
+): Promise<Instanciacion> {
+  return enActo(pool, async (c) => {
+    const { rows: maestra } = await c.query<{ nombre: string | null; es_maestra: boolean }>(
+      "select nombre, es_maestra from rutas where id = $1",
+      [maestraId],
+    );
+    if (!maestra[0]) return { tipo: "maestra_no_existe" };
+    // Instanciar desde una ruta del día produciría una copia de un día concreto con cara de
+    // plantilla, y el operador la editaría creyendo que no toca nada.
+    if (!maestra[0].es_maestra) return { tipo: "no_es_maestra" };
+
+    const { rows: nueva } = await c.query<Ruta>(
+      `insert into rutas (nombre, vehiculo_id, fecha_servicio, origen, maestra_id)
+       values ($1, $2, coalesce($3::date, (now() at time zone 'America/Santiago')::date),
+               'maestra', $4)
+       returning ${COLUMNAS_DE_RUTA}`,
+      [maestra[0].nombre, datos.vehiculoId, datos.fechaServicio, maestraId],
+    );
+
+    // Las paradas se copian con su tipo, su orden y su ventana. Los ítems no: cuelgan de
+    // encargos de un día concreto, y una plantilla no tiene encargos.
+    const { rows: copiadas } = await c.query<{ id: string }>(
+      `insert into paradas (ruta_id, tipo, orden, destino_id, ventana)
+       select $1, tipo, orden, destino_id, ventana from paradas where ruta_id = $2
+       returning id::text as id`,
+      [nueva[0]!.id, maestraId],
+    );
+
+    await registrarEvento(c, {
+      codigo: EVENTOS_OPERACION.ruta_creada,
+      objetoTabla: "rutas",
+      objetoId: nueva[0]!.id,
+      sesion,
+      payload: { origen: "maestra", maestra_id: maestraId, paradas: copiadas.length },
+    });
+    return { tipo: "ok", ruta: nueva[0]!, paradas: copiadas.length };
+  });
+}
+
+/** Las plantillas del tenant. Van aparte de `listarRutas`, que solo trae los días. */
+export async function listarMaestras(pool: Pool): Promise<Ruta[]> {
+  const { rows } = await pool.query<Ruta>(
+    `select ${COLUMNAS_DE_RUTA} from rutas where es_maestra order by nombre`,
+  );
+  return rows;
+}
+
+export type Reordenamiento = { tipo: "ok"; paradas: number } | { tipo: "ruta_no_existe" };
+
+/**
+ * Reordena las paradas de una ruta [AC-FRUT-06].
+ *
+ * La MISMA función sirve al drag & drop del escritorio y a los botones de subir/bajar del móvil.
+ * Es el punto del AC: el §3.E1.6 pide arrastrar solo en escritorio, y si el móvil no tuviera
+ * ninguna otra vía, «sin drag & drop» sería «sin poder reordenar» — que es pérdida de datos por
+ * omisión. Dos gestos, un endpoint, un solo lugar donde el orden se escribe.
+ *
+ * Va en dos pasadas por lo mismo que `ordenarPorHora`: `(ruta_id, orden)` es único y no admite
+ * diferir, así que los órdenes salen del rango en uso antes de tomar el definitivo.
+ */
+export async function reordenarParadas(
+  pool: Pool,
+  rutaId: string,
+  enOrden: string[],
+): Promise<Reordenamiento> {
+  return enActo(pool, async (c) => {
+    const { rows: ruta } = await c.query("select 1 from rutas where id = $1", [rutaId]);
+    if (ruta.length === 0) return { tipo: "ruta_no_existe" };
+
+    await c.query("update paradas set orden = orden + 10000 where ruta_id = $1", [rutaId]);
+    let n = 0;
+    for (const [i, paradaId] of enOrden.entries()) {
+      const { rowCount } = await c.query(
+        "update paradas set orden = $3 where ruta_id = $1 and id = $2",
+        [rutaId, paradaId, i + 1],
+      );
+      n += rowCount ?? 0;
+    }
+    // Las que el cliente no nombró conservan su orden relativo, detrás de las que sí: perder una
+    // parada porque la lista que llegó venía incompleta sería exactamente la pérdida de datos
+    // que el AC prohíbe.
+    await c.query(
+      `with resto as (
+         select id, row_number() over (order by orden) as k
+           from paradas where ruta_id = $1 and orden > 10000
+       )
+       update paradas set orden = $2 + resto.k from resto where paradas.id = resto.id`,
+      [rutaId, enOrden.length],
+    );
+    return { tipo: "ok", paradas: n };
+  });
+}
+
 export type Publicacion =
   | { tipo: "ok"; paradas: number; requisitos: number; promesas: number }
   | { tipo: "ruta_no_existe" }
