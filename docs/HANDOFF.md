@@ -1,8 +1,8 @@
-# HANDOFF — El módulo 03 pasó la mitad: 11 de 22
+# HANDOFF — El módulo 03 va en 12 de 22
 
-**Traspaso de la sesión del 10-ago-2026 (05:20 → 09:30), rama `flota/specs-e1` en
-`~/kilopan-monorepo-flota`, Opus 5 esfuerzo alto.** Diez commits, nueve ACs cerrados y un
-defecto propio corregido. `check.sh --app=flota --full` en **VERDE con 14 OK · 0 fallados · 1
+**Traspaso de la sesión del 10-ago-2026 (05:20 →), rama `flota/specs-e1` en
+`~/kilopan-monorepo-flota`, Opus 5 esfuerzo alto.** Once commits, diez ACs cerrados, un defecto
+propio corregido y **la deuda de `app.current_role` SALDADA**. `check.sh --app=flota --full` en **VERDE con 14 OK · 0 fallados · 1
 saltado declarado**.
 
 > Sesión nueva: retomá esto **sin re-preguntar nada**, armá tu propio despertador de 4h30m
@@ -14,15 +14,15 @@ saltado declarado**.
 
 | | Antes | Ahora |
 |---|---|---|
-| Módulo 03 (encargos, rutas, custodia) | 2 de 22 | **11 de 22** |
-| ACs cerrados de la plataforma | 69 de 197 | **78 de 197** |
+| Módulo 03 (encargos, rutas, custodia) | 2 de 22 | **12 de 22** |
+| ACs cerrados de la plataforma | 69 de 197 | **79 de 197** |
 | Rutas que sirve `apps/flota` | 48 | **60** |
-| Migraciones de tenant | 36 | **39** (última: `0039_empresa_implicita`) |
+| Migraciones de tenant | 36 | **40** (última: `0040_confinamiento_del_cliente`) |
 
 **Cerrados en esta sesión:** AC-FRUT-04 (agrupación multi-empresa), 05 (publicar el día en 6
 clics), 15 (destino sin geo), 18 (bloque de recarga como parada), 20 (seeds de
 `pin_destinatario`), 17 (repetir el día de ayer), 13 (motivos), 14 (empresa implícita y
-selector de modo) y 06 (rutas maestras).
+selector de modo), 06 (rutas maestras) y **12 (aislamiento y confinamiento del rol `cliente`)**.
 
 **Presupuesto medido:** publicar el día **6 clics** contra 15, recorriendo la secuencia F1
 COMPLETA con el tablero del módulo 02 incluido en el conteo. Baseline en
@@ -97,36 +97,28 @@ trigger de la empresa implícita pueda leerla sin cruzar bases (§7.2).
   `recurso` además su `ids_de_b` con la tabla de la que sale el identificador. Si la tabla es
   nueva, hay que sembrarle una fila al vecino en `preparar-tenants.mjs` o el caso no prueba nada.
 
-### 1. Lo que sigue: **AC-FRUT-12**, y es el más grande que queda
+### 1. Lo que sigue: el bloque de CUSTODIA (AC-FRUT-07/08/09/10)
 
-«Aislamiento: sesión del tenant A con IDs de B ⇒ 404 […]; dentro del tenant, sesión `cliente` de
-la empresa X ⇒ 0 filas de la empresa Y en toda tabla del módulo (§4.1, §7.2, §9.3.3)».
+Es el más grande que queda y son cuatro ACs que se sostienen entre sí: traen `manifiestos`,
+`manifiesto_items` y `custody_transfer`, más la creación de filas en `reference_document` (cuya
+tabla ya existe, del módulo 00).
 
-La primera mitad ya está cubierta por la suite HTTP autogenerada del manifiesto (60 rutas, 71
-casos). **La segunda mitad es la que falta y no es chica**, por eso no se empezó al final de una
-sesión: es RLS de verdad y pide tres cosas que hoy no existen.
+- **AC-FRUT-07** — sub-manifiesto por parada de carga y POR EMPRESA, ≤4 acciones, cifra en 96 px
+  con `tabular-nums` (test tipográfico que falla si falta), «Conforme» con undo de 8 s.
+- **AC-FRUT-08** — DTE gate: sin `reference_document` asociado no hay mercadería a bordo, con la
+  vía explícita «bajar del manifiesto». Incluye un grep-gate: cero rutas de emisión de DTE, XML,
+  TED o folios — la app JAMÁS emite.
+- **AC-FRUT-09 y 10** — custodia inmutable y la captura que jamás rebota. **Los dos dependen de
+  la pregunta 7** (si el `pin_hash` argon2id de OTRO usuario viaja en el snapshot del dispositivo
+  ajeno): sin esa respuesta, el oráculo offline de la firma no se puede fijar sin inventar el
+  mecanismo. Se puede construir todo lo demás y dejar esa cláusula declarada.
 
-1. **`usuarios.empresa_cliente_id`** — hoy nada ata un usuario `cliente` a su empresa. Sin esa
-   columna no hay a qué confinarlo.
-2. **Que el servidor SETEE el GUC en cada acto.** `app.current_role` existe y las políticas de
-   dinero del §4.8 lo usan, pero **hoy solo lo setean las suites de `db/flota/suite-bd/`**: la app
-   nunca lo escribe. Eso significa que las políticas de dinero del módulo 02 tampoco están
-   activas en runtime — **es una deuda REAL que este AC destapa y que conviene arreglar acá**,
-   porque el lugar es el mismo: `enActo` en `servidor/gobierno.ts` y el pool de lectura.
-3. **La política por empresa** en `encargos`, `paradas`, `items` (y las de custodia cuando
-   nazcan), más **un invariante que exija la política a toda tabla del módulo que tenga
-   `empresa_cliente_id`** — así, cuando nazca `manifiestos`, el test se pone rojo si no la lleva.
-   Ese invariante es lo que hace que «toda tabla del módulo» sea cierto a futuro y no solo hoy.
-
-Arrancá con la ventana entera por delante. Y ojo con el punto 2: tocar `enActo` afecta a TODO el
-módulo 02, así que conviene correr el `--full` apenas esté y no al final.
+Cuando nazcan esas tablas, **la que lleve `empresa_cliente_id` tiene que llevar su política de
+confinamiento**: el invariante de `db/flota/suite-bd/confinamiento.test.mjs` se pone rojo solo si
+falta. No hace falta acordarse — hace falta no ignorarlo.
 
 ### 2. Lo que sigue después, en orden de dependencia
 
-- **AC-FRUT-07/08/09/10** (F2: sub-manifiesto, DTE gate, custodia, la captura que jamás rebota).
-  Son el bloque de la cadena de custodia y traen `manifiestos`, `manifiesto_items` y
-  `custody_transfer`. El 09 y el 10 dependen de la **pregunta 7** (si el `pin_hash` de otro
-  usuario viaja en el snapshot del dispositivo ajeno) para su oráculo offline.
 - **AC-FRUT-11 y 21** (ecuación de cierre y `devoluciones`): el 11 necesita `entregas_pod`
   fixtureada del módulo 04.
 - **AC-FRUT-19** (telemetría `toques_flujo` a `client_metric`): necesita el endpoint de sync del
@@ -156,9 +148,12 @@ qué comparar.
 
 ## Deudas reales, ninguna tapada
 
-- **`app.current_role` no lo setea la app.** Ver punto 2 de «lo que sigue»: las políticas de
-  dinero del §4.8 están escritas y probadas por `suite-bd` con el rol real, pero en runtime nadie
-  declara el rol, así que hoy no protegen nada en producción. Es la deuda más seria del árbol.
+- **La app se conecta con el superusuario del cluster en local.** Las políticas de RLS
+  —dinero (§4.8) y empresa (§7.2)— solo rigen contra un rol NOBYPASSRLS, y `app_t_<slug>` existe
+  desde AC-FTEN-03 pero la cadena local apunta a `flota_admin`. En producción `DATABASE_URL`
+  apunta al rol de app, así que la política SÍ rige allá; lo que no puede es ejercerse desde el
+  e2e, y por eso toda RLS se prueba en `suite-bd`. Vale la pena hacer que el e2e también use el
+  rol de app: sería la única forma de que una regresión de RLS se vea en el camino feliz.
 - **`tenant_info.id` ≠ `control.tenants.id`.** Se rodea resolviendo por slug.
 - **`scripts/deploy.sh` del §9.1 sigue sin existir**, y `guardrail.sh` sigue sin la regla que
   ponga en rojo toda invocación de `railway` fuera de él.
@@ -209,27 +204,20 @@ mostró 34 procesos).
 > `docs/handoffs/2026-08-10-0930.md`, armá tu propio despertador de 4h30m (tarea Bash en
 > background) y arrancá por «Próximos pasos».
 >
-> **Estado: 78 de 197 ACs.** El hito (c) —vehículos EV, módulo 02— está cerrado en 21 de 22 (el
+> **Estado: 79 de 197 ACs.** El hito (c) —vehículos EV, módulo 02— está cerrado en 21 de 22 (el
 > único abierto es de oráculo humano y jamás bloquea). El hito (d) —encargos, rutas y custodia,
-> módulo 03— va en **11 de 22**: están `rutas`, `paradas` e `items`, la agrupación multi-empresa
+> módulo 03— va en **12 de 22**: están `rutas`, `paradas` e `items`, la agrupación multi-empresa
 > garantizada por índice único parcial, publicar el día en 6 clics con sus cuatro rebotes, las
-> rutas maestras, los motivos, la empresa implícita del modo `mi_flota` y el bloque de recarga
-> como parada.
+> rutas maestras, los motivos, la empresa implícita del modo `mi_flota`, el bloque de recarga
+> como parada y el confinamiento del rol `cliente` a su empresa por política de BD.
 >
-> **Lo que sigue es AC-FRUT-12**, el más grande que queda: la mitad de aislamiento entre tenants
-> ya la cubre la suite autogenerada del manifiesto, pero la del rol `cliente` confinado a su
-> empresa pide RLS de verdad — y destapa una deuda seria: **`app.current_role` hoy solo lo setean
-> las suites de `db/flota/suite-bd/`, la app nunca lo escribe**, así que las políticas de dinero
-> del §4.8 no protegen nada en runtime. Arreglalo en el mismo lugar (`enActo` en
-> `servidor/gobierno.ts`) y corré el `--full` apenas esté, porque toca todo el módulo 02.
->
-> **Leé la sección «Lo aprendido a fuerza de rojos» ANTES de escribir**: ahí están el backtick que
-> cierra un template SQL, el backtick que bash EJECUTA dentro de `gate.sh`, el gate de PII que
-> muerde toda columna llamada `rut`, y cómo reconstruir las bases cuando una migración sin
-> comitear necesita corregirse. Ahorra media hora.
->
-> **Mirá también la sección «ATENCIÓN»**: hay un cambio en `packages/metodo/panel/generar.mjs`
-> que NO es de la sesión anterior y quedó sin comitear a propósito.
+> **Lo que sigue es el bloque de CUSTODIA: AC-FRUT-07/08/09/10.** Traen `manifiestos`,
+> `manifiesto_items` y `custody_transfer`. El 09 y el 10 dependen de la **pregunta 7** al dueño
+> —si el `pin_hash` de otro usuario viaja en el snapshot del dispositivo ajeno— y sin esa
+> respuesta su oráculo offline no se puede fijar sin inventar el mecanismo: construí todo lo
+> demás y dejá esa cláusula declarada. Y cuando crees una tabla con `empresa_cliente_id`,
+> acordate de su política de confinamiento — el invariante de
+> `db/flota/suite-bd/confinamiento.test.mjs` te lo va a decir en rojo si falta.
 >
 > Contrato: `specs/flota/*.md` + `IMPLEMENTATION_PLAN_flota.md`; la constitución es
 > `docs/PROMPT_MAESTRO_FLOTA.md`. Reglas duras: un AC = un commit con su test naciendo en el
