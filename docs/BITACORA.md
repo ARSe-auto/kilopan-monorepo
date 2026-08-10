@@ -2102,3 +2102,54 @@ respondida sin que nadie lo note.
 `check.sh --app=flota --full` en VERDE: **14 OK · 0 fallados · 1 saltado declarado**, con 158
 casos e2e. Última migración: `0021_bloques_agenda`. Matriz KiloRuta: 15 criterios con test
 verificado (entraron KR-04, KR-14, KR-15, KR-44 y KR-55).
+
+## 09-ago-2026 (tercer tramo) · El hito (c) cerrado: 21 de 22, y el único abierto es humano
+
+**Módulo 02: 21 de 22. Plataforma: 67 de 197.** El único AC que queda —AC-FVEH-16— es de
+oráculo HUMANO (DONE-adopción, dueño nombrado: Alexis) y por contrato jamás bloquea al loop:
+pide un alta real cronometrada en <2 min y la lectura sin ayuda del semáforo y del tablero.
+
+Ocho ACs más en este tramo: **03** (documentos que rebotan solo con feature ON), **17** («por
+vencer»), **18** (config congelada), **19** (máx capturas de SOC), **04** (chequeos y ciclo del
+defecto), **08** (recarga como captura con dinero invisible), **14** (ganchos §4.9), **22**
+(cierre forzado, KR-41), **15** (telemetría), **11** (señales), **10** (apertura F3), **21**
+(cierre F5), **12** (tablero) y **13** (reporte en CLP).
+
+### Los tres defectos REALES que el trabajo destapó, en orden de gravedad
+
+**1. Una vista de PostgreSQL no hereda la RLS.** `energia_semanal` sumaba exactamente las filas
+que el §4.8 le niega al chofer y le devolvía el TOTAL: no veía ninguna fila y veía el monto
+igual. La fuga que el centinela 10 existe para impedir, con la política intacta — ninguna
+revisión de la política la habría encontrado, porque la política estaba bien. Solo aparece
+corriendo la consulta con el rol `app_t_<slug>` real. Las tres vistas del tenant pasan a
+`security_invoker = true` y un invariante lo exige para toda vista futura.
+
+**2. `ON CONFLICT` necesita LEER, y el chofer no puede.** El cierre idempotente de la recarga
+rebotaba con `app.current_role` en chofer: la RLS de dinero le niega el SELECT que el
+`ON CONFLICT DO NOTHING` usa para resolver el replay. O sea, el replay del outbox del chofer
+FALLABA — contra el §4.2. Se resolvió con una función `SECURITY DEFINER` que devuelve solo el
+id: ninguna de las dos reglas se ablandó.
+
+**3. Un entitlement AUSENTE no es «apagado».** La primera versión leía la ausencia como
+apagado, y el gate lo mostró en un segundo: cada captura de cada tenant salía con el flag
+`modulo_apagado`. Habría llenado «Por revisar» de ruido desde el primer día, y una bandeja así
+deja de mirarse en una semana. Ahora hay tres estados y cada consumidor elige el suyo.
+
+### Lo que se respetó sin inventar
+
+Cinco preguntas abiertas se atravesaron y ninguna quedó respondida por accidente: el catálogo
+de tipos de vehículo (15, nueva), la colisión al duplicar semana (12), el conteo de capturas de
+SOC (9), el método de estimación de consumo (13 — los DOS implementados, sin default, y cada
+caso corrido con los dos) y el sugerir-vs-crear del bloque de recarga (14). En los cinco, el
+código hace lo que el maestro sí cierra y DICE lo que falta.
+
+### Presupuestos de toques, medidos
+
+Alta de vehículo **3**, apertura de turno **7** (presupuesto 9), cierre **6** (presupuesto 6).
+Los tres con su artefacto de baseline y su regresión bloqueante.
+
+### Estado
+
+`check.sh --app=flota --full` en VERDE: **14 OK · 0 fallados · 1 saltado declarado**. Última
+migración: `0035_vistas_security_invoker`. 43 rutas con su cruce declarado. Matriz KiloRuta: 23
+criterios con test verificado.
