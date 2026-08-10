@@ -34,7 +34,7 @@ clasificado, se corrige allá, con la firma del dueño, y acá se refleja.
 | KR-01 | — (supersedido: la norte es la EEVD, §2) | — (supersedido: AC-FTAR-03/04 · hito f) |
 | KR-02 | linea_devengo (creador SECURITY DEFINER único) | — (pendiente: AC-FTAR-03/04 · hito f) |
 | KR-03 | eventos.event_time + tz_offset_min / record_time (§4.6) | db/flota/suite-bd/hechos.test.mjs::[AC-FTEN-24] las tablas del §4.6 nacen en |
-| KR-04 | vista eevd_semanal | — (pendiente: AC-FVEH-20 · hito c) |
+| KR-04 | vista eevd_semanal | db/flota/pgtap/0013_eevd_semanal.sql::dos vehículos con turno abierto el mismo día |
 | KR-05 | personas.rut CHECK personas_rut_modulo_11 · usuarios.rol enum rol_usuario | db/flota/suite-bd/identidad.test.mjs::[AC-FIDN-01] un RUT con dígito verificador equivocado NO entra |
 | KR-06 | dispositivos.secreto_hash · dispositivos.revocado_at (revocación soft) | apps/flota/e2e/aprobacion.spec.ts::[AC-FIDN-04] una SEGUNDA aprobación de la misma solicitud rebota y no re-emite |
 | KR-07 | firmas (persona_id, dispositivo_id) append-only | apps/flota/e2e/firmas.spec.ts::[AC-FIDN-10] CENTINELA 12: la sesión del titular sigue intacta |
@@ -74,7 +74,7 @@ clasificado, se corrige allá, con la firma del dueño, y acá se refleja.
 | KR-41 | cierre forzado administrativo del turno | — (pendiente: AC-FVEH-22 (D2, nuevo) · hito c) |
 | KR-42 | captura de coordenadas (GPS off por omisión, §7.8) | — (pendiente: AC-FPOD-12 · hito e) |
 | KR-43 | entregas_pod inmutable + evidence write-once por sha256 | — (pendiente: AC-FPOD-08/11/19 · hito e) |
-| KR-44 | reading (odómetro) + trigger de proyección vehiculos.soc | — (pendiente: AC-FVEH-05 · hito c) |
+| KR-44 | reading (odómetro) + trigger de proyección vehiculos.soc | db/flota/pgtap/0012_proyeccion_de_lecturas.sql::un odómetro menor NO arrastra la proyección hacia atrás |
 | KR-45 | función SECURITY DEFINER única de devengo | — (pendiente: AC-FTAR-03 · hito f) |
 | KR-46 | liquidaciones abierta→cerrada→pagada | — (pendiente: AC-FTAR-05 · hito f) |
 | KR-47 | disputa por línea con motivo tipado | — (pendiente: AC-FTAR-06 / AC-FPOR-10 · hito f) |
@@ -85,7 +85,7 @@ clasificado, se corrige allá, con la firma del dueño, y acá se refleja.
 | KR-52 | atribución turno/bloque→empresa | — (pendiente: AC-FTAR-14 · hito f · bloqueado en pregunta 06-12) |
 | KR-53 | COMMENT ON TABLE con clase de la regla de oro (linter §4.2) | db/flota/lint-migraciones.test.mjs::exigencia 5 — un COMMENT sin clase de la regla de oro ⇒ rojo |
 | KR-54 | UNIQUE (tenant_id, client_uuid) en las tablas de captura | db/flota/suite-bd/identidad.test.mjs::[AC-FIDN-01] el replay de una firma no crea una segunda fila (centinela 1) |
-| KR-55 | EXCLUDE WHERE estado<>'anulado' en turnos y bloques_agenda | — (pendiente: AC-FVEH-06/07 · hito c) |
+| KR-55 | EXCLUDE WHERE estado<>'anulado' en turnos (vivo, AC-FVEH-06) y en bloques_agenda (falta) | — (pendiente: AC-FVEH-07 · hito c — la mitad de `turnos` ya la prueba db/flota/pgtap/0011_turnos.sql; se cierra cuando exista la otra) |
 | KR-56 | política RESTRICTIVE FOR SELECT de aplicar_rls_de_dinero(regclass) | db/flota/suite-bd/dinero.test.mjs::[AC-FTEN-21] el chofer NO ve montos pero su captura con costo NULL entra sin rebote |
 | KR-57 | rut_valido() módulo 11 · lista congelada de RUTs sintéticos | packages/nucleo-comun/src/rut.test.ts::[AC-FIDN-17] la lista congelada entera: los válidos pasan y los inválidos no |
 | KR-58 | reference_document UNIQUE (tipo, folio, emisor); tipos 33/39/52/61 | — (pendiente: AC-FTEN-14 (DDL) · AC-FTAR-08 · hito f · clase en pregunta 00-13) |
