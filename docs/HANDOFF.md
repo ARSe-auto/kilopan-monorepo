@@ -1,4 +1,4 @@
-# HANDOFF — El hito (c) va 13 de 22 del módulo 02
+# HANDOFF — El hito (c) CERRADO: 21 de 22, y el único abierto es de oráculo humano
 
 **Traspaso de la sesión del 09-ago-2026 (20:14 →), rama `flota/specs-e1` en
 `~/kilopan-monorepo-flota`, Opus 5 esfuerzo alto.** Árbol limpio salvo el churn de artefacto de
@@ -6,7 +6,7 @@ siempre, todo comiteado, `check.sh --app=flota --full` en **VERDE con 14 OK · 0
 saltado declarado** (158 casos e2e).
 
 > Sesión nueva: retomá esto **sin re-preguntar nada**, armá tu propio despertador de 4h35m
-> (tarea Bash en background) y archivá este archivo en `docs/handoffs/2026-08-10-0000.md` al
+> (tarea Bash en background) y archivá este archivo en `docs/handoffs/2026-08-10-0010.md` al
 > absorberlo. **Alexis pidió expresamente que NO se creen chips de continuación**: el traspaso
 > es este archivo y se retoma solo.
 
@@ -14,24 +14,17 @@ saltado declarado** (158 casos e2e).
 
 | | Antes | Ahora |
 |---|---|---|
-| Módulo 02 (vehículos/energía/agenda) | 0 de 22 | **13 de 22** |
-| ACs cerrados de la plataforma | 46 de 197 | **59 de 197** |
-| Rutas que sirve `apps/flota` | 20 | **33** |
-| Migraciones de tenant | 15 | **28** (última: `0028_recarga_idempotente`) |
-| Criterios KiloRuta con test | 11 | **16** (entraron KR-04, KR-14, KR-15, KR-44, KR-51, KR-55) |
+| Módulo 02 (vehículos/energía/agenda) | 0 de 22 | **21 de 22** |
+| ACs cerrados de la plataforma | 46 de 197 | **67 de 197** |
+| Rutas que sirve `apps/flota` | 20 | **43** |
+| Migraciones de tenant | 15 | **35** (última: `0035_vistas_security_invoker`) |
+| Criterios KiloRuta con test | 11 | **23** |
 
-Los trece ACs: **01** (alta con baseline de acciones), **02** (CRUD del dueño, DELETE que
-desactiva), **06** (vehículo-día con EXCLUDE), **05** (odómetro y SOC por `reading`), **20**
-(`eevd_semanal`), **09** (fórmula única de energía y su grep-gate), **07** (agenda y duplicar
-semana), **03** (documentos que rebotan solo con feature ON), **17** («por vencer»), **18**
-(config congelada por turno y `modulo_apagado`), **19** (máx capturas de SOC), **04** (chequeos
-y ciclo del defecto) y **08** (recarga como captura, con dinero invisible).
+**Presupuestos de toques medidos, cada uno con su artefacto y su regresión bloqueante:** alta
+de vehículo **3**, apertura de turno **7** (presupuesto 9), cierre **6** (presupuesto 6).
 
-**Lo que queda del módulo 02 (9):** AC-FVEH-10 (apertura F3 ≤9 toques), AC-FVEH-21 (cierre F5
-≤6), AC-FVEH-11 (datos fuente de señales), AC-FVEH-12 (tablero «Listos para salir»),
-AC-FVEH-13 (ahorro vs diésel, aserción numérica bloqueada por la pregunta 3), AC-FVEH-14
-(ganchos §4.9 en estado exacto), AC-FVEH-15 (telemetría de energía), AC-FVEH-16 (validación en
-vivo, DONE-adopción) y AC-FVEH-22 (cierre forzado, KR-41).
+**Lo único que queda del módulo 02:** AC-FVEH-16, de oráculo HUMANO (DONE-adopción, dueño
+nombrado: Alexis). Por contrato JAMÁS bloquea al loop y no se cierra con código.
 
 ## Lo que hay que saber para seguir, y no se lee del diff
 
@@ -73,60 +66,56 @@ manejar la deriva con turno abierto.
 
 ### 0. Lo aprendido a fuerza de rojos, que ahorra media hora en el AC siguiente
 
+- **Una vista de PostgreSQL NO hereda la RLS**: toda vista nueva va con `security_invoker =
+  true`, y hay un invariante en `pgtap/0016` que lo exige. El defecto real: `energia_semanal`
+  le devolvía al chofer el TOTAL de las filas que no podía ver.
+- **`ON CONFLICT` necesita LEER la fila en conflicto.** Sobre una tabla con RLS de dinero, el
+  upsert del chofer rebota. Se resuelve con función `SECURITY DEFINER` (`registrar_recarga`).
 - **Los hechos append-only no se borran NI con el dueño del esquema**, y lo que cuelga de ellos
-  tampoco. `e2e/limpiar.mjs` excluye los turnos con chequeos y los vehículos con recargas.
-- **Las suites que dejan hechos usan el tenant `hechos`**, con URL absoluta
+  tampoco: `e2e/limpiar.mjs` excluye turnos con chequeos y vehículos con recargas.
+- **Las suites que dejan hechos usan el tenant `hechos`** con URL absoluta
   (`http://hechos.localhost:3311`). El primer activo tiene que poder quedar VACÍO.
-- **Un entitlement ausente no es «apagado»** (`estadoDeFeature` devuelve los tres estados).
-- **El grep-gate de constantes muerde al CITAR el maestro**: no escribir los números del §0 en
-  comentarios, ni «§4.5» seguido de coma o paréntesis salvo por el lookbehind ya puesto.
-- **`guardrail.sh` rebota la palabra TODO en mayúsculas**, aunque sea español legítimo.
+- **Un entitlement ausente NO es «apagado»** (`estadoDeFeature` da los tres estados).
+- **El grep-gate de constantes muerde al CITAR el maestro**: no escribir sus números en
+  comentarios (pasó con «máx 3 capturas» y con «(§4.5)»).
+- **`guardrail.sh` rebota TODO en mayúsculas** — y también «MÉTODO», porque el acento en UTF-8
+  parte la palabra y deja «TODO» suelto en la locale del grep.
 - **Una migración aplicada no se edita**: el runner frena por sha. Se escribe la siguiente.
+- **Dos tecladas propias en la misma pantalla** obligan a acotar el `getByRole` del e2e por
+  contenedor, o el «8» es ambiguo.
 
-### 1. AC-FVEH-03 — `vehiculo_documentos` (HECHO; queda como referencia del patrón feature-ON)
+### 1. El hito (c) está CERRADO salvo su AC humano
 
-Diseñado y sin bloqueos duros. Lo que hace falta:
+Solo queda **AC-FVEH-16**: validación en vivo del dueño (alta real cronometrada en <2 min y
+lectura sin ayuda del semáforo y del tablero). Es DONE-adopción con dueño nombrado —Alexis— y
+por contrato JAMÁS bloquea al loop (§9.2/§10). No se cierra con código.
 
-1. **Migración 0022** con `vehiculo_documentos`(tipo `text`, `vence_el date`, `sha256`
-   write-once §4.6, FK compuesta a `vehiculos`). Clase **PLANIFICACIÓN**. El catálogo de tipos
-   es texto y NO enum: la **pregunta 2** (lista cerrada vs filas por tenant) sigue abierta y un
-   enum la respondería por el dueño.
-2. **El rebote SOLO con feature ON.** El entitlement efectivo se lee de `control`
-   (`entitlements_efectivos`, misma vía que `versionVigente` en `servidor/turnos.ts`) — o, mejor
-   para un turno abierto, del snapshot que ya viaja en `turnos.config_version_id`. Con OFF no
-   rebota NADA: es el mismo patrón que `vehicle_certification` (§4.9).
-3. **Dónde rebota:** «planificar/asignar un vehículo con documento vencido» ⇒ hoy eso son
-   `POST /api/agenda` y `POST /api/turnos`, las dos puertas de planificación que existen.
-4. **Estado con TEXTO, jamás solo color** (§5.1) en `/vehiculos`.
+### 2. Lo que sigue es el hito (d): encargos, rutas y custodia (módulo 03)
 
-Ojo: el `sha256` write-once necesita su trigger, y el §4.6 dice que el hash viaja ANTES del
-binario.
+`specs/flota/03-encargos-rutas-custodia.md`, 22 ACs. Es el que le SUMINISTRA a este módulo el
+dato que dejó pendientes tres cláusulas: `rutas.km_presupuesto_energia` (§4.5), sin el cual el
+semáforo «Alcanza/No alcanza» y el «necesario» del tablero no tienen contra qué comparar. Al
+cerrarlo hay que volver a AC-FVEH-10 y AC-FVEH-12 y cerrar esas cláusulas.
 
-### 2. AC-FVEH-17 — recordatorios de vencimiento
+Lo que ese módulo va a encontrar ya construido y puede reusar sin pensarlo: `enActo` +
+`registrarEvento` para toda mutación con rastro, `limpiar.mjs` para el orden de fixtures,
+`baseline-acciones.mjs` para los presupuestos del §5.3, `config.ts` para features congeladas,
+`fechas.ts` para es-CL y `energia.ts` para todo lo que toque energía.
 
-Va justo después de AC-FVEH-03 porque lo consume. La **pregunta 1** deja abiertos el NOMBRE de
-la fila de `parametros` y el seed de anticipación: sin eso, «por vencer» no tiene umbral. Una
-salida honesta es que sin fila de parámetros solo se muestre «vencido», y que «por vencer»
-aparezca en cuanto la fila exista — pero eso hay que declararlo como cláusula, no dejarlo pasar.
+### 3. Cláusulas de este módulo que se cierran cuando llegue su respuesta
 
-### 3. AC-FVEH-12 — tablero «Listos para salir»
-
-La fórmula ya está (AC-FVEH-09). El AC mismo acota lo verificable hoy: fórmula única aplicada,
-sugerencia a 1 clic y degradación con estado vacío accionable. La rama «necesario» espera
-`rutas.km_presupuesto_energia` del hito (d), y la semántica sugerir-vs-crear es la **pregunta
-14**.
-
-### 4. AC-FVEH-04 (chequeos), AC-FVEH-10 (apertura F3) y AC-FVEH-21 (cierre F5)
-
-Los tres son de superficie de terreno y llevan presupuesto de toques del §5.3 (≤9 y ≤6). El
-contador de acciones que hay que reusar está en `e2e/vehiculos.spec.ts` (`llenar` y `tocar`
-suman 1 cada uno, con la convención cerrada del §5.3) y el artefacto de baseline en
-`e2e/baseline-acciones.mjs`.
-
-### 5. AC-FVEH-22 (cierre forzado, KR-41) necesita el estado nuevo del enum
-
-`turno_estado` tiene hoy `abierto|cerrado|anulado` a propósito: el cierre forzado tiene que ser
-DISTINGUIBLE de un cierre real y su valor lo agrega su propio AC con `ALTER TYPE … ADD VALUE`.
+- **pregunta 3** → la aserción numérica del ahorro vs diésel (AC-FVEH-13).
+- **pregunta 9** → el conteo exacto de capturas de SOC (AC-FVEH-19).
+- **pregunta 12** → la colisión al duplicar semana (AC-FVEH-07): hoy no procede y lo dice.
+- **pregunta 13** → el método de estimación (AC-FVEH-11): los DOS implementados, sin default.
+- **pregunta 14** → sugerir-vs-crear el bloque de recarga (AC-FVEH-12): hoy solo sugiere.
+- **pregunta 15 (NUEVA)** → el catálogo de tipos de vehículo (AC-FVEH-01): hoy los chips salen
+  de los tipos que el propio tenant ya usó.
+- **pregunta 7** → turno anulado y el denominador de la EEVD (AC-FVEH-20).
+- **pregunta 6** → la clase de `turnos` si la apertura fuera offline (AC-FVEH-06).
+- **pregunta 1** → el canal y el SEED de anticipación (AC-FVEH-17): el nombre de la fila ya
+  estaba cerrado por la P5 de la spec 00.
+- **pregunta 2** → el catálogo de tipos de documento (AC-FVEH-03): hoy es texto.
 
 ## Preguntas al dueño que siguen abiertas
 
@@ -189,7 +178,7 @@ mirar `git log --oneline -5` antes de escribir. **Un builder por worktree**: ant
 > Seguí construyendo la Plataforma FLOTA en `~/kilopan-monorepo-flota` (rama
 > `flota/specs-e1`), con Opus 5 y esfuerzo alto — el §8 exige el modelo tope para este hito y
 > prohíbe delegarlo a un motor. Leé `docs/HANDOFF.md` completo, archivalo en
-> `docs/handoffs/2026-08-10-0000.md`, armá tu despertador de 4h35m y arrancá por «Próximos
+> `docs/handoffs/2026-08-10-0010.md`, armá tu despertador de 4h35m y arrancá por «Próximos
 > pasos». El hito (c) va **7 de 22**: están el alta y el gobierno de vehículos, el vehículo-día
 > con su EXCLUDE, las lecturas con proyección por trigger, la vista `eevd_semanal`, la fórmula
 > única de energía con su grep-gate y la agenda con «duplicar semana». Lo que sigue es
