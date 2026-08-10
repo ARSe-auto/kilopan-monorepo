@@ -37,6 +37,7 @@ type Vehiculo = {
   activo: boolean;
   bateria_wh: number | null;
   autonomia_nominal_km: number | null;
+  documentos_vencidos: number;
 };
 
 type Rebote = { error?: string; mensaje?: string };
@@ -181,6 +182,16 @@ export default function Vehiculos() {
               {v.activo ? "" : " · desactivado"}
               {v.bateria_wh === null && v.autonomia_nominal_km === null ? " · sin datos de batería" : ""}
             </p>
+            {/* El estado del documento se comunica con TEXTO y jamás solo por color (§5.1). Un
+                punto rojo no lo ve quien no distingue rojo de verde, y tampoco lo entiende
+                quien nunca vio esta pantalla antes. */}
+            {v.documentos_vencidos > 0 && (
+              <p data-testid="documentos-vencidos" style={textoVencido}>
+                {v.documentos_vencidos === 1
+                  ? "1 documento vencido"
+                  : `${v.documentos_vencidos} documentos vencidos`}
+              </p>
+            )}
           </article>
         ))}
       </section>
@@ -225,4 +236,5 @@ const tarjeta = {
   background: superficie.tarjeta,
   border: `1px solid ${superficie.hairline}`,
 };
+const textoVencido = { ...pie, margin: 0, color: colorSemantico.error, fontWeight: enfasis.medio };
 const textoRebote = { ...cuerpo, margin: 0, color: colorSemantico.error, fontWeight: enfasis.medio };

@@ -184,6 +184,7 @@ function accionesDeGobierno() {
     "/api/gobierno/dispositivos/[id]": operario.dispositivoId,
     "/api/gobierno/usuarios/[id]/pin": operario.usuarioId,
     "/api/gobierno/vehiculos/[id]": vehiculoId,
+    "/api/gobierno/vehiculos/[id]/documentos": vehiculoId,
   };
   return casos
     .filter((c) => c.ruta.startsWith("/api/gobierno/"))

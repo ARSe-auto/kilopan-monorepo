@@ -66,6 +66,8 @@ export const EVENTOS = {
   vehiculo_editado: "gobierno.vehiculo_editado",
   vehiculo_desactivado: "gobierno.vehiculo_desactivado",
   vehiculo_reactivado: "gobierno.vehiculo_reactivado",
+  documento_cargado: "gobierno.documento_cargado",
+  documento_eliminado: "gobierno.documento_eliminado",
 } as const;
 
 /** Los eventos del TERRENO. No llevan el prefijo `gobierno.` y no es un detalle: la auditoría

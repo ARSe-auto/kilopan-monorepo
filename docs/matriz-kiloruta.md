@@ -81,7 +81,7 @@ clasificado, se corrige allá, con la firma del dueño, y acá se refleja.
 | KR-48 | — (descartado: D5) | — (descartado: D5, firmada 08-ago-2026) |
 | KR-49 | reference_document (SOLO registro; cero emisión de DTE) | — (pendiente: AC-FTAR-08 / AC-FRUT-08 · hito f) |
 | KR-50 | review_queue como bandeja del panel Hoy | — (pendiente: AC-FSEM-01/04/05/20 · hito e · cláusula en pregunta 03-9) |
-| KR-51 | vehiculo_documentos.vence_el | — (pendiente: AC-FVEH-17 · hito c · cláusula por km diferida (D6)) |
+| KR-51 | vehiculo_documentos.vence_el | db/flota/pgtap/0014_vehiculo_documentos.sql::un documento que venció AYER sí está vencido |
 | KR-52 | atribución turno/bloque→empresa | — (pendiente: AC-FTAR-14 · hito f · bloqueado en pregunta 06-12) |
 | KR-53 | COMMENT ON TABLE con clase de la regla de oro (linter §4.2) | db/flota/lint-migraciones.test.mjs::exigencia 5 — un COMMENT sin clase de la regla de oro ⇒ rojo |
 | KR-54 | UNIQUE (tenant_id, client_uuid) en las tablas de captura | db/flota/suite-bd/identidad.test.mjs::[AC-FIDN-01] el replay de una firma no crea una segunda fila (centinela 1) |

@@ -54,6 +54,12 @@ select is(
   (select array_agg(codigo order by codigo) from evento_tipo where codigo like 'gobierno.%'),
   array[
     'gobierno.dispositivo_revocado',
+    -- Los documentos con vencimiento también son del panel del dueño (§5.4, «edición de
+    -- capacidades/DOCUMENTOS») [AC-FVEH-03]. El orden es alfabético porque el `array_agg` de
+    -- arriba ordena por código: escribirlos donde parecen ir cronológicamente pone rojo el
+    -- test sin que falte ni sobre nada.
+    'gobierno.documento_cargado',
+    'gobierno.documento_eliminado',
     'gobierno.invitacion_emitida',
     'gobierno.invitacion_pausada',
     'gobierno.invitacion_reanudada',
@@ -65,15 +71,15 @@ select is(
     'gobierno.soporte_otorgado',
     'gobierno.soporte_revocado',
     'gobierno.usuario_desbloqueado',
-    -- Los cuatro últimos llegaron con el módulo 02: el §5.4 pone «alta, edición … y
-    -- desactivación de VEHÍCULOS» dentro del plano de control exclusivo del dueño, así que
-    -- son de esta familia [AC-FVEH-01, AC-FVEH-02].
+    -- Los seis últimos llegaron con el módulo 02: el §5.4 pone «alta, edición de
+    -- capacidades/DOCUMENTOS y desactivación de VEHÍCULOS» dentro del plano de control
+    -- exclusivo del dueño, así que son de esta familia [AC-FVEH-01, 02 y 03].
     'gobierno.vehiculo_creado',
     'gobierno.vehiculo_desactivado',
     'gobierno.vehiculo_editado',
     'gobierno.vehiculo_reactivado'
   ],
-  'catálogo de eventos de gobierno: los dieciséis actos, sin uno de menos'
+  'catálogo de eventos de gobierno: los dieciocho actos, sin uno de menos'
 );
 
 -- Y cada uno con su descripción escrita: un catálogo de códigos sin texto es un panel de
@@ -81,7 +87,7 @@ select is(
 select is(
   (select count(*)::int from evento_tipo
     where codigo like 'gobierno.%' and length(btrim(descripcion)) > 0),
-  16, 'cada tipo de evento de gobierno trae su descripción en es-CL'
+  18, 'cada tipo de evento de gobierno trae su descripción en es-CL'
 );
 
 select finish();

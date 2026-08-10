@@ -1,6 +1,6 @@
-import type { Pool, PoolClient } from "pg";
-import { enActo, registrarEvento, tenantIdEnControl, EVENTOS_OPERACION } from "./gobierno.ts";
-import { poolDe } from "./conexion.ts";
+import type { Pool } from "pg";
+import { enActo, registrarEvento, EVENTOS_OPERACION } from "./gobierno.ts";
+import { versionVigente, entitlementVigente, FEATURES } from "./config.ts";
 import type { Sesion } from "./sesion.ts";
 import { ROLES, type Rol } from "../../../../packages/nucleo-comun/src/constants.ts";
 
@@ -45,6 +45,7 @@ export type AperturaDeTurno =
   | { tipo: "ok"; turno: Turno }
   | { tipo: "vehiculo_no_existe" }
   | { tipo: "vehiculo_inactivo" }
+  | { tipo: "documento_vencido" }
   | { tipo: "turno_solapado" };
 
 const COLUMNAS = `id::text as id, vehiculo_id::text as vehiculo_id,
@@ -53,35 +54,6 @@ const COLUMNAS = `id::text as id, vehiculo_id::text as vehiculo_id,
 
 /** El código que PostgreSQL usa para una violación de restricción EXCLUDE. */
 const EXCLUSION_VIOLATION = "23P01";
-
-/**
- * La versión vigente de la configuración, sellando la primera si el tenant no tiene ninguna.
- *
- * `slug` es el del RUTEO —lo sobrescribe `servidor.mjs` con el veredicto de `control`, jamás
- * llega del cliente— y de ahí sale el id con el que se leen los entitlements del plano de
- * control.
- */
-async function versionVigente(c: PoolClient, slug: string): Promise<string> {
-  const { rows } = await c.query<{ id: string }>(
-    "select id::text as id from config_version order by id desc limit 1",
-  );
-  if (rows[0]) return rows[0].id;
-
-  const tenantId = await tenantIdEnControl(slug);
-  const { rows: features } = await poolDe("control").query<{
-    lookup_key: string;
-    habilitada: boolean;
-  }>(
-    "select lookup_key, habilitada from entitlements_efectivos where tenant_id = $1",
-    [tenantId],
-  );
-  const entitlements = Object.fromEntries(features.map((f) => [f.lookup_key, f.habilitada]));
-  const { rows: nueva } = await c.query<{ id: string }>(
-    "select crear_config_version($1, $2::jsonb)::text as id",
-    ["primera versión, sellada al abrir un turno", JSON.stringify(entitlements)],
-  );
-  return nueva[0]!.id;
-}
 
 export async function abrirTurno(
   pool: Pool,
@@ -99,6 +71,18 @@ export async function abrirTurno(
       // Un vehículo desactivado no abre jornada: el §5.4 le da al dueño la desactivación para
       // sacarlo de la operación, y dejarlo abrir turnos igual vaciaría ese acto de contenido.
       if (!vehiculo[0]!.activo) return { tipo: "vehiculo_inactivo" };
+
+      // El rebote del §4.5, SOLO con el feature encendido [AC-FVEH-03]. Abrir la jornada es
+      // planificar: es la puerta por la que un camión con la revisión técnica vencida sale a
+      // la calle, y con el feature apagado no rebota nada — mismo patrón que
+      // `vehicle_certification` (§4.9).
+      if (await entitlementVigente(c, slug, FEATURES.documentos_vencidos_bloquean)) {
+        const { rows: vencidos } = await c.query<{ vencido: boolean }>(
+          "select tiene_documentos_vencidos($1) as vencido",
+          [vehiculoId],
+        );
+        if (vencidos[0]!.vencido) return { tipo: "documento_vencido" };
+      }
 
       const configVersionId = await versionVigente(c, slug);
       const { rows } = await c.query<Turno>(

@@ -54,7 +54,7 @@ export async function POST(peticion: Request) {
     );
   }
 
-  const alta = await agendarBloque(g.acto.pool, g.acto.sesion, {
+  const alta = await agendarBloque(g.acto.pool, g.acto.sesion, g.acto.slug, {
     vehiculoId: String(cuerpo.vehiculo_id ?? ""),
     tipo: String(cuerpo.tipo ?? ""),
     empiezaEn,
@@ -81,6 +81,17 @@ export async function POST(peticion: Request) {
   if (alta.tipo === "ventana_invalida") {
     return Response.json(
       { error: "ventana_invalida", mensaje: "El bloque tiene que terminar después de empezar." },
+      { status: 422 },
+    );
+  }
+  if (alta.tipo === "documento_vencido") {
+    // §4.5 con el feature encendido: no se le agenda trabajo futuro a un camión que hoy no
+    // puede circular. El mensaje nombra la causa, no el síntoma.
+    return Response.json(
+      {
+        error: "documento_vencido",
+        mensaje: "Ese vehículo tiene un documento vencido. Renovalo antes de agendarle trabajo.",
+      },
       { status: 422 },
     );
   }

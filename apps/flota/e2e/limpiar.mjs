@@ -14,8 +14,9 @@
 // `reading`, `evidence` y `client_metric` son append-only (§7.4) y rebotan el DELETE con
 // 42501. Las suites que las miran cuentan por DIFERENCIA, no por total.
 
-/** De lo que apunta a lo apuntado: los bloques y los turnos cuelgan de los vehículos. */
-export const TABLAS_DE_OPERACION = ["bloques_agenda", "turnos", "vehiculos"];
+/** De lo que apunta a lo apuntado: los bloques, los turnos y los documentos cuelgan de los
+ *  vehículos. Agregar una tabla acá es la ÚNICA edición que pide una tabla nueva del módulo. */
+export const TABLAS_DE_OPERACION = ["bloques_agenda", "turnos", "vehiculo_documentos", "vehiculos"];
 
 /** Igual, para el plano de identidad: los códigos puente cuelgan de los usuarios. */
 export const TABLAS_DE_IDENTIDAD = [

@@ -48,6 +48,11 @@ export type Vehiculo = {
   soc: number | null;
 };
 
+/** Lo que la LISTA agrega a la ficha: cuántos documentos vencidos tiene el vehículo hoy. Va en
+ *  el listado y no en cada alta porque la pantalla lo necesita para todos a la vez — con veinte
+ *  camiones, preguntarlo uno por uno son veinte requests desde un teléfono [AC-FVEH-03]. */
+export type VehiculoEnLista = Vehiculo & { documentos_vencidos: number };
+
 export type AltaDeVehiculo =
   | { tipo: "ok"; vehiculo: Vehiculo }
   | { tipo: "patente_invalida"; motivo: PatenteInvalida }
@@ -97,9 +102,13 @@ export async function crearVehiculo(
  * Los activos primero: un vehículo desactivado sigue existiendo —tiene hechos asociados y
  * jamás se borra (§7.4)— pero no es lo que alguien busca cuando abre la pantalla.
  */
-export async function listarVehiculos(pool: Pool): Promise<Vehiculo[]> {
-  const { rows } = await pool.query<Vehiculo>(
-    `select ${COLUMNAS} from vehiculos order by activo desc, patente asc`,
+export async function listarVehiculos(pool: Pool): Promise<VehiculoEnLista[]> {
+  const { rows } = await pool.query<VehiculoEnLista>(
+    `select ${COLUMNAS},
+            (select count(*)::int from vehiculo_documentos d
+              where d.vehiculo_id = vehiculos.id
+                and d.vence_el < (now() at time zone 'America/Santiago')::date) as documentos_vencidos
+       from vehiculos order by activo desc, patente asc`,
   );
   return rows;
 }

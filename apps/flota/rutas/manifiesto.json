@@ -228,6 +228,25 @@
       }
     },
     {
+      "ruta": "/api/gobierno/vehiculos/[id]/documentos",
+      "archivo": "src/app/api/gobierno/vehiculos/[id]/documentos/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "vehiculos",
+          "columna": "id"
+        },
+        "nota": "Documentos con vencimiento de un vehículo [AC-FVEH-03]. El parámetro es el VEHÍCULO de B, y por eso el caso es de tipo recurso: leer los documentos del vecino expone su cumplimiento —qué camión tiene la revisión técnica vencida— y escribirle uno con fecha pasada le DETIENE la flota si tiene el feature encendido. Contrato 404 y huella de B intacta. El fixture del vecino ya siembra un vehículo, así que el id es real: contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin probar nada."
+      }
+    },
+    {
       "ruta": "/api/lecturas",
       "archivo": "src/app/api/lecturas/route.ts",
       "metodos": [

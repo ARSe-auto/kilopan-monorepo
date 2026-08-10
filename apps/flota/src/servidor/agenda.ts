@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
 import { enActo, registrarEvento, EVENTOS_OPERACION } from "./gobierno.ts";
+import { entitlementVigente, FEATURES } from "./config.ts";
 import type { Sesion } from "./sesion.ts";
 
 // La agenda por vehículo [AC-FVEH-07] — §3.E1.4, §4.5, §9.3 centinela 5.
@@ -45,6 +46,7 @@ export type AltaDeBloque =
   | { tipo: "vehiculo_no_existe" }
   | { tipo: "tipo_invalido" }
   | { tipo: "ventana_invalida" }
+  | { tipo: "documento_vencido" }
   | { tipo: "bloque_solapado" };
 
 const COLUMNAS = `id::text as id, vehiculo_id::text as vehiculo_id, tipo::text as tipo,
@@ -55,6 +57,7 @@ const EXCLUSION_VIOLATION = "23P01";
 export async function agendarBloque(
   pool: Pool,
   sesion: Sesion,
+  slug: string,
   datos: { vehiculoId: string; tipo: string; empiezaEn: Date; terminaEn: Date; nota: string | null },
 ): Promise<AltaDeBloque> {
   if (!(TIPOS_DE_BLOQUE as readonly string[]).includes(datos.tipo)) return { tipo: "tipo_invalido" };
@@ -66,6 +69,17 @@ export async function agendarBloque(
         datos.vehiculoId,
       ]);
       if (vehiculo.length === 0) return { tipo: "vehiculo_no_existe" };
+
+      // El rebote del §4.5, SOLO con el feature encendido [AC-FVEH-03]. Agendar ES planificar,
+      // y es la puerta por la que se le asigna trabajo futuro a un camión que hoy no puede
+      // circular. Con el feature apagado no rebota nada (§4.9).
+      if (await entitlementVigente(c, slug, FEATURES.documentos_vencidos_bloquean)) {
+        const { rows: vencidos } = await c.query<{ vencido: boolean }>(
+          "select tiene_documentos_vencidos($1) as vencido",
+          [datos.vehiculoId],
+        );
+        if (vencidos[0]!.vencido) return { tipo: "documento_vencido" };
+      }
 
       const { rows } = await c.query<Bloque>(
         `insert into bloques_agenda (vehiculo_id, tipo, empieza_en, termina_en, nota)

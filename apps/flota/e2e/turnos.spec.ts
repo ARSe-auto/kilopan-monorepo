@@ -77,7 +77,18 @@ const cuantosTurnos = () =>
     (r) => Number(r[0]!.n),
   );
 
+/** Eventos de apertura acumulados. `eventos` es append-only (§7.4): no se puede vaciar y trae
+ *  lo que dejaron las suites anteriores, así que la medición honesta es la DIFERENCIA. */
+const aperturasRegistradas = () =>
+  con(BD_A, (c: Conexion) =>
+    c.sql<{ n: string }>(
+      `select count(*)::text as n from eventos e join evento_tipo t on t.id = e.tipo_id
+        where t.codigo = 'turno.abierto'`,
+    ),
+  ).then((r) => Number(r[0]!.n));
+
 test("[AC-FVEH-06] abrir la jornada deja el turno con su versión de config congelada", async ({ request }) => {
+  const eventosAntes = await aperturasRegistradas();
   const r = await request.post("/api/turnos", { headers: comoDuena, data: { vehiculo_id: vehiculoA } });
   expect(r.status()).toBe(201);
   const { turno } = (await r.json()) as { turno: { id: string; estado: string; config_version_id: string } };
@@ -97,13 +108,10 @@ test("[AC-FVEH-06] abrir la jornada deja el turno con su versión de config cong
   // corrió sin un módulo que sí tenía.
   expect(JSON.parse(v!.snapshot).entitlements, "el snapshot se selló sin entitlements").toBeTruthy();
 
-  const [e] = await con(BD_A, (c: Conexion) =>
-    c.sql<{ n: string }>(
-      `select count(*)::text as n from eventos e join evento_tipo t on t.id = e.tipo_id
-        where t.codigo = 'turno.abierto'`,
-    ),
-  );
-  expect(e!.n, "la apertura no dejó su evento").toBe("1");
+  expect(
+    (await aperturasRegistradas()) - eventosAntes,
+    "la apertura no dejó su evento",
+  ).toBe(1);
 });
 
 test("[AC-FVEH-06] el segundo turno del MISMO vehículo rebota 422 y no deja ni una fila", async ({ request }) => {

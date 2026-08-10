@@ -71,6 +71,18 @@ export async function POST(peticion: Request) {
       { status: 422 },
     );
   }
+  if (apertura.tipo === "documento_vencido") {
+    // §4.5 con el feature encendido. El mensaje nombra la causa: quien lo lee está por salir y
+    // «no se pudo abrir» lo dejaría llamando a la oficina para averiguar qué pasó.
+    return Response.json(
+      {
+        error: "documento_vencido",
+        mensaje:
+          "Ese vehículo tiene un documento vencido. Hay que renovarlo antes de abrir la jornada.",
+      },
+      { status: 422 },
+    );
+  }
   if (apertura.tipo === "turno_solapado") {
     // El centinela 5, con un mensaje que se puede actuar: quien lo lee está de pie al lado del
     // camión, y «restricción violada» no le dice qué hacer.
