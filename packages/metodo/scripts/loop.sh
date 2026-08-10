@@ -260,6 +260,16 @@ mkdir -p "$LOG_DIR"
 # Regla: si el selector pidió el modelo TOPE, no hay red de contención. Vale más una
 # iteración fallida y reintentada que un commit fundacional escrito por otro modelo. Para
 # todo lo demás el fallback sigue, porque ahí sí es preferible avanzar a detenerse.
+#
+# BUG REAL (10-ago-2026, primer arranque del motor de FLOTA): la rama sin fallback moría con
+# «FALLBACK[@]: unbound variable» y el motor no podía construir NI UN AC de los que el §8 manda
+# al modelo tope — que en FLOTA son casi todos. El bash de macOS es 3.2, y ahí expandir un array
+# VACÍO bajo `set -u` cuenta como variable no definida; en bash ≥4.4 no. Por eso la expansión de
+# abajo va con la forma `${A[@]+"${A[@]}"}`, que es fea y es la única que funciona en las dos.
+#
+# El síntoma engañaba, como el del token en KiloPan: el gate corría VERDE, el loop elegía bien
+# su AC y anunciaba el modelo correcto, y recién ahí moría. Tres iteraciones así y el watchdog
+# pausó el motor por «sin avance» — que es cierto, pero la causa no estaba en ningún AC.
 MODELO_PEDIDO="$(bash packages/metodo/scripts/model-selector.sh build "$APP" "$AC_ID")"
 MODELO_TOPE="$(bash packages/metodo/scripts/model-selector.sh modelo-tope)"
 FALLBACK=(--fallback-model sonnet)
@@ -273,7 +283,7 @@ claude -p "$PROMPT" \
   --max-budget-usd "$MAX_BUDGET_USD" \
   --permission-mode acceptEdits \
   --model "$MODELO_PEDIDO" \
-  "${FALLBACK[@]}" \
+  ${FALLBACK[@]+"${FALLBACK[@]}"} \
   > "$LOG_DIR/ultimo-resultado.json" 2>>"$LOG_DIR/ultimo-loop.log"
 
 # Y la segunda mitad: mirar quién respondió DE VERDAD. Quitar el fallback evita el degradado
