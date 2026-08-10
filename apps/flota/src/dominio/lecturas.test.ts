@@ -1,7 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { SOC, RELOJ } from "../../../../packages/nucleo-comun/src/constants.ts";
-import { clasificar, rechaza, valorProyectado, FLAGS, type Lectura } from "./lecturas.ts";
+import {
+  clasificar,
+  rechaza,
+  valorProyectado,
+  quedanCapturasDeSoc,
+  FLAGS,
+  type Lectura,
+} from "./lecturas.ts";
 
 // Mutantes de la degradación de una lectura [AC-FVEH-05] — centinela 4 del §9.3.
 //
@@ -21,6 +28,7 @@ const base: Lectura = {
   recibidaEn: AHORA,
   tieneTurno: true,
   moduloEncendido: true,
+  capturasDeSocEnElTurno: 0,
 };
 
 // ─── Ninguna rechaza. Es el invariante del centinela 4 ───────────────────────────────
@@ -129,6 +137,45 @@ test("el módulo apagado marca la captura y NO la rechaza (§0, fila HTTP)", () 
   assert.equal(rechaza(clasificar(conModuloApagado)), false);
 });
 
+// ─── Máximo de capturas de carga por turno [AC-FVEH-19] ──────────────────────────────
+
+test("hasta el máximo del §0 no hay bandera, y la siguiente sí la levanta", () => {
+  // Los bordes se derivan de `SOC.capturas_max_por_turno`: escritos literales, este archivo
+  // sería una copia de la familia canónica y el gate lo marcaría.
+  for (let ya = 0; ya < SOC.capturas_max_por_turno; ya++) {
+    assert.deepEqual(clasificar({ ...base, capturasDeSocEnElTurno: ya }), [], `con ${ya} previas`);
+  }
+  assert.deepEqual(
+    clasificar({ ...base, capturasDeSocEnElTurno: SOC.capturas_max_por_turno }),
+    ["exceso_de_soc"],
+  );
+});
+
+test("el exceso NO rechaza: la persona ya lo miró y ya lo tecleó", () => {
+  const excedida: Lectura = { ...base, capturasDeSocEnElTurno: SOC.capturas_max_por_turno + 5 };
+  assert.equal(rechaza(clasificar(excedida)), false);
+});
+
+test("el máximo es de CARGA: un odómetro no lo consume ni lo dispara", () => {
+  // El mutante obvio: contar todas las lecturas del turno haría que el cuarto odómetro del día
+  // marcara un exceso de SOC, y la bandeja se llenaría de un flag que no describe nada.
+  const odometro: Lectura = {
+    ...base,
+    magnitud: "odometro",
+    valor: 1000,
+    capturasDeSocEnElTurno: SOC.capturas_max_por_turno + 2,
+  };
+  assert.deepEqual(clasificar(odometro), []);
+});
+
+test("el CLIENTE sabe cuándo dejar de pedir la carga, con el mismo número", () => {
+  // §4.2: la validación bloqueante corre en el cliente. Lo que el límite protege no es la base
+  // —una captura de más entra igual— sino que la app no le pida el SOC diez veces por jornada.
+  assert.equal(quedanCapturasDeSoc(0), true);
+  assert.equal(quedanCapturasDeSoc(SOC.capturas_max_por_turno - 1), true);
+  assert.equal(quedanCapturasDeSoc(SOC.capturas_max_por_turno), false);
+});
+
 test("las banderas se acumulan: una lectura puede tener varias cosas mal a la vez", () => {
   const fea: Lectura = {
     magnitud: "soc",
@@ -138,6 +185,7 @@ test("las banderas se acumulan: una lectura puede tener varias cosas mal a la ve
     recibidaEn: AHORA,
     tieneTurno: false,
     moduloEncendido: true,
+    capturasDeSocEnElTurno: 0,
   };
   assert.deepEqual(clasificar(fea).sort(), ["reloj_desfasado", "sin_turno", "soc_fuera_de_rango"]);
   assert.equal(rechaza(clasificar(fea)), false);

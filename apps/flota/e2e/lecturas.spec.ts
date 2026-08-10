@@ -233,3 +233,76 @@ test("[AC-FVEH-05] rechazos = 0: ninguna de las capturas degradadas devolvió 4x
   }
   expect(rechazos, "el centinela 4 exige rechazos = 0 (§9.3.4)").toBe(0);
 });
+
+// ─── Máximo de capturas de carga por turno [AC-FVEH-19] ──────────────────────────────
+//
+// El §0 lo fija y el §4.2 dice dónde se valida: en el CLIENTE, contra el snapshot. Lo que
+// llega de más por sync entra igual —es captura— con su flag y su fila en «Por revisar».
+//
+// CLÁUSULA CONDICIONADA por la pregunta 9 de la spec 02: acá se cuentan TODAS las capturas de
+// carga del turno, que es la lectura literal del §0. Si el dueño responde que son tres
+// ADICIONALES en ruta —sin contar apertura y cierre—, cambian juntos el conteo y este test.
+
+test("[AC-FVEH-19] la captura de carga que pasa el máximo entra 2xx, con flag y revisión", async ({
+  request,
+}) => {
+  // Turno propio, para contar desde cero sin depender de lo que hicieron los tests de arriba.
+  const [v] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ id: string }>(
+      "insert into vehiculos (patente, tipo) values ('LEC0002', 'furgón') returning id::text as id",
+    ),
+  );
+  const [cv] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ id: string }>("select id::text as id from config_version order by id desc limit 1"),
+  );
+  const [t] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ id: string }>(
+      "insert into turnos (vehiculo_id, config_version_id) values ($1, $2) returning id::text as id",
+      [v!.id, cv!.id],
+    ),
+  );
+
+  // Las tres que el §0 permite: ninguna marca.
+  for (let i = 0; i < SOC.capturas_max_por_turno; i++) {
+    const r = await request.post("/api/lecturas", {
+      headers: comoChofer,
+      data: { ...cuerpoBase({ magnitud: "soc", valor: 50 + i }), turno_id: t!.id },
+    });
+    expect(r.status(), `la captura ${i + 1} no entró`).toBe(201);
+    expect((await r.json()).lectura.flags, `la captura ${i + 1} marcó de más`).not.toContain(
+      "exceso_de_soc",
+    );
+  }
+
+  const antes = await rastro();
+  const excedida = await request.post("/api/lecturas", {
+    headers: comoChofer,
+    data: { ...cuerpoBase({ magnitud: "soc", valor: 44 }), turno_id: t!.id },
+  });
+  // JAMÁS rebota (centinela 4): la persona ya miró el tablero y ya tecleó lo que vio.
+  expect(excedida.status(), "una captura de más NO puede rebotar (§4.2)").toBe(201);
+  expect((await excedida.json()).lectura.flags).toContain("exceso_de_soc");
+  const despues = await rastro();
+  expect(Number(despues.lecturas) - Number(antes.lecturas), "la captura de más no se guardó").toBe(1);
+  expect(
+    Number(despues.revisiones) - Number(antes.revisiones),
+    "el exceso no abrió su fila «Por revisar»",
+  ).toBe(1);
+});
+
+test("[AC-FVEH-19] el máximo es de CARGA: el odómetro no lo consume ni lo dispara", async ({ request }) => {
+  // Sin esta mitad, contar todas las lecturas del turno haría que el cuarto odómetro del día
+  // marcara un exceso de carga, y la bandeja se llenaría de un flag que no describe nada.
+  const [t] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ id: string }>(
+      `select t.id::text as id from turnos t join vehiculos v on v.id = t.vehiculo_id
+        where v.patente = 'LEC0002'`,
+    ),
+  );
+  const r = await request.post("/api/lecturas", {
+    headers: comoChofer,
+    data: { ...cuerpoBase({ magnitud: "odometro", valor: 5_000 }), turno_id: t!.id },
+  });
+  expect(r.status()).toBe(201);
+  expect((await r.json()).lectura.flags).not.toContain("exceso_de_soc");
+});

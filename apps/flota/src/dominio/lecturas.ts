@@ -34,6 +34,9 @@ export const FLAGS = [
   // donde la regla de oro se ve más clara: el dueño apagó algo en una oficina y el chofer ya
   // había tecleado el dato en la calle.
   "modulo_apagado",
+  // El máximo de capturas de carga por turno del §0. El límite lo valida el CLIENTE (§4.2);
+  // lo que llega de más por sync entra igual con este flag [AC-FVEH-19].
+  "exceso_de_soc",
 ] as const;
 export type FlagDeLectura = (typeof FLAGS)[number];
 
@@ -48,6 +51,8 @@ export type Lectura = {
   tieneTurno: boolean;
   /** Si el módulo estaba encendido en la config CONGELADA del turno (§4.4, §5.5). */
   moduloEncendido: boolean;
+  /** Cuántas capturas de carga lleva YA este turno, sin contar esta [AC-FVEH-19]. */
+  capturasDeSocEnElTurno: number;
 };
 
 /** Milisegundos de desfase tolerado entre el reloj del aparato y el del servidor (§0). */
@@ -76,12 +81,32 @@ export function clasificar(lectura: Lectura): FlagDeLectura[] {
   ) {
     flags.push("odometro_retrocedido");
   }
+  // CLÁUSULA CONDICIONADA por la pregunta 9 de la spec 02. El §0 fija un máximo de capturas de
+  // SOC por turno, y acá se cuentan TODAS las del turno: es su lectura literal. Si el dueño
+  // responde que son adicionales a las de apertura y cierre, cambian juntos este conteo y su
+  // test. El número sale de la familia canónica y no se escribe acá (grep-gate de AC-FTEN-01).
+  if (lectura.magnitud === "soc" && lectura.capturasDeSocEnElTurno >= SOC.capturas_max_por_turno) {
+    flags.push("exceso_de_soc");
+  }
+
   // Valor absoluto: un reloj adelantado es tan sospechoso como uno atrasado, y solo uno de los
   // dos signos se ve si se compara sin él.
   const desfase = Math.abs(lectura.recibidaEn.getTime() - lectura.tsDispositivo.getTime());
   if (desfase > TOLERANCIA_DE_RELOJ_MS) flags.push("reloj_desfasado");
 
   return flags;
+}
+
+/**
+ * ¿Le queda al turno alguna captura de carga? Es lo que el CLIENTE usa para no volver a pedirla
+ * (§4.2: «la validación bloqueante corre en el cliente»).
+ *
+ * Vive acá y no en la pantalla porque el mismo número lo necesitan los dos lados, y dos copias
+ * se separan el día que alguien ajusta una. Lo que el límite protege no es la base: es que la
+ * app no le pida el SOC diez veces por jornada a alguien que está trabajando.
+ */
+export function quedanCapturasDeSoc(capturasDeSocEnElTurno: number): boolean {
+  return capturasDeSocEnElTurno < SOC.capturas_max_por_turno;
 }
 
 /**

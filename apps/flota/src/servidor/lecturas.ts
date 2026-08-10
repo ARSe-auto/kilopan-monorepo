@@ -70,6 +70,7 @@ const EVENTO_DE_FLAG: Record<FlagDeLectura, (typeof EVENTOS_OPERACION)[keyof typ
   reloj_desfasado: EVENTOS_OPERACION.lectura_reloj_desfasado,
   sin_turno: EVENTOS_OPERACION.lectura_sin_turno,
   modulo_apagado: EVENTOS_OPERACION.lectura_modulo_apagado,
+  exceso_de_soc: EVENTOS_OPERACION.lectura_exceso_de_soc,
 };
 
 /** Lo que ya tiene proyectado el vehículo de este turno, para juzgar la monotonicidad. */
@@ -114,6 +115,18 @@ async function moduloOperativoEn(c: PoolClient, versionId: string): Promise<bool
   return (await estadoDeFeature(c, versionId, FEATURES.modulo_vehiculos)) !== false;
 }
 
+/** Cuántas capturas de carga lleva este turno. Se cuentan TODAS —la lectura literal del §0—;
+ *  la pregunta 9 de la spec 02 puede cambiarlo a «tres adicionales en ruta» [AC-FVEH-19]. */
+async function capturasDeSoc(c: PoolClient, turnoId: string | null): Promise<number> {
+  if (!turnoId) return 0;
+  const { rows } = await c.query<{ n: string }>(
+    `select count(*)::text as n from reading r join magnitud m on m.id = r.magnitud_id
+      where r.turno_id = $1 and m.codigo = 'soc'`,
+    [turnoId],
+  );
+  return Number(rows[0]?.n ?? "0");
+}
+
 export async function registrarLectura(
   pool: Pool,
   sesion: Sesion,
@@ -142,6 +155,7 @@ export async function registrarLectura(
     const configVersionId = configDelTurno ?? (await versionVigente(c, slug));
     const moduloEncendido = await moduloOperativoEn(c, configVersionId);
     const anterior = magnitud === "odometro" ? (antes?.odometro ?? null) : (antes?.soc ?? null);
+    const capturasDeSocEnElTurno = await capturasDeSoc(c, entrante.turnoId);
     const recibidaEn = new Date();
 
     const flags = clasificar({
@@ -152,6 +166,7 @@ export async function registrarLectura(
       recibidaEn,
       tieneTurno: antes !== null,
       moduloEncendido,
+      capturasDeSocEnElTurno,
     });
 
     const { rows } = await c.query<{ id: string }>(

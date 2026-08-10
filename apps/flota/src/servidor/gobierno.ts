@@ -81,6 +81,7 @@ export const EVENTOS_OPERACION = {
   lectura_reloj_desfasado: "lectura.reloj_desfasado",
   lectura_sin_turno: "lectura.sin_turno",
   lectura_modulo_apagado: "lectura.modulo_apagado",
+  lectura_exceso_de_soc: "lectura.exceso_de_soc",
   agenda_bloque_creado: "agenda.bloque_creado",
   agenda_bloque_borrado: "agenda.bloque_borrado",
   agenda_semana_duplicada: "agenda.semana_duplicada",
