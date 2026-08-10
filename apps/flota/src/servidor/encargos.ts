@@ -1,6 +1,8 @@
 import type { Pool } from "pg";
 import { enActo, registrarEvento, EVENTOS_OPERACION } from "./gobierno.ts";
 import type { Sesion } from "./sesion.ts";
+import { createHash } from "node:crypto";
+import { leerCsv } from "../dominio/csv.ts";
 
 // El alta de encargo de la bandeja [AC-FRUT-01] — §3.E1.5, §4.5, §4.2, §4.9.
 //
@@ -137,4 +139,148 @@ export async function listarEncargos(pool: Pool, fecha: string | null): Promise<
     [fecha],
   );
   return rows;
+}
+
+// ─── Importación CSV de la bandeja [AC-FRUT-02] — §5.2-F1, §4.2, §9.3.1 ─────────────
+//
+// ─── LA GRANULARIDAD NO ESTÁ DECIDIDA, Y ACÁ SE ELIGE LA CONDUCTA SEGURA ──────────
+//
+// La **pregunta 6** de la spec 03 deja abierto si una fila inválida invalida el ARCHIVO entero
+// o solo esa fila. El AC pide asertar lo invariante bajo las dos semánticas: que la fila
+// inválida NO entre y que la respuesta sea 422 tipado.
+//
+// Entre las dos, esta implementación elige Todo-o-nada y lo declara como provisional. La razón
+// no es que sea más fácil —sale gratis de una transacción, es cierto— sino que es la que se
+// puede deshacer: una importación a medias deja al operador sin saber qué entró, y completarla
+// son veinte altas a mano; volver a subir el archivo corregido es un clic. Si el dueño elige
+// por-fila, cambia esta función y su cláusula, no el resto del módulo.
+//
+// Y se reportan TODAS las filas malas, no la primera: quien arma el archivo lo corrige de una
+// vez en vez de subirlo cinco veces descubriendo un error por vez.
+//
+// ─── EL `client_uuid` ES POR FILA, NO POR ARCHIVO ────────────────────────────────────
+//
+// El centinela 1 pide que el replay doble deje exactamente una fila POR client_uuid. Si el
+// identificador fuera del lote, reimportar un archivo con una fila más crearía todas de nuevo.
+// Por fila, el segundo intento no duplica nada y la fila nueva sí entra.
+
+export type FilaImportada = { linea: number; error: string; detalle: string };
+
+export type Importacion =
+  | { tipo: "ok"; creados: number; repetidos: number }
+  | { tipo: "archivo_vacio" }
+  | { tipo: "faltan_columnas"; columnas: string[] }
+  | { tipo: "filas_invalidas"; filas: FilaImportada[] };
+
+/** Las columnas que el archivo tiene que traer. Son los tres datos del alta (§3.E1.5). */
+export const COLUMNAS_DEL_CSV = ["empresa", "destino", "bultos"] as const;
+
+export async function importarEncargos(
+  pool: Pool,
+  sesion: Sesion,
+  texto: string,
+): Promise<Importacion> {
+  const lectura = leerCsv(texto, [...COLUMNAS_DEL_CSV]);
+  if (lectura.tipo === "vacio") return { tipo: "archivo_vacio" };
+  if (lectura.tipo === "faltan_columnas") return { tipo: "faltan_columnas", columnas: lectura.columnas };
+
+  return enActo(pool, async (c) => {
+    // Los catálogos se leen UNA vez: con doscientas filas, resolver empresa y destino por fila
+    // serían cuatrocientas consultas dentro de una transacción abierta.
+    const { rows: empresas } = await c.query<{ id: string; rut: string; razon_social: string }>(
+      "select id::text as id, rut, razon_social from empresas_cliente where activa",
+    );
+    const { rows: destinos } = await c.query<{ id: string; nombre: string }>(
+      "select id::text as id, nombre from destinos",
+    );
+    const porEmpresa = new Map(
+      empresas.flatMap((e) => [
+        [e.rut.toLowerCase(), e.id] as const,
+        [e.razon_social.toLowerCase(), e.id] as const,
+      ]),
+    );
+    const porDestino = new Map(destinos.map((d) => [d.nombre.toLowerCase(), d.id] as const));
+
+    const malas: FilaImportada[] = [];
+    const buenas: { empresaId: string; destinoId: string; bultos: number; clientUuid: string }[] = [];
+
+    lectura.filas.forEach((fila, i) => {
+      // +2: la primera línea es el encabezado y los humanos cuentan desde uno. Un número de
+      // línea que no coincide con lo que la persona ve en Excel no sirve para arreglar nada.
+      const linea = i + 2;
+      const empresaId = porEmpresa.get((fila.empresa ?? "").toLowerCase());
+      if (!empresaId) {
+        malas.push({ linea, error: "empresa_no_existe", detalle: fila.empresa ?? "" });
+        return;
+      }
+      const destinoId = porDestino.get((fila.destino ?? "").toLowerCase());
+      if (!destinoId) {
+        malas.push({ linea, error: "destino_no_existe", detalle: fila.destino ?? "" });
+        return;
+      }
+      const bultos = Number(fila.bultos);
+      if (!Number.isInteger(bultos) || bultos < 1 || bultos > 500) {
+        malas.push({ linea, error: "bultos_fuera_de_rango", detalle: fila.bultos ?? "" });
+        return;
+      }
+      // El `client_uuid` de cada fila se DERIVA de su contenido y no se sortea: así el mismo
+      // archivo subido dos veces produce los mismos identificadores y el centinela 1 tiene de
+      // dónde agarrarse. Un uuid al azar por intento haría que cada reintento duplicara todo.
+      buenas.push({
+        empresaId,
+        destinoId,
+        bultos,
+        clientUuid: uuidDeterminista(`${empresaId}|${destinoId}|${bultos}|${linea}`),
+      });
+    });
+
+    // Todo-o-nada, provisional (pregunta 6): la transacción se deshace sola al devolver el
+    // rebote, así que ninguna de las buenas queda escrita.
+    if (malas.length > 0) return { tipo: "filas_invalidas", filas: malas };
+
+    let creados = 0;
+    let repetidos = 0;
+    for (const fila of buenas) {
+      const { rows } = await c.query<{ id: string }>(
+        `insert into encargos (empresa_cliente_id, destino_id, bultos, client_uuid)
+         values ($1, $2, $3, $4)
+           on conflict (tenant_id, client_uuid) do nothing
+         returning id::text as id`,
+        [fila.empresaId, fila.destinoId, fila.bultos, fila.clientUuid],
+      );
+      if (!rows[0]) {
+        repetidos++;
+        continue;
+      }
+      creados++;
+      await registrarEvento(c, {
+        codigo: EVENTOS_OPERACION.encargo_creado,
+        objetoTabla: "encargos",
+        objetoId: rows[0].id,
+        sesion,
+        payload: { bultos: fila.bultos, origen: "importacion_csv" },
+      });
+    }
+    return { tipo: "ok", creados, repetidos };
+  });
+}
+
+/**
+ * Un UUID v5-ish derivado del contenido de la fila: el mismo archivo produce los mismos
+ * identificadores en cada intento, que es lo que hace posible el centinela 1 sin pedirle al
+ * operador que ponga un id en su Excel.
+ *
+ * Se arma del sha256 del contenido, con los bits de versión y variante fijados a mano. No es un
+ * UUIDv7 —no lleva tiempo— y no tiene por qué serlo: el §0 exige v7 en las PK, que las genera
+ * el servidor; esto es el identificador de idempotencia del cliente.
+ */
+function uuidDeterminista(contenido: string): string {
+  const h = createHash("sha256").update(contenido).digest("hex");
+  return [
+    h.slice(0, 8),
+    h.slice(8, 12),
+    `5${h.slice(13, 16)}`,
+    ((Number.parseInt(h.slice(16, 18), 16) & 0x3f) | 0x80).toString(16).padStart(2, "0") + h.slice(18, 20),
+    h.slice(20, 32),
+  ].join("-");
 }

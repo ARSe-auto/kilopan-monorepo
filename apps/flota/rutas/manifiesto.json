@@ -130,6 +130,18 @@
       }
     },
     {
+      "ruta": "/api/encargos/importar",
+      "archivo": "src/app/api/encargos/importar/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Importación CSV de la bandeja [AC-FRUT-02]. Sin parámetro: el archivo va en el cuerpo y el tenant sale del ruteo. Es la mutación de MAYOR volumen del módulo —doscientas filas en un request— y por eso el comparador de huella de la BD de B es el guard que corresponde: una importación escrita en el vecino le llenaría la bandeja del día con encargos que nadie pidió, y los descubriría al armar rutas. Sin credencial, la guardia contesta 404 pelado antes de parsear una línea."
+      }
+    },
+    {
       "ruta": "/api/energia",
       "archivo": "src/app/api/energia/route.ts",
       "metodos": [

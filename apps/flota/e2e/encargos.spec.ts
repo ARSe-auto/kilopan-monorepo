@@ -268,3 +268,98 @@ test("[AC-FRUT-01] el rebote de bultos se muestra con su rango, no como «datos 
   // Quien tipea arregla un número y no tiene que adivinar cuál: el mensaje trae el límite.
   await expect(rebote).toContainText("500");
 });
+
+// ─── Importación CSV [AC-FRUT-02] — §5.2-F1, §4.2, §9.3.1 ───────────────────────────
+//
+// LO INVARIANTE BAJO LAS DOS SEMÁNTICAS de la pregunta 6 —archivo completo o por fila— es lo
+// único que este archivo asierta, con esas palabras del AC: que la fila inválida NO entre y que
+// la respuesta sea 422 tipado. La política que hoy se aplica (todo-o-nada) se declara en el
+// cuerpo de la respuesta, y el test la mira sin depender de ella.
+
+const CSV_BUENO = (empresa: string, destino: string) =>
+  `empresa,destino,bultos\n${empresa},${destino},30\n${empresa},${destino},45\n`;
+
+test("[AC-FRUT-02] un CSV bueno crea sus encargos, con id de servidor y fecha de hoy", async ({
+  request,
+}) => {
+  const antes = await cuantosEncargos();
+  const r = await request.post("/api/encargos/importar", {
+    headers: { ...comoOperador, "content-type": "text/csv" },
+    data: CSV_BUENO("Panadería del barrio", "Local del centro"),
+  });
+  expect(r.status()).toBe(201);
+  expect((await r.json()).creados).toBe(2);
+  expect(await cuantosEncargos()).toBe(antes + 2);
+
+  const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago" }).format(new Date());
+  const [f] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ n: string }>(
+      "select count(*)::text as n from encargos where fecha_servicio <> $1::date",
+      [hoy],
+    ),
+  );
+  expect(Number(f!.n), "un encargo importado quedó con fecha distinta de hoy").toBe(0);
+});
+
+test("[AC-FRUT-02] el replay de la MISMA importación no crea una segunda copia (centinela 1)", async ({
+  request,
+}) => {
+  const antes = await cuantosEncargos();
+  const r = await request.post("/api/encargos/importar", {
+    headers: { ...comoOperador, "content-type": "text/csv" },
+    data: CSV_BUENO("Panadería del barrio", "Local del centro"),
+  });
+  expect(r.status()).toBe(201);
+  const cuerpo = (await r.json()) as { creados: number; repetidos: number };
+  // El `client_uuid` se DERIVA del contenido de cada fila, así que el mismo archivo produce los
+  // mismos identificadores: el segundo intento no crea nada y lo dice.
+  expect(cuerpo.creados).toBe(0);
+  expect(cuerpo.repetidos).toBe(2);
+  expect(await cuantosEncargos(), "el replay duplicó la importación").toBe(antes);
+});
+
+test("[AC-FRUT-02] las filas inválidas NO entran, y se reportan TODAS con su línea", async ({
+  request,
+}) => {
+  const antes = await cuantosEncargos();
+  const malo =
+    "empresa,destino,bultos\n" +
+    "Panadería del barrio,Local del centro,700\n" + // línea 2: fuera de rango
+    "Empresa que no existe,Local del centro,10\n" + // línea 3: empresa desconocida
+    "Panadería del barrio,Local del centro,25\n"; // línea 4: buena
+
+  const r = await request.post("/api/encargos/importar", {
+    headers: { ...comoOperador, "content-type": "text/csv" },
+    data: malo,
+  });
+  expect(r.status()).toBe(422);
+  const cuerpo = (await r.json()) as { error: string; filas: { linea: number; error: string }[] };
+  expect(cuerpo.error).toBe("filas_invalidas");
+  // TODAS, no la primera: quien arma el archivo lo corrige de una vez.
+  expect(cuerpo.filas.length).toBe(2);
+  // El número de línea es el que la persona ve en Excel — el encabezado cuenta.
+  expect(cuerpo.filas.map((f) => f.linea).sort()).toEqual([2, 3]);
+  expect(cuerpo.filas.map((f) => f.error).sort()).toEqual(["bultos_fuera_de_rango", "empresa_no_existe"]);
+
+  // LO INVARIANTE BAJO LAS DOS SEMÁNTICAS: las filas inválidas no dejaron fila. (Que además no
+  // haya entrado la buena es la política de hoy, que la pregunta 6 puede cambiar.)
+  const [malas] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ n: string }>("select count(*)::text as n from encargos where bultos = 700"),
+  );
+  expect(Number(malas!.n), "una fila inválida entró igual").toBe(0);
+  expect(await cuantosEncargos()).toBe(antes);
+});
+
+test("[AC-FRUT-02] un archivo sin las columnas necesarias lo dice, con los nombres", async ({
+  request,
+}) => {
+  const r = await request.post("/api/encargos/importar", {
+    headers: { ...comoOperador, "content-type": "text/csv" },
+    data: "empresa\nPanadería del barrio\n",
+  });
+  expect(r.status()).toBe(422);
+  const cuerpo = (await r.json()) as { error: string; mensaje: string };
+  expect(cuerpo.error).toBe("faltan_columnas");
+  expect(cuerpo.mensaje).toContain("destino");
+  expect(cuerpo.mensaje).toContain("bultos");
+});
