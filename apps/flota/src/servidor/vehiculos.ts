@@ -103,3 +103,143 @@ export async function listarVehiculos(pool: Pool): Promise<Vehiculo[]> {
   );
   return rows;
 }
+
+// ─── Edición y desactivación: los otros dos actos del dueño [AC-FVEH-02] ──────────────
+//
+// QUÉ SE PUEDE EDITAR, Y QUÉ NO. El §5.4 dice «edita capacidades/documentos»: acá van las
+// capacidades y los datos EV —lo progresivo del alta— más el tipo y el estado. Fuera quedan
+// dos cosas, y las dos por una razón que no es de estilo:
+//
+//   · `patente` es la IDENTIDAD operativa del vehículo. Cambiarla no es editar una ficha: es
+//     decir que este es otro camión, con toda la historia del anterior colgando. El maestro no
+//     pide ese acto y esta puerta no lo inventa.
+//   · `odometro` y `soc` son proyecciones de `reading` (§4.5). El trigger de la base ya rebota
+//     su escritura, pero un rebote de restricción sale como error del servidor; que la lista
+//     de campos editables no las incluya convierte el intento en un 422 tipado, que es lo que
+//     el §4.2 pide de una mutación de planificación.
+
+/** Los campos que el dueño puede mover. La lista es CERRADA: lo que no está, no se edita. */
+const EDITABLES = [
+  "tipo",
+  "capacidad_bultos",
+  "capacidad_kg",
+  "bateria_wh",
+  "autonomia_nominal_km",
+  "wh_por_km_base",
+  "soh_pct",
+  "activo",
+] as const;
+
+const NUMERICOS = new Set<string>([
+  "capacidad_bultos",
+  "capacidad_kg",
+  "bateria_wh",
+  "autonomia_nominal_km",
+  "wh_por_km_base",
+  "soh_pct",
+]);
+
+export type EdicionDeVehiculo =
+  | { tipo: "ok"; vehiculo: Vehiculo; reactivado: boolean }
+  | { tipo: "no_existe" }
+  | { tipo: "sin_cambios" }
+  | { tipo: "campo_no_editable"; campo: string }
+  | { tipo: "valor_invalido"; campo: string };
+
+export async function editarVehiculo(
+  pool: Pool,
+  sesion: Sesion,
+  vehiculoId: string,
+  cambios: Record<string, unknown>,
+): Promise<EdicionDeVehiculo> {
+  const columnas: string[] = [];
+  const valores: unknown[] = [];
+
+  for (const [campo, valor] of Object.entries(cambios)) {
+    if (!(EDITABLES as readonly string[]).includes(campo)) {
+      return { tipo: "campo_no_editable", campo };
+    }
+    if (campo === "tipo") {
+      const juicio = juzgarTipo(String(valor ?? ""));
+      if (juicio.tipo === "invalida") return { tipo: "valor_invalido", campo };
+      valores.push(juicio.valor);
+    } else if (campo === "activo") {
+      if (typeof valor !== "boolean") return { tipo: "valor_invalido", campo };
+      valores.push(valor);
+    } else if (NUMERICOS.has(campo)) {
+      // `null` es un valor legítimo: es «todavía no lo sabemos», que es el estado con el que
+      // nace toda columna progresiva y al que se puede volver si alguien cargó un número mal.
+      if (valor !== null && !Number.isInteger(valor)) return { tipo: "valor_invalido", campo };
+      valores.push(valor);
+    }
+    columnas.push(`${campo} = $${valores.length}`);
+  }
+  if (columnas.length === 0) return { tipo: "sin_cambios" };
+
+  return enActo(pool, async (c) => {
+    const { rows: antes } = await c.query<{ activo: boolean }>(
+      "select activo from vehiculos where id = $1",
+      [vehiculoId],
+    );
+    if (antes.length === 0) return { tipo: "no_existe" };
+
+    const { rows } = await c.query<Vehiculo>(
+      `update vehiculos set ${columnas.join(", ")} where id = $${valores.length + 1}
+       returning ${COLUMNAS}`,
+      [...valores, vehiculoId],
+    );
+    const vehiculo = rows[0]!;
+    // Volver a poner en operación un vehículo que estaba fuera deja su PROPIO rastro: en la
+    // auditoría no es lo mismo que corregir una capacidad.
+    const reactivado = !antes[0]!.activo && vehiculo.activo;
+    await registrarEvento(c, {
+      codigo: reactivado ? EVENTOS.vehiculo_reactivado : EVENTOS.vehiculo_editado,
+      objetoTabla: "vehiculos",
+      objetoId: vehiculo.id,
+      sesion,
+      payload: { patente: vehiculo.patente, campos: Object.keys(cambios) },
+    });
+    return { tipo: "ok", vehiculo, reactivado };
+  });
+}
+
+export type Desactivacion =
+  | { tipo: "ok"; vehiculo: Vehiculo }
+  | { tipo: "no_existe" }
+  | { tipo: "ya_estaba" };
+
+/**
+ * El DELETE de HTTP, materializado como desactivación (§5.4, §7.4).
+ *
+ * La fila NO se toca más allá de `activo`: sus lecturas, sus chequeos y sus turnos siguen
+ * enteros, porque son la historia con la que la EEVD se computa hacia atrás (§2). Un borrado
+ * físico acá no sería «limpiar»: sería perder el denominador de las semanas ya cerradas.
+ */
+export async function desactivarVehiculo(
+  pool: Pool,
+  sesion: Sesion,
+  vehiculoId: string,
+): Promise<Desactivacion> {
+  return enActo(pool, async (c) => {
+    const { rows: existe } = await c.query("select 1 from vehiculos where id = $1", [vehiculoId]);
+    if (existe.length === 0) return { tipo: "no_existe" };
+
+    const { rows } = await c.query<Vehiculo>(
+      `update vehiculos set activo = false where id = $1 and activo returning ${COLUMNAS}`,
+      [vehiculoId],
+    );
+    const vehiculo = rows[0];
+    // Idempotente y sin evento de más: desactivar dos veces no es un acto nuevo, y una
+    // auditoría con dos filas iguales le hace creer a quien la lee que pasó dos veces.
+    if (!vehiculo) return { tipo: "ya_estaba" };
+
+    await registrarEvento(c, {
+      codigo: EVENTOS.vehiculo_desactivado,
+      objetoTabla: "vehiculos",
+      objetoId: vehiculo.id,
+      sesion,
+      payload: { patente: vehiculo.patente },
+    });
+    return { tipo: "ok", vehiculo };
+  });
+}

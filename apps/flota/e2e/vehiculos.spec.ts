@@ -31,7 +31,9 @@ const BD_A = bdDeTenant(A.slug);
 type Conexion = { sql: <T = Record<string, string>>(t: string, p?: unknown[]) => Promise<T[]> };
 
 const RUT_DUENA = Object.keys(VALIDOS)[0]!;
+const RUT_OPERADOR = Object.keys(VALIDOS)[4]!;
 const SECRETO_DUENA = secretoNuevo();
+const SECRETO_OPERADOR = secretoNuevo();
 
 /** Las patentes del fixture. Sin guiones a propósito en la segunda: es la MISMA que la primera
  *  para la base, y es lo que hace que el 422 pruebe la normalización y no solo el índice. */
@@ -59,6 +61,23 @@ test.beforeAll(async () => {
       `insert into dispositivos (tipo, persona_id, secreto_hash, enrolado_por, enrolado_en, is_standalone, storage_persisted)
        values ('personal', $1, $2, $3, now(), true, true)`,
       [p!.id, hashDeSecreto(SECRETO_DUENA), u!.id],
+    );
+
+    // Y un `operador` con su propio aparato [AC-FVEH-02]. Es la mitad que hace valer el
+    // centinela 15: sin una sesión REAL de rol distinto, el 403 se podría estar dando por
+    // falta de credencial y no por el rol, que es otra cosa y otro contrato (404, no 403).
+    const [po] = await c.sql<{ id: string }>(
+      "insert into personas (rut, nombre) values ($1, 'Quien opera') returning id::text as id",
+      [RUT_OPERADOR],
+    );
+    const [uo] = await c.sql<{ id: string }>(
+      "insert into usuarios (persona_id, rol) values ($1, 'operador') returning id::text as id",
+      [po!.id],
+    );
+    await c.sql(
+      `insert into dispositivos (tipo, persona_id, secreto_hash, enrolado_por, enrolado_en, is_standalone, storage_persisted)
+       values ('personal', $1, $2, $3, now(), true, true)`,
+      [po!.id, hashDeSecreto(SECRETO_OPERADOR), uo!.id],
     );
   });
 });
@@ -238,4 +257,154 @@ test("[AC-FVEH-01] el segundo vehículo elige su tipo con un CHIP: el catálogo 
     c2.sql<{ tipo: string }>("select tipo from vehiculos where patente = 'CD5678'"),
   );
   expect(v!.tipo, "el chip no cargó el tipo que decía").toBe(TIPO);
+});
+
+// ─── El CRUD es del dueño, y el operador conserva lo suyo [AC-FVEH-02] ────────────────
+//
+// El §5.4 lo reparte con nombre y apellido: el `admin_tenant` da de alta, edita capacidades y
+// desactiva; el `operador` «solo lee y asigna a rutas». Lo que el centinela 15 (§9.3) pide
+// probar son las dos mitades, y la segunda importa tanto como la primera: un 403 que además
+// le sacara la lectura al operador cumpliría el test y rompería la operación.
+//
+// La sesión del operador es REAL, no una petición sin credencial: sin eso, el 403 podría estar
+// saliendo por falta de sesión —que tiene otro contrato, 404 pelado— y el rebote por ROL
+// quedaría sin probar. El barrido autogenerado de AC-FIDN-12 cubre estas mismas rutas con rol
+// `chofer`; acá se ejerce el rol que el §5.4 nombra por escrito.
+
+/** Conteos de las tres tablas que un acto de gobierno mueve. Es «0 filas», leído de la base. */
+async function huella() {
+  const [f] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ vehiculos: string; activos: string; auditoria: string; eventos: string }>(
+      `select (select count(*)::text from vehiculos) as vehiculos,
+              (select count(*)::text from vehiculos where activo) as activos,
+              (select count(*)::text from audit_trail where tabla = 'vehiculos') as auditoria,
+              (select count(*)::text from eventos e join evento_tipo t on t.id = e.tipo_id
+                where t.codigo like 'gobierno.vehiculo_%') as eventos`,
+    ),
+  );
+  return f!;
+}
+
+const comoOperador = { Authorization: `Portador ${SECRETO_OPERADOR}` };
+const comoDuena = { Authorization: `Portador ${SECRETO_DUENA}` };
+
+const idDeAlguno = () =>
+  con(BD_A, (c: Conexion) =>
+    c.sql<{ id: string }>("select id::text as id from vehiculos order by patente limit 1"),
+  ).then((r) => r[0]!.id);
+
+test("[AC-FVEH-02] el operador no puede crear, editar ni desactivar: 403 y CERO filas", async ({ request }) => {
+  const id = await idDeAlguno();
+  const antes = await huella();
+
+  const casos: [string, string, Record<string, unknown> | undefined][] = [
+    ["POST", "/api/gobierno/vehiculos", { patente: "ZZ9999", tipo: "camión" }],
+    ["PATCH", `/api/gobierno/vehiculos/${id}`, { capacidad_bultos: 90, activo: false }],
+    ["DELETE", `/api/gobierno/vehiculos/${id}`, undefined],
+  ];
+
+  for (const [metodo, ruta, datos] of casos) {
+    const r = await request.fetch(ruta, { method: metodo, headers: comoOperador, data: datos });
+    expect(r.status(), `${metodo} ${ruta} con rol operador`).toBe(403);
+    expect((await r.json()).error, `${metodo} ${ruta}`).toBe("solo_el_dueno");
+  }
+
+  // «0 filas» de verdad: ni un vehículo nuevo, ni uno desactivado, ni una fila de auditoría o
+  // de evento. Un 403 que ya hubiera escrito algo antes de rebotar sería peor que no tenerlo.
+  expect(await huella()).toEqual(antes);
+});
+
+test("[AC-FVEH-02] el operador conserva la LECTURA de la flota, que es lo que el §5.4 le deja", async ({
+  request,
+}) => {
+  const r = await request.get("/api/vehiculos", { headers: comoOperador });
+  expect(r.status(), "al operador se le cerró la puerta que sí es suya").toBe(200);
+  const { vehiculos } = (await r.json()) as { vehiculos: { patente: string }[] };
+  // Anti-vacuidad: un 200 con la lista vacía «pasaría» sin probar que ve la flota.
+  expect(vehiculos.length).toBeGreaterThan(0);
+  expect(vehiculos.map((v) => v.patente)).toContain(PATENTE);
+});
+
+test("[AC-FVEH-02] la dueña edita capacidades y datos EV, y el acto queda en audit_trail", async ({ request }) => {
+  const id = await idDeAlguno();
+  const antes = await huella();
+
+  const r = await request.patch(`/api/gobierno/vehiculos/${id}`, {
+    headers: comoDuena,
+    // Las capacidades del §4.5 y un dato EV. Nada de esto existía al dar de alta: es
+    // exactamente el «resto progresivo» del §5.4, completándose después.
+    data: { capacidad_bultos: 90, capacidad_kg: 1200, bateria_wh: 41860 },
+  });
+  expect(r.status()).toBe(200);
+
+  const despues = await huella();
+  expect(Number(despues.auditoria), "la edición no dejó su fila de audit_trail").toBe(
+    Number(antes.auditoria) + 1,
+  );
+  expect(Number(despues.eventos), "la edición no dejó su evento de gobierno").toBe(
+    Number(antes.eventos) + 1,
+  );
+  expect(despues.vehiculos, "una edición no crea vehículos").toBe(antes.vehiculos);
+
+  const [v] = await con(BD_A, (c: Conexion) =>
+    c.sql<Record<string, string>>(
+      "select capacidad_bultos::text as bultos, capacidad_kg::text as kg, bateria_wh::text as wh from vehiculos where id = $1",
+      [id],
+    ),
+  );
+  expect(v!.bultos).toBe("90");
+  expect(v!.kg).toBe("1200");
+  expect(v!.wh).toBe("41860");
+});
+
+test("[AC-FVEH-02] la patente y las proyecciones NO se editan desde acá: 422 tipado", async ({ request }) => {
+  const id = await idDeAlguno();
+  const antes = await huella();
+
+  for (const campo of ["patente", "odometro", "soc"]) {
+    const r = await request.patch(`/api/gobierno/vehiculos/${id}`, {
+      headers: comoDuena,
+      data: { [campo]: campo === "patente" ? "XX0000" : 1234 },
+    });
+    // 422 tipado y no un error de restricción: el trigger de la base ya rebota el odómetro y
+    // el SOC, pero un rebote de constraint sale como 500 y eso es una pantalla rota en vez de
+    // un mensaje que se puede actuar (§4.2).
+    expect(r.status(), `PATCH con ${campo}`).toBe(422);
+    expect((await r.json()).error, `PATCH con ${campo}`).toBe("campo_no_editable");
+  }
+  expect(await huella()).toEqual(antes);
+});
+
+test("[AC-FVEH-02] el DELETE desactiva: la fila y su historia siguen enteras", async ({ request }) => {
+  const id = await idDeAlguno();
+  const antes = await huella();
+
+  const r = await request.delete(`/api/gobierno/vehiculos/${id}`, { headers: comoDuena });
+  expect(r.status()).toBe(200);
+  expect((await r.json()).estado).toBe("desactivado");
+
+  const despues = await huella();
+  // Lo que el §7.4 protege: la fila NO se fue. Un borrado físico se llevaría puesta la
+  // historia con la que la EEVD se computa hacia atrás (§2).
+  expect(despues.vehiculos, "el DELETE borró la fila en vez de desactivarla").toBe(antes.vehiculos);
+  expect(Number(despues.activos)).toBe(Number(antes.activos) - 1);
+  expect(Number(despues.auditoria)).toBe(Number(antes.auditoria) + 1);
+
+  // Segundo DELETE: idempotente y SIN evento nuevo. Dos filas iguales en la auditoría le
+  // hacen creer a quien la lee que el acto ocurrió dos veces.
+  const eventosAntes = (await huella()).eventos;
+  const otra = await request.delete(`/api/gobierno/vehiculos/${id}`, { headers: comoDuena });
+  expect(otra.status()).toBe(200);
+  expect((await otra.json()).estado).toBe("ya_estaba_desactivado");
+  expect((await huella()).eventos, "el segundo DELETE escribió un evento de más").toBe(eventosAntes);
+
+  // Y vuelve: una desactivación que no se deshace es un borrado con pasos extra, y quien se
+  // equivocó de fila quedaría sin salida (§7.4).
+  const vuelta = await request.patch(`/api/gobierno/vehiculos/${id}`, {
+    headers: comoDuena,
+    data: { activo: true },
+  });
+  expect(vuelta.status()).toBe(200);
+  expect((await vuelta.json()).reactivado, "reactivar tiene que distinguirse de editar").toBe(true);
+  expect((await huella()).activos).toBe(antes.activos);
 });

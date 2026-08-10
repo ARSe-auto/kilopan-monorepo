@@ -172,6 +172,25 @@
       }
     },
     {
+      "ruta": "/api/gobierno/vehiculos/[id]",
+      "archivo": "src/app/api/gobierno/vehiculos/[id]/route.ts",
+      "metodos": [
+        "PATCH",
+        "DELETE"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "vehiculos",
+          "columna": "id"
+        },
+        "nota": "Editar o desactivar el vehículo de B desde A no es solo una fuga: es sacarle un camión de la operación al vecino, y el §7.4 protege justo esa fila porque abajo cuelgan sus lecturas, sus chequeos y sus turnos — la historia con la que su EEVD se computa hacia atrás (§2). Contrato 404 y huella de B intacta. El fixture del vecino siembra un vehículo propio para que el id sea REAL: contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin haber probado nada."
+      }
+    },
+    {
       "ruta": "/api/pin/puente",
       "archivo": "src/app/api/pin/puente/route.ts",
       "metodos": [

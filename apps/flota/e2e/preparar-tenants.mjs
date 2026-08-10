@@ -87,6 +87,11 @@ async function sembrarIdentidadDelVecino(slug) {
        values ($1, '7.654.321-6', 'Quien pide en el vecino', '$argon2id$del-vecino', 'clave-del-vecino', 'huella-del-vecino')`,
       [invitacion.id],
     );
+    // Y un vehículo del vecino [AC-FVEH-02]: las rutas de gobierno de vehículos llevan
+    // parámetro, así que el caso del centinela 2 saca de acá el id REAL con el que A intenta
+    // editar y desactivar la flota de B. Sin esta fila el caso no probaría nada, y la suite lo
+    // dice con esas palabras antes que pasar en falso.
+    await sql("insert into vehiculos (patente, tipo) values ('VECINO1', 'furgón del vecino')");
   });
 }
 

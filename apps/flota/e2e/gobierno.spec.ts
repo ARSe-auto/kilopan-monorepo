@@ -105,6 +105,7 @@ let duena = { usuarioId: "", personaId: "", secreto: "" };
 let operario = { usuarioId: "", personaId: "", dispositivoId: "", secreto: "" };
 let invitacionId = "";
 let solicitudId = "";
+let vehiculoId = "";
 
 async function enrolar(rut: string, nombre: string, rol: string) {
   const secreto = secretoNuevo();
@@ -155,6 +156,14 @@ test.beforeAll(async () => {
     [invitacionId],
   );
   solicitudId = s!.id;
+
+  // Un vehículo, porque las rutas de gobierno de vehículos llevan parámetro [AC-FVEH-02]: el
+  // barrido de más abajo necesita un id REAL de esta base para que el 403 signifique algo.
+  await sql("delete from vehiculos");
+  const [v] = await sql<{ id: string }>(
+    "insert into vehiculos (patente, tipo) values ('GOB1234', 'furgón') returning id::text as id",
+  );
+  vehiculoId = v!.id;
 });
 
 test.afterAll(async () => {
@@ -176,6 +185,7 @@ function accionesDeGobierno() {
     "/api/gobierno/solicitudes/[id]": solicitudId,
     "/api/gobierno/dispositivos/[id]": operario.dispositivoId,
     "/api/gobierno/usuarios/[id]/pin": operario.usuarioId,
+    "/api/gobierno/vehiculos/[id]": vehiculoId,
   };
   return casos
     .filter((c) => c.ruta.startsWith("/api/gobierno/"))

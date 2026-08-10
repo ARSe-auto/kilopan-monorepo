@@ -122,7 +122,7 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 ## Hito (c) — Vehículos EV, energía/carga y agenda vehículo-día (primer módulo operativo: nace `eevd_semanal`)
 
 - [x] (P1) Alta de vehículo con SOLO patente + tipo lo deja operable (resto progresivo); patente duplicada 422; baseline de acciones registrada con regresión bloqueante — spec: specs/flota/02-vehiculos-energia-agenda.md [AC-FVEH-01]
-- [ ] (P1) Vehículos solo-dueño (centinela 15): POST/PATCH/DELETE de `operador` ⇒ 403 y 0 filas; admin ⇒ 2xx + audit; DELETE = desactivación soft — spec: specs/flota/02-vehiculos-energia-agenda.md [AC-FVEH-02]
+- [x] (P1) Vehículos solo-dueño (centinela 15): POST/PATCH/DELETE de `operador` ⇒ 403 y 0 filas; admin ⇒ 2xx + audit; DELETE = desactivación soft — spec: specs/flota/02-vehiculos-energia-agenda.md [AC-FVEH-02]
 - [ ] (P1) `vehiculo_documentos` (tipo, vence_el, sha256): con feature ON el documento vencido rebota planificación 422; OFF no rebota; estado con texto, jamás solo color — spec: specs/flota/02-vehiculos-energia-agenda.md [AC-FVEH-03]
 - [ ] (P1) Chequeo pre/post OK-por-defecto: ítem fallado +2 toques + flag sin bloquear; cadena chequeo→defecto→issue→resolución; captura offline con replay doble ⇒ 1 fila — spec: specs/flota/02-vehiculos-energia-agenda.md [AC-FVEH-04]
 - [ ] (P1) Odómetro/SOC SIEMPRE por `reading` (declarada, doble reloj, idempotencia doble); proyección `vehiculos.soc` clampada solo por trigger; SOC>100/odómetro menor/drift ⇒ 2xx + flag (centinela 4) — spec: specs/flota/02-vehiculos-energia-agenda.md [AC-FVEH-05]

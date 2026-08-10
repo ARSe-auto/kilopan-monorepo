@@ -63,6 +63,9 @@ export const EVENTOS = {
   // revocar aparatos. Por eso su evento es `gobierno.*` y no de otro dominio: es lo que hace
   // que el alta de un vehículo aparezca en la auditoría de accesos que el dueño lee (§3.E1.15).
   vehiculo_creado: "gobierno.vehiculo_creado",
+  vehiculo_editado: "gobierno.vehiculo_editado",
+  vehiculo_desactivado: "gobierno.vehiculo_desactivado",
+  vehiculo_reactivado: "gobierno.vehiculo_reactivado",
 } as const;
 
 export type CodigoDeEvento = (typeof EVENTOS)[keyof typeof EVENTOS];
