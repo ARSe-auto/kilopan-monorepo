@@ -58,6 +58,11 @@ export const EVENTOS = {
   usuario_desbloqueado: "gobierno.usuario_desbloqueado",
   soporte_otorgado: "gobierno.soporte_otorgado",
   soporte_revocado: "gobierno.soporte_revocado",
+  // El §5.4 pone «alta, edición de capacidades/documentos y desactivación de VEHÍCULOS»
+  // dentro del plano de control exclusivo del dueño, en la misma lista que aprobar accesos y
+  // revocar aparatos. Por eso su evento es `gobierno.*` y no de otro dominio: es lo que hace
+  // que el alta de un vehículo aparezca en la auditoría de accesos que el dueño lee (§3.E1.15).
+  vehiculo_creado: "gobierno.vehiculo_creado",
 } as const;
 
 export type CodigoDeEvento = (typeof EVENTOS)[keyof typeof EVENTOS];

@@ -64,9 +64,12 @@ select is(
     'gobierno.solicitud_rechazada',
     'gobierno.soporte_otorgado',
     'gobierno.soporte_revocado',
-    'gobierno.usuario_desbloqueado'
+    'gobierno.usuario_desbloqueado',
+    -- El decimotercero llegó con el módulo 02: el §5.4 pone el alta de VEHÍCULOS dentro del
+    -- plano de control exclusivo del dueño, así que su evento es de esta familia [AC-FVEH-01].
+    'gobierno.vehiculo_creado'
   ],
-  'catálogo de eventos de gobierno: los doce actos, sin uno de menos'
+  'catálogo de eventos de gobierno: los trece actos, sin uno de menos'
 );
 
 -- Y cada uno con su descripción escrita: un catálogo de códigos sin texto es un panel de
@@ -74,7 +77,7 @@ select is(
 select is(
   (select count(*)::int from evento_tipo
     where codigo like 'gobierno.%' and length(btrim(descripcion)) > 0),
-  12, 'cada tipo de evento de gobierno trae su descripción en es-CL'
+  13, 'cada tipo de evento de gobierno trae su descripción en es-CL'
 );
 
 select finish();

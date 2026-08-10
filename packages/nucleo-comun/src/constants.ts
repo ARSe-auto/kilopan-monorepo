@@ -429,7 +429,13 @@ export const CIFRAS_VIGILADAS = [
   // que alguien apaga a la semana.
   { nombre: "UNDO.ventana_ms", valor: 8000, patron: String.raw`(?<![\w-])8000(?![\w-])` },
   { nombre: "EV.factor_consumo_default", valor: 0.85, patron: String.raw`\b0\.85\b` },
-  { nombre: "CONTRASTE.texto", valor: 4.5, patron: String.raw`\b4\.5\s*:\s*1|\b4\.5\b(?=\s*[,;)\]])` },
+  // El `(?<!§)` no es un ablande: es la diferencia entre el contraste mínimo y una CITA al
+  // §4.5 del maestro —«operación: vehículos, agenda»—, que el módulo 02 nombra en cada
+  // archivo. Sin él, escribir «(§4.5)» ponía el gate rojo por citar la constitución, y un
+  // guard que se dispara con la fuente es un guard que alguien apaga a la semana (mismo
+  // criterio que el uuid con `8000` adentro). Lo ejerce un mutante propio en las dos
+  // direcciones: la cita no dispara, el número suelto sí.
+  { nombre: "CONTRASTE.texto", valor: 4.5, patron: String.raw`\b4\.5\s*:\s*1|(?<!§)\b4\.5\b(?=\s*[,;)\]])` },
   { nombre: "CIFRA_OPERATIVA.tamano_px", valor: 96, patron: String.raw`\b96\s*px\b|font-?[Ss]ize[^\n]{0,12}\b96\b` },
   { nombre: "CIFRA_OPERATIVA.peso", valor: 700, patron: String.raw`font-?[Ww]eight[^\n]{0,12}\b700\b` },
   // AC-FMIG-01: los tokens estructurales del §5.1 entran a la vigilancia junto con

@@ -160,6 +160,18 @@
       }
     },
     {
+      "ruta": "/api/gobierno/vehiculos",
+      "archivo": "src/app/api/gobierno/vehiculos/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Alta de vehículo, acto del dueño (§5.4) [AC-FVEH-01]. Sin parámetro de ruta: el vehículo se nombra por patente en el cuerpo y el tenant sale del ruteo, jamás de la cabecera. El caso genérico va SIN credencial y sin payload, así que la guardia del panel contesta 404 pelado antes de tocar la base — y el verbo MUTA, así que enciende el comparador de huella de la BD de B, que es lo que prueba que un alta no se pudo colar en la flota del vecino. El cruce CON sesión legítima de A y rol ajeno lo prueba el barrido de AC-FIDN-12 (e2e/gobierno.spec.ts), que recoge sola toda ruta de este prefijo."
+      }
+    },
+    {
       "ruta": "/api/pin/puente",
       "archivo": "src/app/api/pin/puente/route.ts",
       "metodos": [
@@ -232,6 +244,18 @@
       }
     },
     {
+      "ruta": "/api/vehiculos",
+      "archivo": "src/app/api/vehiculos/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Listado de la flota, la lectura que el §5.4 le reserva al operador para asignar [AC-FVEH-01]. Sin parámetro: devuelve siempre los vehículos del tenant que eligió el ruteo. El cruce genérico verifica que la flota de B no se pueda enumerar desde el host de A ni inyectando su identidad por cabecera — y acá el tamaño de la flota ajena ya es información, así que el contrato es 404 sin sesión y ni una patente de B en la respuesta."
+      }
+    },
+    {
       "ruta": "/panel",
       "archivo": "src/app/panel/page.tsx",
       "metodos": [
@@ -253,6 +277,18 @@
       "cruce": {
         "tipo": "sin_recurso",
         "nota": "Pantalla F-B del §5.4. No recibe identificador de recurso —el código de la invitación llega por query o se teclea, y no es un id de la casa— así que el cruce que aplica es el genérico: identidad de B inyectada por los canales falsificables (host propio de A + cabeceras de tenant apuntando a B) y ni una cadena de B en el HTML servido. Importa más que en otras pantallas porque esta es la primera que un desconocido abre: si el shell filtrara el slug o la base del vecino, lo haría ante alguien que todavía no es de ninguna de las dos empresas."
+      }
+    },
+    {
+      "ruta": "/vehiculos",
+      "archivo": "src/app/vehiculos/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de alta y listado de vehículos (§5.4) [AC-FVEH-01]. No recibe identificador por URL: todo lo que hace pasa por /api/vehiculos y /api/gobierno/vehiculos, que tienen sus propios casos declarados. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y pesa porque el HTML servido no puede traer ni el slug ni la base del vecino antes de que haya sesión."
       }
     },
     {

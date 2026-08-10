@@ -134,6 +134,29 @@ test("un uuid que contiene una cifra vigilada NO dispara el gate", () => {
   assert.equal(codigo, 0, salida);
 });
 
+test("citar el §4.5 del maestro NO dispara el gate, pero el 4.5 suelto SÍ", () => {
+  // Pasó de verdad, con la primera migración del módulo 02 (09-ago-2026): el §4.5 es la
+  // sección de OPERACIÓN del maestro —la que define `vehiculos`— y se cita en cada archivo
+  // del módulo. Escrita entre paréntesis, «(§4.5)» caía en el patrón del contraste mínimo y
+  // el gate se ponía rojo por citar la fuente. Un guard que castiga citar la constitución es
+  // un guard que alguien apaga a la semana.
+  //
+  // Las DOS direcciones, porque arreglar el falso positivo es también la forma más fácil de
+  // dejar la constante sin vigilancia.
+  const contraste = CIFRAS_VIGILADAS.find((c) => c.nombre === "CONTRASTE.texto");
+  const cita = sandbox({
+    "db/flota/.fixture-cita.mjs": "// La patente es UNIQUE por tenant (§4.5), y el alta pide dos campos.\n",
+  });
+  assert.equal(correr(cita).codigo, 0, correr(cita).salida);
+
+  const suelto = sandbox({
+    "db/flota/.fixture-contraste.mjs": `export const minimo = ${contraste.valor};\n`,
+  });
+  const veredicto = correr(suelto);
+  assert.equal(veredicto.codigo, 1);
+  assert.match(veredicto.salida, /repite CONTRASTE\.texto/);
+});
+
 test("el gate se pone ROJO si la lista de cifras vigiladas queda vacía (verde vacuo)", () => {
   const raiz = sandbox();
   writeFileSync(join(raiz, CANONICO), "export const CIFRAS_VIGILADAS = [] as const;\n");
