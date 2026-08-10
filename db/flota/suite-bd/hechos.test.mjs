@@ -267,9 +267,13 @@ test("[AC-FTEN-24] `review_queue` no se puede resolver sin nota, y sus transicio
 // como superusuario, a quien ni el REVOKE ni la RLS se le aplican.
 
 test("[AC-FTEN-14] la app INSERTA lecturas pero no puede editarlas ni borrarlas ⇒ 42501", async () => {
+  // La magnitud ya viene con la plantilla desde la migración 0019: `odometro` y `soc` son de
+  // PLATAFORMA (§4.6), no seeds de vertical. Antes esta línea la insertaba, y el día que la
+  // migración la sembró el test se puso rojo por duplicada — con el esquema sano.
   const [magnitud] = await migrador.sql(
-    "insert into magnitud (codigo, unidad) values ('soc', 'decimas_de_pct') returning id::text as id",
+    "select id::text as id from magnitud where codigo = 'soc'",
   );
+  assert.ok(magnitud, "la plantilla tiene que traer la magnitud `soc` sembrada (§4.6, AC-FVEH-05)");
 
   // La mitad positiva: la lectura entra, y entra FUERA de rango a propósito. `valor_int` no
   // lleva CHECK (§0 fila SOC): una sonda descalibrada no puede rebotar la captura del chofer.

@@ -191,6 +191,18 @@
       }
     },
     {
+      "ruta": "/api/lecturas",
+      "archivo": "src/app/api/lecturas/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Captura de odómetro y carga declarados [AC-FVEH-05]. Sin parámetro de ruta: el turno se nombra en el cuerpo y el tenant sale del ruteo. Endpoint de CAPTURA, así que su contrato es 2xx siempre para el contenido (§0) — pero eso es DENTRO del tenant: sin sesión no hay captura que valga y la guardia contesta 404 pelado antes de tocar la base. Como el POST MUTA, el caso genérico enciende el comparador de huella de la BD de B: una lectura escrita en el vecino le movería la proyección de odómetro de un camión ajeno, que es de las peores fugas posibles — corrompe un dato operativo, no solo lo expone. El cruce CON payload —un uuid de turno de B— lo prueba la suite del módulo, que sabe cómo se ve uno."
+      }
+    },
+    {
       "ruta": "/api/pin/puente",
       "archivo": "src/app/api/pin/puente/route.ts",
       "metodos": [

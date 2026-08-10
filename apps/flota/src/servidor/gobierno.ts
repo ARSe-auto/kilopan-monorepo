@@ -73,6 +73,11 @@ export const EVENTOS = {
  *  los actos del dueño bajo el ruido de la operación. */
 export const EVENTOS_OPERACION = {
   turno_abierto: "turno.abierto",
+  lectura_registrada: "lectura.registrada",
+  lectura_soc_fuera_de_rango: "lectura.soc_fuera_de_rango",
+  lectura_odometro_retrocedido: "lectura.odometro_retrocedido",
+  lectura_reloj_desfasado: "lectura.reloj_desfasado",
+  lectura_sin_turno: "lectura.sin_turno",
 } as const;
 
 /** Todo código que `registrarEvento` acepta tiene que estar sembrado en `evento_tipo`: si los
