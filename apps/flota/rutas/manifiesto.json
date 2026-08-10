@@ -386,6 +386,24 @@
       }
     },
     {
+      "ruta": "/api/turnos/[id]/cierre-forzado",
+      "archivo": "src/app/api/turnos/[id]/cierre-forzado/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "turnos",
+          "columna": "id"
+        },
+        "nota": "Cierre forzado del turno (KR-41) [AC-FVEH-22]. El parámetro es el TURNO de B, y cerrarlo desde A es de las mutaciones más destructivas del módulo: le marca al vecino una jornada como cerrada por la fuerza —lo que su módulo de liquidación lee distinto de un cierre real— y le resuelve una fila de «Por revisar» que su operación todavía no atendió. Contrato 404 y huella de B intacta. El fixture del vecino siembra un turno abierto para que el id sea REAL: contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin probar nada."
+      }
+    },
+    {
       "ruta": "/api/vehiculos",
       "archivo": "src/app/api/vehiculos/route.ts",
       "metodos": [

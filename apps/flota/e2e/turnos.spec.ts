@@ -159,3 +159,163 @@ test("[AC-FVEH-06] la empresa contratante no abre turnos: 403 y CERO filas", asy
   expect((await r.json()).error).toBe("rol_sin_turno");
   expect(await cuantosTurnos()).toBe(antes);
 });
+
+// ─── Cierre forzado del turno que quedó abierto [AC-FVEH-22] — KR-41, §5.6 ──────────
+//
+// Hasta este AC el semáforo detectaba el turno sin cerrar sin que existiera acción alguna que
+// lo resolviera: un rojo sin salida, contra el contrato del §5.6 de que la cola tiende a cero
+// cada día.
+//
+// LO QUE SE VERIFICA, y el orden importa porque cada caso deja el terreno para el siguiente:
+// el rebote sin motivo y con motivo desconocido, el cierre que SÍ ocurre y deja su rastro, que
+// NO alimente la proyección del vehículo (KR-41 literal: «sin alimentar monotonicidad»), que
+// resuelva la fila de «Por revisar», que el segundo intento rebote, y que los roles del terreno
+// no puedan hacerlo.
+
+const MOTIVO = "olvido_de_cierre";
+
+/** Un turno abierto propio, para no depender del que dejaron los tests de arriba. */
+async function turnoAbiertoPropio(patente: string) {
+  return con(BD_A, async (c: Conexion) => {
+    const [v] = await c.sql<{ id: string }>(
+      "insert into vehiculos (patente, tipo) values ($1, 'furgón') returning id::text as id",
+      [patente],
+    );
+    const [cv] = await c.sql<{ id: string }>(
+      "select id::text as id from config_version order by id desc limit 1",
+    );
+    const [t] = await c.sql<{ id: string }>(
+      "insert into turnos (vehiculo_id, config_version_id) values ($1, $2) returning id::text as id",
+      [v!.id, cv!.id],
+    );
+    return { vehiculoId: v!.id, turnoId: t!.id };
+  });
+}
+
+test("[AC-FVEH-22] sin motivo, o con un motivo que no está en el catálogo, rebota 422", async ({
+  request,
+}) => {
+  const { turnoId } = await turnoAbiertoPropio("KR410001");
+
+  const sinMotivo = await request.post(`/api/turnos/${turnoId}/cierre-forzado`, {
+    headers: comoDuena,
+    data: {},
+  });
+  expect(sinMotivo.status()).toBe(422);
+  expect((await sinMotivo.json()).error).toBe("sin_motivo");
+
+  // El motivo es TIPADO, del catálogo del tenant (§4.5): un texto libre llenaría la bandeja de
+  // explicaciones que no se pueden agrupar ni contar.
+  const inventado = await request.post(`/api/turnos/${turnoId}/cierre-forzado`, {
+    headers: comoDuena,
+    data: { motivo: "porque si" },
+  });
+  expect(inventado.status()).toBe(422);
+  expect((await inventado.json()).error).toBe("motivo_desconocido");
+
+  // Y el turno sigue abierto: 422 con 0 filas.
+  const [t] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ estado: string }>("select estado::text as estado from turnos where id = $1", [turnoId]),
+  );
+  expect(t!.estado).toBe("abierto");
+});
+
+test("[AC-FVEH-22] con motivo del catálogo cierra, deja rastro y NO toca la proyección", async ({
+  request,
+}) => {
+  const { vehiculoId, turnoId } = await turnoAbiertoPropio("KR410002");
+  await con(BD_A, async (c: Conexion) => {
+    await c.sql(
+      `insert into motivos (codigo, etiqueta, estado_asociado) values ($1, 'Se olvidó de cerrar', 'turno_cerrado_forzado')
+       on conflict (tenant_id, codigo) do nothing`,
+      [MOTIVO],
+    );
+    // La fila de «Por revisar» que el semáforo habría abierto por el turno sin cerrar (§5.6).
+    await c.sql(
+      "insert into review_queue (origen, severidad, nota) values ('turno_sin_cerrar', 'media', 'turno abierto cruzando medianoche')",
+    );
+  });
+
+  const r = await request.post(`/api/turnos/${turnoId}/cierre-forzado`, {
+    headers: comoDuena,
+    data: { motivo: MOTIVO, nota: "el chofer entregó el vehículo y se fue" },
+  });
+  expect(r.status()).toBe(200);
+  expect((await r.json()).estado).toBe("cerrado_forzado");
+
+  const [t] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ estado: string; motivo: string | null; odometro: string | null; soc: string | null }>(
+      `select t.estado::text as estado, t.cierre_motivo_id::text as motivo,
+              v.odometro::text as odometro, v.soc::text as soc
+         from turnos t join vehiculos v on v.id = t.vehiculo_id where t.id = $1`,
+      [turnoId],
+    ),
+  );
+  // Estado PROPIO, distinguible de un cierre real: el módulo de liquidación cobra sobre esto.
+  expect(t!.estado).toBe("cerrado_forzado");
+  expect(t!.motivo, "el cierre forzado quedó sin motivo").toBeTruthy();
+  // KR-41 literal: «sin alimentar monotonicidad». Inventarle un kilometraje a un turno que
+  // nadie cerró sería exactamente el dato falso que la proyección existe para no tener.
+  expect(t!.odometro, "el cierre forzado movió el odómetro").toBeNull();
+  expect(t!.soc, "el cierre forzado movió la carga").toBeNull();
+
+  // Y no escribió NINGUNA lectura para ese vehículo.
+  const [l] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ n: string }>(
+      `select count(*)::text as n from reading r join turnos t on t.id = r.turno_id
+        where t.vehiculo_id = $1`,
+      [vehiculoId],
+    ),
+  );
+  expect(Number(l!.n), "el cierre forzado escribió una lectura").toBe(0);
+
+  // Resuelve la fila de «Por revisar» que originó la señal (§5.6): sin esto, el rojo seguiría
+  // ahí después de haberlo arreglado y la cola dejaría de tender a cero.
+  const [rq] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ n: string }>(
+      "select count(*)::text as n from review_queue where origen = 'turno_sin_cerrar' and estado <> 'resuelta'",
+    ),
+  );
+  expect(Number(rq!.n), "el rojo del semáforo quedó sin resolver").toBe(0);
+
+  // Y su evento append-only, distinguible de una apertura.
+  const [e] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ n: string }>(
+      `select count(*)::text as n from eventos e join evento_tipo t on t.id = e.tipo_id
+        where t.codigo = 'turno.cerrado_forzado'`,
+    ),
+  );
+  expect(Number(e!.n)).toBeGreaterThan(0);
+
+  // El SEGUNDO cierre forzado sobre el mismo turno rebota con 0 filas: no es idempotencia
+  // amable, es planificación — repetirla significaría que alguien creyó que el primero no
+  // había ocurrido.
+  const otra = await request.post(`/api/turnos/${turnoId}/cierre-forzado`, {
+    headers: comoDuena,
+    data: { motivo: MOTIVO },
+  });
+  expect(otra.status()).toBe(422);
+  expect((await otra.json()).error).toBe("ya_no_esta_abierto");
+});
+
+test("[AC-FVEH-22] los roles del terreno no cierran por la fuerza: 403 y CERO filas", async ({
+  request,
+}) => {
+  const { turnoId } = await turnoAbiertoPropio("KR410003");
+  const antes = await cuantosTurnos();
+
+  // `cliente` es el único rol del enum con sesión propia que este fixture tiene además del
+  // dueño; los otros del terreno rebotan por la misma guardia y el mismo camino.
+  const r = await request.post(`/api/turnos/${turnoId}/cierre-forzado`, {
+    headers: comoContratante,
+    data: { motivo: MOTIVO },
+  });
+  expect(r.status()).toBe(403);
+  expect((await r.json()).error).toBe("rol_sin_cierre_forzado");
+
+  const [t] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ estado: string }>("select estado::text as estado from turnos where id = $1", [turnoId]),
+  );
+  expect(t!.estado, "el rebote por rol igual cerró el turno").toBe("abierto");
+  expect(await cuantosTurnos()).toBe(antes);
+});

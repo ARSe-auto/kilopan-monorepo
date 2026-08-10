@@ -71,7 +71,7 @@ clasificado, se corrige allá, con la firma del dueño, y acá se refleja.
 | KR-38 | — (diferido a E2: D4) | — (diferido: D4, firmada 08-ago-2026) |
 | KR-39 | paradas (N encargos de N empresas al mismo destino) | — (pendiente: AC-FRUT-04 · hito d) |
 | KR-40 | ecuación de cierre por empresa | — (pendiente: AC-FRUT-11/21 · hito d) |
-| KR-41 | cierre forzado administrativo del turno | — (pendiente: AC-FVEH-22 (D2, nuevo) · hito c) |
+| KR-41 | cierre forzado administrativo del turno | apps/flota/e2e/turnos.spec.ts::con motivo del catálogo cierra, deja rastro y NO toca la proyección |
 | KR-42 | captura de coordenadas (GPS off por omisión, §7.8) | — (pendiente: AC-FPOD-12 · hito e) |
 | KR-43 | entregas_pod inmutable + evidence write-once por sha256 | — (pendiente: AC-FPOD-08/11/19 · hito e) |
 | KR-44 | reading (odómetro) + trigger de proyección vehiculos.soc | db/flota/pgtap/0012_proyeccion_de_lecturas.sql::un odómetro menor NO arrastra la proyección hacia atrás |

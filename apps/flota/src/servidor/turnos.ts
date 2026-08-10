@@ -129,3 +129,88 @@ export async function listarTurnos(pool: Pool): Promise<Turno[]> {
   );
   return rows;
 }
+
+// ─── Cierre forzado del turno que quedó abierto [AC-FVEH-22] — KR-41, §5.6, §4.5 ─────
+//
+// Hasta este AC, el semáforo detectaba el turno sin cerrar —el rojo del Anexo B— sin que
+// existiera acción alguna que lo resolviera: un rojo sin salida, contra el contrato del §5.6
+// de que la cola tiende a cero cada día. Esto es la salida.
+//
+// ES PLANIFICACIÓN, no captura, y por eso rebota. Lo hace alguien sentado con red mirando la
+// bandeja, no una persona de pie al lado de un camión: rebotar acá no pierde ningún hecho del
+// terreno, y dejar pasar un cierre sin motivo sí perdería la única explicación que ese turno
+// va a tener dentro de tres meses.
+//
+// NO ALIMENTA LA PROYECCIÓN DEL VEHÍCULO. El KR-41 lo dice literal: «sin alimentar
+// monotonicidad». No escribe `reading` de odómetro ni de SOC, y por lo tanto no mueve
+// `vehiculos.odometro`/`soc` — inventarle un kilometraje a un turno que nadie cerró sería
+// exactamente el dato falso que la proyección existe para no tener.
+
+/** Quién puede cerrar por la fuerza (KR-41): el operador y el dueño, y nadie más. */
+export const ROLES_QUE_CIERRAN_FORZADO: readonly Rol[] = ["operador", "admin_tenant"];
+
+export type CierreForzado =
+  | { tipo: "ok"; turnoId: string }
+  | { tipo: "no_existe" }
+  | { tipo: "sin_motivo" }
+  | { tipo: "motivo_desconocido" }
+  | { tipo: "ya_no_esta_abierto" };
+
+export async function cerrarTurnoPorLaFuerza(
+  pool: Pool,
+  sesion: Sesion,
+  turnoId: string,
+  datos: { motivoCodigo: string; nota: string | null },
+): Promise<CierreForzado> {
+  if (!datos.motivoCodigo.trim()) return { tipo: "sin_motivo" };
+
+  return enActo(pool, async (c) => {
+    const { rows: turno } = await c.query<{ estado: string }>(
+      "select estado::text as estado from turnos where id = $1",
+      [turnoId],
+    );
+    // El turno de OTRO tenant sencillamente no está en esta base (§4.1): sale 404, no 403.
+    if (turno.length === 0) return { tipo: "no_existe" };
+
+    const { rows: motivo } = await c.query<{ id: string; require_notes: boolean }>(
+      "select id::text as id, require_notes from motivos where codigo = $1 and activo",
+      [datos.motivoCodigo],
+    );
+    // El motivo es TIPADO, del catálogo del tenant (§4.5): un texto libre acá haría que la
+    // bandeja se llenara de explicaciones que no se pueden agrupar ni contar.
+    if (!motivo[0]) return { tipo: "motivo_desconocido" };
+    if (motivo[0].require_notes && !datos.nota?.trim()) return { tipo: "sin_motivo" };
+
+    const { rows } = await c.query<{ id: string }>(
+      `update turnos
+          set estado = 'cerrado_forzado', cerrado_en = now(),
+              cierre_motivo_id = $2, cierre_nota = $3
+        where id = $1 and estado = 'abierto'
+        returning id::text as id`,
+      [turnoId, motivo[0].id, datos.nota],
+    );
+    // Segundo cierre forzado sobre el mismo turno: 422 y 0 filas. No es idempotencia amable —
+    // es planificación, y repetirla significaría que alguien creyó que el primero no había
+    // ocurrido.
+    if (!rows[0]) return { tipo: "ya_no_esta_abierto" };
+
+    await registrarEvento(c, {
+      codigo: EVENTOS_OPERACION.turno_cerrado_forzado,
+      objetoTabla: "turnos",
+      objetoId: turnoId,
+      sesion,
+      payload: { motivo: datos.motivoCodigo },
+    });
+
+    // Y RESUELVE la fila de «Por revisar» que originó la señal (§5.6): sin esto, el rojo
+    // seguiría ahí después de haberlo arreglado, y la cola dejaría de tender a cero.
+    await c.query(
+      `update review_queue
+          set estado = 'resuelta', resuelta_en = now(),
+              nota = coalesce(nota || ' · ', '') || $1
+        where origen = 'turno_sin_cerrar' and estado <> 'resuelta'`,
+      [`Cerrado por la fuerza: ${datos.motivoCodigo}`],
+    );
+    return { tipo: "ok", turnoId };
+  });
+}

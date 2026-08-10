@@ -114,6 +114,14 @@ async function sembrarIdentidadDelVecino(slug) {
     await sql("insert into defectos (chequeo_id, item) values ($1, 'luz de freno del vecino')", [
       chequeo.id,
     ]);
+    // Y un turno ABIERTO [AC-FVEH-22]: `/api/turnos/[id]/cierre-forzado` es de tipo recurso y
+    // el caso del centinela 2 saca de acá el id con el que A intenta cerrarle la jornada al
+    // vecino — que además le resolvería una fila de «Por revisar» que su operación no atendió.
+    const [config] = await sql("select crear_config_version('fixture del vecino')::text as id");
+    await sql("insert into turnos (vehiculo_id, config_version_id) values ($1, $2)", [
+      vehiculo.id,
+      config.id,
+    ]);
   });
 }
 
