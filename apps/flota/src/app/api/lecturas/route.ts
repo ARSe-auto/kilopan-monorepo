@@ -50,7 +50,7 @@ export async function POST(peticion: Request) {
     );
   }
 
-  const resultado = await registrarLectura(g.acto.pool, g.acto.sesion, {
+  const resultado = await registrarLectura(g.acto.pool, g.acto.sesion, g.acto.slug, {
     magnitud: String(cuerpo.magnitud ?? ""),
     valor,
     turnoId: cuerpo.turno_id ? String(cuerpo.turno_id) : null,

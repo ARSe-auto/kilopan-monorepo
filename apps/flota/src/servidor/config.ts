@@ -53,12 +53,38 @@ export async function versionVigente(c: PoolClient, slug: string): Promise<strin
 }
 
 /**
- * ¿Está encendida esta feature para este tenant, según la config CONGELADA?
+ * El estado de una feature en una versión de config: encendida, apagada, o SIN CONFIGURAR.
  *
- * Una feature que no está en el snapshot resuelve APAGADA. Es la respuesta correcta y no una
- * omisión: un entitlement ausente significa que el tenant se selló antes de que la feature
- * existiera, y encender por defecto algo que nadie decidió es cómo un rebote de planificación
- * aparece un martes en la cara de un operador que no cambió nada.
+ * Los tres estados son distintos y confundir dos de ellos rompe cosas opuestas:
+ *
+ *   · `true`  — alguien la encendió.
+ *   · `false` — alguien la APAGÓ. Es una decisión con dueño y con motivo (§4.4 exige el
+ *     `motivo` del override), y es la única que justifica marcar una captura con
+ *     `modulo_apagado`: hubo una acción humana detrás.
+ *   · `null`  — no está en el snapshot. Hoy es el caso NORMAL de todo tenant, porque los
+ *     planes los siembra el hito (g) y `plan_features` está vacío. Leerlo como «apagada»
+ *     pondría el flag `modulo_apagado` en cada captura de cada tenant y llenaría «Por
+ *     revisar» de ruido desde el primer día — una bandeja así deja de mirarse en una semana.
+ */
+export async function estadoDeFeature(
+  c: PoolClient,
+  versionId: string,
+  lookupKey: string,
+): Promise<boolean | null> {
+  const { rows } = await c.query<{ habilitada: boolean | null }>(
+    "select (snapshot -> 'entitlements' ->> $2)::boolean as habilitada from config_version where id = $1",
+    [versionId, lookupKey],
+  );
+  return rows[0]?.habilitada ?? null;
+}
+
+/**
+ * ¿Está ENCENDIDA esta feature, según la config CONGELADA?
+ *
+ * Sin configurar cuenta como apagada, y para lo que consume esta función —el rebote de
+ * planificación por documento vencido— es la respuesta correcta: encender por defecto algo que
+ * nadie decidió es cómo un rebote aparece un martes en la cara de un operador que no cambió
+ * nada. Quien necesite distinguir «apagada» de «sin configurar» usa `estadoDeFeature`.
  */
 export async function entitlementVigente(
   c: PoolClient,
@@ -66,11 +92,7 @@ export async function entitlementVigente(
   lookupKey: string,
 ): Promise<boolean> {
   const versionId = await versionVigente(c, slug);
-  const { rows } = await c.query<{ habilitada: boolean | null }>(
-    "select (snapshot -> 'entitlements' ->> $2)::boolean as habilitada from config_version where id = $1",
-    [versionId, lookupKey],
-  );
-  return rows[0]?.habilitada === true;
+  return (await estadoDeFeature(c, versionId, lookupKey)) === true;
 }
 
 /** Las features que este módulo consulta. Escritas una vez, para que el `lookup_key` no se
@@ -78,4 +100,5 @@ export async function entitlementVigente(
  *  nada se ponga rojo. */
 export const FEATURES = {
   documentos_vencidos_bloquean: "documentos_vencidos_bloquean",
+  modulo_vehiculos: "modulo_vehiculos",
 } as const;

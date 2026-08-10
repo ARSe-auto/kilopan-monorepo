@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { Pool } from "pg";
+import { randomUUID } from "node:crypto";
 import { con, bdDeTenant, BD_CONTROL, CLUSTER_LOCAL, ROL_MIGRADOR } from "../../../db/flota/conectar.mjs";
 import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
 import { VALIDOS } from "../../../db/flota/ruts-sinteticos.mjs";
@@ -319,3 +320,123 @@ test("[AC-FVEH-17] un documento fuera de la anticipación NO avisa", async ({ re
   expect(r.status()).toBe(201);
   expect((await r.json()).documento.estado).toBe("vigente");
 });
+
+// ─── Config CONGELADA por turno [AC-FVEH-18] ─────────────────────────────────────────
+//
+// El §4.4 lo dice con esas palabras: «un turno corre entero con UNA versión; cambios aplican al
+// turno siguiente». Lo que eso protege es concreto — el dueño puede apagar un módulo o cambiar
+// un parámetro a las once de la mañana, y el chofer que abrió a las seis termina su jornada con
+// las reglas con las que la empezó. Sin esto, la app cambiaría de conducta debajo de alguien
+// que está manejando.
+//
+// Y la otra mitad, del §0 (fila HTTP): una captura que llega con el módulo apagado entra 2xx,
+// con flag `modulo_apagado`, su fila en «Por revisar», y MANDANDO `turno.config_version_id` —
+// porque sin esa referencia, quien mira el flag no puede saber cuál configuración regía.
+
+/** Enciende o apaga el módulo del tenant y sella la versión, como hará «Funciones» (hito g). */
+async function moduloVehiculos(encendido: boolean) {
+  const tenantId = await tenantEnControl();
+  await control.query(
+    `insert into tenant_feature_overrides (tenant_id, feature_id, enabled, motivo)
+     select $1, f.id, $3, 'fixture del e2e de AC-FVEH-18' from features f where f.lookup_key = $2
+     on conflict (tenant_id, feature_id) do update set enabled = excluded.enabled`,
+    [tenantId, "modulo_vehiculos", encendido],
+  );
+  await sellarVersion(tenantId);
+}
+
+const flagsDe = (respuesta: { flags: string[] }) => respuesta.flags;
+
+test("[AC-FVEH-18] el turno abierto NO cambia de reglas cuando el dueño mueve un toggle", async ({
+  request,
+}) => {
+  await moduloVehiculos(true);
+  const [v] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ id: string }>(
+      "insert into vehiculos (patente, tipo) values ('CFG0001', 'furgón') returning id::text as id",
+    ),
+  );
+  const abierto = await request.post("/api/turnos", {
+    headers: comoDuena,
+    data: { vehiculo_id: v!.id },
+  });
+  expect(abierto.status()).toBe(201);
+  const turno = (await abierto.json()).turno as { id: string; config_version_id: string };
+
+  // El dueño apaga el módulo con el turno YA abierto.
+  await moduloVehiculos(false);
+
+  const [despues] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ id: string }>("select config_version_id::text as id from turnos where id = $1", [turno.id]),
+  );
+  expect(despues!.id, "el turno abierto cambió de versión de config").toBe(turno.config_version_id);
+
+  // Y la captura de ESE turno sigue juzgándose con la versión con la que abrió: sin flag.
+  const lectura = await request.post("/api/lecturas", {
+    headers: comoDuena,
+    data: {
+      magnitud: "odometro",
+      valor: 100,
+      turno_id: turno.id,
+      client_uuid: randomUUID(),
+      ts_dispositivo: new Date().toISOString(),
+    },
+  });
+  expect(lectura.status()).toBe(201);
+  const registrada = (await lectura.json()).lectura as { flags: string[]; config_version_id: string };
+  expect(
+    flagsDe(registrada),
+    "la captura de un turno abierto se juzgó con la config nueva, no con la suya",
+  ).not.toContain("modulo_apagado");
+  // El §0 pide que la respuesta mande la versión con la que se juzgó.
+  expect(registrada.config_version_id).toBe(turno.config_version_id);
+});
+
+test("[AC-FVEH-18] el turno SIGUIENTE sí toma la config nueva, y su captura entra 2xx con flag", async ({
+  request,
+}) => {
+  // El módulo quedó apagado en el test anterior. Un turno nuevo nace con la versión de ahora.
+  const [v] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ id: string }>(
+      "insert into vehiculos (patente, tipo) values ('CFG0002', 'furgón') returning id::text as id",
+    ),
+  );
+  const abierto = await request.post("/api/turnos", {
+    headers: comoDuena,
+    data: { vehiculo_id: v!.id },
+  });
+  expect(abierto.status()).toBe(201);
+  const turno = (await abierto.json()).turno as { id: string; config_version_id: string };
+
+  const antes = await rastroDeRevisiones();
+  const lectura = await request.post("/api/lecturas", {
+    headers: comoDuena,
+    data: {
+      magnitud: "soc",
+      valor: 40,
+      turno_id: turno.id,
+      client_uuid: randomUUID(),
+      ts_dispositivo: new Date().toISOString(),
+    },
+  });
+  // SYNC DE CAPTURA = 2xx SIEMPRE (§0). El módulo apagado marca, no rechaza: el chofer ya
+  // tecleó el dato en la calle y un 422 se lo borraría.
+  expect(lectura.status(), "una captura con el módulo apagado NO puede rebotar").toBe(201);
+  const registrada = (await lectura.json()).lectura as { flags: string[]; config_version_id: string };
+  expect(flagsDe(registrada)).toContain("modulo_apagado");
+  expect(registrada.config_version_id, "la respuesta tiene que mandar la versión que juzgó").toBe(
+    turno.config_version_id,
+  );
+  expect(
+    (await rastroDeRevisiones()) - antes,
+    "la captura de módulo apagado no abrió su fila «Por revisar» (§0)",
+  ).toBe(1);
+
+  await moduloVehiculos(true);
+});
+
+/** Filas de «Por revisar» abiertas por lecturas. `review_queue` no se vacía: por DIFERENCIA. */
+const rastroDeRevisiones = () =>
+  con(BD_A, (c: Conexion) =>
+    c.sql<{ n: string }>("select count(*)::text as n from review_queue where origen like 'lectura.%'"),
+  ).then((r) => Number(r[0]!.n));

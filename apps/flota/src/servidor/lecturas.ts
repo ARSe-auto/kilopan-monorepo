@@ -9,6 +9,7 @@ import {
   type Magnitud,
 } from "../dominio/lecturas.ts";
 import { EV } from "../../../../packages/nucleo-comun/src/constants.ts";
+import { versionVigente, estadoDeFeature, FEATURES } from "./config.ts";
 
 // La ingesta de odómetro y SOC [AC-FVEH-05] — §4.6, §4.2, §9.3 centinela 4.
 //
@@ -53,6 +54,10 @@ export type Registrada = {
   flags: FlagDeLectura[];
   repetida: boolean;
   proyeccion: { odometro: number | null; soc: number | null } | null;
+  /** La versión de config con la que se juzgó esta captura. El §0 la pide en la respuesta:
+   *  sin ella, quien mira un flag `modulo_apagado` no puede saber CUÁL configuración estaba
+   *  vigente cuando el dato entró [AC-FVEH-18]. */
+  config_version_id: string;
 };
 
 export type ResultadoLectura =
@@ -64,6 +69,7 @@ const EVENTO_DE_FLAG: Record<FlagDeLectura, (typeof EVENTOS_OPERACION)[keyof typ
   odometro_retrocedido: EVENTOS_OPERACION.lectura_odometro_retrocedido,
   reloj_desfasado: EVENTOS_OPERACION.lectura_reloj_desfasado,
   sin_turno: EVENTOS_OPERACION.lectura_sin_turno,
+  modulo_apagado: EVENTOS_OPERACION.lectura_modulo_apagado,
 };
 
 /** Lo que ya tiene proyectado el vehículo de este turno, para juzgar la monotonicidad. */
@@ -82,9 +88,36 @@ async function proyeccionDelTurno(
   return fila ? { vehiculoId: fila.vehiculo_id, odometro: fila.odometro, soc: fila.soc } : null;
 }
 
+/** La versión de config del turno, o `null` si la lectura viene sin turno. */
+async function versionDelTurno(c: PoolClient, turnoId: string | null): Promise<string | null> {
+  if (!turnoId) return null;
+  const { rows } = await c.query<{ id: string }>(
+    "select config_version_id::text as id from turnos where id = $1",
+    [turnoId],
+  );
+  return rows[0]?.id ?? null;
+}
+
+/**
+ * ¿El módulo estaba operativo EN ESA versión? No en la de ahora: el §4.4 dice que un turno
+ * corre entero con una versión, y apagar el módulo a mitad de la jornada no puede cambiar cómo
+ * se juzga lo que ese turno sigue capturando.
+ *
+ * SIN CONFIGURAR cuenta como operativo, y esa es la decisión importante de esta función. El
+ * flag `modulo_apagado` existe para el caso del §0 —«el módulo se apagó CON turno abierto»—,
+ * que supone una acción humana con motivo. Hoy ningún plan trae el módulo (los siembra el hito
+ * g), así que leer la ausencia como «apagado» marcaría cada captura de cada tenant y abriría
+ * una fila de «Por revisar» por cada odómetro tecleado. Una bandeja así deja de mirarse en una
+ * semana, y con ella se pierden los flags que sí importan.
+ */
+async function moduloOperativoEn(c: PoolClient, versionId: string): Promise<boolean> {
+  return (await estadoDeFeature(c, versionId, FEATURES.modulo_vehiculos)) !== false;
+}
+
 export async function registrarLectura(
   pool: Pool,
   sesion: Sesion,
+  slug: string,
   entrante: LecturaEntrante,
 ): Promise<ResultadoLectura> {
   if (!(MAGNITUDES as readonly string[]).includes(entrante.magnitud)) {
@@ -102,6 +135,12 @@ export async function registrarLectura(
     if (!mag[0]) throw new Error(`la magnitud «${magnitud}» no está sembrada en esta base`);
 
     const antes = await proyeccionDelTurno(c, entrante.turnoId);
+    // La config CONGELADA manda (§4.4). Si el turno ya existe, la de SU versión; si la lectura
+    // viene suelta, la vigente del tenant. Es lo que hace que apagar un módulo con un turno
+    // abierto no cambie cómo se juzga lo que ese turno todavía está capturando.
+    const configDelTurno = await versionDelTurno(c, entrante.turnoId);
+    const configVersionId = configDelTurno ?? (await versionVigente(c, slug));
+    const moduloEncendido = await moduloOperativoEn(c, configVersionId);
     const anterior = magnitud === "odometro" ? (antes?.odometro ?? null) : (antes?.soc ?? null);
     const recibidaEn = new Date();
 
@@ -112,6 +151,7 @@ export async function registrarLectura(
       tsDispositivo: entrante.tsDispositivo,
       recibidaEn,
       tieneTurno: antes !== null,
+      moduloEncendido,
     });
 
     const { rows } = await c.query<{ id: string }>(
@@ -150,6 +190,7 @@ export async function registrarLectura(
           flags,
           repetida: true,
           proyeccion: despues ? { odometro: despues.odometro, soc: despues.soc } : null,
+          config_version_id: configVersionId,
         },
       };
     }
@@ -194,6 +235,7 @@ export async function registrarLectura(
         flags,
         repetida: false,
         proyeccion: despues ? { odometro: despues.odometro, soc: despues.soc } : null,
+        config_version_id: configVersionId,
       },
     };
   });

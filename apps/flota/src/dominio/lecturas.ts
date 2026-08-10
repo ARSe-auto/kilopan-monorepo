@@ -29,6 +29,11 @@ export const FLAGS = [
   "odometro_retrocedido",
   "reloj_desfasado",
   "sin_turno",
+  // El §0 lo nombra con estas letras en su fila de HTTP: una captura que llega con el módulo
+  // apagado entra igual, con este flag y su fila en «Por revisar» [AC-FVEH-18]. Es el caso
+  // donde la regla de oro se ve más clara: el dueño apagó algo en una oficina y el chofer ya
+  // había tecleado el dato en la calle.
+  "modulo_apagado",
 ] as const;
 export type FlagDeLectura = (typeof FLAGS)[number];
 
@@ -41,6 +46,8 @@ export type Lectura = {
   tsDispositivo: Date;
   recibidaEn: Date;
   tieneTurno: boolean;
+  /** Si el módulo estaba encendido en la config CONGELADA del turno (§4.4, §5.5). */
+  moduloEncendido: boolean;
 };
 
 /** Milisegundos de desfase tolerado entre el reloj del aparato y el del servidor (§0). */
@@ -57,6 +64,7 @@ export function clasificar(lectura: Lectura): FlagDeLectura[] {
   const flags: FlagDeLectura[] = [];
 
   if (!lectura.tieneTurno) flags.push("sin_turno");
+  if (!lectura.moduloEncendido) flags.push("modulo_apagado");
 
   if (lectura.magnitud === "soc" && (lectura.valor < SOC.minimo || lectura.valor > SOC.maximo)) {
     flags.push("soc_fuera_de_rango");

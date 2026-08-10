@@ -20,6 +20,7 @@ const base: Lectura = {
   tsDispositivo: AHORA,
   recibidaEn: AHORA,
   tieneTurno: true,
+  moduloEncendido: true,
 };
 
 // ─── Ninguna rechaza. Es el invariante del centinela 4 ───────────────────────────────
@@ -120,6 +121,14 @@ test("una lectura sin turno entra igual, con su bandera", () => {
   assert.equal(rechaza(clasificar(suelta)), false);
 });
 
+test("el módulo apagado marca la captura y NO la rechaza (§0, fila HTTP)", () => {
+  // El caso donde la regla de oro se ve más clara: el dueño apagó un módulo en una oficina y el
+  // chofer ya había tecleado el dato en la calle. La captura entra igual, con su bandera.
+  const conModuloApagado: Lectura = { ...base, moduloEncendido: false };
+  assert.deepEqual(clasificar(conModuloApagado), ["modulo_apagado"]);
+  assert.equal(rechaza(clasificar(conModuloApagado)), false);
+});
+
 test("las banderas se acumulan: una lectura puede tener varias cosas mal a la vez", () => {
   const fea: Lectura = {
     magnitud: "soc",
@@ -128,6 +137,7 @@ test("las banderas se acumulan: una lectura puede tener varias cosas mal a la ve
     tsDispositivo: enMinutos(AHORA, -(RELOJ.drift_max_minutos + 10)),
     recibidaEn: AHORA,
     tieneTurno: false,
+    moduloEncendido: true,
   };
   assert.deepEqual(clasificar(fea).sort(), ["reloj_desfasado", "sin_turno", "soc_fuera_de_rango"]);
   assert.equal(rechaza(clasificar(fea)), false);
