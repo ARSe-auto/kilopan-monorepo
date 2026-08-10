@@ -70,7 +70,7 @@ export async function conmutarModo(acto: Acto, modo: Modo): Promise<CambioDeModo
         payload: { de: anterior, a: modo },
       });
       return { tipo: "ok", modo, empresas: Number(rows[0]!.n) };
-    });
+    }, acto.sesion);
   } catch (error) {
     // La réplica no quedó escrita: se devuelve `control` a donde estaba, que es el único estado
     // desde el que reintentar es seguro. Dejarlo conmutado con la réplica atrás daría un tenant

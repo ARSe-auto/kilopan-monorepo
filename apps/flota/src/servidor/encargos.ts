@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { enActo, registrarEvento, EVENTOS_OPERACION } from "./gobierno.ts";
+import { enActo, enLectura, registrarEvento, EVENTOS_OPERACION } from "./gobierno.ts";
 import type { Sesion } from "./sesion.ts";
 import { createHash } from "node:crypto";
 import { leerCsv } from "../dominio/csv.ts";
@@ -120,7 +120,7 @@ export async function crearEncargo(
         payload: { bultos: datos.bultos, estado },
       });
       return { tipo: "ok", encargo: rows[0], repetido: false };
-    });
+    }, sesion);
   } catch (error) {
     // El trigger de `attrs` del §4.9 rebota con `check_violation`, igual que el CHECK de
     // bultos. Se distinguen por el mensaje porque son dos causas que quien tipea arregla de
@@ -145,8 +145,15 @@ export async function crearEncargo(
  * de la bandeja sin que nadie lo borre se lee como un dato perdido, y el operador vuelve a
  * cargarlo.
  */
-export async function listarEncargos(pool: Pool, fecha: string | null): Promise<Encargo[]> {
-  const { rows } = await pool.query<Encargo>(
+export async function listarEncargos(
+  pool: Pool,
+  sesion: Sesion,
+  fecha: string | null,
+): Promise<Encargo[]> {
+  // `enLectura` y no `pool.query`: la política que confina al rol `cliente` a su empresa lee un
+  // GUC, y un GUC local necesita transacción. Sin ella, un contratante vería la bandeja entera.
+  return enLectura(pool, sesion, async (c) => {
+    const { rows } = await c.query<Encargo>(
     // Calificado con `encargos.`: con los dos joins, `id` está en las tres tablas y sin el
     // prefijo la consulta rebota por ambigüedad.
     `select encargos.id::text as id,
@@ -162,9 +169,10 @@ export async function listarEncargos(pool: Pool, fecha: string | null): Promise<
       where encargos.fecha_servicio
               = coalesce($1::date, (now() at time zone 'America/Santiago')::date)
       order by encargos.creado_en desc`,
-    [fecha],
-  );
-  return rows;
+      [fecha],
+    );
+    return rows;
+  });
 }
 
 // ─── Importación CSV de la bandeja [AC-FRUT-02] — §5.2-F1, §4.2, §9.3.1 ─────────────
@@ -288,7 +296,7 @@ export async function importarEncargos(
       });
     }
     return { tipo: "ok", creados, repetidos };
-  });
+  }, sesion);
 }
 
 // ─── «Duplicar encargos de ayer» [AC-FRUT-17] — §5.2-F1, §3.E1.5, §9.3.1 ────────────
@@ -379,7 +387,7 @@ export async function duplicarEncargos(
       });
     }
     return { creados, repetidos, origen: deAyer };
-  });
+  }, sesion);
 }
 
 /**

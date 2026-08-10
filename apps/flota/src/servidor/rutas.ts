@@ -1,5 +1,5 @@
 import type { Pool, PoolClient } from "pg";
-import { enActo, registrarEvento, EVENTOS_OPERACION } from "./gobierno.ts";
+import { enActo, enLectura, registrarEvento, EVENTOS_OPERACION } from "./gobierno.ts";
 import { entitlementVigente, FEATURES } from "./config.ts";
 import type { Sesion } from "./sesion.ts";
 
@@ -98,18 +98,26 @@ export async function crearRuta(
       payload: { vehiculo_id: datos.vehiculoId },
     });
     return rows[0];
-  });
+  }, sesion);
 }
 
-export async function listarRutas(pool: Pool, fecha: string | null): Promise<Ruta[]> {
-  const { rows } = await pool.query<Ruta>(
-    `select ${COLUMNAS_DE_RUTA} from rutas
-      where fecha_servicio = coalesce($1::date, (now() at time zone 'America/Santiago')::date)
-        and not es_maestra
-      order by creada_en`,
-    [fecha],
-  );
-  return rows;
+export async function listarRutas(
+  pool: Pool,
+  sesion: Sesion,
+  fecha: string | null,
+): Promise<Ruta[]> {
+  // Con política activa, el rol `cliente` recibe CERO: el §3.E1.10 dice que el contratante
+  // jamás ve rutas completas. La lista no tiene una rama para él — la base no le da filas.
+  return enLectura(pool, sesion, async (c) => {
+    const { rows } = await c.query<Ruta>(
+      `select ${COLUMNAS_DE_RUTA} from rutas
+        where fecha_servicio = coalesce($1::date, (now() at time zone 'America/Santiago')::date)
+          and not es_maestra
+        order by creada_en`,
+      [fecha],
+    );
+    return rows;
+  });
 }
 
 export type Asignacion =
@@ -190,7 +198,7 @@ export async function asignarEncargos(
     }
 
     return { tipo: "ok", paradas: paradasCreadas, items: itemsCreados, repetidos };
-  });
+  }, sesion);
 }
 
 /**
@@ -227,15 +235,17 @@ async function paradaDeEntrega(
 
 export async function verRuta(
   pool: Pool,
+  sesion: Sesion,
   rutaId: string,
 ): Promise<{ ruta: Ruta; paradas: (Parada & { items: ItemDeParada[] })[] } | null> {
-  const { rows: ruta } = await pool.query<Ruta>(
+  return enLectura(pool, sesion, async (c) => {
+  const { rows: ruta } = await c.query<Ruta>(
     `select ${COLUMNAS_DE_RUTA} from rutas where id = $1`,
     [rutaId],
   );
   if (!ruta[0]) return null;
 
-  const { rows: paradas } = await pool.query<Parada>(
+  const { rows: paradas } = await c.query<Parada>(
     `select p.id::text as id, p.tipo::text as tipo, p.orden, p.destino_id::text as destino_id,
             d.nombre as destino
        from paradas p left join destinos d on d.id = p.destino_id
@@ -243,7 +253,7 @@ export async function verRuta(
       order by p.orden`,
     [rutaId],
   );
-  const { rows: items } = await pool.query<ItemDeParada & { parada_id: string }>(
+  const { rows: items } = await c.query<ItemDeParada & { parada_id: string }>(
     `select i.id::text as id, i.parada_id::text as parada_id, i.encargo_id::text as encargo_id,
             i.empresa_cliente_id::text as empresa_cliente_id, e.razon_social as empresa,
             i.qty_planificada
@@ -259,6 +269,7 @@ export async function verRuta(
     ruta: ruta[0],
     paradas: paradas.map((p) => ({ ...p, items: items.filter((i) => i.parada_id === p.id) })),
   };
+  });
 }
 
 // ─── Publicar el día: el momento en que la planificación se compromete [AC-FRUT-05] ───
@@ -361,15 +372,17 @@ export async function instanciarDesdeMaestra(
       payload: { origen: "maestra", maestra_id: maestraId, paradas: copiadas.length },
     });
     return { tipo: "ok", ruta: nueva[0]!, paradas: copiadas.length };
-  });
+  }, sesion);
 }
 
 /** Las plantillas del tenant. Van aparte de `listarRutas`, que solo trae los días. */
-export async function listarMaestras(pool: Pool): Promise<Ruta[]> {
-  const { rows } = await pool.query<Ruta>(
-    `select ${COLUMNAS_DE_RUTA} from rutas where es_maestra order by nombre`,
-  );
-  return rows;
+export async function listarMaestras(pool: Pool, sesion: Sesion): Promise<Ruta[]> {
+  return enLectura(pool, sesion, async (c) => {
+    const { rows } = await c.query<Ruta>(
+      `select ${COLUMNAS_DE_RUTA} from rutas where es_maestra order by nombre`,
+    );
+    return rows;
+  });
 }
 
 export type Reordenamiento = { tipo: "ok"; paradas: number } | { tipo: "ruta_no_existe" };
@@ -387,6 +400,7 @@ export type Reordenamiento = { tipo: "ok"; paradas: number } | { tipo: "ruta_no_
  */
 export async function reordenarParadas(
   pool: Pool,
+  sesion: Sesion,
   rutaId: string,
   enOrden: string[],
 ): Promise<Reordenamiento> {
@@ -415,7 +429,7 @@ export async function reordenarParadas(
       [rutaId, enOrden.length],
     );
     return { tipo: "ok", paradas: n };
-  });
+  }, sesion);
 }
 
 export type Publicacion =
@@ -534,7 +548,7 @@ export async function publicarRuta(
       payload: { paradas: todas.length, recargas, requisitos, promesas: promesas ?? 0 },
     });
     return { tipo: "ok", paradas: todas.length, requisitos, promesas: promesas ?? 0 };
-  });
+  }, sesion);
 }
 
 /**

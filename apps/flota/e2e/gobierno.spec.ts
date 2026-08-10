@@ -434,6 +434,8 @@ test("[AC-FIDN-12] el evento y la mutación entran juntos, o no entra ninguno", 
           rol: "admin_tenant",
           isStandalone: true,
           storagePersisted: true,
+          // Solo el rol `cliente` la lleva (§4.3, AC-FRUT-12); la dueña de la cuenta, nunca.
+          empresaClienteId: null,
         },
       });
     }),

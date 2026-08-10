@@ -31,13 +31,24 @@ let vehiculoB = "";
 let vehiculoApagado = "";
 
 async function enrolar(c: Conexion, rut: string, nombre: string, rol: string, secreto: string) {
+  await c.sql(
+    `insert into empresas_cliente (rut, razon_social)
+     values ('76.111.111-6', 'Contratante del fixture')
+       on conflict (tenant_id, rut) do nothing`,
+  );
   const [p] = await c.sql<{ id: string }>(
     "insert into personas (rut, nombre) values ($1, $2) returning id::text as id",
     [rut, nombre],
   );
+  // La empresa del `cliente` se crea de verdad: desde AC-FRUT-12 la columna lleva su FK
+  // compuesta y un uuid al azar ya no entra. Idempotente por RUT, porque `enrolar` corre varias
+  // veces en el mismo fixture.
   const [u] = await c.sql<{ id: string }>(
     `insert into usuarios (persona_id, rol, empresa_cliente_id)
-     values ($1, $2::rol_usuario, case when $2 = 'cliente' then gen_random_uuid() end)
+     values ($1, $2::rol_usuario,
+             case when $2 = 'cliente' then (
+               select id from empresas_cliente where rut = '76.111.111-6'
+             ) end)
      returning id::text as id`,
     [p!.id, rol],
   );

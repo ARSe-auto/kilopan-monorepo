@@ -15,7 +15,7 @@ export async function GET(_peticion: Request, contexto: { params: Promise<{ id: 
   const { id } = await contexto.params;
   if (!esUuid(id)) return noExiste();
 
-  const armada = await verRuta(g.acto.pool, id);
+  const armada = await verRuta(g.acto.pool, g.acto.sesion, id);
   if (!armada) return noExiste();
   return Response.json(armada);
 }

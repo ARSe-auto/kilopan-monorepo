@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const g = await sesionDelTenant(await headers());
   if (g.tipo === "rebote") return g.respuesta;
-  return Response.json({ maestras: await listarMaestras(g.acto.pool) });
+  return Response.json({ maestras: await listarMaestras(g.acto.pool, g.acto.sesion) });
 }
 
 export async function POST(peticion: Request) {

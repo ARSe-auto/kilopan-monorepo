@@ -143,7 +143,15 @@ test("[AC-FIDN-01] la anonimización de la 21.719 es todo o nada", async () => {
 
 test("[AC-FIDN-01] rol `cliente` ⇔ empresa_cliente_id, en los dos sentidos", async () => {
   const [p] = await app.sql("select id::text as id from personas where rut = $1", [RUT_A]);
-  const empresa = "0192f0a0-0000-7000-8000-000000000001";
+  // La empresa se CREA: desde AC-FRUT-12 la columna lleva su FK compuesta —la que esta misma
+  // migración dejó anotada para el módulo que creara `empresas_cliente`— y un uuid inventado ya
+  // no entra. El caso que se ejerce acá es el CHECK del §4.3, no la FK, así que la fila tiene
+  // que existir para que el rebote que se mide sea el correcto y no un 23503 disfrazado.
+  const [creada] = await app.sql(
+    `insert into empresas_cliente (rut, razon_social)
+     values ('76.111.111-6', 'Contratante del fixture') returning id::text as id`,
+  );
+  const empresa = creada.id;
 
   // Un `cliente` sin empresa vería el portal de nadie: el portal filtra por esa columna.
   assert.equal(

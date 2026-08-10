@@ -30,6 +30,10 @@ export type Sesion = {
    *  `enrolamientoCompleto`, no el hecho de que la sesión resuelva. */
   isStandalone: boolean;
   storagePersisted: boolean;
+  /** La empresa contratante, SOLO para el rol `cliente` [AC-FRUT-12]. Es lo que la política de
+   *  fila del §7.2 compara: sin ella, una sesión de cliente no ve ninguna fila —falla hacia el
+   *  cierre— porque una sesión de cliente sin empresa es un error de programación. */
+  empresaClienteId: string | null;
 };
 
 export type VeredictoSesion =
@@ -61,6 +65,7 @@ export async function resolverSesion(pool: Pool, cabecera: string | null): Promi
     activo: boolean | null;
     is_standalone: boolean;
     storage_persisted: boolean;
+    empresa_cliente_id: string | null;
   }>(
     `select d.id::text  as dispositivo_id,
             d.persona_id::text as persona_id,
@@ -69,7 +74,8 @@ export async function resolverSesion(pool: Pool, cabecera: string | null): Promi
             d.revocado_at,
             u.activo,
             d.is_standalone,
-            d.storage_persisted
+            d.storage_persisted,
+            u.empresa_cliente_id::text as empresa_cliente_id
        from dispositivos d
        left join usuarios u on u.persona_id = d.persona_id
       where d.secreto_hash = $1`,
@@ -95,6 +101,7 @@ export async function resolverSesion(pool: Pool, cabecera: string | null): Promi
       rol: fila.rol!,
       isStandalone: fila.is_standalone,
       storagePersisted: fila.storage_persisted,
+      empresaClienteId: fila.empresa_cliente_id,
     },
   };
 }

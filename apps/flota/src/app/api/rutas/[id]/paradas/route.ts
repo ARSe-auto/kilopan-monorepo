@@ -32,7 +32,7 @@ export async function PATCH(peticion: Request, contexto: { params: Promise<{ id:
     );
   }
 
-  const hecho = await reordenarParadas(g.acto.pool, id, enOrden);
+  const hecho = await reordenarParadas(g.acto.pool, g.acto.sesion, id, enOrden);
   if (hecho.tipo === "ruta_no_existe") return noExiste();
   return Response.json({ paradas: hecho.paradas });
 }

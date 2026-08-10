@@ -18,7 +18,7 @@ export async function GET(peticion: Request) {
   const g = await sesionDelTenant(await headers());
   if (g.tipo === "rebote") return g.respuesta;
   const todos = new URL(peticion.url).searchParams.get("todos") === "1";
-  return Response.json({ motivos: await listarMotivos(g.acto.pool, todos) });
+  return Response.json({ motivos: await listarMotivos(g.acto.pool, g.acto.sesion, todos) });
 }
 
 export async function POST(peticion: Request) {

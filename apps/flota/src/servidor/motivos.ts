@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { enActo, registrarEvento, EVENTOS_OPERACION } from "./gobierno.ts";
+import { enActo, enLectura, registrarEvento, EVENTOS_OPERACION } from "./gobierno.ts";
 import type { Sesion } from "./sesion.ts";
 
 // El catálogo de motivos del tenant [AC-FRUT-13] — §4.5, §4.4, §4.2.
@@ -38,11 +38,17 @@ export type Motivo = {
 const COLUMNAS = `id::text as id, codigo, etiqueta, estado_asociado, require_notes, orden, activo`;
 
 /** Los que se ofrecen en un flujo nuevo, o TODOS si es el panel el que pregunta. */
-export async function listarMotivos(pool: Pool, todos: boolean): Promise<Motivo[]> {
-  const { rows } = await pool.query<Motivo>(
-    `select ${COLUMNAS} from motivos ${todos ? "" : "where activo"} order by orden, codigo`,
-  );
-  return rows;
+export async function listarMotivos(
+  pool: Pool,
+  sesion: Sesion,
+  todos: boolean,
+): Promise<Motivo[]> {
+  return enLectura(pool, sesion, async (c) => {
+    const { rows } = await c.query<Motivo>(
+      `select ${COLUMNAS} from motivos ${todos ? "" : "where activo"} order by orden, codigo`,
+    );
+    return rows;
+  });
 }
 
 /** Copia el catálogo del vertical al tenant (§4.4). Idempotente: la función lo garantiza. */
@@ -82,5 +88,5 @@ export async function cambiarMotivo(
       payload: { codigo: rows[0].codigo },
     });
     return { tipo: "ok", motivo: rows[0] };
-  });
+  }, sesion);
 }

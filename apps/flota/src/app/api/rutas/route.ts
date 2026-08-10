@@ -12,7 +12,7 @@ export async function GET(peticion: Request) {
   const g = await sesionDelTenant(await headers());
   if (g.tipo === "rebote") return g.respuesta;
   const fecha = new URL(peticion.url).searchParams.get("fecha");
-  return Response.json({ rutas: await listarRutas(g.acto.pool, fecha) });
+  return Response.json({ rutas: await listarRutas(g.acto.pool, g.acto.sesion, fecha) });
 }
 
 export async function POST(peticion: Request) {

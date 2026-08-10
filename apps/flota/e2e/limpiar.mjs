@@ -50,6 +50,15 @@ export async function limpiarBandeja(sql) {
   await sql("delete from rutas");
   await sql("delete from encargos");
   await sql("delete from destinos");
+  // Desde AC-FRUT-12 un usuario `cliente` apunta a SU empresa, así que las empresas no se pueden
+  // borrar mientras exista uno. Se van con ella y sus aparatos primero: un contratante sin
+  // empresa no es un usuario huérfano, es un estado que el CHECK de `usuarios` prohíbe.
+  await sql(
+    `delete from dispositivos d
+      where exists (select 1 from usuarios u
+                     where u.persona_id = d.persona_id and u.empresa_cliente_id is not null)`,
+  );
+  await sql("delete from usuarios where empresa_cliente_id is not null");
   await sql("delete from empresas_cliente");
 }
 

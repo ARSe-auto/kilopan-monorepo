@@ -156,8 +156,16 @@ test("[AC-FIDN-04] aprobar un `cliente` sin empresa rebota 422 tipado y no deja 
 
   // El positivo: con la empresa, el mismo `cliente` entra. Sin esto, un rebote que negara
   // todo se vería idéntico a la regla correcta.
+  //
+  // La empresa se CREA: desde AC-FRUT-12 la columna lleva su FK compuesta —la que la 0011 dejó
+  // anotada para el módulo que creara `empresas_cliente`— y un uuid inventado ya no entra.
+  const [empresa] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ id: string }>(
+      "insert into empresas_cliente (rut, razon_social) values ('76.111.111-6', 'Contratante del fixture') returning id::text as id",
+    ),
+  );
   const conEmpresa = await aprobar(pool, solicitudId, duenaId, {
-    empresaClienteId: "0192f0a0-0000-7000-8000-000000000001",
+    empresaClienteId: empresa!.id,
   });
   expect(conEmpresa.tipo).toBe("aprobada");
 });

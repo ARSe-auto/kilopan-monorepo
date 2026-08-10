@@ -174,10 +174,36 @@ export async function sesionDelTenant(
 
 // ─── El acto: una transacción que muta y registra, o no hace ninguna de las dos ────────
 
-export async function enActo<T>(pool: Pool, fn: (c: PoolClient) => Promise<T>): Promise<T> {
+/**
+ * Declara QUIÉN pregunta, para las políticas de fila del §4.8 y del §7.2 [AC-FRUT-12].
+ *
+ * Las dos familias de RLS de la base leen GUCs: la de dinero mira `app.current_role` para no
+ * mostrarle montos al chofer, y la de empresa mira además `app.current_empresa` para confinar al
+ * rol `cliente`. Hasta este AC nadie los escribía desde la app —solo las suites de
+ * `db/flota/suite-bd/`—, así que las políticas estaban probadas y no protegían nada en runtime.
+ *
+ * Va con `set_config(..., true)`: LOCAL a la transacción. Un `set` de sesión sobreviviría a la
+ * conexión devuelta al pool y el request siguiente heredaría el rol del anterior — que es
+ * exactamente el peor error posible acá: un chofer viendo lo del dueño porque le tocó su
+ * conexión. Por eso toda lectura que necesite política abre transacción, aunque no escriba.
+ */
+async function declararQuienPregunta(c: PoolClient, sesion?: Sesion): Promise<void> {
+  if (!sesion) return;
+  await c.query("select set_config('app.current_role', $1, true)", [sesion.rol]);
+  await c.query("select set_config('app.current_empresa', $1, true)", [
+    sesion.empresaClienteId ?? "",
+  ]);
+}
+
+export async function enActo<T>(
+  pool: Pool,
+  fn: (c: PoolClient) => Promise<T>,
+  sesion?: Sesion,
+): Promise<T> {
   const cliente = await pool.connect();
   try {
     await cliente.query("begin");
+    await declararQuienPregunta(cliente, sesion);
     const salida = await fn(cliente);
     await cliente.query("commit");
     return salida;
@@ -185,6 +211,31 @@ export async function enActo<T>(pool: Pool, fn: (c: PoolClient) => Promise<T>): 
     await cliente.query("rollback");
     throw error;
   } finally {
+    cliente.release();
+  }
+}
+
+/**
+ * Una LECTURA con las políticas de fila activas [AC-FRUT-12].
+ *
+ * Existe por el mismo motivo que `enActo` recibe la sesión: un `pool.query` suelto no puede
+ * declarar el rol, porque el `set_config` local necesita una transacción y el de sesión
+ * contaminaría la conexión siguiente. Abrir una transacción para leer parece caro y no lo es —
+ * `read only` le dice al planificador que no va a haber escrituras— y es el precio de que la
+ * política sea una garantía y no una intención.
+ */
+export async function enLectura<T>(
+  pool: Pool,
+  sesion: Sesion,
+  fn: (c: PoolClient) => Promise<T>,
+): Promise<T> {
+  const cliente = await pool.connect();
+  try {
+    await cliente.query("begin read only");
+    await declararQuienPregunta(cliente, sesion);
+    return await fn(cliente);
+  } finally {
+    await cliente.query("rollback");
     cliente.release();
   }
 }
