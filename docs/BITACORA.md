@@ -1949,3 +1949,80 @@ idénticos.
 Y el hallazgo que solo aparece recorriendo los dos teléfonos en orden: **volver de «Compartir»
 no recargaba la lista**, y entre compartir el link y volver a mirar pasa justo el rato en que la
 persona completa sus datos. El dueño veía «no hay nadie esperando» con alguien esperando.
+
+---
+
+## 09-ago-2026 (20:14 →) · Hito (c) arranca: vehículos, gobierno de la flota y el vehículo-día
+
+Sesión con Opus 5, esfuerzo alto, tras absorber `docs/HANDOFF.md` (archivado en
+`docs/handoffs/2026-08-09-2230.md`). **Módulo 02: 3 de 22.** Plataforma: **49 de 197.**
+
+Tres ACs, tres commits, cada uno con su test naciendo junto al código: **AC-FVEH-01** (alta
+con patente + tipo, y su baseline de acciones), **AC-FVEH-02** (el CRUD es del dueño y el
+DELETE desactiva) y **AC-FVEH-06** (el vehículo-día con su EXCLUDE de solape).
+
+### Lo que costó decidir, y por qué quedó así
+
+**«Progresivo» obliga a que nada tenga default.** El §5.4 pide alta en dos minutos con dos
+campos y el resto después. La forma de sostenerlo no es un comentario: es que TODA columna
+salvo patente y tipo sea nullable y sin default. Un default sano —una autonomía de folleto, un
+SOH de 100— es una cifra inventada con cara de dato medido, y el Anexo A dice con todas las
+letras que los 305 km CLTC no son los 185–245 reales. El pgTAP lo vigila en el catálogo: el día
+que alguien ponga `NOT NULL` en `bateria_wh` «para que los datos estén completos», el alta en
+dos minutos se muere y el gate lo dice antes del deploy.
+
+**El «SOLO por trigger» de las proyecciones se sostiene, no se declara.** `vehiculos.odometro`
+y `vehiculos.soc` tienen un trigger que rebota cualquier escritura que no venga del proyector
+de lecturas. El pgTAP ejerce las DOS mitades —la puerta cerrada y la puerta que sí abre con el
+GUC encendido—, porque un guardián que rebotara siempre pasaría igual el primer test y
+AC-FVEH-05 descubriría que la proyección no tiene forma de escribirse.
+
+**El 422 de patente duplicada se juega en el índice, no en un `select` previo**, y lo mismo el
+solape de turnos: los dos chequeos «mirar antes de escribir» son carreras que dos requests
+simultáneos ganan. La normalización de patente (mayúsculas, sin separadores) es lo que hace que
+el UNIQUE signifique «un camión» y no «un camión por cada forma de tipearlo».
+
+**El maestro pide «tipo (chips)» y no enumera los chips en ninguna parte** — ni §4.5, ni §5.4,
+ni `vertical_template`. Inventar la lista sería responder por el dueño: entró como **pregunta
+15** de la spec 02. Mientras tanto los chips salen de los tipos que ese tenant ya usó: la
+primera alta se escribe, de la segunda en adelante es un toque.
+
+**Dónde vive el gobierno de vehículos.** Las mutaciones van bajo `/api/gobierno/**` porque el
+§5.4 las pone con esas palabras en el plano de control del dueño — y el efecto práctico es que
+el barrido autogenerado de AC-FIDN-12 las recogió solas, con el centinela 15 cubierto sobre
+estas puertas y sobre la que se agregue mañana. La LECTURA quedó aparte (`/api/vehiculos`):
+el mismo §5.4 dice que el operador lee y asigna, y un 403 ahí le rompería el trabajo.
+
+**Cláusulas que salen del maestro y no del enunciado del AC** (escritas en la spec, no
+inventadas en el código): la desactivación se DESHACE con evento propio —una que no se revierte
+es un borrado con pasos extra—; la edición es de lista cerrada porque `patente` es identidad y
+`odometro`/`soc` son proyecciones; un vehículo desactivado no abre jornada; el rol `cliente` no
+abre turnos, porque le sumaría al denominador de la EEVD una jornada que nadie trabajó; y
+`config_version_id` se sella con los entitlements LEÍDOS de `control`, no con `{}` —un snapshot
+vacío se lee igual que «todas las features apagadas».
+
+### Baseline de acciones, que ahora es un techo
+
+El maestro no fija presupuesto de toques para el alta (§5.3 no la lista; el «<2 min» del §5.4 es
+oráculo de tiempo). Así que el camino feliz **fijó su baseline en el primer verde: 3 acciones**
+—patente, tipo, agregar— y de ahí en adelante una regresión que lo suba pone el gate rojo. El
+artefacto (`packages/metodo/panel/acciones-alta-vehiculo.json`) y su histórico deduplicado por
+SHA siguen el molde del contador de exenciones de rutas.
+
+### Dos defectos que el trabajo destapó
+
+- **El grep-gate de constantes se ponía rojo al CITAR el §4.5 del maestro.** «(§4.5)» caía en el
+  patrón del contraste mínimo (4.5), y este módulo cita esa sección en cada archivo. Un guard
+  que castiga citar la constitución es un guard que alguien apaga a la semana: quedó acotado con
+  un lookbehind y un mutante propio que lo ejerce en las dos direcciones —la cita no dispara, el
+  número suelto sí—.
+- **`vehiculos.spec.ts` contaba TOTALES de `eventos` y `audit_trail`.** Son append-only y
+  empezaron a acumular lo que deja el fixture de la suite de turnos, así que el verde duró
+  exactamente hasta el AC siguiente. Pasó a medir por DIFERENCIA, que es la regla de la casa
+  para esas tablas y estaba escrita en el traspaso.
+
+### Estado al cierre del tramo
+
+`check.sh --app=flota --full` en VERDE: **14 OK · 0 fallados · 1 saltado declarado**, con 149
+casos e2e. Última migración: `0018_turnos`. Preguntas al dueño abiertas: **nueve** en la spec 02
+(1, 6, 7, 9, 11, 12, 13, 14 y la 15 nueva) y las 4 y 8 de la spec 01.
