@@ -36,6 +36,18 @@ export const FUENTE_UNICA = "declarada";
 /** Las que existen en el enum de `reading.fuente` y NO pueden tener implementación en E1. */
 export const FUENTES_DE_E4 = ["archivo_logger", "api_fabricante", "sonda_vehiculo", "obd", "ocpp"];
 
+/**
+ * Los valores de `destinos.geo_confianza` que solo puede producir el GEOCODING, que es E2
+ * (§3.E2) [AC-FRUT-15].
+ *
+ * El enum va completo en el DDL —es del §4.5 y agregarle un valor después es un ALTER TYPE en
+ * producción— pero en E1 solo se producen `manual` y `sin_geo`: nadie geocodifica todavía. El
+ * día que alguien escriba `rooftop` en el código, la app estará afirmando que una coordenada
+ * cayó sobre el techo del local cuando en realidad la tecleó una persona — y de esa afirmación
+ * cuelga que una parada se planifique sin que nadie confirme el pin.
+ */
+export const CONFIANZAS_DE_E2 = ["rooftop", "interpolado"];
+
 /** Donde vive la UI. Es lo único que se mira para el punto 1: el DDL las nombra por oficio. */
 const ARBOL_DE_UI = "apps/flota/src/app";
 /** Donde podría aparecer una implementación de telemetría. */
@@ -96,6 +108,17 @@ for (const arbol of ARBOL_DE_CODIGO) {
     const rel = relative(RAIZ, ruta);
     if (rel === "db/flota/gate-ganchos-e1.mjs") continue;
     const codigo = sinComentarios(readFileSync(ruta, "utf8"));
+    for (const confianza of CONFIANZAS_DE_E2) {
+      // Mismo criterio que las fuentes: se busca la CADENA, porque escribir un
+      // `geo_confianza` exige nombrarlo, y por ahí es por donde entra E2 sin querer.
+      if (new RegExp(`['\"\`]${confianza}['\"\`]`).test(codigo)) {
+        problemas.push(
+          `${rel} usa la confianza de geocoding «${confianza}»: en E1 solo se producen ` +
+            "«manual» y «sin_geo», el geocoding es E2 (§3.E2, §4.5)",
+        );
+        fallo = true;
+      }
+    }
     for (const fuente of FUENTES_DE_E4) {
       // Se busca la fuente como CADENA: una implementación de telemetría real tiene que
       // nombrar su fuente para escribir en `reading.fuente`, y por ahí es por donde entra.
@@ -113,7 +136,8 @@ for (const arbol of ARBOL_DE_CODIGO) {
 for (const p of problemas) console.error(`GATE: ${p}`);
 console.log(
   `gate-ganchos-e1: ${SIN_PANTALLA.length} ganchos DDL-only × ${revisadosUi} archivos de UI · ` +
-    `${FUENTES_DE_E4.length} fuentes de E4 × ${revisadosCodigo} archivos de código · ` +
+    `${FUENTES_DE_E4.length} fuentes de E4 y ${CONFIANZAS_DE_E2.length} confianzas de E2 × ` +
+    `${revisadosCodigo} archivos de código · ` +
     `${problemas.length} problemas`,
 );
 if (revisadosUi === 0) {

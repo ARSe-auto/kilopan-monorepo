@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SIN_PANTALLA, FUENTES_DE_E4, sinComentarios } from "./gate-ganchos-e1.mjs";
+import { SIN_PANTALLA, FUENTES_DE_E4, CONFIANZAS_DE_E2, sinComentarios } from "./gate-ganchos-e1.mjs";
 
 const RAIZ = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
 const GATE = join(RAIZ, "db/flota/gate-ganchos-e1.mjs");
@@ -63,6 +63,27 @@ test("cada fuente de E4 dispara si alguien la escribe como cadena", () => {
     });
     assert.equal(correr(raiz).codigo, 1, `${fuente} no disparó`);
   }
+});
+
+test("cada confianza de geocoding de E2 dispara si alguien la escribe como cadena", () => {
+  // El geocoding es E2 (§3.E2). Escribir `rooftop` en E1 sería afirmar que una coordenada cayó
+  // sobre el techo del local cuando en realidad la tecleó una persona — y de esa afirmación
+  // cuelga que una parada se planifique sin que nadie confirme el pin.
+  for (const confianza of CONFIANZAS_DE_E2) {
+    const raiz = sandbox({
+      "apps/flota/src/.fixture-geo.ts": `export const confianza = "${confianza}";\n`,
+    });
+    assert.equal(correr(raiz).codigo, 1, `${confianza} no disparó`);
+  }
+});
+
+test("las confianzas que E1 SÍ produce no disparan", () => {
+  // La otra mitad: sin ella, el guard haría imposible escribir el valor que el módulo necesita
+  // todos los días y alguien lo apagaría en una semana.
+  const raiz = sandbox({
+    "apps/flota/src/.fixture-geo-ok.ts": 'export const a = "manual"; export const b = "sin_geo";\n',
+  });
+  assert.equal(correr(raiz).codigo, 0);
 });
 
 test("nombrar un gancho en un COMENTARIO no dispara", () => {

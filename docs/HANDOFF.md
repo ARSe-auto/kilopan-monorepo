@@ -97,7 +97,15 @@ en 4 acciones (baseline fijado) y la importación CSV con lector propio
 (`apps/flota/src/dominio/csv.ts`) e idempotencia derivada del CONTENIDO de cada fila — no por
 lote ni al azar, o el reintento duplicaría todo.
 
-Lo que sigue, en el orden que menos depende de respuestas: **AC-FRUT-06** (rutas maestras),
+**AC-FRUT-15 (destinos) está a MEDIAS a propósito y NO marcado:** su guard ya existe —
+`gate-ganchos-e1.mjs` ahora rebota si alguien escribe `rooftop` o `interpolado`, que solo puede
+producir el geocoding de E2— y el CHECK de la caja de Chile y los enums están probados en
+`pgtap/0019`. Lo que falta de ese AC es su última cláusula: «una parada sobre destino `sin_geo`
+se planifica, publica y opera igual», que necesita la tabla `paradas`. Se cierra en cuanto
+exista, sin tocar nada de lo ya escrito.
+
+Lo que sigue, en el orden que menos depende de respuestas: **AC-FRUT-04/05** (que TRAEN
+`rutas`, `paradas` e `items` — son la puerta de entrada al resto del módulo), **AC-FRUT-06** (rutas maestras),
 **AC-FRUT-04/05** (agrupación multi-empresa y publicar el día en ≤15 clics, que INCLUYE en el
 conteo el tablero del módulo 02 — ya construido, `/listos`), **AC-FRUT-21** (devoluciones).
 **AC-FRUT-03** (máquina de estados) espera la **pregunta 1 de la spec 03**: el enum de
