@@ -6,7 +6,7 @@ siempre, todo comiteado, `check.sh --app=flota --full` en **VERDE con 14 OK · 0
 saltado declarado** (158 casos e2e).
 
 > Sesión nueva: retomá esto **sin re-preguntar nada**, armá tu propio despertador de 4h35m
-> (tarea Bash en background) y archivá este archivo en `docs/handoffs/2026-08-10-0010.md` al
+> (tarea Bash en background) y archivá este archivo en `docs/handoffs/2026-08-10-0520.md` al
 > absorberlo. **Alexis pidió expresamente que NO se creen chips de continuación**: el traspaso
 > es este archivo y se retoma solo.
 
@@ -197,23 +197,38 @@ mirar `git log --oneline -5` antes de escribir. **Un builder por worktree**: ant
 
 ## Prompt de arranque de la sesión nueva
 
-> Seguí construyendo la Plataforma FLOTA en `~/kilopan-monorepo-flota` (rama
-> `flota/specs-e1`), con Opus 5 y esfuerzo alto — el §8 exige el modelo tope para este hito y
-> prohíbe delegarlo a un motor. Leé `docs/HANDOFF.md` completo, archivalo en
-> `docs/handoffs/2026-08-10-0010.md`, armá tu despertador de 4h35m y arrancá por «Próximos
-> pasos». El hito (c) va **7 de 22**: están el alta y el gobierno de vehículos, el vehículo-día
-> con su EXCLUDE, las lecturas con proyección por trigger, la vista `eevd_semanal`, la fórmula
-> única de energía con su grep-gate y la agenda con «duplicar semana». Lo que sigue es
-> **AC-FVEH-03** (`vehiculo_documentos`), diseñado en el handoff. Contrato: `specs/flota/*.md` +
-> `IMPLEMENTATION_PLAN_flota.md`; la constitución es `docs/PROMPT_MAESTRO_FLOTA.md`. Reglas
-> duras: un AC = un commit con su test naciendo en el mismo commit · citar el id del AC en el
-> código o el test · `[x]` solo con test verde y marcado en la spec Y en el plan en el mismo
-> commit · un paso SALTADO no es un paso verde · nunca inventar la respuesta a una pregunta al
-> dueño (la spec 02 tiene NUEVE abiertas). Verificá con
-> `bash packages/metodo/scripts/check.sh --app=flota --full`. Antes de tocar la base:
-> `bash db/flota/cluster.sh iniciar`. No toques `apps/kilopan/**`, `db/migraciones/*.sql` ni el
-> contenido de negocio de `specs/kilopan/**`. No uses `git add -A`. Y **no crees chips de
-> continuación**: Alexis lo pidió expresamente.
+> Seguí construyendo la Plataforma FLOTA en `~/kilopan-monorepo-flota` (rama `flota/specs-e1`),
+> con Opus 5 y esfuerzo alto — el §8 exige el modelo tope para este hito y prohíbe delegarlo a
+> un motor automático. Leé `docs/HANDOFF.md` COMPLETO, archivalo en
+> `docs/handoffs/2026-08-10-0520.md`, armá tu propio despertador de 4h30m (tarea Bash en
+> background) y arrancá por «Próximos pasos».
+>
+> **Estado: 69 de 197 ACs.** El hito (c) —vehículos EV, módulo 02— está CERRADO en 21 de 22: el
+> único abierto, AC-FVEH-16, es de oráculo HUMANO (DONE-adopción, dueño nombrado: Alexis) y por
+> contrato jamás bloquea. El hito (d) —encargos, rutas y custodia, módulo 03— va en 2 de 22:
+> están la bandeja (alta en 4 acciones, con baseline) y la importación CSV con lector propio.
+>
+> **Lo que sigue es AC-FRUT-04/05**, que TRAEN `rutas`, `paradas` e `items` — son la puerta de
+> entrada al resto del módulo 03 y no hay ningún AC pequeño que se pueda cerrar antes. Cuando
+> `paradas` exista se cierran además dos cláusulas ya escritas: la última de AC-FRUT-15
+> (destino `sin_geo` se planifica y opera igual) y, cuando llegue `rutas.km_presupuesto_energia`,
+> las de AC-FVEH-10 y AC-FVEH-12 del módulo 02.
+>
+> **Leé la sección «Lo aprendido a fuerza de rojos» ANTES de escribir**: ahí están la vista que
+> no hereda la RLS, el `ON CONFLICT` que necesita leer sobre una tabla con RLS de dinero, el
+> entitlement ausente que no es «apagado», y las cuatro formas en que los gates muerden por
+> citar el maestro. Ahorra media hora.
+>
+> Contrato: `specs/flota/*.md` + `IMPLEMENTATION_PLAN_flota.md`; la constitución es
+> `docs/PROMPT_MAESTRO_FLOTA.md`. Reglas duras: un AC = un commit con su test naciendo en el
+> MISMO commit · citar el id del AC en el código o el test · `[x]` solo con evidencia de test
+> verde, marcado en la spec Y en el plan en el mismo commit · un paso SALTADO no es un paso
+> verde · **nunca inventar la respuesta a una pregunta al dueño** — hay diez abiertas en la
+> spec 02, seis atravesadas y declaradas en el módulo 02, y la 1 y la 6 de la spec 03 tocan lo
+> que sigue. Verificá con `bash packages/metodo/scripts/check.sh --app=flota --full`. Antes de
+> tocar la base: `bash db/flota/cluster.sh iniciar`. No toques `apps/kilopan/**`,
+> `db/migraciones/*.sql` ni el contenido de negocio de `specs/kilopan/**`. No uses `git add -A`.
+> Y **no crees chips de continuación**: Alexis lo pidió expresamente.
 
 ## Advertencia de método
 
