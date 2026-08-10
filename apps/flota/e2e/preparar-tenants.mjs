@@ -91,7 +91,20 @@ async function sembrarIdentidadDelVecino(slug) {
     // parámetro, así que el caso del centinela 2 saca de acá el id REAL con el que A intenta
     // editar y desactivar la flota de B. Sin esta fila el caso no probaría nada, y la suite lo
     // dice con esas palabras antes que pasar en falso.
-    await sql("insert into vehiculos (patente, tipo) values ('VECINO1', 'furgón del vecino')");
+    const [vehiculo] = await sql(
+      "insert into vehiculos (patente, tipo) values ('VECINO1', 'furgón del vecino') returning id::text as id",
+    );
+    // Y un chequeo con su defecto [AC-FVEH-04]: `/api/defectos/[id]` es de tipo recurso y el
+    // caso del centinela 2 saca de acá el id REAL con el que A intenta cerrar —o marcar
+    // bloqueante— un defecto del vecino. Las dos direcciones son daño, no solo fuga.
+    const [chequeo] = await sql(
+      `insert into chequeos (inspectable_tipo, inspectable_id, momento, ts_dispositivo, tz_offset_min)
+       values ('vehiculos', $1, 'pre', now(), -240) returning id::text as id`,
+      [vehiculo.id],
+    );
+    await sql("insert into defectos (chequeo_id, item) values ($1, 'luz de freno del vecino')", [
+      chequeo.id,
+    ]);
   });
 }
 

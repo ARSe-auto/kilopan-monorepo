@@ -51,6 +51,36 @@
       }
     },
     {
+      "ruta": "/api/chequeos",
+      "archivo": "src/app/api/chequeos/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Chequeo pre/post de un inspectable [AC-FVEH-04]. El inspectable viaja en el cuerpo y el tenant sale del ruteo, así que no hay parámetro de ruta: el caso genérico va sin credencial y la guardia contesta 404 pelado antes de mirarlo. El POST MUTA y enciende el comparador de huella de la BD de B — un chequeo escrito en el vecino no es solo una fuga: le inventa un defecto a un camión ajeno, y si alguien lo marca bloqueante le detiene la operación. El cruce CON un uuid de vehículo de B lo prueba la suite del módulo."
+      }
+    },
+    {
+      "ruta": "/api/defectos/[id]",
+      "archivo": "src/app/api/defectos/[id]/route.ts",
+      "metodos": [
+        "PATCH"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "defectos",
+          "columna": "id"
+        },
+        "nota": "El ciclo del defecto [AC-FVEH-04]. Cerrar el defecto de B desde A le borra de la bandeja algo que su operación todavía no resolvió, y marcarlo bloqueante le detiene un camión — las dos direcciones son daño, no solo fuga. Contrato 404 y huella de B intacta. El fixture del vecino siembra un chequeo con su defecto para que el id sea REAL: contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin probar nada."
+      }
+    },
+    {
       "ruta": "/api/entorno",
       "archivo": "src/app/api/entorno/route.ts",
       "metodos": [

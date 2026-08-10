@@ -229,7 +229,14 @@ test("[AC-FIDN-01] UPDATE y DELETE sobre `firmas` como rol de app ⇒ 42501 (cen
     await codigoDe(migrador, "update firmas set significado = 'rechazo' where id = $1", [f.id]),
     "42501",
   );
-  assert.equal(await codigoDe(migrador, "truncate firmas"), "42501");
+  // TRES capas, desde AC-FVEH-04. `truncate firmas` a secas ya ni llega al trigger: PostgreSQL
+  // lo rechaza antes con 0A000 porque `chequeos.firma_id` la referencia — vaciar firmas dejaría
+  // chequeos apuntando a firmas que no existen, y «apto» derivaría de una firma fantasma (§4.5).
+  assert.equal(await codigoDe(migrador, "truncate firmas"), "0A000");
+  // Y con CASCADE, que sí sortea la FK, el trigger del §7.4 sigue ahí y contesta lo mismo que
+  // el UPDATE. Se prueba por este camino para que la capa del trigger no quede sin ejercer
+  // detrás de la que llegó después.
+  assert.equal(await codigoDe(migrador, "truncate firmas cascade"), "42501");
 });
 
 test("[AC-FIDN-01] el replay de una firma no crea una segunda fila (centinela 1)", async () => {

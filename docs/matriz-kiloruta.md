@@ -49,7 +49,7 @@ clasificado, se corrige allá, con la firma del dueño, y acá se refleja.
 | KR-16 | turnos + chequeo pre (odómetro, SOC) | — (pendiente: AC-FVEH-10 · hito c) |
 | KR-17 | vertical_template.checklists[] | db/flota/pgtap/0002_verticales_grupos_y_parametros.sql::has_column('vertical_template', 'checklists') |
 | KR-18 | proyección vehiculos.soc + fórmula de rango del §0 | — (pendiente: AC-FVEH-09/10 · hito c) |
-| KR-19 | eventos + review_queue (confirmación de 1 toque) | — (pendiente: AC-FVEH-10 / AC-FVEH-04 · hito c) |
+| KR-19 | eventos + review_queue (confirmación de 1 toque) | — (pendiente: AC-FVEH-10 · hito c — la mitad del defecto ya la prueba apps/flota/e2e/chequeos.spec.ts; se cierra con la confirmación de 1 toque de la apertura) |
 | KR-20 | cierre de turno (odómetro, SOC, defecto→issue) | — (pendiente: AC-FVEH-21 · hito c) |
 | KR-21 | encargos (empresa + destino + bultos) | — (pendiente: AC-FRUT-01 · hito d) |
 | KR-22 | encargos (duplicar de ayer) | — (pendiente: AC-FRUT-17 · hito d) |

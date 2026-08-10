@@ -14,9 +14,19 @@
 // `reading`, `evidence` y `client_metric` son append-only (§7.4) y rebotan el DELETE con
 // 42501. Las suites que las miran cuentan por DIFERENCIA, no por total.
 
-/** De lo que apunta a lo apuntado: los bloques, los turnos y los documentos cuelgan de los
- *  vehículos. Agregar una tabla acá es la ÚNICA edición que pide una tabla nueva del módulo. */
-export const TABLAS_DE_OPERACION = ["bloques_agenda", "turnos", "vehiculo_documentos", "vehiculos"];
+/** De lo que apunta a lo apuntado: los defectos cuelgan de los chequeos, y los chequeos, los
+ *  bloques, los turnos y los documentos cuelgan de los vehículos. Agregar una tabla acá es la
+ *  ÚNICA edición que pide una tabla nueva del módulo.
+ *
+ *  `chequeos` NO está en la lista y no puede estarlo: es append-only (§7.4) y su trigger rebota
+ *  el DELETE también para el dueño del esquema. Las suites que lo miran cuentan por diferencia.
+ *  Como `chequeos.inspectable_id` es polimórfico y no lleva FK, borrar vehículos no lo toca. */
+export const TABLAS_DE_OPERACION = [
+  "defectos",
+  "bloques_agenda",
+  "vehiculo_documentos",
+  "vehiculos",
+];
 
 /** Igual, para el plano de identidad: los códigos puente cuelgan de los usuarios. */
 export const TABLAS_DE_IDENTIDAD = [
@@ -35,12 +45,19 @@ export const TABLAS_DE_IDENTIDAD = [
  * decida si abre una propia o reusa la que ya tiene.
  */
 export async function limpiarFixture(sql) {
-  for (const tabla of [...TABLAS_DE_OPERACION, ...TABLAS_DE_IDENTIDAD]) {
-    await sql(`delete from ${tabla}`);
-  }
+  await limpiarOperacion(sql);
+  for (const tabla of TABLAS_DE_IDENTIDAD) await sql(`delete from ${tabla}`);
 }
 
 /** Solo la operación: para las suites que arman su identidad aparte y no quieren perderla. */
 export async function limpiarOperacion(sql) {
-  for (const tabla of TABLAS_DE_OPERACION) await sql(`delete from ${tabla}`);
+  await sql("delete from defectos");
+  await sql("delete from bloques_agenda");
+  // Los turnos con chequeos NO se borran: el chequeo es append-only y su FK los sostiene. Es
+  // la conducta correcta —esa jornada dejó un hecho firmado y la historia no se tira— y por eso
+  // acá se excluyen en vez de intentar el borrado y morir con un error de restricción.
+  await sql(
+    "delete from turnos t where not exists (select 1 from chequeos c where c.turno_id = t.id)",
+  );
+  for (const tabla of ["vehiculo_documentos", "vehiculos"]) await sql(`delete from ${tabla}`);
 }
