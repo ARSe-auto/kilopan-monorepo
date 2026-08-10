@@ -48,10 +48,33 @@ trap 'bash packages/metodo/scripts/lock.sh soltar "builder-'"$APP"'" '"$$"' >/de
 # pendiente, solo deja de ser el tapón.
 ATASCADOS="$LOG_DIR/acs-atascados.txt"
 
+# ACs BLOQUEADOS por una decisión que no es del arnés (10-ago-2026). Distinto de los atascados:
+# aquellos los anota el motor tras fallar; éstos los escribe una persona porque el AC NO SE PUEDE
+# construir hoy — falta una respuesta del dueño, o su oráculo es humano (§9.2, §10).
+#
+# Sin esta lista, el motor eligió la máquina de estados del encargo —un AC que espera una
+# respuesta del dueño— y quemó los 6 USD de su presupuesto intentando cerrarlo. Lo habría
+# reintentado en cada tanda, indefinidamente, gastando en cada vuelta. El archivo lleva la RAZÓN
+# de cada uno al lado, que es lo que permite saber qué lo desbloquea.
+#
+# Los ids NO se citan en este archivo a propósito: `verify-refs` escanea los `.sh` del método y
+# un id de una app citado desde acá se lee como cita huérfana en el gate de la OTRA app. Van en
+# el `.txt`, que no se escanea.
+BLOQUEADOS="packages/metodo/acs-bloqueados-${APP}.txt"
+
 esta_atascado () { # $1 = id del AC
   [ -n "${1:-}" ] || return 1
   [ -f "$ATASCADOS" ] || return 1
   grep -qxF "$1" "$ATASCADOS"
+}
+
+esta_bloqueado () { # $1 = id del AC
+  [ -n "${1:-}" ] || return 1
+  [ -f "$BLOQUEADOS" ] || return 1
+  # El id al principio de línea y seguido de espacio o fin de línea. El ancla importa: sin ella,
+  # un id de dos cifras bloquearía también al de tres que lo tiene como prefijo el día que
+  # exista. La razón, que va después del `#`, no estorba.
+  grep -qE "^${1}([[:space:]]|\$)" "$BLOQUEADOS"
 }
 
 siguiente_ac() {
@@ -62,6 +85,9 @@ siguiente_ac() {
       [ -n "$linea" ] || continue
       id=$(echo "$linea" | grep -oE '\[AC-[A-Z0-9-]+\]' | tr -d '[]')
       esta_atascado "$id" && continue
+      # Un AC bloqueado por una decisión del dueño no se intenta: gastaría el presupuesto entero
+      # de la iteración en algo que ninguna cantidad de trabajo cierra.
+      esta_bloqueado "$id" && continue
       echo "$linea"
       return 0
     done <<EOF

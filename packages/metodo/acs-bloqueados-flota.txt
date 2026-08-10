@@ -1,0 +1,27 @@
+# ACs que el motor NO debe elegir, y por qué.
+#
+# Distinto de `panel/acs-atascados.txt`: aquel lo escribe el motor solo, cuando un AC le falla N
+# veces y decide seguir con el siguiente. Éste lo escribe una PERSONA, y dice que el AC no se
+# puede construir hoy — no porque sea difícil, sino porque falta una decisión que no es del
+# arnés.
+#
+# POR QUÉ EXISTE. El 10-ago-2026 el motor eligió AC-FRUT-03 y quemó los 6 USD de su presupuesto
+# intentando cerrarlo. No podía: la máquina de estados del encargo espera una respuesta del
+# dueño, y el enum tiene a propósito solo los dos valores que el maestro fija literalmente.
+# Sin esta lista lo habría reintentado en cada tanda, indefinidamente, gastando en cada vuelta.
+#
+# Formato: el id del AC, y después de `#` la razón. La razón NO es decorativa: es lo que le
+# permite a quien lea esto saber qué desbloquea el AC. Un id sin razón es un AC que nadie va a
+# volver a mirar.
+#
+# QUITAR UNA LÍNEA ES UNA DECISIÓN. Se quita cuando la respuesta llegó, no cuando el AC parece
+# fácil.
+
+# ─── Bloqueados por una pregunta al dueño sin responder ─────────────────────────────
+AC-FRUT-03   # spec 03, pregunta 1: el maestro no enumera los estados intermedios ni los finales del encargo. El enum tiene los DOS que fija literalmente y el pgTAP lo asierta para que nadie los amplíe inventando.
+AC-FIDN-13   # spec 01, pregunta 4: passkey del admin. Sin la decisión, el mecanismo se inventaría.
+AC-FIDN-15   # spec 01, pregunta 8: export ARCO de la Ley 21.719 — qué se entrega y en qué forma.
+
+# ─── De oráculo HUMANO: no se cierran con código, JAMÁS bloquean al loop (§9.2, §10) ──
+AC-FVEH-16   # DONE-adopción: alta real cronometrada en menos de dos minutos y lectura del semáforo sin ayuda. Dueño nombrado: Alexis.
+AC-FRUT-16   # Camino dorado de custodia del piloto B en producción, 14 días con ≥95% de entregas con evidencia. Dueño nombrado: Alexis.
