@@ -31,6 +31,10 @@ export type Encargo = {
   bultos: number;
   fecha_servicio: string;
   estado: string;
+  /** Solo en la LISTA: el alta devuelve la fila recién escrita, sin resolver los catálogos. */
+  empresa?: string;
+  destino?: string;
+  asignado?: boolean;
 };
 
 export type AltaDeEncargo =
@@ -130,12 +134,34 @@ export async function crearEncargo(
   }
 }
 
-/** La bandeja del día: lo que el operador tiene para armar rutas (§5.2-F1). */
+/**
+ * La bandeja del día: lo que el operador tiene para armar rutas (§5.2-F1).
+ *
+ * Trae la razón social y el nombre del destino y no solo sus ids: la pantalla de armar rutas
+ * elige con estos nombres y sin ellos tendría que pedir los dos catálogos completos para
+ * traducir cada fila (§5.7 — un id crudo en pantalla no le dice nada a nadie).
+ *
+ * `asignado` dice si ese encargo ya está en una ruta. No los esconde: un encargo que desaparece
+ * de la bandeja sin que nadie lo borre se lee como un dato perdido, y el operador vuelve a
+ * cargarlo.
+ */
 export async function listarEncargos(pool: Pool, fecha: string | null): Promise<Encargo[]> {
   const { rows } = await pool.query<Encargo>(
-    `select ${COLUMNAS} from encargos
-      where fecha_servicio = coalesce($1::date, (now() at time zone 'America/Santiago')::date)
-      order by creado_en desc`,
+    // Calificado con `encargos.`: con los dos joins, `id` está en las tres tablas y sin el
+    // prefijo la consulta rebota por ambigüedad.
+    `select encargos.id::text as id,
+            encargos.empresa_cliente_id::text as empresa_cliente_id,
+            encargos.destino_id::text as destino_id, encargos.bultos,
+            to_char(encargos.fecha_servicio, 'YYYY-MM-DD') as fecha_servicio,
+            encargos.estado::text as estado,
+            em.razon_social as empresa, d.nombre as destino,
+            exists (select 1 from items i where i.encargo_id = encargos.id) as asignado
+       from encargos
+       join empresas_cliente em on em.id = encargos.empresa_cliente_id
+       join destinos d on d.id = encargos.destino_id
+      where encargos.fecha_servicio
+              = coalesce($1::date, (now() at time zone 'America/Santiago')::date)
+      order by encargos.creado_en desc`,
     [fecha],
   );
   return rows;

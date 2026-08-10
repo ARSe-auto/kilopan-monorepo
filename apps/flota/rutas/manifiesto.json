@@ -646,6 +646,18 @@
       }
     },
     {
+      "ruta": "/rutas",
+      "archivo": "src/app/rutas/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Armar rutas (§5.2-F1) [AC-FRUT-05]. No recibe identificador por URL: la bandeja y los camiones se eligen con chips y todo lo que hace pasa por /api/encargos, /api/vehiculos y /api/rutas, que tienen sus propios casos. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y pesa porque el HTML servido no puede traer ni la razón social de una empresa contratante del vecino ni el nombre de sus destinos antes de que haya sesión: son exactamente los datos que un competidor querría."
+      }
+    },
+    {
       "ruta": "/solicitar",
       "archivo": "src/app/solicitar/page.tsx",
       "metodos": [

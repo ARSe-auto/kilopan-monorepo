@@ -40,6 +40,9 @@ type Fila = {
 
 type Sugerencia = { empieza_en: string; termina_en: string };
 
+/** La ruta del día de ese vehículo, si tiene una armada y sin publicar [AC-FRUT-05]. */
+type Ruta = { id: string; vehiculo_id: string | null; publicada: boolean };
+
 const TEXTO_DEL_SEMAFORO: Record<Fila["semaforo"], string> = {
   alcanza: "Alcanza",
   no_alcanza: "No alcanza — recargá antes de salir",
@@ -52,14 +55,34 @@ export default function ListosParaSalir() {
   const [flota, setFlota] = useState<Fila[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sugerencias, setSugerencias] = useState<Record<string, Sugerencia | string>>({});
+  const [rutas, setRutas] = useState<Ruta[]>([]);
+  const [publicados, setPublicados] = useState<Record<string, string>>({});
 
   const cargar = useCallback(async () => {
-    const respuesta = await pedir("/api/tablero").catch(() => null);
+    const [respuesta, deRutas] = await Promise.all([
+      pedir("/api/tablero").catch(() => null),
+      pedir("/api/rutas").catch(() => null),
+    ]);
     if (!respuesta?.ok) return setError("No se pudo leer el tablero. Revisá tu conexión.");
     setFlota(((await respuesta.json()) as { flota: Fila[] }).flota);
+    // Si las rutas no cargan, el tablero sigue sirviendo: es del módulo 02 y su razón de ser
+    // —decir si el camión llega— no depende de que haya un día armado.
+    if (deRutas?.ok) setRutas(((await deRutas.json()) as { rutas: Ruta[] }).rutas);
     setError(null);
     return undefined;
   }, []);
+
+  async function publicar(rutaId: string, vehiculoId: string) {
+    const respuesta = await pedir(`/api/rutas/${rutaId}/publicar`, { method: "POST" }).catch(() => null);
+    const cuerpo = (await respuesta?.json().catch(() => ({}))) as { mensaje?: string; paradas?: number };
+    setPublicados((previos) => ({
+      ...previos,
+      [vehiculoId]: respuesta?.ok
+        ? `Día publicado: ${cuerpo.paradas} paradas.`
+        : (cuerpo.mensaje ?? "No se pudo publicar el día."),
+    }));
+    if (respuesta?.ok) await cargar();
+  }
 
   useEffect(() => {
     void cargar();
@@ -79,6 +102,12 @@ export default function ListosParaSalir() {
       [vehiculoId]: cuerpo.sugerencia ?? cuerpo.mensaje ?? "No se pudo calcular la sugerencia.",
     }));
   }
+
+  // La ruta sin publicar de cada vehículo. Solo las de HOY y solo las que todavía se pueden
+  // publicar: un día ya publicado no ofrece el botón, o el segundo clic parecería un error suyo.
+  const porVehiculo = new Map(
+    rutas.filter((r) => !r.publicada && r.vehiculo_id).map((r) => [r.vehiculo_id!, r]),
+  );
 
   return (
     <main data-testid="listos-para-salir">
@@ -127,6 +156,25 @@ export default function ListosParaSalir() {
                   : `Hueco libre: ${fechaEsCl(new Date(sugerencia.empieza_en))} de ${horaEsCl(
                       new Date(sugerencia.empieza_en),
                     )} a ${horaEsCl(new Date(sugerencia.termina_en))}.`}
+              </p>
+            )}
+
+            {/* «Publicar día» del §5.2-F1 [AC-FRUT-05]. El botón vive ACÁ y no en «Armar rutas»
+                porque el §5.2 pone este tablero entre las dos fases y lo llama obligatorio: con
+                el botón en la pantalla anterior, la fase que evita mandar a la calle un camión
+                que no llega se puede saltar sin darse cuenta. El módulo 02 provee la pantalla;
+                este módulo le integra el paso. */}
+            {porVehiculo.get(v.vehiculo_id) && (
+              <BotonPrimario
+                testid={`publicar-dia-${v.patente}`}
+                onClick={() => void publicar(porVehiculo.get(v.vehiculo_id)!.id, v.vehiculo_id)}
+              >
+                Publicar el día
+              </BotonPrimario>
+            )}
+            {publicados[v.vehiculo_id] && (
+              <p data-testid={`publicacion-${v.patente}`} style={pieDim}>
+                {publicados[v.vehiculo_id]}
               </p>
             )}
           </article>

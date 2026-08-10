@@ -28,10 +28,28 @@ const comoOperador = { Authorization: `Portador ${SECRETO}` };
 let encargos: { panaderia: string; pasteleria: string; segundoDePanaderia: string; otroDestino: string };
 let vehiculoId = "";
 
+/**
+ * Cada caso arranca con el día LIBRE.
+ *
+ * Desde AC-FRUT-05, publicar OCUPA la agenda del vehículo —un camión no hace dos días a la vez—
+ * y sin esto el primer caso que publica le rebota el resto de la suite con `agenda_solapada`. El
+ * fixture de la bandeja no se toca: los encargos son los mismos para todos.
+ */
+test.beforeEach(async () => {
+  await con(BD_A, async (c: Conexion) => {
+    await c.sql("delete from rutas");
+    await c.sql("delete from bloques_agenda");
+  });
+});
+
 test.beforeAll(async () => {
   await con(BD_A, async (c: Conexion) => {
     await limpiarBandeja(c.sql);
     await limpiarFixture(c.sql);
+    // Los catálogos del §4.9 no son de la bandeja y `limpiarBandeja` no los toca: se limpian
+    // acá para que la suite pueda volver a sembrarlos sin chocar con su UNIQUE por código.
+    await c.sql("delete from cargo_type_requirement");
+    await c.sql("delete from cargo_type");
 
     const [p] = await c.sql<{ id: string }>(
       "insert into personas (rut, nombre) values ($1, 'Quien planifica') returning id::text as id",

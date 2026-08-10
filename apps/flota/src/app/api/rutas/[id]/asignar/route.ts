@@ -35,7 +35,12 @@ export async function POST(peticion: Request, contexto: { params: Promise<{ id: 
     );
   }
 
-  const asignacion = await asignarEncargos(g.acto.pool, g.acto.sesion, id, encargos);
+  // La ventana comprometida es OPCIONAL: donde no la haya, al publicar no se congela ninguna
+  // promesa — que es lo correcto, porque no se prometió nada (§4.5).
+  const v = cuerpo.ventana as { desde?: string; hasta?: string } | undefined;
+  const ventana = v?.desde && v?.hasta ? { desde: String(v.desde), hasta: String(v.hasta) } : null;
+
+  const asignacion = await asignarEncargos(g.acto.pool, g.acto.sesion, id, encargos, ventana);
 
   if (asignacion.tipo === "ruta_no_existe") return noExiste();
   if (asignacion.tipo === "encargo_no_existe") {

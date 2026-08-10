@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from "pg";
 import { enActo, registrarEvento, EVENTOS_OPERACION } from "./gobierno.ts";
+import { entitlementVigente, FEATURES } from "./config.ts";
 import type { Sesion } from "./sesion.ts";
 
 // Armado de rutas: agrupación multi-empresa y derivación de requisitos [AC-FRUT-04]
@@ -117,11 +118,20 @@ export type Asignacion =
   | { tipo: "ruta_ya_publicada" }
   | { tipo: "encargo_no_existe"; encargoId: string };
 
+/**
+ * Asigna encargos a la ruta, agrupando por destino.
+ *
+ * `ventana` es OPCIONAL y se aplica a las paradas que esta asignación toca: es cómo el operador
+ * dice «esto va entre las 6 y las 9». Opcional a propósito — el camino feliz del §5.3 son quince
+ * clics para el día entero y comprometerse con un horario no es obligatorio; lo que sí es cierto
+ * es que donde no hubo ventana, al publicar no se congela ninguna promesa (§4.5).
+ */
 export async function asignarEncargos(
   pool: Pool,
   sesion: Sesion,
   rutaId: string,
   encargoIds: string[],
+  ventana?: { desde: string; hasta: string } | null,
 ): Promise<Asignacion> {
   return enActo(pool, async (c) => {
     const { rows: ruta } = await c.query<{ publicada: boolean }>(
@@ -145,6 +155,13 @@ export async function asignarEncargos(
       if (!encargo[0]) return { tipo: "encargo_no_existe", encargoId };
 
       const paradaId = await paradaDeEntrega(c, rutaId, encargo[0].destino_id, () => paradasCreadas++);
+
+      if (ventana) {
+        await c.query(
+          "update paradas set ventana = tstzrange($2::timestamptz, $3::timestamptz) where id = $1",
+          [paradaId, ventana.desde, ventana.hasta],
+        );
+      }
 
       // `empresa_cliente_id` va NULL a propósito: lo estampa el trigger desde el encargo
       // (0037), y el NOT NULL de la columna se evalúa después del BEFORE INSERT. Que este
@@ -244,45 +261,137 @@ export async function verRuta(
   };
 }
 
+// ─── Publicar el día: el momento en que la planificación se compromete [AC-FRUT-05] ───
+//
+// Hasta este clic todo era borrador. Desde acá, tres cosas dejan de moverse: la versión de la
+// ruta, la promesa que se le hizo a cada cliente y los requisitos de evidencia de cada parada.
+//
+// ─── LOS TRES REBOTES, Y POR QUÉ VAN JUSTO ACÁ ────────────────────────────────────
+//
+// El §5.2 F1 los pide: solape de agenda, documento vencido con feature ON y certificación
+// vencida con feature ON, todos 422 con 0 filas. Van al PUBLICAR y no al armar porque armar es
+// pensar en voz alta —un borrador con un camión que hoy no puede circular es una idea, no un
+// daño— y publicar es lo que pone al chofer en la calle a las cinco de la mañana.
+//
+// ─── EL SOLAPE NO SE BUSCA: SE INTENTA OCUPAR ────────────────────────────────────
+//
+// Publicar ESCRIBE el bloque `ruta` en la agenda del vehículo, y el EXCLUDE de `bloques_agenda`
+// (0021) rebota el choque con `23P01`. Buscarlo con un `select` previo habría sido más obvio de
+// leer y lo gana cualquier par de publicaciones simultáneas: dos operadores que publican a la
+// vez encontrarían la agenda libre los dos. Acá el que llega segundo rebota, siempre.
+//
+// La ventana que se ocupa sale de las ventanas comprometidas de las paradas. Si NINGUNA tiene
+// ventana, se ocupa el día entero de Chile: sin horarios no hay forma de saber que dos rutas del
+// mismo vehículo caben en el mismo día, y la respuesta conservadora es la que no manda un camión
+// a dos lados a la vez. Es además el rebote que hace que publicar dos días para el mismo camión
+// se note.
+//
+// ─── LA PROMESA SE CONGELA DESDE LA VENTANA, Y DONDE NO HUBO VENTANA QUEDA VACÍA ──
+//
+// `promesa_original` es lo que se le dijo al cliente (§4.5). Se copia de `ventana` en este
+// instante y no vuelve a moverse. Donde el operador no comprometió ventana, la promesa queda
+// NULL: inventarle una —el día entero, la hora de publicación— sería fabricar un compromiso que
+// nadie hizo, y después medir el cumplimiento contra él.
+
 export type Publicacion =
-  | { tipo: "ok"; paradas: number; requisitos: number }
+  | { tipo: "ok"; paradas: number; requisitos: number; promesas: number }
   | { tipo: "ruta_no_existe" }
   | { tipo: "ruta_ya_publicada" }
-  | { tipo: "ruta_vacia" };
+  | { tipo: "ruta_vacia" }
+  | { tipo: "ruta_sin_vehiculo" }
+  | { tipo: "documento_vencido" }
+  | { tipo: "certificacion_vencida" }
+  | { tipo: "agenda_solapada" };
 
-export async function publicarRuta(pool: Pool, sesion: Sesion, rutaId: string): Promise<Publicacion> {
-  return enActo(pool, async (c) => {
-    const { rows: ruta } = await c.query<{ publicada: boolean }>(
-      "select (publicada_en is not null) as publicada from rutas where id = $1",
-      [rutaId],
-    );
-    if (!ruta[0]) return { tipo: "ruta_no_existe" };
-    if (ruta[0].publicada) return { tipo: "ruta_ya_publicada" };
+const EXCLUSION_VIOLATION = "23P01";
 
-    const { rows: paradas } = await c.query<{ id: string }>(
-      "select id::text as id from paradas where ruta_id = $1 order by orden",
-      [rutaId],
-    );
-    // Publicar un día vacío manda al chofer a la calle sin nada que hacer, y es PLANIFICACIÓN:
-    // acá se rebota (§4.2).
-    if (paradas.length === 0) return { tipo: "ruta_vacia" };
+export async function publicarRuta(
+  pool: Pool,
+  sesion: Sesion,
+  slug: string,
+  rutaId: string,
+): Promise<Publicacion> {
+  try {
+    return await enActo(pool, async (c) => {
+      const { rows: ruta } = await c.query<{ publicada: boolean; vehiculo_id: string | null }>(
+        `select (publicada_en is not null) as publicada, vehiculo_id::text as vehiculo_id
+           from rutas where id = $1`,
+        [rutaId],
+      );
+      if (!ruta[0]) return { tipo: "ruta_no_existe" };
+      if (ruta[0].publicada) return { tipo: "ruta_ya_publicada" };
+      // Un día sin camión no lo hace nadie. Rebota antes que los demás porque los tres rebotes
+      // que siguen son SOBRE el vehículo.
+      if (!ruta[0].vehiculo_id) return { tipo: "ruta_sin_vehiculo" };
+      const vehiculoId = ruta[0].vehiculo_id;
 
-    let requisitos = 0;
-    for (const parada of paradas) requisitos += await derivarRequisitos(c, parada.id);
+      const { rows: paradas } = await c.query<{ id: string }>(
+        "select id::text as id from paradas where ruta_id = $1 order by orden",
+        [rutaId],
+      );
+      // Publicar un día vacío manda al chofer a la calle sin nada que hacer, y es
+      // PLANIFICACIÓN: acá se rebota (§4.2).
+      if (paradas.length === 0) return { tipo: "ruta_vacia" };
 
-    await c.query(
-      "update rutas set publicada_en = now(), version = version + 1 where id = $1",
-      [rutaId],
-    );
-    await registrarEvento(c, {
-      codigo: EVENTOS_OPERACION.ruta_publicada,
-      objetoTabla: "rutas",
-      objetoId: rutaId,
-      sesion,
-      payload: { paradas: paradas.length, requisitos },
+      // Los dos rebotes por feature, con la misma regla que la agenda del módulo 02 (§4.9):
+      // apagados no rebotan nada, y un entitlement AUSENTE no es «apagado» (`estadoDeFeature`).
+      if (await entitlementVigente(c, slug, FEATURES.documentos_vencidos_bloquean)) {
+        const { rows } = await c.query<{ vencido: boolean }>(
+          "select tiene_documentos_vencidos($1) as vencido",
+          [vehiculoId],
+        );
+        if (rows[0]!.vencido) return { tipo: "documento_vencido" };
+      }
+      if (await entitlementVigente(c, slug, FEATURES.certificaciones_vencidas_bloquean)) {
+        const { rows } = await c.query<{ vencida: boolean }>(
+          "select tiene_certificaciones_vencidas($1) as vencida",
+          [vehiculoId],
+        );
+        if (rows[0]!.vencida) return { tipo: "certificacion_vencida" };
+      }
+
+      // Ocupar la agenda: el EXCLUDE decide, no un `select` que dos publicaciones simultáneas
+      // ganarían las dos.
+      await c.query(
+        `insert into bloques_agenda (vehiculo_id, tipo, empieza_en, termina_en, nota)
+         select $1, 'ruta',
+                coalesce(min(lower(p.ventana)), (r.fecha_servicio + time '00:00')
+                  at time zone 'America/Santiago'),
+                coalesce(max(upper(p.ventana)), (r.fecha_servicio + time '00:00')
+                  at time zone 'America/Santiago' + interval '1 day'),
+                'Ruta publicada'
+           from rutas r join paradas p on p.ruta_id = r.id
+          where r.id = $2
+          group by r.fecha_servicio`,
+        [vehiculoId, rutaId],
+      );
+
+      let requisitos = 0;
+      for (const parada of paradas) requisitos += await derivarRequisitos(c, parada.id);
+
+      // La promesa se congela desde la ventana comprometida, y solo donde la hubo.
+      const { rowCount: promesas } = await c.query(
+        "update paradas set promesa_original = ventana where ruta_id = $1 and ventana is not null",
+        [rutaId],
+      );
+
+      await c.query(
+        "update rutas set publicada_en = now(), version = version + 1 where id = $1",
+        [rutaId],
+      );
+      await registrarEvento(c, {
+        codigo: EVENTOS_OPERACION.ruta_publicada,
+        objetoTabla: "rutas",
+        objetoId: rutaId,
+        sesion,
+        payload: { paradas: paradas.length, requisitos, promesas: promesas ?? 0 },
+      });
+      return { tipo: "ok", paradas: paradas.length, requisitos, promesas: promesas ?? 0 };
     });
-    return { tipo: "ok", paradas: paradas.length, requisitos };
-  });
+  } catch (error) {
+    if ((error as { code?: string }).code === EXCLUSION_VIOLATION) return { tipo: "agenda_solapada" };
+    throw error;
+  }
 }
 
 /**
