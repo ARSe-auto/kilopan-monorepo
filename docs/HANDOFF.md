@@ -1,4 +1,4 @@
-# HANDOFF — Hito (c) cerrado (21 de 22) y el (d) arrancado (1 de 22)
+# HANDOFF — Hito (c) cerrado (21 de 22) y el (d) en 2 de 22
 
 **Traspaso de la sesión del 09-ago-2026 (20:14 →), rama `flota/specs-e1` en
 `~/kilopan-monorepo-flota`, Opus 5 esfuerzo alto.** Árbol limpio salvo el churn de artefacto de
@@ -15,8 +15,8 @@ saltado declarado** (158 casos e2e).
 | | Antes | Ahora |
 |---|---|---|
 | Módulo 02 (vehículos/energía/agenda) | 0 de 22 | **21 de 22** |
-| ACs cerrados de la plataforma | 46 de 197 | **68 de 197** |
-| Rutas que sirve `apps/flota` | 20 | **47** |
+| ACs cerrados de la plataforma | 46 de 197 | **69 de 197** |
+| Rutas que sirve `apps/flota` | 20 | **48** |
 | Migraciones de tenant | 15 | **36** (última: `0036_encargos`) |
 | Criterios KiloRuta con test | 11 | **23** |
 
@@ -92,13 +92,17 @@ por contrato JAMÁS bloquea al loop (§9.2/§10). No se cierra con código.
 
 ### 2. El hito (d) ya arrancó: 1 de 22 (módulo 03)
 
-**AC-FRUT-01 cerrado**: `empresas_cliente`, `destinos`, `encargos` y la bandeja en 4 acciones
-(baseline fijado). Lo que sigue en ese módulo, en el orden que menos depende de respuestas:
-**AC-FRUT-02** (importación CSV — reusa el `client_uuid` del alta, ya idempotente),
-**AC-FRUT-06** (rutas maestras), **AC-FRUT-04/05** (agrupación multi-empresa y publicar el día
-en ≤15 clics, que INCLUYE el tablero del módulo 02 en el conteo). **AC-FRUT-03** (máquina de
-estados) espera la **pregunta 1 de la spec 03**: el enum de `encargos.estado` tiene HOY solo
-`solicitado` y `aceptado`, los dos que el maestro fija literalmente, y el pgTAP lo asierta.
+**AC-FRUT-01 y AC-FRUT-02 cerrados**: `empresas_cliente`, `destinos`, `encargos`, la bandeja
+en 4 acciones (baseline fijado) y la importación CSV con lector propio
+(`apps/flota/src/dominio/csv.ts`) e idempotencia derivada del CONTENIDO de cada fila — no por
+lote ni al azar, o el reintento duplicaría todo.
+
+Lo que sigue, en el orden que menos depende de respuestas: **AC-FRUT-06** (rutas maestras),
+**AC-FRUT-04/05** (agrupación multi-empresa y publicar el día en ≤15 clics, que INCLUYE en el
+conteo el tablero del módulo 02 — ya construido, `/listos`), **AC-FRUT-21** (devoluciones).
+**AC-FRUT-03** (máquina de estados) espera la **pregunta 1 de la spec 03**: el enum de
+`encargos.estado` tiene HOY solo `solicitado` y `aceptado`, los dos que el maestro fija
+literalmente, y el pgTAP lo asierta para que nadie los amplíe sin respuesta.
 
 ### 2b. Contexto del hito (d)
 
