@@ -43,6 +43,8 @@ const TIPO = "Furgón eléctrico";
 
 test.beforeAll(async () => {
   await con(BD_A, async (c: Conexion) => {
+    // El orden lo dictan las FK: los turnos apuntan a los vehículos.
+    await c.sql("delete from turnos");
     await c.sql("delete from vehiculos");
     await c.sql("delete from solicitudes_acceso");
     await c.sql("delete from invitaciones");
@@ -122,6 +124,18 @@ async function sesionDe(page: Page, secreto: string) {
   }, secreto);
 }
 
+/** Los dos rastros append-only que un acto sobre un vehículo deja. Se leen ANTES y DESPUÉS:
+ *  `eventos` y `audit_trail` no se pueden vaciar (§7.4) y el fixture de cada suite anterior ya
+ *  escribió en ellos, así que la única medición honesta es la diferencia. */
+const rastroDeVehiculos = () =>
+  con(BD_A, (c: Conexion) =>
+    c.sql<{ eventos: string; auditoria: string }>(
+      `select (select count(*)::text from eventos e join evento_tipo t on t.id = e.tipo_id
+                where t.codigo = 'gobierno.vehiculo_creado') as eventos,
+              (select count(*)::text from audit_trail where tabla = 'vehiculos') as auditoria`,
+    ),
+  ).then((r) => r[0]!);
+
 const filasDeVehiculos = () =>
   con(BD_A, (c: Conexion) =>
     c.sql<{ n: string }>("select count(*)::text as n from vehiculos"),
@@ -131,6 +145,7 @@ test("[AC-FVEH-01] con patente + tipo el vehículo queda operable, y el camino f
   page,
 }) => {
   await sesionDe(page, SECRETO_DUENA);
+  const rastroAntes = await rastroDeVehiculos();
   const c = contador(page);
   await page.goto("/vehiculos");
   await expect(page.getByTestId("vehiculos")).toBeVisible();
@@ -176,15 +191,12 @@ test("[AC-FVEH-01] con patente + tipo el vehículo queda operable, y el camino f
   }
 
   // ── Y el acto quedó auditado: es alta de vehículo, o sea gobierno del dueño (§5.4) ──
-  const [rastro] = await con(BD_A, (c2: Conexion) =>
-    c2.sql<{ eventos: string; auditoria: string }>(
-      `select (select count(*)::text from eventos e join evento_tipo t on t.id = e.tipo_id
-                where t.codigo = 'gobierno.vehiculo_creado') as eventos,
-              (select count(*)::text from audit_trail where tabla = 'vehiculos') as auditoria`,
-    ),
-  );
-  expect(rastro!.eventos, "el alta no dejó su evento de gobierno").toBe("1");
-  expect(rastro!.auditoria, "el alta no dejó su fila de audit_trail").toBe("1");
+  // Por DIFERENCIA y no por total: `eventos` y `audit_trail` son append-only (§7.4), así que
+  // acumulan lo que dejaron las suites anteriores —incluidos los borrados de sus fixtures— y
+  // un total esperado se rompe el día que alguien agrega una suite antes que esta.
+  const rastro = await rastroDeVehiculos();
+  expect(Number(rastro.eventos) - Number(rastroAntes.eventos), "el alta no dejó su evento de gobierno").toBe(1);
+  expect(Number(rastro.auditoria) - Number(rastroAntes.auditoria), "el alta no dejó su fila de audit_trail").toBe(1);
 
   // ── El baseline del §5.3, que a partir de acá es un techo ──────────────────────────
   const { baseline, acciones, primeraVez } = registrarBaseline({

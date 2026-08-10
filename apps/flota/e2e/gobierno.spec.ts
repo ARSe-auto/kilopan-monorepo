@@ -159,6 +159,7 @@ test.beforeAll(async () => {
 
   // Un vehículo, porque las rutas de gobierno de vehículos llevan parámetro [AC-FVEH-02]: el
   // barrido de más abajo necesita un id REAL de esta base para que el 403 signifique algo.
+  await sql("delete from turnos");
   await sql("delete from vehiculos");
   const [v] = await sql<{ id: string }>(
     "insert into vehiculos (patente, tipo) values ('GOB1234', 'furgón') returning id::text as id",

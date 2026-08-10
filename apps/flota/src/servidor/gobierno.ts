@@ -68,7 +68,18 @@ export const EVENTOS = {
   vehiculo_reactivado: "gobierno.vehiculo_reactivado",
 } as const;
 
-export type CodigoDeEvento = (typeof EVENTOS)[keyof typeof EVENTOS];
+/** Los eventos del TERRENO. No llevan el prefijo `gobierno.` y no es un detalle: la auditoría
+ *  de accesos del §3.E1.15 filtra por ese prefijo, y un turno por vehículo y por día ahogaría
+ *  los actos del dueño bajo el ruido de la operación. */
+export const EVENTOS_OPERACION = {
+  turno_abierto: "turno.abierto",
+} as const;
+
+/** Todo código que `registrarEvento` acepta tiene que estar sembrado en `evento_tipo`: si los
+ *  dos se separan, el `insert … select` no encuentra el tipo y el acto entero se deshace. */
+export type CodigoDeEvento =
+  | (typeof EVENTOS)[keyof typeof EVENTOS]
+  | (typeof EVENTOS_OPERACION)[keyof typeof EVENTOS_OPERACION];
 
 /** El rol que gobierna. Uno solo, y sale del canónico §0 en vez de escribirse a mano. */
 export const ROL_DE_GOBIERNO: Rol = "admin_tenant";

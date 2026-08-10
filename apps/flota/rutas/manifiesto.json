@@ -263,6 +263,19 @@
       }
     },
     {
+      "ruta": "/api/turnos",
+      "archivo": "src/app/api/turnos/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Apertura y listado del vehículo-día [AC-FVEH-06]. Sin parámetro de ruta: el vehículo se nombra en el cuerpo y el tenant sale del ruteo. El caso genérico va sin credencial y sin payload, así que la guardia contesta 404 pelado antes de tocar la base — y como el POST MUTA, enciende el comparador de huella de la BD de B, que es lo que prueba que no se pudo abrir una jornada en la flota del vecino. Un turno ajeno no es solo una fuga: le suma al vecino un vehículo-día que nadie trabajó, y el denominador de su EEVD (§2) queda mintiendo. El cruce CON payload —un uuid de vehículo de B— lo prueba la suite del módulo, que sabe cómo se ve uno."
+      }
+    },
+    {
       "ruta": "/api/vehiculos",
       "archivo": "src/app/api/vehiculos/route.ts",
       "metodos": [
