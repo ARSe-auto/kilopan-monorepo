@@ -500,3 +500,63 @@ test("[AC-FVEH-14] la certificación vencida rebota SOLO con su feature, y con m
 
   await featureDeCertificaciones(false);
 });
+
+// ─── Un cambio de `parametros` SIN deploy no toca el turno abierto [AC-FVEH-15] ──────
+//
+// La otra mitad del AC de telemetría: el §4.4 permite mover `factor_consumo`, `reserva_pct` y
+// los umbrales por tenant sin desplegar nada, y el §5.5 dice qué pasa entonces — el turno
+// abierto termina con su config congelada y el cambio aplica al siguiente. Es la misma regla
+// que AC-FVEH-18 verificó para los toggles; acá se verifica para los PARÁMETROS, que es donde
+// el dueño la va a usar de verdad para calibrar la flota tras el piloto.
+
+test("[AC-FVEH-15] mover un parámetro sin deploy no altera el turno abierto, y sí el siguiente", async ({
+  request,
+}) => {
+  const [v] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ id: string }>(
+      "insert into vehiculos (patente, tipo) values ('PRM0001', 'furgón') returning id::text as id",
+    ),
+  );
+  const abierto = await request.post("/api/turnos", { headers: comoDuena, data: { vehiculo_id: v!.id } });
+  expect(abierto.status()).toBe(201);
+  const turno = (await abierto.json()).turno as { id: string; config_version_id: string };
+
+  // El dueño calibra la flota: cambia el factor de consumo con el turno YA abierto. Sin deploy,
+  // sin reinicio, sin tocar código — que es exactamente lo que el §4.4 promete.
+  await con(BD_A, (c: Conexion) =>
+    c.sql(
+      `insert into parametros (factor_consumo) values (0.7)
+       on conflict (unica) do update set factor_consumo = excluded.factor_consumo`,
+    ),
+  );
+  await sellarVersion(await tenantEnControl());
+
+  const [sigueIgual] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ id: string }>("select config_version_id::text as id from turnos where id = $1", [turno.id]),
+  );
+  expect(sigueIgual!.id, "el turno abierto cambió de versión al mover un parámetro").toBe(
+    turno.config_version_id,
+  );
+
+  // Y la versión del turno SIGUIENTE ya no es la misma: el cambio aplicó, sin desplegar nada.
+  await con(BD_A, (c: Conexion) =>
+    c.sql("update turnos set estado = 'cerrado', cerrado_en = now() where id = $1", [turno.id]),
+  );
+  const siguiente = await request.post("/api/turnos", { headers: comoDuena, data: { vehiculo_id: v!.id } });
+  expect(siguiente.status()).toBe(201);
+  const nuevo = (await siguiente.json()).turno as { config_version_id: string };
+  expect(nuevo.config_version_id, "el turno siguiente no tomó la config nueva").not.toBe(
+    turno.config_version_id,
+  );
+
+  // Y la config nueva TRAE el parámetro cambiado: sin esto, «tomó otra versión» podría ser una
+  // versión sellada por cualquier otro motivo.
+  const [snapshot] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ factor: string | null }>(
+      `select (snapshot -> 'parametros' -> 0 ->> 'factor_consumo') as factor
+         from config_version where id = $1`,
+      [nuevo.config_version_id],
+    ),
+  );
+  expect(Number(snapshot!.factor), "el snapshot nuevo no trae el parámetro cambiado").toBe(0.7);
+});
