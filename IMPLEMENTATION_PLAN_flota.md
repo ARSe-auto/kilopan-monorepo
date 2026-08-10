@@ -146,7 +146,7 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 
 ## Hito (d) — Encargos → paradas → ítems, rutas manuales y maestras, cadena de custodia multi-empresa
 
-- [ ] (P1) Alta de encargo con empresa + destino + bultos en ≤4 acciones; bultos fuera de 1–500 o attrs inválido ⇒ 422 y 0 filas — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-01]
+- [x] (P1) Alta de encargo con empresa + destino + bultos en ≤4 acciones; bultos fuera de 1–500 o attrs inválido ⇒ 422 y 0 filas — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-01]
 - [ ] (P2) Importación CSV de la bandeja F1: replay doble ⇒ 1 fila; filas inválidas 422 tipado y 0 filas de las inválidas (granularidad pendiente pregunta 6) — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-02]
 - [ ] (P1) Máquina de estados del encargo: finales solo-por-trigger; `solicitado` editable por su creador solo hasta aceptación; reintento = encargo nuevo con `reintento_de` — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-03]
 - [ ] (P1) Agrupación multi-empresa: N encargos de ≥2 empresas al mismo destino ⇒ UNA parada con desglose por empresa; stop_requirements derivados al PUBLICAR (momento único) — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-04]

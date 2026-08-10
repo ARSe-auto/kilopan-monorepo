@@ -93,6 +93,43 @@
       }
     },
     {
+      "ruta": "/api/destinos",
+      "archivo": "src/app/api/destinos/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Los destinos del tenant [AC-FRUT-01]. Solo lectura, sin parámetro. Expone a dónde reparte el vecino —sus locales, sus bodegas— que junto con la cartera de clientes es su operación completa. Cruce genérico: ni un nombre de destino de B en la respuesta de A."
+      }
+    },
+    {
+      "ruta": "/api/empresas",
+      "archivo": "src/app/api/empresas/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Las empresas contratantes del tenant [AC-FRUT-01]. Solo lectura, sin parámetro. Es la CARTERA DE CLIENTES de una empresa de transporte en una respuesta: el cruce genérico verifica que no salga por el host de A. El alta vive en el módulo de tarifas y portal (hito f), donde está su contrato."
+      }
+    },
+    {
+      "ruta": "/api/encargos",
+      "archivo": "src/app/api/encargos/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Bandeja de encargos (F1) [AC-FRUT-01]. La empresa y el destino viajan en el cuerpo y el tenant sale del ruteo, así que no hay parámetro de ruta. El GET expone la bandeja del día del vecino —qué empresas le contratan, a qué destinos y con cuántos bultos—, que es su cartera de clientes en una respuesta; el POST MUTA y enciende el comparador de huella. El cruce CON uuids de empresa y destino de B lo prueba la suite del módulo, que sabe cómo se ven."
+      }
+    },
+    {
       "ruta": "/api/energia",
       "archivo": "src/app/api/energia/route.ts",
       "metodos": [
@@ -491,6 +528,18 @@
       "cruce": {
         "tipo": "sin_recurso",
         "nota": "Listado de la flota, la lectura que el §5.4 le reserva al operador para asignar [AC-FVEH-01]. Sin parámetro: devuelve siempre los vehículos del tenant que eligió el ruteo. El cruce genérico verifica que la flota de B no se pueda enumerar desde el host de A ni inyectando su identidad por cabecera — y acá el tamaño de la flota ajena ya es información, así que el contrato es 404 sin sesión y ni una patente de B en la respuesta."
+      }
+    },
+    {
+      "ruta": "/bandeja",
+      "archivo": "src/app/bandeja/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de la bandeja de encargos (F1) [AC-FRUT-01]. No recibe identificador por URL: empresa y destino se eligen con chips de las propias listas del tenant, y el alta pasa por /api/encargos, que tiene su caso. Cruce genérico — identidad de B por los canales falsificables."
       }
     },
     {

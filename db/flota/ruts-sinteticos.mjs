@@ -27,6 +27,7 @@ export const VALIDOS = {
   "5.126.663-3": "cuerpo de siete dígitos, para el caso del primer grupo de una sola cifra",
   "7.654.321-6": "dígitos descendentes; segundo operario donde hace falta más de una persona",
   "9.999.999-3": "el máximo de siete dígitos; comparte dígito verificador con 5.126.663-3, que es lo que prueba la máscara",
+  "76.111.111-6": "la EMPRESA contratante de los fixtures del módulo 03 (AC-FRUT-01): rango 76.xxx de persona jurídica, que es el que usan las empresas en Chile y ninguna persona natural",
 };
 
 /**
