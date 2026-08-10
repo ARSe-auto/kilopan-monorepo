@@ -122,6 +122,14 @@ async function sembrarIdentidadDelVecino(slug) {
       vehiculo.id,
       config.id,
     ]);
+    // Y una RUTA armada del vecino [AC-FRUT-04]: las tres rutas de `/api/rutas/[id]` son de
+    // tipo recurso y el caso del centinela 2 saca de acá el id REAL con el que A intenta ver,
+    // cargar y PUBLICAR el día de B. Publicárselo es la mutación más cara del módulo: le
+    // congela la promesa al cliente y le cierra la única ventana en que el día se corregía.
+    await sql(
+      "insert into rutas (nombre, vehiculo_id) values ('Ruta de la madrugada del vecino', $1)",
+      [vehiculo.id],
+    );
   });
 }
 

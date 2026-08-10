@@ -1,0 +1,318 @@
+import type { Pool, PoolClient } from "pg";
+import { enActo, registrarEvento, EVENTOS_OPERACION } from "./gobierno.ts";
+import type { Sesion } from "./sesion.ts";
+
+// Armado de rutas: agrupación multi-empresa y derivación de requisitos [AC-FRUT-04]
+// — §3.E1.5, §4.5, §4.6, §4.9, §5.2 F1.
+//
+// ─── DOS ENCARGOS AL MISMO DESTINO SON UNA PARADA, NO DOS ──────────────────────────
+//
+// El §3.E1.5 lo pide para el caso que es la razón de ser del piloto B: tres panaderías
+// distintas mandan pan a la misma sucursal, y el camión tiene que parar UNA vez. Dos paradas
+// serían dos veces la misma cuadra, dos firmas al mismo destinatario y una ecuación de cierre
+// que hay que sumar a mano.
+//
+// Lo que NO se puede perder al agrupar es de quién es cada bulto: cuando la sucursal reciba, el
+// sub-manifiesto del andén es POR EMPRESA (§5.2 F2) y la ecuación de cierre también (§3.E1.6).
+// Por eso la agrupación ocurre en `paradas` y el desglose queda en `items`, uno por encargo,
+// cada uno con su empresa. Agrupar sumando los bultos en un solo ítem habría sido más corto y
+// habría borrado exactamente el dato que el módulo entero necesita.
+//
+// El invariante «una sola entrega por destino» NO lo sostiene este archivo: lo sostiene el
+// índice único parcial de la 0037. Acá se busca la parada existente antes de crear otra porque
+// es la conducta correcta; si algún día este código se equivocara, la BD lo rebota igual.
+//
+// ─── PUBLICAR ES EL MOMENTO ÚNICO DE DERIVACIÓN ────────────────────────────────────
+//
+// El §4.6 dice que los `stop_requirement` se derivan del cargo_type; la sección 1 de la spec
+// fija ACÁ el momento, que el maestro no fijaba: al publicar el día, junto con los demás
+// snapshots. Derivarlos al asignar significaría que un encargo agregado a las seis de la mañana
+// cambia lo que el operario ya tenía en pantalla; derivarlos al llegar a la parada significaría
+// que dos choferes de la misma ruta ven requisitos distintos según cuándo abrieron la app.
+//
+// La derivación es una COPIA, no una traducción: `cargo_type_requirement` tiene el mismo shape
+// que `stop_requirement` a propósito (0037). Cero condicionales por vertical, que es lo que el
+// §4.6 exige con todas las letras.
+//
+// Una parada agrupada puede tener varios tipos de carga, y entonces sus requisitos son la UNIÓN
+// deduplicada por tipo de evidencia: pedir dos firmas porque dos empresas mandaron cosas
+// distintas es pedirle al operario que firme dos veces lo mismo, y en el andén eso se resuelve
+// firmando cualquier cosa. Si uno de los dos lo marca obligatorio, manda el obligatorio.
+
+export type Ruta = {
+  id: string;
+  nombre: string | null;
+  vehiculo_id: string | null;
+  fecha_servicio: string;
+  origen: string;
+  version: number;
+  publicada: boolean;
+};
+
+export type Parada = {
+  id: string;
+  tipo: string;
+  orden: number;
+  destino_id: string | null;
+  destino: string | null;
+};
+
+export type ItemDeParada = {
+  id: string;
+  encargo_id: string;
+  empresa_cliente_id: string;
+  empresa: string;
+  qty_planificada: number;
+};
+
+const COLUMNAS_DE_RUTA = `id::text as id, nombre, vehiculo_id::text as vehiculo_id,
+   to_char(fecha_servicio, 'YYYY-MM-DD') as fecha_servicio, origen::text as origen, version,
+   (publicada_en is not null) as publicada`;
+
+export async function crearRuta(
+  pool: Pool,
+  sesion: Sesion,
+  datos: { nombre: string | null; vehiculoId: string | null; fechaServicio: string | null; clientUuid: string | null },
+): Promise<Ruta> {
+  return enActo(pool, async (c) => {
+    const { rows } = await c.query<Ruta>(
+      `insert into rutas (nombre, vehiculo_id, fecha_servicio, client_uuid)
+       values ($1, $2, coalesce($3::date, (now() at time zone 'America/Santiago')::date), $4)
+         on conflict (tenant_id, client_uuid) do nothing
+       returning ${COLUMNAS_DE_RUTA}`,
+      [datos.nombre, datos.vehiculoId, datos.fechaServicio, datos.clientUuid],
+    );
+    if (!rows[0]) {
+      const { rows: previa } = await c.query<Ruta>(
+        `select ${COLUMNAS_DE_RUTA} from rutas where client_uuid = $1`,
+        [datos.clientUuid],
+      );
+      return previa[0]!;
+    }
+    await registrarEvento(c, {
+      codigo: EVENTOS_OPERACION.ruta_creada,
+      objetoTabla: "rutas",
+      objetoId: rows[0].id,
+      sesion,
+      payload: { vehiculo_id: datos.vehiculoId },
+    });
+    return rows[0];
+  });
+}
+
+export async function listarRutas(pool: Pool, fecha: string | null): Promise<Ruta[]> {
+  const { rows } = await pool.query<Ruta>(
+    `select ${COLUMNAS_DE_RUTA} from rutas
+      where fecha_servicio = coalesce($1::date, (now() at time zone 'America/Santiago')::date)
+        and not es_maestra
+      order by creada_en`,
+    [fecha],
+  );
+  return rows;
+}
+
+export type Asignacion =
+  | { tipo: "ok"; paradas: number; items: number; repetidos: number }
+  | { tipo: "ruta_no_existe" }
+  | { tipo: "ruta_ya_publicada" }
+  | { tipo: "encargo_no_existe"; encargoId: string };
+
+export async function asignarEncargos(
+  pool: Pool,
+  sesion: Sesion,
+  rutaId: string,
+  encargoIds: string[],
+): Promise<Asignacion> {
+  return enActo(pool, async (c) => {
+    const { rows: ruta } = await c.query<{ publicada: boolean }>(
+      "select (publicada_en is not null) as publicada from rutas where id = $1",
+      [rutaId],
+    );
+    if (!ruta[0]) return { tipo: "ruta_no_existe" };
+    // Un día publicado es un día congelado (§5.2 F1): reabrirlo para meter un encargo más
+    // dejaría al chofer con una pantalla que no coincide con lo que se le prometió al cliente.
+    if (ruta[0].publicada) return { tipo: "ruta_ya_publicada" };
+
+    let paradasCreadas = 0;
+    let itemsCreados = 0;
+    let repetidos = 0;
+
+    for (const encargoId of encargoIds) {
+      const { rows: encargo } = await c.query<{ destino_id: string; bultos: number }>(
+        "select destino_id::text as destino_id, bultos from encargos where id = $1",
+        [encargoId],
+      );
+      if (!encargo[0]) return { tipo: "encargo_no_existe", encargoId };
+
+      const paradaId = await paradaDeEntrega(c, rutaId, encargo[0].destino_id, () => paradasCreadas++);
+
+      // `empresa_cliente_id` va NULL a propósito: lo estampa el trigger desde el encargo
+      // (0037), y el NOT NULL de la columna se evalúa después del BEFORE INSERT. Que este
+      // código no PUEDA escribirlo distinto es el punto — no es que elija no hacerlo.
+      const { rows: item } = await c.query<{ id: string }>(
+        `insert into items (parada_id, encargo_id, qty_planificada)
+         values ($1, $2, $3)
+           on conflict (tenant_id, parada_id, encargo_id) do nothing
+         returning id::text as id`,
+        [paradaId, encargoId, encargo[0].bultos],
+      );
+      if (!item[0]) {
+        // Ya estaba asignado a esta parada: asignar dos veces el mismo encargo es un clic
+        // repetido, no un pedido de duplicar los bultos.
+        repetidos++;
+        continue;
+      }
+      itemsCreados++;
+      await registrarEvento(c, {
+        codigo: EVENTOS_OPERACION.encargo_asignado,
+        objetoTabla: "encargos",
+        objetoId: encargoId,
+        sesion,
+        payload: { ruta_id: rutaId, parada_id: paradaId },
+      });
+    }
+
+    return { tipo: "ok", paradas: paradasCreadas, items: itemsCreados, repetidos };
+  });
+}
+
+/**
+ * La parada de entrega de ese destino en esa ruta: la que ya está, o una nueva al final.
+ *
+ * Es el corazón de la agrupación (§3.E1.5). El `select` antes del `insert` es correcto acá
+ * porque `enActo` corre todo en una sola transacción y el índice único parcial de la 0037 es la
+ * red: si dos armados concurrentes intentaran crear la misma, el segundo rebota en la BD en vez
+ * de producir la parada duplicada.
+ */
+async function paradaDeEntrega(
+  c: PoolClient,
+  rutaId: string,
+  destinoId: string,
+  alCrear: () => void,
+): Promise<string> {
+  const { rows: existente } = await c.query<{ id: string }>(
+    "select id::text as id from paradas where ruta_id = $1 and destino_id = $2 and tipo = 'entrega'",
+    [rutaId, destinoId],
+  );
+  if (existente[0]) return existente[0].id;
+
+  const { rows: nueva } = await c.query<{ id: string }>(
+    `insert into paradas (ruta_id, tipo, orden, destino_id)
+     values ($1, 'entrega',
+             coalesce((select max(orden) from paradas where ruta_id = $1), 0) + 1,
+             $2)
+     returning id::text as id`,
+    [rutaId, destinoId],
+  );
+  alCrear();
+  return nueva[0]!.id;
+}
+
+export async function verRuta(
+  pool: Pool,
+  rutaId: string,
+): Promise<{ ruta: Ruta; paradas: (Parada & { items: ItemDeParada[] })[] } | null> {
+  const { rows: ruta } = await pool.query<Ruta>(
+    `select ${COLUMNAS_DE_RUTA} from rutas where id = $1`,
+    [rutaId],
+  );
+  if (!ruta[0]) return null;
+
+  const { rows: paradas } = await pool.query<Parada>(
+    `select p.id::text as id, p.tipo::text as tipo, p.orden, p.destino_id::text as destino_id,
+            d.nombre as destino
+       from paradas p left join destinos d on d.id = p.destino_id
+      where p.ruta_id = $1
+      order by p.orden`,
+    [rutaId],
+  );
+  const { rows: items } = await pool.query<ItemDeParada & { parada_id: string }>(
+    `select i.id::text as id, i.parada_id::text as parada_id, i.encargo_id::text as encargo_id,
+            i.empresa_cliente_id::text as empresa_cliente_id, e.razon_social as empresa,
+            i.qty_planificada
+       from items i
+       join paradas p on p.id = i.parada_id
+       join empresas_cliente e on e.id = i.empresa_cliente_id
+      where p.ruta_id = $1
+      order by e.razon_social`,
+    [rutaId],
+  );
+
+  return {
+    ruta: ruta[0],
+    paradas: paradas.map((p) => ({ ...p, items: items.filter((i) => i.parada_id === p.id) })),
+  };
+}
+
+export type Publicacion =
+  | { tipo: "ok"; paradas: number; requisitos: number }
+  | { tipo: "ruta_no_existe" }
+  | { tipo: "ruta_ya_publicada" }
+  | { tipo: "ruta_vacia" };
+
+export async function publicarRuta(pool: Pool, sesion: Sesion, rutaId: string): Promise<Publicacion> {
+  return enActo(pool, async (c) => {
+    const { rows: ruta } = await c.query<{ publicada: boolean }>(
+      "select (publicada_en is not null) as publicada from rutas where id = $1",
+      [rutaId],
+    );
+    if (!ruta[0]) return { tipo: "ruta_no_existe" };
+    if (ruta[0].publicada) return { tipo: "ruta_ya_publicada" };
+
+    const { rows: paradas } = await c.query<{ id: string }>(
+      "select id::text as id from paradas where ruta_id = $1 order by orden",
+      [rutaId],
+    );
+    // Publicar un día vacío manda al chofer a la calle sin nada que hacer, y es PLANIFICACIÓN:
+    // acá se rebota (§4.2).
+    if (paradas.length === 0) return { tipo: "ruta_vacia" };
+
+    let requisitos = 0;
+    for (const parada of paradas) requisitos += await derivarRequisitos(c, parada.id);
+
+    await c.query(
+      "update rutas set publicada_en = now(), version = version + 1 where id = $1",
+      [rutaId],
+    );
+    await registrarEvento(c, {
+      codigo: EVENTOS_OPERACION.ruta_publicada,
+      objetoTabla: "rutas",
+      objetoId: rutaId,
+      sesion,
+      payload: { paradas: paradas.length, requisitos },
+    });
+    return { tipo: "ok", paradas: paradas.length, requisitos };
+  });
+}
+
+/**
+ * Copia a la parada los requisitos de evidencia de los tipos de carga que lleva.
+ *
+ * La UNIÓN deduplicada por tipo de evidencia, con el obligatorio ganando: dos empresas que
+ * mandan cosas distintas al mismo destino no producen dos firmas del mismo destinatario. El
+ * `orden` se renumera de corrido porque el de la plantilla es relativo a SU tipo de carga y
+ * `stop_requirement` lo tiene único por parada.
+ *
+ * Es una copia y no una traducción — cero condicionales por vertical (§4.6).
+ */
+async function derivarRequisitos(c: PoolClient, paradaId: string): Promise<number> {
+  const { rows } = await c.query<{ n: string }>(
+    `with de_la_parada as (
+       select r.tipo_evidencia,
+              bool_or(r.obligatorio) as obligatorio,
+              min(r.orden)           as orden
+         from items i
+         join encargos e on e.id = i.encargo_id
+         join cargo_type_requirement r on r.cargo_type_id = e.cargo_type_id
+        where i.parada_id = $1
+        group by r.tipo_evidencia
+     )
+     insert into stop_requirement (parada_id, tipo_evidencia, obligatorio, orden)
+     select $1, tipo_evidencia, obligatorio,
+            row_number() over (order by orden, tipo_evidencia)
+       from de_la_parada
+     returning 1 as n`,
+    [paradaId],
+  );
+  return rows.length;
+}

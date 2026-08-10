@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { con, bdDeTenant } from "../../../db/flota/conectar.mjs";
 import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
 import { VALIDOS } from "../../../db/flota/ruts-sinteticos.mjs";
-import { limpiarFixture } from "./limpiar.mjs";
+import { limpiarFixture, limpiarBandeja } from "./limpiar.mjs";
 import { registrarBaseline } from "./baseline-acciones.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
 
@@ -31,9 +31,7 @@ let destinoId = "";
 
 test.beforeAll(async () => {
   await con(BD_A, async (c: Conexion) => {
-    await c.sql("delete from encargos");
-    await c.sql("delete from destinos");
-    await c.sql("delete from empresas_cliente");
+    await limpiarBandeja(c.sql);
     await limpiarFixture(c.sql);
 
     const [p] = await c.sql<{ id: string }>(

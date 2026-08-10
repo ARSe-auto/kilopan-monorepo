@@ -39,6 +39,21 @@ export const TABLAS_DE_IDENTIDAD = [
 ];
 
 /**
+ * La bandeja y lo que cuelga de ella: rutas (con sus paradas e ítems en cascada), encargos,
+ * destinos y empresas [AC-FRUT-04].
+ *
+ * Va en el mismo lugar y por la misma razón que el resto: `items` apunta a `encargos` sin
+ * cascada, así que las rutas se van primero o el borrado de la bandeja rebota. Una suite que
+ * escriba su propia lista vuelve a pagar ese costo en el AC siguiente.
+ */
+export async function limpiarBandeja(sql) {
+  await sql("delete from rutas");
+  await sql("delete from encargos");
+  await sql("delete from destinos");
+  await sql("delete from empresas_cliente");
+}
+
+/**
  * Deja la base del fixture sin operación ni identidad.
  *
  * `sql` es el de `conectar.mjs`. Se le pasa la función y no la conexión para que la suite
@@ -60,6 +75,10 @@ export async function limpiarFixture(sql) {
  * error de restricción que no dice qué falta.
  */
 export async function limpiarOperacion(sql) {
+  // `rutas` va PRIMERO de todo: apunta a `vehiculos` y arrastra en cascada sus paradas, sus
+  // ítems y los `stop_requirement` derivados. Sin esto, borrar un vehículo del fixture rebota
+  // con una restricción que no dice qué falta.
+  await sql("delete from rutas");
   await sql("delete from defectos");
   await sql("delete from bloques_agenda");
   await sql(

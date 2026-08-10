@@ -94,6 +94,9 @@ export const EVENTOS_OPERACION = {
   agenda_bloque_creado: "agenda.bloque_creado",
   agenda_bloque_borrado: "agenda.bloque_borrado",
   agenda_semana_duplicada: "agenda.semana_duplicada",
+  ruta_creada: "ruta.creada",
+  ruta_publicada: "ruta.publicada",
+  encargo_asignado: "encargo.asignado",
 } as const;
 
 /** Todo código que `registrarEvento` acepta tiene que estar sembrado en `evento_tipo`: si los

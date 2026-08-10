@@ -398,6 +398,73 @@
       }
     },
     {
+      "ruta": "/api/rutas",
+      "archivo": "src/app/api/rutas/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Rutas del día (§5.2-F1) [AC-FRUT-04]. El GET lista y el POST CREA, así que enciende el comparador de huella de la BD de B: una ruta escrita en el vecino no es solo una fuga, le mete un día de trabajo en la planificación de otro y se lo publica un chofer que no es suyo. El caso genérico va sin credencial y la guardia contesta 404 pelado antes de mirar el cuerpo; el `vehiculo_id` de B viaja en el cuerpo y lo prueba la suite del módulo, que sabe cómo se ve uno."
+      }
+    },
+    {
+      "ruta": "/api/rutas/[id]",
+      "archivo": "src/app/api/rutas/[id]/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "rutas",
+          "columna": "id"
+        },
+        "nota": "La ruta armada de B pedida con sesión de A: 404 y cuerpo sin una sola cadena de B —ni el nombre de la ruta, ni el del destino, ni la razón social de la empresa contratante, que son exactamente los datos que un competidor querría (§9.3.2)."
+      }
+    },
+    {
+      "ruta": "/api/rutas/[id]/asignar",
+      "archivo": "src/app/api/rutas/[id]/asignar/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "rutas",
+          "columna": "id"
+        },
+        "nota": "Asignar encargos de A a una ruta de B, o encargos de B a una ruta de A: 404 y la BD de B sin cambios. MUTA, así que el comparador de huella pesa — un encargo asignado en el vecino le carga bultos ajenos a un camión suyo y le descuadra la ecuación de cierre de esa empresa (§3.E1.6, centinela 2)."
+      }
+    },
+    {
+      "ruta": "/api/rutas/[id]/publicar",
+      "archivo": "src/app/api/rutas/[id]/publicar/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "rutas",
+          "columna": "id"
+        },
+        "nota": "Publicar el día de B desde una sesión de A: 404 y la BD de B sin cambios. Es la mutación más cara del módulo — congela la promesa que se le hizo al cliente y deriva los requisitos de evidencia de cada parada (§5.2 F1, §4.6): publicado por un ajeno, el operador de B pierde la única ventana en que su día todavía se podía corregir."
+      }
+    },
+    {
       "ruta": "/api/sesion",
       "archivo": "src/app/api/sesion/route.ts",
       "metodos": [
