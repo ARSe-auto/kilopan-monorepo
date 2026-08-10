@@ -1,4 +1,4 @@
-# HANDOFF — El hito (c) CERRADO: 21 de 22, y el único abierto es de oráculo humano
+# HANDOFF — Hito (c) cerrado (21 de 22) y el (d) arrancado (1 de 22)
 
 **Traspaso de la sesión del 09-ago-2026 (20:14 →), rama `flota/specs-e1` en
 `~/kilopan-monorepo-flota`, Opus 5 esfuerzo alto.** Árbol limpio salvo el churn de artefacto de
@@ -15,9 +15,9 @@ saltado declarado** (158 casos e2e).
 | | Antes | Ahora |
 |---|---|---|
 | Módulo 02 (vehículos/energía/agenda) | 0 de 22 | **21 de 22** |
-| ACs cerrados de la plataforma | 46 de 197 | **67 de 197** |
-| Rutas que sirve `apps/flota` | 20 | **43** |
-| Migraciones de tenant | 15 | **35** (última: `0035_vistas_security_invoker`) |
+| ACs cerrados de la plataforma | 46 de 197 | **68 de 197** |
+| Rutas que sirve `apps/flota` | 20 | **47** |
+| Migraciones de tenant | 15 | **36** (última: `0036_encargos`) |
 | Criterios KiloRuta con test | 11 | **23** |
 
 **Presupuestos de toques medidos, cada uno con su artefacto y su regresión bloqueante:** alta
@@ -90,7 +90,17 @@ Solo queda **AC-FVEH-16**: validación en vivo del dueño (alta real cronometrad
 lectura sin ayuda del semáforo y del tablero). Es DONE-adopción con dueño nombrado —Alexis— y
 por contrato JAMÁS bloquea al loop (§9.2/§10). No se cierra con código.
 
-### 2. Lo que sigue es el hito (d): encargos, rutas y custodia (módulo 03)
+### 2. El hito (d) ya arrancó: 1 de 22 (módulo 03)
+
+**AC-FRUT-01 cerrado**: `empresas_cliente`, `destinos`, `encargos` y la bandeja en 4 acciones
+(baseline fijado). Lo que sigue en ese módulo, en el orden que menos depende de respuestas:
+**AC-FRUT-02** (importación CSV — reusa el `client_uuid` del alta, ya idempotente),
+**AC-FRUT-06** (rutas maestras), **AC-FRUT-04/05** (agrupación multi-empresa y publicar el día
+en ≤15 clics, que INCLUYE el tablero del módulo 02 en el conteo). **AC-FRUT-03** (máquina de
+estados) espera la **pregunta 1 de la spec 03**: el enum de `encargos.estado` tiene HOY solo
+`solicitado` y `aceptado`, los dos que el maestro fija literalmente, y el pgTAP lo asierta.
+
+### 2b. Contexto del hito (d)
 
 `specs/flota/03-encargos-rutas-custodia.md`, 22 ACs. Es el que le SUMINISTRA a este módulo el
 dato que dejó pendientes tres cláusulas: `rutas.km_presupuesto_energia` (§4.5), sin el cual el
