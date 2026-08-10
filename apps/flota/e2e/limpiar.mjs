@@ -28,7 +28,11 @@ export const TABLAS_DE_OPERACION = [
   "vehiculos",
 ];
 
-/** Igual, para el plano de identidad: los códigos puente cuelgan de los usuarios. */
+/** Igual, para el plano de identidad: los códigos puente cuelgan de los usuarios.
+ *
+ *  `usuarios` NO siempre se puede borrar: desde AC-FRUT-08 un acto de custodia guarda su ACTOR,
+ *  y ese acto es append-only. Quien amparó o bajó una carga se queda — es justamente el dato que
+ *  hace que la vía sea explícita y no un override anónimo. `limpiarFixture` los excluye. */
 export const TABLAS_DE_IDENTIDAD = [
   "codigos_puente",
   "solicitudes_acceso",
@@ -91,7 +95,26 @@ export async function limpiarBandeja(sql) {
  */
 export async function limpiarFixture(sql) {
   await limpiarOperacion(sql);
-  for (const tabla of TABLAS_DE_IDENTIDAD) await sql(`delete from ${tabla}`);
+  for (const tabla of TABLAS_DE_IDENTIDAD) {
+    if (tabla === "usuarios") {
+      // Los que firmaron un acto de custodia se quedan: ese acto es append-only y su ACTOR es
+      // lo que lo hace explícito. Borrarlos dejaría una bajada de carga sin nadie detrás.
+      await sql(
+        `delete from usuarios u
+          where not exists (
+            select 1 from manifiesto_item_documento d where d.actor_id = u.id
+          )`,
+      );
+      continue;
+    }
+    if (tabla === "personas") {
+      await sql(
+        "delete from personas p where not exists (select 1 from usuarios u where u.persona_id = p.id)",
+      );
+      continue;
+    }
+    await sql(`delete from ${tabla}`);
+  }
 }
 
 /**

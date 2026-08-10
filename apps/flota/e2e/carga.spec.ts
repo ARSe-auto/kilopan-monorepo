@@ -348,3 +348,253 @@ test("[AC-FRUT-07] el manifiesto es un HECHO: no se edita ni se borra", async ()
     await expect(c.sql("delete from manifiestos where id = $1", [m!.id])).rejects.toThrow();
   });
 });
+
+// ─── El DTE gate [AC-FRUT-08] — §7.3, §4.6, §5.2 F2, art. 55 DL 825 ─────────────────
+//
+// ─── LO QUE ESTE BLOQUE PROTEGE ───────────────────────────────────────────────────
+//
+// Que la mercadería sin documento NO quede a bordo, y que la única salida sea BAJARLA con su
+// motivo. Sin la segunda mitad, la primera se convierte en su contrario: el operario con un
+// camión que sale a las cinco confirma con un folio inventado, y ahí sí la app produjo un dato
+// falso — que es exactamente lo que el art. 55 vino a evitar.
+//
+// El invariante vive en un CHECK de la base y no en el servidor, así que la consulta que se
+// olvide de mirarlo rebota igual. Y va NOT VALID: los manifiestos anteriores al gate se firmaron
+// cuando nadie pedía documento, y declararlos ilegales retroactivamente sería reescribir la
+// historia de una tabla append-only.
+
+/** Un manifiesto nuevo con un solo ítem, para ejercer el gate sin arrastrar los casos previos. */
+async function unItemAConfirmar(request: import("@playwright/test").APIRequestContext) {
+  const propia = await con(BD_A, async (c: Conexion) => {
+    const [r] = await c.sql<{ id: string }>(
+      `insert into rutas (nombre, publicada_en, version)
+       values ('Ruta del DTE gate', now(), 1) returning id::text as id`,
+    );
+    const [d] = await c.sql<{ id: string }>("select id::text as id from destinos limit 1");
+    const [p] = await c.sql<{ id: string }>(
+      "insert into paradas (ruta_id, tipo, orden, destino_id) values ($1, 'carga', 1, $2) returning id::text as id",
+      [r!.id, d!.id],
+    );
+    const [e] = await c.sql<{ id: string }>(
+      "insert into encargos (empresa_cliente_id, destino_id, bultos) values ($1, $2, 9) returning id::text as id",
+      [panaderia, d!.id],
+    );
+    await c.sql("insert into items (parada_id, encargo_id, qty_planificada) values ($1, $2, 9)", [
+      p!.id,
+      e!.id,
+    ]);
+    return p!.id;
+  });
+
+  const { declarado } = (await (
+    await request.get(`${EN_A}/api/paradas/${propia}/manifiesto`, { headers: comoOperador })
+  ).json()) as { declarado: { item_id: string; empresa_cliente_id: string }[] };
+
+  await request.post(`${EN_A}/api/paradas/${propia}/manifiesto`, {
+    headers: comoOperador,
+    data: {
+      empresa_cliente_id: panaderia,
+      client_uuid: crypto.randomUUID(),
+      ts_dispositivo: new Date().toISOString(),
+      tz_offset_min: -240,
+      conteos: declarado
+        .filter((d) => d.empresa_cliente_id === panaderia)
+        .map((d) => ({ item_id: d.item_id, qty_confirmada: 9 })),
+    },
+  });
+
+  const [item] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ id: string }>(
+      `select mi.id::text as id from manifiesto_items mi
+         join manifiestos m on m.id = mi.manifiesto_id where m.parada_id = $1`,
+      [propia],
+    ),
+  );
+  return item!.id;
+}
+
+test("[AC-FRUT-08] el documento del tercero se asocia, y dos capturas del mismo LIGAN", async ({
+  request,
+}) => {
+  const itemId = await unItemAConfirmar(request);
+  const documento = { tipo: "52", folio: "9876543", emisor: "76.111.111-6" };
+
+  const primera = await request.post(`${EN_A}/api/manifiesto-items/${itemId}/documento`, {
+    headers: comoOperador,
+    data: documento,
+  });
+  expect(primera.status()).toBe(201);
+  const { reference_document_id, ligado } = (await primera.json()) as {
+    reference_document_id: string;
+    ligado: boolean;
+  };
+  expect(ligado).toBe(false);
+
+  // Otro ítem, el MISMO documento: es el caso normal —varios bultos en la misma guía— y tiene
+  // que ligar a la fila que hay, no duplicarla (§4.2, `UNIQUE(tipo, folio, emisor)`).
+  const otroItem = await unItemAConfirmar(request);
+  const segunda = await request.post(`${EN_A}/api/manifiesto-items/${otroItem}/documento`, {
+    headers: comoOperador,
+    data: documento,
+  });
+  expect(segunda.status()).toBe(201);
+  const ligada = (await segunda.json()) as { reference_document_id: string; ligado: boolean };
+  expect(ligada.ligado).toBe(true);
+  expect(ligada.reference_document_id).toBe(reference_document_id);
+
+  await con(BD_A, async (c: Conexion) => {
+    const [n] = await c.sql<{ n: string }>(
+      "select count(*)::text as n from reference_document where folio = $1",
+      [documento.folio],
+    );
+    expect(n!.n).toBe("1");
+  });
+});
+
+test("[AC-FRUT-08] la carga sin documento NO puede salir, y bajarla la saca del gate", async ({
+  request,
+}) => {
+  const itemId = await unItemAConfirmar(request);
+
+  const sinDocumento = async () =>
+    con(BD_A, (c: Conexion) =>
+      c.sql<{ id: string }>(
+        `select f.manifiesto_item_id::text as id
+           from manifiesto_items mi, carga_sin_documento(mi.manifiesto_id) f
+          where mi.id = $1`,
+        [itemId],
+      ),
+    );
+
+  // Contado y a bordo, sin papel: el art. 55 dice que así no viaja. La fila EXISTE —es captura y
+  // el conteo del andén no se rechaza— pero el gate la nombra.
+  expect((await sinDocumento()).map((f: { id: string }) => f.id)).toContain(itemId);
+
+  // Primera salida: asociar el documento del tercero.
+  await request.post(`${EN_A}/api/manifiesto-items/${itemId}/documento`, {
+    headers: comoOperador,
+    data: { tipo: "52", folio: "5550001", emisor: "76.111.111-6" },
+  });
+  expect((await sinDocumento()).map((f: { id: string }) => f.id)).not.toContain(itemId);
+
+  // Segunda salida: bajarlo del manifiesto. Sin ELLA, la primera se convierte en su contrario —
+  // el operario con un camión que sale a las cinco confirma con un folio inventado.
+  const otro = await unItemAConfirmar(request);
+  const antesDeBajar = await con(BD_A, (c: Conexion) =>
+    c.sql<{ id: string }>(
+      `select f.manifiesto_item_id::text as id
+         from manifiesto_items mi, carga_sin_documento(mi.manifiesto_id) f
+        where mi.id = $1`,
+      [otro],
+    ),
+  );
+  expect(antesDeBajar.map((f: { id: string }) => f.id)).toContain(otro);
+
+  await request.post(`${EN_A}/api/manifiesto-items/${otro}/bajar`, {
+    headers: comoOperador,
+    data: { motivo: "Sin guía del emisor: se baja del camión" },
+  });
+  const despuesDeBajar = await con(BD_A, (c: Conexion) =>
+    c.sql<{ id: string }>(
+      `select f.manifiesto_item_id::text as id
+         from manifiesto_items mi, carga_sin_documento(mi.manifiesto_id) f
+        where mi.id = $1`,
+      [otro],
+    ),
+  );
+  expect(despuesDeBajar.map((f: { id: string }) => f.id)).not.toContain(otro);
+});
+
+test("[AC-FRUT-08] contar CERO no pide documento: no hay mercadería que amparar", async () => {
+  await con(BD_A, async (c: Conexion) => {
+    const [d] = await c.sql<{ id: string }>("select id::text as id from destinos limit 1");
+    const [r] = await c.sql<{ id: string }>(
+      `insert into rutas (nombre, publicada_en, version)
+       values ('Ruta del cero', now(), 1) returning id::text as id`,
+    );
+    const [p] = await c.sql<{ id: string }>(
+      "insert into paradas (ruta_id, tipo, orden, destino_id) values ($1, 'carga', 1, $2) returning id::text as id",
+      [r!.id, d!.id],
+    );
+    const [e] = await c.sql<{ id: string }>(
+      "insert into encargos (empresa_cliente_id, destino_id, bultos) values ($1, $2, 4) returning id::text as id",
+      [panaderia, d!.id],
+    );
+    const [i] = await c.sql<{ id: string }>(
+      "insert into items (parada_id, encargo_id, qty_planificada) values ($1, $2, 4) returning id::text as id",
+      [p!.id, e!.id],
+    );
+    const [m] = await c.sql<{ id: string }>(
+      `insert into manifiestos (parada_id, empresa_cliente_id, ts_dispositivo, tz_offset_min)
+       values ($1, $2, now(), -240) returning id::text as id`,
+      [p!.id, panaderia],
+    );
+    await c.sql(
+      `insert into manifiesto_items (manifiesto_id, item_id, qty_declarada, qty_confirmada)
+       values ($1, $2, 4, 0)`,
+      [m!.id, i!.id],
+    );
+
+    // «No subió nada» es una respuesta válida del andén, y la más importante. Exigirle documento
+    // dejaría el manifiesto trabado por una carga que no existe.
+    const trabados = await c.sql<{ id: string }>(
+      "select manifiesto_item_id::text as id from carga_sin_documento($1)",
+      [m!.id],
+    );
+    expect(trabados).toHaveLength(0);
+  });
+});
+
+test("[AC-FRUT-08] bajar del manifiesto es EXPLÍCITO: exige motivo y deja evento", async ({
+  request,
+}) => {
+  const itemId = await unItemAConfirmar(request);
+
+  // Sin motivo no se baja. No es burocracia: sin texto, mañana nadie sabe por qué faltó esa
+  // carga, y el §7.3 pide que la vía sea explícita y no un override silencioso.
+  const sinMotivo = await request.post(`${EN_A}/api/manifiesto-items/${itemId}/bajar`, {
+    headers: comoOperador,
+    data: { motivo: "" },
+  });
+  expect(sinMotivo.status()).toBe(422);
+  expect(((await sinMotivo.json()) as { error: string }).error).toBe("falta_motivo");
+
+  const eventosAntes = await con(BD_A, (c: Conexion) =>
+    c.sql<{ n: string }>(
+      "select count(*)::text as n from eventos e join evento_tipo t on t.id = e.tipo_id where t.codigo = 'manifiesto.item_bajado'",
+    ),
+  );
+
+  const bajado = await request.post(`${EN_A}/api/manifiesto-items/${itemId}/bajar`, {
+    headers: comoOperador,
+    data: { motivo: "La guía no llegó del emisor: sale en el viaje de la tarde" },
+  });
+  expect(bajado.ok()).toBe(true);
+
+  await con(BD_A, async (c: Conexion) => {
+    const [item] = await c.sql<{ motivo: string | null }>(
+      "select bajado_motivo as motivo from manifiesto_item_documento where manifiesto_item_id = $1",
+      [itemId],
+    );
+    expect(item!.motivo).toContain("La guía no llegó");
+
+    // El evento queda: la bajada emite rastro y auditoría, jamás un override silencioso (§7.3).
+    // Se cuenta por DIFERENCIA porque `eventos` es append-only y arrastra lo de cada suite.
+    const [despues] = await c.sql<{ n: string }>(
+      "select count(*)::text as n from eventos e join evento_tipo t on t.id = e.tipo_id where t.codigo = 'manifiesto.item_bajado'",
+    );
+    expect(Number(despues!.n)).toBe(Number(eventosAntes[0]!.n) + 1);
+  });
+});
+
+test("[AC-FRUT-08] un tipo de documento que el SII no define no entra", async ({ request }) => {
+  const itemId = await unItemAConfirmar(request);
+  const rebote = await request.post(`${EN_A}/api/manifiesto-items/${itemId}/documento`, {
+    headers: comoOperador,
+    data: { tipo: "99", folio: "1", emisor: "76.111.111-6" },
+  });
+  // El enum del §4.6 tiene los cuatro que el SII define para esto. Un quinto sería la app
+  // inventando una clase de documento tributario.
+  expect(rebote.status()).toBe(422);
+  expect(((await rebote.json()) as { error: string }).error).toBe("documento_incompleto");
+});

@@ -400,6 +400,42 @@
       }
     },
     {
+      "ruta": "/api/manifiesto-items/[id]/bajar",
+      "archivo": "src/app/api/manifiesto-items/[id]/bajar/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "manifiesto_items",
+          "columna": "id"
+        },
+        "nota": "Bajar del manifiesto un ítem de B desde una sesión de A: 404 y la BD de B sin cambios. Es la mutación con peor consecuencia física del módulo — la carga se declara fuera del camión y el acto es append-only, así que el vecino no puede deshacerlo: o sale mercadería que su registro dice que se bajó, o se baja carga que nadie de su casa decidió bajar."
+      }
+    },
+    {
+      "ruta": "/api/manifiesto-items/[id]/documento",
+      "archivo": "src/app/api/manifiesto-items/[id]/documento/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "manifiesto_items",
+          "columna": "id"
+        },
+        "nota": "Asociar el DTE de un tercero a un ítem del manifiesto de B desde una sesión de A (§7.3, art. 55 DL 825) [AC-FRUT-08]: 404 y la BD de B sin cambios. Escribe un ACTO append-only en la custodia del vecino, y eso es lo que lo hace grave: la asociación no se puede borrar ni corregir con un UPDATE, así que un documento ajeno pegado a su carga queda como constancia de que ESA mercadería viajó amparada por ESE papel — y es la fila que se mira si el SII pregunta."
+      }
+    },
+    {
       "ruta": "/api/motivos",
       "archivo": "src/app/api/motivos/route.ts",
       "metodos": [

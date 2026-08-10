@@ -187,3 +187,179 @@ export async function confirmarManifiesto(
     sesion,
   );
 }
+
+// ─── El DTE gate [AC-FRUT-08] — §7.3, §4.6, §5.2 F2, art. 55 DL 825 ─────────────────
+//
+// ─── LA APP REFERENCIA, JAMÁS EMITE ───────────────────────────────────────────────
+//
+// `reference_document` apunta a un DTE que emitió un tercero autorizado por el SII. Lo que este
+// archivo hace es CREAR LA REFERENCIA con los datos que el andén lee del papel —tipo, folio,
+// emisor— por escaneo del TED o tecleados a mano. Nada más.
+//
+// Emitir un documento con apariencia de DTE sin ser emisor autorizado es el art. 97 N°4 del
+// Código Tributario, y no es una multa: es un delito. Por eso acá no hay generación de folios, ni
+// de XML, ni de TED — y un grep-gate lo vigila sobre el árbol entero, porque la línea que lo
+// rompa se va a escribir con la mejor intención.
+//
+// ─── EL FOLIO MANUAL NO ES UN FALLBACK DE SEGUNDA ─────────────────────────────────
+//
+// El §7.6 prohíbe depender de la cámara. En un andén a las cuatro de la mañana el TED está
+// arrugado, el vidrio empañado o el teléfono es prestado y no tiene permiso: el folio tecleado es
+// la vía normal, no la excepción. Las dos terminan en la misma fila.
+//
+// ─── DOS CAPTURAS DEL MISMO DOCUMENTO LIGAN, NO DUPLICAN ─────────────────────────
+//
+// El `UNIQUE(tipo, folio, emisor)` de la 0006 lo garantiza, y acá se resuelve con `on conflict
+// do nothing` + relectura: es la semántica «creando/ligando» del §4.2. Un rebote acá sería la
+// captura rechazada, que es justo lo que la regla de oro prohíbe.
+
+/** Los tipos que el SII define y que este módulo puede REFERENCIAR (§4.6). */
+export const TIPOS_DE_DTE = ["33", "39", "52", "61"] as const;
+export type TipoDeDte = (typeof TIPOS_DE_DTE)[number];
+
+export const esTipoDeDte = (valor: string): valor is TipoDeDte =>
+  (TIPOS_DE_DTE as readonly string[]).includes(valor);
+
+export type Asociacion =
+  | { tipo: "ok"; reference_document_id: string; ligado: boolean }
+  | { tipo: "item_no_existe" };
+
+/**
+ * Asocia el documento de un tercero a un ítem del manifiesto.
+ *
+ * Es CAPTURA y no rebota: si el documento ya estaba —porque otro ítem del mismo manifiesto va en
+ * la misma guía, que es el caso normal— se liga a la fila que hay.
+ */
+export async function asociarDocumento(
+  pool: Pool,
+  sesion: Sesion,
+  datos: {
+    manifiestoItemId: string;
+    tipo: TipoDeDte;
+    folio: string;
+    emisor: string;
+    fecha: string | null;
+  },
+): Promise<Asociacion> {
+  return enActo(
+    pool,
+    async (c) => {
+      const { rows: creado } = await c.query<{ id: string }>(
+        `insert into reference_document (tipo, folio, emisor, fecha)
+         values ($1::dte_tipo, $2, $3, $4::date)
+           on conflict (tipo, folio, emisor) do nothing
+         returning id::text as id`,
+        [datos.tipo, datos.folio.trim(), datos.emisor.trim(), datos.fecha],
+      );
+
+      let documentoId = creado[0]?.id;
+      const ligado = documentoId === undefined;
+      if (!documentoId) {
+        const { rows: previo } = await c.query<{ id: string }>(
+          `select id::text as id from reference_document
+            where tipo = $1::dte_tipo and folio = $2 and emisor = $3`,
+          [datos.tipo, datos.folio.trim(), datos.emisor.trim()],
+        );
+        documentoId = previo[0]!.id;
+      }
+
+      // El acto es una FILA NUEVA, no un UPDATE: `manifiesto_items` es append-only y amparar
+      // ocurre después de contar. Así el acto queda con su autor y su momento, que es lo que
+      // convierte esto en trazable en vez de en un atributo que alguien cambió (§7.3, §7.4).
+      const { rows: acto } = await c.query<{ id: string }>(
+        `insert into manifiesto_item_documento (manifiesto_item_id, reference_document_id, actor_id)
+         select $1, $2, $3
+           from manifiesto_items where id = $1
+           on conflict (tenant_id, manifiesto_item_id) do nothing
+         returning id::text as id`,
+        [datos.manifiestoItemId, documentoId, sesion.usuarioId],
+      );
+      // Sin fila: o el ítem no existe, o ya tenía su acto. Las dos se ven igual desde afuera y
+      // ninguna es un error del andén — el segundo toque sobre el mismo bulto es lo normal.
+      if (!acto[0]) return { tipo: "item_no_existe" };
+
+      await registrarEvento(c, {
+        codigo: EVENTOS_OPERACION.manifiesto_documento_asociado,
+        objetoTabla: "manifiesto_items",
+        objetoId: datos.manifiestoItemId,
+        sesion,
+        payload: { tipo: datos.tipo, folio: datos.folio, ligado },
+      });
+      return { tipo: "ok", reference_document_id: documentoId, ligado };
+    },
+    sesion,
+  );
+}
+
+export type Bajada = { tipo: "ok" } | { tipo: "item_no_existe" } | { tipo: "falta_motivo" };
+
+/**
+ * Baja un ítem del manifiesto: la vía EXPLÍCITA del §7.3 cuando no hay documento.
+ *
+ * Jamás un override silencioso. El motivo es obligatorio y el evento queda — sin esta puerta, el
+ * operario con un camión que sale a las cinco encuentra la salida por su cuenta: confirma con un
+ * folio inventado, y ahí sí la app produjo un dato falso. Con ella, la mercadería se baja, queda
+ * escrito quién lo hizo y por qué, y el camión sale legal.
+ */
+export async function bajarDelManifiesto(
+  pool: Pool,
+  sesion: Sesion,
+  manifiestoItemId: string,
+  motivo: string,
+): Promise<Bajada> {
+  // El motivo es obligatorio ACÁ y no en la base: el CHECK solo sabe si hay texto, y lo que hace
+  // falta es que quien baja la carga diga algo que otro pueda leer mañana.
+  if (motivo.trim().length < 3) return { tipo: "falta_motivo" };
+
+  return enActo(
+    pool,
+    async (c) => {
+      // Igual que amparar: la bajada es un ACTO con su autor, no una columna que se edita. Es
+      // lo que hace cierto el «emite evento y auditoría» del §7.3 sin depender de nadie.
+      const { rows: acto } = await c.query<{ id: string }>(
+        `insert into manifiesto_item_documento (manifiesto_item_id, bajado_motivo, actor_id)
+         select $1, $2, $3
+           from manifiesto_items where id = $1
+           on conflict (tenant_id, manifiesto_item_id) do nothing
+         returning id::text as id`,
+        [manifiestoItemId, motivo.trim(), sesion.usuarioId],
+      );
+      if (!acto[0]) return { tipo: "item_no_existe" };
+
+      await registrarEvento(c, {
+        codigo: EVENTOS_OPERACION.manifiesto_item_bajado,
+        objetoTabla: "manifiesto_items",
+        objetoId: manifiestoItemId,
+        sesion,
+        payload: { motivo: motivo.trim() },
+      });
+      return { tipo: "ok" };
+    },
+    sesion,
+  );
+}
+
+/** Los ítems de un manifiesto con su estado frente al gate: a bordo, amparado o bajado. */
+export async function estadoDelGate(
+  pool: Pool,
+  sesion: Sesion,
+  manifiestoId: string,
+): Promise<{ id: string; qty_confirmada: number; con_documento: boolean; bajado: boolean }[]> {
+  return enLectura(pool, sesion, async (c) => {
+    const { rows } = await c.query<{
+      id: string;
+      qty_confirmada: number;
+      con_documento: boolean;
+      bajado: boolean;
+    }>(
+      `select mi.id::text as id, mi.qty_confirmada,
+              (d.reference_document_id is not null) as con_documento,
+              (d.bajado_motivo is not null) as bajado
+         from manifiesto_items mi
+         left join manifiesto_item_documento d on d.manifiesto_item_id = mi.id
+        where mi.manifiesto_id = $1 order by mi.id`,
+      [manifiestoId],
+    );
+    return rows;
+  });
+}

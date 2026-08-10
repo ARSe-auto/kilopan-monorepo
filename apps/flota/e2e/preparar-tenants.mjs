@@ -145,10 +145,40 @@ async function sembrarIdentidadDelVecino(slug) {
     const [destinoDelVecino] = await sql(
       "insert into destinos (nombre) values ('Sucursal del vecino') returning id::text as id",
     );
-    await sql(
+    const [paradaDelVecino] = await sql(
       `insert into paradas (ruta_id, tipo, orden, destino_id)
-       select id, 'carga', 1, $1 from rutas where nombre = 'Ruta de la madrugada del vecino'`,
+       select id, 'carga', 1, $1 from rutas where nombre = 'Ruta de la madrugada del vecino'
+       returning id::text as id`,
       [destinoDelVecino.id],
+    );
+    // Y un ÍTEM de manifiesto del vecino [AC-FRUT-08]: las dos rutas de
+    // `/api/manifiesto-items/[id]` son de tipo recurso y el caso del centinela 2 saca de acá el
+    // id REAL con el que A intenta amparar —o BAJAR— carga ajena. El acto es append-only: el
+    // vecino no podría deshacerlo, así que o sale mercadería que su registro dice bajada, o se
+    // baja carga que nadie de su casa decidió bajar.
+    const [empresaDelVecino] = await sql(
+      `insert into empresas_cliente (rut, razon_social)
+       values ('76.111.111-6', 'Contratante del vecino') returning id::text as id`,
+    );
+    const [encargoDelVecino] = await sql(
+      `insert into encargos (empresa_cliente_id, destino_id, bultos)
+       values ($1, $2, 6) returning id::text as id`,
+      [empresaDelVecino.id, destinoDelVecino.id],
+    );
+    const [itemDelVecino] = await sql(
+      `insert into items (parada_id, encargo_id, qty_planificada)
+       values ($1, $2, 6) returning id::text as id`,
+      [paradaDelVecino.id, encargoDelVecino.id],
+    );
+    const [manifiestoDelVecino] = await sql(
+      `insert into manifiestos (parada_id, empresa_cliente_id, ts_dispositivo, tz_offset_min)
+       values ($1, $2, now(), -240) returning id::text as id`,
+      [paradaDelVecino.id, empresaDelVecino.id],
+    );
+    await sql(
+      `insert into manifiesto_items (manifiesto_id, item_id, qty_declarada, qty_confirmada)
+       values ($1, $2, 6, 6)`,
+      [manifiestoDelVecino.id, itemDelVecino.id],
     );
   });
 }

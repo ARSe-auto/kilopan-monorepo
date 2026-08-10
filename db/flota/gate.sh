@@ -70,6 +70,13 @@ paso "ganchos §4.9: DDL-only sin pantalla y una sola implementación de telemet
 paso "seeds: nadie siembra el gancho pin_destinatario, y sigue vivo en el DDL (§4.9)" \
   node db/flota/gate-seeds-pin-destinatario.mjs
 
+# La app REFERENCIA documentos de terceros y JAMÁS los emite (§7.3). No es preferencia de
+# arquitectura: emitir algo con apariencia de DTE sin ser emisor autorizado es el art. 97 N°4 del
+# Código Tributario. El gate no busca la palabra «emitir» —nadie la va a escribir— sino las
+# capacidades: generar folios, armar el XML, construir el TED, el CAF. [AC-FRUT-08]
+paso "la app jamás emite un DTE: cero folios, cero TED, cero XML del SII (§7.3)" \
+  node db/flota/gate-jamas-emite-dte.mjs
+
 # El scan de logs del §9.2: cero PIN en cualquier forma, cero RUT sin máscara, cero secreto
 # de dispositivo. Estático y no sobre la salida de los tests, porque la línea que filtra un
 # PIN es casi siempre la del `catch` que nadie ejerció. [AC-FIDN-06]
