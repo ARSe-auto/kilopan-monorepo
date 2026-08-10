@@ -283,6 +283,39 @@ test("[AC-FRUT-05] un vehículo con la agenda ocupada rebota 422 y no publica na
   });
 });
 
+test("[AC-FRUT-05] un bloque de RECARGA no es un solape: es una parada más", async ({ request }) => {
+  await sembrar();
+
+  // La distinción que decide si el módulo sirve: el §5.2 F4 dice que un bloque de recarga es una
+  // parada de la ruta, no un compromiso que compita con ella. Si contara como choque, no se
+  // podría publicar el día de ningún camión que cargue de noche — que son todos.
+  await con(BD_A, async (c: Conexion) => {
+    await c.sql(
+      `insert into bloques_agenda (vehiculo_id, tipo, empieza_en, termina_en)
+       values ($1, 'recarga',
+               (now() at time zone 'America/Santiago')::date::timestamptz + interval '22 hours',
+               (now() at time zone 'America/Santiago')::date::timestamptz + interval '30 hours')`,
+      [vehiculoId],
+    );
+  });
+
+  const ruta = (await (
+    await request.post(`${EN_A}/api/rutas`, {
+      headers: comoOperador,
+      data: { nombre: "Ruta con recarga nocturna", vehiculo_id: vehiculoId },
+    })
+  ).json()) as { ruta: { id: string } };
+  await request.post(`${EN_A}/api/rutas/${ruta.ruta.id}/asignar`, {
+    headers: comoOperador,
+    data: { encargos: encargosDeHoy },
+  });
+
+  const publicada = await request.post(`${EN_A}/api/rutas/${ruta.ruta.id}/publicar`, {
+    headers: comoOperador,
+  });
+  expect(publicada.ok(), "un bloque de recarga rebotó la publicación del día").toBe(true);
+});
+
 test("[AC-FRUT-05] con la feature encendida, un documento vencido rebota la publicación", async ({
   request,
 }) => {
