@@ -2026,3 +2026,79 @@ SHA siguen el molde del contador de exenciones de rutas.
 `check.sh --app=flota --full` en VERDE: **14 OK · 0 fallados · 1 saltado declarado**, con 149
 casos e2e. Última migración: `0018_turnos`. Preguntas al dueño abiertas: **nueve** en la spec 02
 (1, 6, 7, 9, 11, 12, 13, 14 y la 15 nueva) y las 4 y 8 de la spec 01.
+
+## 09-ago-2026 (segundo tramo del hito (c)) · El corazón EV: lecturas, EEVD, fórmula y agenda
+
+Cuatro ACs más en la misma sesión. **Módulo 02: 7 de 22. Plataforma: 53 de 197.**
+**AC-FVEH-05** (odómetro y SOC por `reading`), **AC-FVEH-20** (la vista `eevd_semanal`),
+**AC-FVEH-09** (la fórmula única de energía) y **AC-FVEH-07** (la agenda por vehículo).
+
+### La proyección quedó cerrada por los dos lados
+
+La 0016 había dejado la puerta cerrada —toda escritura de `vehiculos.odometro`/`soc` rebota— y
+la 0019 escribió la llave: el único camino es una fila de `reading`. El pgTAP verifica que
+DESPUÉS de abrirla la puerta siga cerrada para todos los demás, que es lo que hace del «SOLO
+por trigger» del §4.5 algo sostenido y no declarado.
+
+**Rechazos = 0, con número.** El endpoint de lecturas no tiene una sola rama que conteste 4xx
+por el contenido: un SOC de 150, un odómetro que retrocede, un reloj corrido o una lectura sin
+turno entran con 2xx, su flag, su evento y su fila en «Por revisar». El chofer ya miró el
+tablero y ya tecleó lo que vio; un 422 no le devuelve el dato, se lo borra.
+
+**Monotonicidad suave, aplicada a una proyección.** El §4.6 la pide sobre la SERIE. En la
+proyección había una decisión más que tomar: se queda con el MÁXIMO declarado, no con el
+último. Un odómetro físico no retrocede, así que un valor menor es casi siempre un dígito de
+menos tipeado con una mano en el volante, y seguirlo haría que el próximo tramo se calculara
+contra kilómetros que nadie recorrió.
+
+**De qué vehículo es una lectura.** `reading` no tiene `vehiculo_id` y no es un olvido: el §4.6
+la define genérica. Llega al vehículo por el TURNO. La consecuencia quedó escrita: una lectura
+sin turno entra igual —rechazarla rompería la regla de oro por un caso que el maestro ni
+siquiera prohíbe— pero no proyecta nada.
+
+### La variable norte, con su denominador vivo
+
+`eevd_semanal` nace donde tiene que nacer: el primer módulo que tiene turnos. **El numerador no
+es un cero literal**: cuenta el evento `entrega.con_evidencia`, que hoy no está en el catálogo y
+por eso da cero solo. Un cero escrito habría que ir a borrarlo un día, y ese día alguien se
+olvida; este se convierte en el número de verdad en cuanto el hito (e) lo emita.
+
+El vehículo-día es el par (vehículo, día de apertura) contado UNA vez —dos jornadas cortas del
+mismo camión no inflan el denominador— y el día es el de Chile: en UTC, toda jornada abierta
+después de las 20:00 se contaría mañana.
+
+### La fórmula, y el gate que impide la segunda
+
+`rango_efectivo = autonomía × SOH × factor`, **sin** reserva; la reserva se resta una sola vez,
+en `max_distance`. El defecto que esto previene tiene nombre —restar la reserva dos veces— y
+termina con el operador ignorando el semáforo. `gate-constantes` vigilaba los VALORES; el nuevo
+`gate-formula-energia` vigila la ARITMÉTICA, que es la que de verdad se rompe: nadie copia el
+0,85 a mano, pero cualquiera reescribe la multiplicación en la pantalla que está armando.
+
+El gate decide por OPERADOR y no por mención, y no se dispara con la fórmula EXPLICADA en un
+comentario. Eso último no fue previsión: se puso rojo contra el árbol sano por la documentación
+del propio `constants.ts`, y un guard que castiga documentar se apaga solo a la semana.
+
+### Y la agenda, con la pregunta 12 intacta
+
+Cuando la semana destino ya tiene bloques que chocan, el servidor **no elige política**:
+contesta `colision_no_resuelta` y no copia nada. Quedarse con «todo-o-nada» porque es lo que
+sale gratis de una transacción habría sido responder por el dueño y, peor, dejar la pregunta
+respondida sin que nadie lo note.
+
+### Tres defectos que el trabajo destapó
+
+- **El grep-gate se ponía rojo al citar el §4.5 del maestro** —«(§4.5)» caía en el patrón del
+  contraste mínimo (4.5)—, y este módulo lo cita en cada archivo.
+- **`vehiculos.spec.ts` contaba TOTALES de tablas append-only.** Su verde duró exactamente
+  hasta el AC siguiente, cuando el fixture de turnos empezó a escribir en las mismas tablas.
+- **Cada suite armaba su propio orden de `delete`, y lo dictan las FK.** Con tres tablas
+  funcionó; al llegar `turnos` hubo que tocar dos suites y al llegar `bloques_agenda`, cuatro —
+  y la que se ponía roja era siempre la que no había cambiado. El orden pasa a vivir en
+  `e2e/limpiar.mjs`, y quedan cinco tablas por venir en este módulo.
+
+### Estado
+
+`check.sh --app=flota --full` en VERDE: **14 OK · 0 fallados · 1 saltado declarado**, con 158
+casos e2e. Última migración: `0021_bloques_agenda`. Matriz KiloRuta: 15 criterios con test
+verificado (entraron KR-04, KR-14, KR-15, KR-44 y KR-55).
