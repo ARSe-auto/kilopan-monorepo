@@ -440,6 +440,18 @@
       }
     },
     {
+      "ruta": "/turno/abrir",
+      "archivo": "src/app/turno/abrir/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de apertura del turno (F3) [AC-FVEH-10]. No recibe identificador por URL: el vehículo se elige con un chip de la propia flota y todo lo que hace pasa por /api/turnos, /api/chequeos y /api/lecturas, que tienen sus casos declarados. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y pesa especialmente acá: es la pantalla que un chofer abre a las cinco de la mañana, y una lista de vehículos del vecino le haría abrir turno sobre un camión que no es de su empresa."
+      }
+    },
+    {
       "ruta": "/vehiculos",
       "archivo": "src/app/vehiculos/page.tsx",
       "metodos": [

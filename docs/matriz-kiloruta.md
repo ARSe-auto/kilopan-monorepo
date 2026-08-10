@@ -46,10 +46,10 @@ clasificado, se corrige allá, con la firma del dueño, y acá se refleja.
 | KR-13 | round_clp() · columnas *_clp en bigint (linter del §7.5) | db/flota/lint-migraciones.test.mjs::en bigint pasa (el guard no es un no-op al revés) |
 | KR-14 | bloques_agenda con EXCLUDE de ventana | apps/flota/e2e/agenda.spec.ts::el solapado rebota 422 con 0 filas |
 | KR-15 | bloques_agenda (duplicar semana) | apps/flota/e2e/agenda.spec.ts::clona los bloques REALES de 7 días atrás |
-| KR-16 | turnos + chequeo pre (odómetro, SOC) | — (pendiente: AC-FVEH-10 · hito c) |
+| KR-16 | turnos + chequeo pre (odómetro, SOC) | apps/flota/e2e/apertura.spec.ts::el turno quedó con su chequeo y sus dos lecturas colgando |
 | KR-17 | vertical_template.checklists[] | db/flota/pgtap/0002_verticales_grupos_y_parametros.sql::has_column('vertical_template', 'checklists') |
 | KR-18 | proyección vehiculos.soc + fórmula de rango del §0 | — (pendiente: AC-FVEH-09/10 · hito c) |
-| KR-19 | eventos + review_queue (confirmación de 1 toque) | — (pendiente: AC-FVEH-10 · hito c — la mitad del defecto ya la prueba apps/flota/e2e/chequeos.spec.ts; se cierra con la confirmación de 1 toque de la apertura) |
+| KR-19 | eventos + review_queue (confirmación de 1 toque) | apps/flota/e2e/apertura.spec.ts::un ítem fallado NO bloquea la apertura, y la pantalla lo dice |
 | KR-20 | cierre de turno (odómetro, SOC, defecto→issue) | — (pendiente: AC-FVEH-21 · hito c) |
 | KR-21 | encargos (empresa + destino + bultos) | — (pendiente: AC-FRUT-01 · hito d) |
 | KR-22 | encargos (duplicar de ayer) | — (pendiente: AC-FRUT-17 · hito d) |
