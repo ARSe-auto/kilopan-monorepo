@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  com.flota.ralph-loop — el motor de la Plataforma FLOTA sobrevive a la sesión, la
+  terminal y el reinicio.
+
+  POR QUÉ EXISTE. La sesión interactiva no ejecuta nada entre turnos: cada turno termina
+  y espera a que una persona escriba. «Seguir construyendo de noche» no se puede cumplir
+  desde ahí — se cumple desde acá. Autorizado por el dueño el 10-ago-2026.
+
+  NO SE CARGA SOLO, y esto importa más acá que en KiloPan: el §8 del maestro fija UN SOLO
+  motor OAuth a la vez y la credencial es COMPARTIDA con `com.kilopan.ralph-loop` y con el
+  de eauto. Cargar éste con otro corriendo hace que los dos se peleen la misma ventana.
+  Cuál corre es decisión del dueño, no del arnés.
+
+  Instalar:
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.flota.ralph-loop.plist
+  Detener:
+    launchctl bootout gui/$(id -u)/com.flota.ralph-loop
+
+  EL DOCTYPE DE ARRIBA NO SE BORRA. `plutil -lint` es permisivo y lo da por válido sin él,
+  pero `launchctl bootstrap` falla con «5: Input/output error» sin señalar la línea. Costó
+  encontrarlo en el plist de KiloPan el 2-ago-2026.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.flota.ralph-loop</string>
+
+  <!-- El token se LEE del archivo en tiempo de ejecución; no se copia acá. Así el secreto
+       vive en un solo lugar, con permisos 600, y este plist se versiona sin filtrar nada.
+       Si falta o está vacío sale con 78 (EX_CONFIG) en vez de arrancar un motor que
+       fallaría en cada iteración con «Not logged in» — el síntoma que engañó en KiloPan,
+       donde el gate corría verde y el fallo parecía del builder. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-c</string>
+    <string>set -e; T="$(cat "$HOME/.claude-oauth-token")"; [ -n "$T" ] || exit 78; export CLAUDE_CODE_OAUTH_TOKEN="$T"; exec bash "/Users/alexismacmini/kilopan-monorepo-flota/packages/metodo/scripts/watchdog.sh"</string>
+  </array>
+
+  <!-- El árbol de FLOTA, que NO es el de KiloPan. Y no está bajo ~/Documents a propósito:
+       macOS (TCC) le niega a los agentes de launchd el acceso a Documents, Desktop y
+       Downloads — el agente carga «bien», muestra pid, y muere al instante con «Operation
+       not permitted» sin una sola línea de stdout. -->
+  <key>WorkingDirectory</key>
+  <string>/Users/alexismacmini/kilopan-monorepo-flota</string>
+
+  <!-- El PATH de launchd NO es el de la terminal: el watchdog aborta si `claude` o `pnpm`
+       no resuelven. HOME explícito, o `claude` no encuentra su configuración.
+
+       KILOPAN_APP=flota es la diferencia con el motor de KiloPan y no es cosmética: sin
+       ella el watchdog correría `check.sh` SIN `--app`, verificando KiloPan y declarando
+       verde un HEAD de FLOTA que nunca miró. El auto-reporte del agente no es evidencia
+       (§9.2), y un gate que verifica otra cosa tampoco. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/Users/alexismacmini/.local/lib/nodejs/current/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>HOME</key>
+    <string>/Users/alexismacmini</string>
+    <key>KILOPAN_APP</key>
+    <string>flota</string>
+  </dict>
+
+  <!-- KeepAlive solo ante fallo. Todo ABORT del watchdog escribe PAUSA-REVISION y sale con
+       0: la salida limpia impide el relanzamiento, y el marcador —que launchd no puede
+       pisar— frena también los arranques futuros hasta que una persona lo borre.
+
+       Sin eso, los ABORT y este KeepAlive se peleaban: launchd resucitaba el motor a los
+       120 s, volvía a abortar, y giraba media hora sobre el mismo AC quemando presupuesto.
+       El pedido de intervención humana se perdía porque la máquina lo pisaba. -->
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- El watchdog termina LIMPIO al llegar a su tope de iteraciones («nunca desatendido
+       indefinidamente») y al terminar el trabajo. Sin esto se apagaría y quedaría esperando
+       a que alguien lo levantara: el backlog se detendría cada 20 iteraciones. Cada 30 min
+       vuelve a levantarse solo si no está corriendo, y retoma.
+
+       No desarma ningún freno: con PAUSA-REVISION presente, CADA arranque —incluidos los de
+       StartInterval— sale de inmediato sin construir. Sigue solo mientras todo va bien, y se
+       queda quieto de verdad cuando algo se rompió. -->
+  <key>StartInterval</key>
+  <integer>1800</integer>
+
+  <key>ThrottleInterval</key>
+  <integer>120</integer>
+
+  <key>StandardOutPath</key>
+  <string>/Users/alexismacmini/kilopan-monorepo-flota/packages/metodo/panel/launchd-flota.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/alexismacmini/kilopan-monorepo-flota/packages/metodo/panel/launchd-flota.err.log</string>
+
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>LowPriorityIO</key>
+  <true/>
+</dict>
+</plist>

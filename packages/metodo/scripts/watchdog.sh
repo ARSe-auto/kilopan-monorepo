@@ -16,6 +16,11 @@ cd "$(dirname "$0")/../../.."
 # hicieron creer que el motor estaba detenido cuando no lo estaba— y, si el gate coincidía
 # con el arranque de una iteración, podía pausar el motor de PRODUCCIÓN. Un test que puede
 # apagar el sistema que vigila no es un test, es una avería con permiso.
+# QUÉ APP construye este motor. Default `kilopan` a propósito: el plist que ya existe no
+# declara nada y tiene que seguir haciendo exactamente lo mismo. El de FLOTA la declara, y con
+# eso el gate independiente verifica SU app — sin esto, el motor de flota habría corrido el gate
+# de KiloPan y declarado verde un HEAD que nunca verificó (§9.2: el auto-reporte no es evidencia).
+APP="${KILOPAN_APP:-kilopan}"
 LOG_DIR="${KILOPAN_PANEL_DIR:-packages/metodo/panel}"
 PIDFILE="$LOG_DIR/loop.pid"
 LOG="$LOG_DIR/watchdog.log"
@@ -106,7 +111,7 @@ while [ "$i" -lt "$MAX_ITERACIONES" ]; do
   # KILOPAN_LOOP_CMD (default: loop.sh de verdad) existe para que prueba-arnes.sh pueda
   # sustituir un stub que devuelve un rc exacto — probar el manejo de rc 9 sin gastar en
   # una invocación real de `claude -p` es la única forma honesta de probarlo.
-  ${KILOPAN_LOOP_CMD:-bash packages/metodo/scripts/loop.sh} 2>&1 | tee -a "$LOG"
+  ${KILOPAN_LOOP_CMD:-bash packages/metodo/scripts/loop.sh --app=$APP} 2>&1 | tee -a "$LOG"
   rc=${PIPESTATUS[0]}
 
   case "$rc" in
@@ -129,7 +134,10 @@ while [ "$i" -lt "$MAX_ITERACIONES" ]; do
       # externa) la ponía roja con HEAD sano — «TODOS los DTE» del WIP pausó el motor.
       # Mismo tratamiento que al inicio de iteración: el WIP se guarda en stash con
       # marca — JAMÁS se borra — y el veredicto es sobre lo comiteado.
-      EXCLUIR_SUCIO_WD=(':!packages/metodo/panel' ':!apps/kilopan/next-env.d.ts')
+      # El churn de artefacto es POR APP: `next build` reescribe el `next-env.d.ts` de la que
+      # se construyó, y excluir solo el de KiloPan dejaba el de FLOTA contando como WIP ajeno —
+      # el motor apartaría en stash un archivo que él mismo acaba de generar, en cada vuelta.
+      EXCLUIR_SUCIO_WD=(':!packages/metodo/panel' ':!apps/kilopan/next-env.d.ts' ':!apps/flota/next-env.d.ts')
       if [ -n "$(git status --porcelain -- "${EXCLUIR_SUCIO_WD[@]}" 2>/dev/null)" ]; then
         MARCA_PV="motor-wip-preverify-$(date +%Y%m%d-%H%M%S)"
         if git stash push -u -m "$MARCA_PV (guardado por watchdog.sh — NO borrado)" -- "${EXCLUIR_SUCIO_WD[@]}" >/dev/null 2>&1; then
@@ -139,7 +147,7 @@ while [ "$i" -lt "$MAX_ITERACIONES" ]; do
           echo "watchdog: no pude apartar el WIP — verifico igual; un rojo aquí puede ser del WIP y no de HEAD." | tee -a "$LOG"
         fi
       fi
-      if ! bash packages/metodo/scripts/check.sh --full 2>&1 | tee -a "$LOG"; then
+      if ! bash packages/metodo/scripts/check.sh --app="$APP" --full 2>&1 | tee -a "$LOG"; then
         pausar "el gate independiente NO dio verde sobre el HEAD que el agente acaba de comitear ($(git rev-parse --short HEAD)). El auto-reporte del agente no es evidencia; revisar a mano."
       fi
       # Publicar lo ya verificado. `loop.sh` comitea local y el agente no tiene permiso de
