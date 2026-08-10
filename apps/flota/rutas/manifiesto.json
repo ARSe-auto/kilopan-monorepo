@@ -374,6 +374,37 @@
       }
     },
     {
+      "ruta": "/api/motivos",
+      "archivo": "src/app/api/motivos/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Catálogo de motivos del tenant (§4.5, §4.4) [AC-FRUT-13]. El GET lista y el POST SIEMBRA desde el vertical, así que enciende el comparador de huella de la BD de B: sembrarle motivos al vecino le mete opciones ajenas en la pantalla de no-entrega de su chofer, y desde ahí quedan escritas en actos que no se pueden corregir —un motivo no se borra—. El caso genérico va sin credencial y la guardia contesta 404 pelado antes de mirar el cuerpo."
+      }
+    },
+    {
+      "ruta": "/api/motivos/[id]",
+      "archivo": "src/app/api/motivos/[id]/route.ts",
+      "metodos": [
+        "PATCH"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "motivos",
+          "columna": "id"
+        },
+        "nota": "Apagar o encender un motivo de B desde A: 404 y la BD de B sin cambios. Apagárselo le saca de la pantalla la explicación que su operación usa todos los días, y encendérselo le devuelve a los flujos nuevos una que había retirado a propósito — las dos direcciones son daño. El fixture del vecino siembra un motivo para que el id sea REAL: contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin probar nada."
+      }
+    },
+    {
       "ruta": "/api/pin/puente",
       "archivo": "src/app/api/pin/puente/route.ts",
       "metodos": [

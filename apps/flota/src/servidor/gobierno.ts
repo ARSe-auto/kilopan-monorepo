@@ -97,6 +97,8 @@ export const EVENTOS_OPERACION = {
   ruta_creada: "ruta.creada",
   ruta_publicada: "ruta.publicada",
   encargo_asignado: "encargo.asignado",
+  motivo_apagado: "motivo.apagado",
+  motivo_encendido: "motivo.encendido",
 } as const;
 
 /** Todo código que `registrarEvento` acepta tiene que estar sembrado en `evento_tipo`: si los

@@ -130,6 +130,13 @@ async function sembrarIdentidadDelVecino(slug) {
       "insert into rutas (nombre, vehiculo_id) values ('Ruta de la madrugada del vecino', $1)",
       [vehiculo.id],
     );
+    // Y un motivo del catálogo del vecino [AC-FRUT-13]: `/api/motivos/[id]` es de tipo recurso y
+    // el caso del centinela 2 saca de acá el id REAL con el que A intenta apagarle —o volver a
+    // encenderle— una opción de su pantalla de no-entrega. Las dos direcciones son daño.
+    await sql(
+      `insert into motivos (codigo, etiqueta, estado_asociado, orden)
+       values ('local_cerrado_del_vecino', 'Local cerrado del vecino', 'parada_fallida', 1)`,
+    );
   });
 }
 
