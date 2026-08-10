@@ -1,6 +1,6 @@
-# HANDOFF — El hito (c) arrancó: 7 de 22 del módulo 02, con el corazón EV en pie
+# HANDOFF — El hito (c) va 13 de 22 del módulo 02
 
-**Traspaso de la sesión del 09-ago-2026 (20:14 → 21:45), rama `flota/specs-e1` en
+**Traspaso de la sesión del 09-ago-2026 (20:14 →), rama `flota/specs-e1` en
 `~/kilopan-monorepo-flota`, Opus 5 esfuerzo alto.** Árbol limpio salvo el churn de artefacto de
 siempre, todo comiteado, `check.sh --app=flota --full` en **VERDE con 14 OK · 0 fallados · 1
 saltado declarado** (158 casos e2e).
@@ -14,16 +14,24 @@ saltado declarado** (158 casos e2e).
 
 | | Antes | Ahora |
 |---|---|---|
-| Módulo 02 (vehículos/energía/agenda) | 0 de 22 | **7 de 22** |
-| ACs cerrados de la plataforma | 46 de 197 | **53 de 197** |
-| Rutas que sirve `apps/flota` | 20 | **29** |
-| Migraciones de tenant | 15 | **21** (última: `0021_bloques_agenda`) |
-| Criterios KiloRuta con test | 11 | **15** (entraron KR-04, KR-14, KR-15, KR-44, KR-55) |
+| Módulo 02 (vehículos/energía/agenda) | 0 de 22 | **13 de 22** |
+| ACs cerrados de la plataforma | 46 de 197 | **59 de 197** |
+| Rutas que sirve `apps/flota` | 20 | **33** |
+| Migraciones de tenant | 15 | **28** (última: `0028_recarga_idempotente`) |
+| Criterios KiloRuta con test | 11 | **16** (entraron KR-04, KR-14, KR-15, KR-44, KR-51, KR-55) |
 
-Los siete ACs: **AC-FVEH-01** (alta con patente + tipo y su baseline de acciones), **AC-FVEH-02**
-(CRUD del dueño y DELETE que desactiva), **AC-FVEH-06** (el vehículo-día con su EXCLUDE),
-**AC-FVEH-05** (odómetro y SOC por `reading`), **AC-FVEH-20** (la vista `eevd_semanal`),
-**AC-FVEH-09** (la fórmula única de energía) y **AC-FVEH-07** (la agenda por vehículo).
+Los trece ACs: **01** (alta con baseline de acciones), **02** (CRUD del dueño, DELETE que
+desactiva), **06** (vehículo-día con EXCLUDE), **05** (odómetro y SOC por `reading`), **20**
+(`eevd_semanal`), **09** (fórmula única de energía y su grep-gate), **07** (agenda y duplicar
+semana), **03** (documentos que rebotan solo con feature ON), **17** («por vencer»), **18**
+(config congelada por turno y `modulo_apagado`), **19** (máx capturas de SOC), **04** (chequeos
+y ciclo del defecto) y **08** (recarga como captura, con dinero invisible).
+
+**Lo que queda del módulo 02 (9):** AC-FVEH-10 (apertura F3 ≤9 toques), AC-FVEH-21 (cierre F5
+≤6), AC-FVEH-11 (datos fuente de señales), AC-FVEH-12 (tablero «Listos para salir»),
+AC-FVEH-13 (ahorro vs diésel, aserción numérica bloqueada por la pregunta 3), AC-FVEH-14
+(ganchos §4.9 en estado exacto), AC-FVEH-15 (telemetría de energía), AC-FVEH-16 (validación en
+vivo, DONE-adopción) y AC-FVEH-22 (cierre forzado, KR-41).
 
 ## Lo que hay que saber para seguir, y no se lee del diff
 
@@ -63,7 +71,19 @@ manejar la deriva con turno abierto.
 
 ## Próximos pasos, en orden
 
-### 1. AC-FVEH-03 — `vehiculo_documentos` (lo que sigue)
+### 0. Lo aprendido a fuerza de rojos, que ahorra media hora en el AC siguiente
+
+- **Los hechos append-only no se borran NI con el dueño del esquema**, y lo que cuelga de ellos
+  tampoco. `e2e/limpiar.mjs` excluye los turnos con chequeos y los vehículos con recargas.
+- **Las suites que dejan hechos usan el tenant `hechos`**, con URL absoluta
+  (`http://hechos.localhost:3311`). El primer activo tiene que poder quedar VACÍO.
+- **Un entitlement ausente no es «apagado»** (`estadoDeFeature` devuelve los tres estados).
+- **El grep-gate de constantes muerde al CITAR el maestro**: no escribir los números del §0 en
+  comentarios, ni «§4.5» seguido de coma o paréntesis salvo por el lookbehind ya puesto.
+- **`guardrail.sh` rebota la palabra TODO en mayúsculas**, aunque sea español legítimo.
+- **Una migración aplicada no se edita**: el runner frena por sha. Se escribe la siguiente.
+
+### 1. AC-FVEH-03 — `vehiculo_documentos` (HECHO; queda como referencia del patrón feature-ON)
 
 Diseñado y sin bloqueos duros. Lo que hace falta:
 
