@@ -83,4 +83,63 @@ select throws_ok(
   'un sha256 mal formado no entra: uno truncado parece un hash y no sirve para comparar'
 );
 
+-- ─── «Por vencer»: el recordatorio del §3.E1.3 [AC-FVEH-17] ──────────────────────────
+--
+-- La anticipación vive en `parametros` (clave `anticipacion_vencimiento_dias`, cerrada por la
+-- P5 de la spec 00). Lo que sigue abierto es su SEED, así que acá se prueba la CONDUCTA con un
+-- valor de fixture y no se siembra ninguno.
+
+insert into vehiculos (patente, tipo) values ('DOC0003', 'furgón');
+
+create temporary table d3 as
+  select (select id from vehiculos where patente = 'DOC0003') as v;
+
+-- Sin anticipación configurada, «por vencer» NO existe: la columna nace NULL y un default
+-- inventado acá sería fabricar la respuesta a la pregunta 1 de la spec 02.
+insert into vehiculo_documentos (vehiculo_id, tipo, vence_el)
+  select v, 'SOAP', (now() at time zone 'America/Santiago')::date + 3 from d3;
+
+select is(
+  (select estado_de_documento(vence_el) from vehiculo_documentos where vehiculo_id = (select v from d3)),
+  'vigente',
+  'sin anticipación configurada no hay «por vencer»: no se inventa un default (pregunta 1)'
+);
+
+insert into parametros (anticipacion_vencimiento_dias) values (10)
+  on conflict (unica) do update set anticipacion_vencimiento_dias = 10;
+
+select is(
+  (select estado_de_documento(vence_el) from vehiculo_documentos where vehiculo_id = (select v from d3)),
+  'por_vencer',
+  'con anticipación de 10 días, uno que vence en 3 está «por vencer» (§3.E1.3)'
+);
+
+-- El borde de la anticipación: justo en el límite avisa, y un día más allá todavía no. Sin
+-- este par, un `<` por un `<=` desplazaría el aviso un día entero sin que nada se ponga rojo.
+update vehiculo_documentos set vence_el = (now() at time zone 'America/Santiago')::date + 10
+ where vehiculo_id = (select v from d3);
+select is(
+  (select estado_de_documento(vence_el) from vehiculo_documentos where vehiculo_id = (select v from d3)),
+  'por_vencer',
+  'el último día de la anticipación todavía avisa'
+);
+
+update vehiculo_documentos set vence_el = (now() at time zone 'America/Santiago')::date + 11
+ where vehiculo_id = (select v from d3);
+select is(
+  (select estado_de_documento(vence_el) from vehiculo_documentos where vehiculo_id = (select v from d3)),
+  'vigente',
+  'un día más allá de la anticipación no avisa: si avisara siempre, nadie miraría el aviso'
+);
+
+-- Y «vencido» le gana a «por vencer»: no son dos etiquetas de lo mismo, son dos situaciones
+-- distintas y quien mira la lista tiene que ver la peor.
+update vehiculo_documentos set vence_el = (now() at time zone 'America/Santiago')::date - 1
+ where vehiculo_id = (select v from d3);
+select is(
+  (select estado_de_documento(vence_el) from vehiculo_documentos where vehiculo_id = (select v from d3)),
+  'vencido',
+  'un documento vencido dice «vencido», no «por vencer»'
+);
+
 select finish();

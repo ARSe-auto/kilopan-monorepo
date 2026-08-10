@@ -38,6 +38,7 @@ type Vehiculo = {
   bateria_wh: number | null;
   autonomia_nominal_km: number | null;
   documentos_vencidos: number;
+  documentos_por_vencer: number;
 };
 
 type Rebote = { error?: string; mensaje?: string };
@@ -192,6 +193,17 @@ export default function Vehiculos() {
                   : `${v.documentos_vencidos} documentos vencidos`}
               </p>
             )}
+            {/* «Por vencer» va en otro color Y con otra palabra: el aviso que llega a tiempo
+                sirve para algo distinto que el que llega tarde, y quien mira la lista tiene que
+                poder distinguirlos sin leerlos enteros. Aparece solo si el tenant configuró su
+                anticipación (§4.4); sin ella el servidor devuelve cero [AC-FVEH-17]. */}
+            {v.documentos_por_vencer > 0 && (
+              <p data-testid="documentos-por-vencer" style={textoPorVencer}>
+                {v.documentos_por_vencer === 1
+                  ? "1 documento por vencer"
+                  : `${v.documentos_por_vencer} documentos por vencer`}
+              </p>
+            )}
           </article>
         ))}
       </section>
@@ -237,4 +249,5 @@ const tarjeta = {
   border: `1px solid ${superficie.hairline}`,
 };
 const textoVencido = { ...pie, margin: 0, color: colorSemantico.error, fontWeight: enfasis.medio };
+const textoPorVencer = { ...pie, margin: 0, color: colorSemantico.alerta, fontWeight: enfasis.medio };
 const textoRebote = { ...cuerpo, margin: 0, color: colorSemantico.error, fontWeight: enfasis.medio };

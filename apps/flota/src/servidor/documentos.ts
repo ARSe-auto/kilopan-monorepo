@@ -15,7 +15,8 @@ import type { Sesion } from "./sesion.ts";
 //
 // EL ESTADO SE CALCULA CON EL DÍA DE CHILE y en un solo lugar. `vencido` es `vence_el < hoy`,
 // nunca `<=`: una revisión técnica que vence el 30 sirve el 30 entero, y un día de más en el
-// rebote es un camión detenido sin motivo.
+// rebote es un camión detenido sin motivo. «Por vencer» necesita la anticipación del tenant
+// (§4.4); sin ella no existe ese estado, y no se inventa un default [AC-FVEH-17].
 
 export type Documento = {
   id: string;
@@ -23,7 +24,7 @@ export type Documento = {
   tipo: string;
   vence_el: string;
   sha256: string | null;
-  estado: "vencido" | "vigente";
+  estado: "vencido" | "por_vencer" | "vigente";
 };
 
 export type AltaDeDocumento =
@@ -33,11 +34,12 @@ export type AltaDeDocumento =
   | { tipo: "fecha_invalida" }
   | { tipo: "sha256_invalido" };
 
-/** El SELECT único: el estado sale de la BASE y no de una comparación en cada pantalla. */
+/** El SELECT único. El estado sale de `estado_de_documento()`, que vive en la BASE: la
+ *  anticipación de «por vencer» es del tenant (§4.4) y calcularla en cada pantalla serían tres
+ *  copias de la misma resta, con el `<=` colándose en una de ellas [AC-FVEH-17]. */
 const COLUMNAS = `id::text as id, vehiculo_id::text as vehiculo_id, tipo,
                   to_char(vence_el, 'YYYY-MM-DD') as vence_el, sha256,
-                  case when vence_el < (now() at time zone 'America/Santiago')::date
-                       then 'vencido' else 'vigente' end as estado`;
+                  estado_de_documento(vence_el) as estado`;
 
 const SHA256 = /^[0-9a-f]{64}$/;
 

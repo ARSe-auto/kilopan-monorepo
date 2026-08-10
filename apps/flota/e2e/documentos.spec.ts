@@ -248,3 +248,74 @@ test("[AC-FVEH-03] el estado vencido se dice con TEXTO, jamás solo con color", 
   expect(await page.getByTestId("vehiculo").count()).toBeGreaterThan(1);
   expect(await aviso.count(), "el aviso de vencido salió en un vehículo que está al día").toBe(1);
 });
+
+// ─── El recordatorio del §3.E1.3 [AC-FVEH-17] ────────────────────────────────────────
+//
+// «Documentos con vencimiento con RECORDATORIOS» es conducta OBLIGADA de E1. La superficie
+// mínima que la cierra es que el vehículo diga, en texto, que un documento está por vencer
+// ANTES de que venza: un aviso el día después no es un recordatorio, es la noticia de que ya
+// es tarde.
+//
+// LO QUE SIGUE ABIERTO Y NO SE INVENTA: el VALOR del seed de anticipación y el canal adicional
+// (pregunta 1 de la spec 02). El NOMBRE de la fila ya estaba cerrado por la P5 de la spec 00
+// —`parametros.anticipacion_vencimiento_dias`— y es el que se consume. Sin fila configurada no
+// existe «por vencer», y eso también se verifica: un default inventado acá quedaría fabricado
+// sin que nadie lo note.
+
+/** Deja configurada la anticipación del tenant, o la borra. Es lo que va a hacer la pantalla
+ *  de configuración del hito (g); acá se escribe directo porque el fixture es la base. */
+async function anticipacionDe(dias: number | null) {
+  await con(BD_A, (c: Conexion) =>
+    c.sql(
+      `insert into parametros (anticipacion_vencimiento_dias) values ($1)
+       on conflict (unica) do update set anticipacion_vencimiento_dias = excluded.anticipacion_vencimiento_dias`,
+      [dias],
+    ),
+  );
+}
+
+test("[AC-FVEH-17] sin anticipación configurada no existe «por vencer»", async ({ request }) => {
+  await anticipacionDe(null);
+  const r = await cargarDocumento(request, { tipo: "SOAP", vence_el: enDias(3) });
+  expect(r.status()).toBe(201);
+  // El estado que devuelve el servidor es `vigente`, no `por_vencer`: sin el parámetro del
+  // tenant no hay umbral, y fabricar uno acá dejaría respondida la pregunta 1 sin que nadie
+  // recordara de dónde salió el número.
+  expect((await r.json()).documento.estado).toBe("vigente");
+});
+
+test("[AC-FVEH-17] con la anticipación configurada, el vehículo lo dice con TEXTO", async ({ page }) => {
+  await anticipacionDe(10);
+  await sesionDe(page, SECRETO);
+  await page.goto("/vehiculos");
+
+  const aviso = page.getByTestId("documentos-por-vencer");
+  await expect(aviso.first()).toBeVisible();
+  // §5.1: la palabra escrita, no un color. Y «por vencer» tiene que decir algo DISTINTO de
+  // «vencido»: son dos situaciones y quien mira la lista actúa distinto en cada una.
+  await expect(aviso.first()).toContainText("por vencer");
+
+  const vencidos = await page.getByTestId("documentos-vencidos").allTextContents();
+  for (const texto of vencidos) {
+    expect(texto, "«vencido» y «por vencer» se están diciendo con la misma frase").not.toContain(
+      "por vencer",
+    );
+  }
+});
+
+test("[AC-FVEH-17] un documento fuera de la anticipación NO avisa", async ({ request }) => {
+  // La mitad sin la cual el aviso saldría siempre, y quien mira la lista dejaría de mirarlo la
+  // primera semana.
+  await anticipacionDe(10);
+  const [v] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ id: string }>(
+      "insert into vehiculos (patente, tipo) values ('DOC9999', 'furgón') returning id::text as id",
+    ),
+  );
+  const r = await request.post(`/api/gobierno/vehiculos/${v!.id}/documentos`, {
+    headers: comoDuena,
+    data: { tipo: "permiso de circulación", vence_el: enDias(40) },
+  });
+  expect(r.status()).toBe(201);
+  expect((await r.json()).documento.estado).toBe("vigente");
+});

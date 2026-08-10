@@ -51,7 +51,12 @@ export type Vehiculo = {
 /** Lo que la LISTA agrega a la ficha: cuántos documentos vencidos tiene el vehículo hoy. Va en
  *  el listado y no en cada alta porque la pantalla lo necesita para todos a la vez — con veinte
  *  camiones, preguntarlo uno por uno son veinte requests desde un teléfono [AC-FVEH-03]. */
-export type VehiculoEnLista = Vehiculo & { documentos_vencidos: number };
+export type VehiculoEnLista = Vehiculo & {
+  documentos_vencidos: number;
+  /** Los que vencen dentro de la anticipación configurada. Cero si el tenant no la configuró:
+   *  sin `parametros.anticipacion_vencimiento_dias` no existe «por vencer» [AC-FVEH-17]. */
+  documentos_por_vencer: number;
+};
 
 export type AltaDeVehiculo =
   | { tipo: "ok"; vehiculo: Vehiculo }
@@ -107,7 +112,10 @@ export async function listarVehiculos(pool: Pool): Promise<VehiculoEnLista[]> {
     `select ${COLUMNAS},
             (select count(*)::int from vehiculo_documentos d
               where d.vehiculo_id = vehiculos.id
-                and d.vence_el < (now() at time zone 'America/Santiago')::date) as documentos_vencidos
+                and estado_de_documento(d.vence_el) = 'vencido') as documentos_vencidos,
+            (select count(*)::int from vehiculo_documentos d
+              where d.vehiculo_id = vehiculos.id
+                and estado_de_documento(d.vence_el) = 'por_vencer') as documentos_por_vencer
        from vehiculos order by activo desc, patente asc`,
   );
   return rows;
