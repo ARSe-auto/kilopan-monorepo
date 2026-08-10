@@ -5,6 +5,7 @@ import { secretoNuevo, hashDeSecreto, parDelAparato } from "../src/dominio/secre
 import { registrarAcceso } from "../src/servidor/soporte.ts";
 import { enActo, registrarEvento, type CodigoDeEvento } from "../src/servidor/gobierno.ts";
 import { casosDelRepo } from "../rutas/generar.mjs";
+import { limpiarFixture } from "./limpiar.mjs";
 import { con, bdDeTenant, BD_CONTROL, CLUSTER_LOCAL, ROL_MIGRADOR } from "../../../db/flota/conectar.mjs";
 import { TENANTS, VECINO } from "./preparar-tenants.mjs";
 import { PIN } from "../../../packages/nucleo-comun/src/constants.ts";
@@ -134,10 +135,8 @@ test.beforeAll(async () => {
     user: ROL_MIGRADOR,
   });
 
-  // El orden lo dictan las FK, no el gusto: lo que apunta antes que lo apuntado.
-  for (const tabla of ["codigos_puente", "solicitudes_acceso", "invitaciones", "dispositivos", "usuarios", "personas"]) {
-    await sql(`delete from ${tabla}`);
-  }
+  // El orden lo dictan las FK, no el gusto, y vive en `limpiar.mjs`.
+  await limpiarFixture(sql);
 
   duena = await enrolar("11.111.111-1", "Dueña", "admin_tenant");
   operario = await enrolar("7.654.321-6", "Operario", "chofer");
@@ -159,8 +158,6 @@ test.beforeAll(async () => {
 
   // Un vehículo, porque las rutas de gobierno de vehículos llevan parámetro [AC-FVEH-02]: el
   // barrido de más abajo necesita un id REAL de esta base para que el 403 signifique algo.
-  await sql("delete from turnos");
-  await sql("delete from vehiculos");
   const [v] = await sql<{ id: string }>(
     "insert into vehiculos (patente, tipo) values ('GOB1234', 'furgón') returning id::text as id",
   );

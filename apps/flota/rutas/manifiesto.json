@@ -14,6 +14,43 @@
       }
     },
     {
+      "ruta": "/agenda",
+      "archivo": "src/app/agenda/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla semanal de la agenda (§5.2-F1) [AC-FVEH-07]. No recibe identificador por URL: el vehículo se elige con un chip y todo lo que hace pasa por /api/agenda y /api/agenda/duplicar-semana, que tienen sus propios casos. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y pesa porque el HTML servido no puede traer ni el slug ni la base del vecino antes de que haya sesión."
+      }
+    },
+    {
+      "ruta": "/api/agenda",
+      "archivo": "src/app/api/agenda/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Agenda por vehículo [AC-FVEH-07]. El vehículo viaja como parámetro de CONSULTA y no de ruta, así que el manifiesto la ve sin `[id]`: el caso genérico va sin credencial y la guardia contesta 404 pelado antes de mirar el `vehiculo_id`. El POST MUTA y enciende el comparador de huella de la BD de B — un bloque escrito en el vecino no es solo una fuga: le ocupa una hora de un camión ajeno y le rebota el bloque legítimo que quiera poner ahí (centinela 5). El cruce CON un uuid de vehículo de B lo prueba la suite del módulo, que sabe cómo se ve uno."
+      }
+    },
+    {
+      "ruta": "/api/agenda/duplicar-semana",
+      "archivo": "src/app/api/agenda/duplicar-semana/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "«Duplicar semana» [AC-FVEH-07]. Sin parámetro de ruta: el vehículo y la semana van en el cuerpo. Es la mutación MÁS destructiva de la agenda —clona una semana entera de bloques— así que el comparador de huella de la BD de B es exactamente el guard que corresponde. Sin credencial no llega a mirar el cuerpo: 404 pelado."
+      }
+    },
+    {
       "ruta": "/api/entorno",
       "archivo": "src/app/api/entorno/route.ts",
       "metodos": [

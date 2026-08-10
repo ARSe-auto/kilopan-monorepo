@@ -78,6 +78,9 @@ export const EVENTOS_OPERACION = {
   lectura_odometro_retrocedido: "lectura.odometro_retrocedido",
   lectura_reloj_desfasado: "lectura.reloj_desfasado",
   lectura_sin_turno: "lectura.sin_turno",
+  agenda_bloque_creado: "agenda.bloque_creado",
+  agenda_bloque_borrado: "agenda.bloque_borrado",
+  agenda_semana_duplicada: "agenda.semana_duplicada",
 } as const;
 
 /** Todo código que `registrarEvento` acepta tiene que estar sembrado en `evento_tipo`: si los

@@ -3,6 +3,7 @@ import { con, bdDeTenant } from "../../../db/flota/conectar.mjs";
 import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
 import { VALIDOS } from "../../../db/flota/ruts-sinteticos.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
+import { limpiarFixture } from "./limpiar.mjs";
 
 // La apertura del vehículo-día, por HTTP [AC-FVEH-06] — §4.5, §5.2-F3, §9.3 centinela 5.
 //
@@ -49,14 +50,9 @@ async function enrolar(c: Conexion, rut: string, nombre: string, rol: string, se
 
 test.beforeAll(async () => {
   await con(BD_A, async (c: Conexion) => {
-    // El orden lo dictan las FK, no el gusto: los turnos apuntan a los vehículos.
-    await c.sql("delete from turnos");
-    await c.sql("delete from vehiculos");
-    await c.sql("delete from solicitudes_acceso");
-    await c.sql("delete from invitaciones");
-    await c.sql("delete from dispositivos");
-    await c.sql("delete from usuarios");
-    await c.sql("delete from personas");
+    // El orden lo dictan las FK, no el gusto, y vive en `limpiar.mjs`: acá se pedía a mano y
+    // la suite se ponía roja cada vez que el módulo estrenaba una tabla.
+    await limpiarFixture(c.sql);
 
     await enrolar(c, RUT_DUENA, "Dueña", "admin_tenant", SECRETO_DUENA);
     await enrolar(c, RUT_CONTRATANTE, "Empresa contratante", "cliente", SECRETO_CONTRATANTE);

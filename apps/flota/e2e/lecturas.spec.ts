@@ -5,6 +5,7 @@ import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
 import { VALIDOS } from "../../../db/flota/ruts-sinteticos.mjs";
 import { SOC, RELOJ } from "../../../packages/nucleo-comun/src/constants.ts";
 import { TENANTS } from "./preparar-tenants.mjs";
+import { limpiarFixture } from "./limpiar.mjs";
 
 // La captura de odómetro y SOC, por HTTP [AC-FVEH-05] — §4.2, §4.6, §0, §9.3 centinela 4.
 //
@@ -37,13 +38,7 @@ const patente = "LEC0001";
 
 test.beforeAll(async () => {
   await con(BD_A, async (c: Conexion) => {
-    await c.sql("delete from turnos");
-    await c.sql("delete from vehiculos");
-    await c.sql("delete from solicitudes_acceso");
-    await c.sql("delete from invitaciones");
-    await c.sql("delete from dispositivos");
-    await c.sql("delete from usuarios");
-    await c.sql("delete from personas");
+    await limpiarFixture(c.sql);
 
     const [p] = await c.sql<{ id: string }>(
       "insert into personas (rut, nombre) values ($1, 'Quien maneja') returning id::text as id",

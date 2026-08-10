@@ -44,8 +44,8 @@ clasificado, se corrige allá, con la firma del dueño, y acá se refleja.
 | KR-11 | rate_card · concepto_tarifa (catálogo cerrado, máx 4 activos) | — (pendiente: AC-FTAR-01 · hito f) |
 | KR-12 | tarifas append-only con vigencia | — (pendiente: AC-FTAR-02 · hito f) |
 | KR-13 | round_clp() · columnas *_clp en bigint (linter del §7.5) | db/flota/lint-migraciones.test.mjs::en bigint pasa (el guard no es un no-op al revés) |
-| KR-14 | bloques_agenda con EXCLUDE de ventana | — (pendiente: AC-FVEH-07/08 · hito c) |
-| KR-15 | bloques_agenda (duplicar semana) | — (pendiente: AC-FVEH-07 · hito c) |
+| KR-14 | bloques_agenda con EXCLUDE de ventana | apps/flota/e2e/agenda.spec.ts::el solapado rebota 422 con 0 filas |
+| KR-15 | bloques_agenda (duplicar semana) | apps/flota/e2e/agenda.spec.ts::clona los bloques REALES de 7 días atrás |
 | KR-16 | turnos + chequeo pre (odómetro, SOC) | — (pendiente: AC-FVEH-10 · hito c) |
 | KR-17 | vertical_template.checklists[] | db/flota/pgtap/0002_verticales_grupos_y_parametros.sql::has_column('vertical_template', 'checklists') |
 | KR-18 | proyección vehiculos.soc + fórmula de rango del §0 | — (pendiente: AC-FVEH-09/10 · hito c) |
@@ -85,7 +85,7 @@ clasificado, se corrige allá, con la firma del dueño, y acá se refleja.
 | KR-52 | atribución turno/bloque→empresa | — (pendiente: AC-FTAR-14 · hito f · bloqueado en pregunta 06-12) |
 | KR-53 | COMMENT ON TABLE con clase de la regla de oro (linter §4.2) | db/flota/lint-migraciones.test.mjs::exigencia 5 — un COMMENT sin clase de la regla de oro ⇒ rojo |
 | KR-54 | UNIQUE (tenant_id, client_uuid) en las tablas de captura | db/flota/suite-bd/identidad.test.mjs::[AC-FIDN-01] el replay de una firma no crea una segunda fila (centinela 1) |
-| KR-55 | EXCLUDE WHERE estado<>'anulado' en turnos (vivo, AC-FVEH-06) y en bloques_agenda (falta) | — (pendiente: AC-FVEH-07 · hito c — la mitad de `turnos` ya la prueba db/flota/pgtap/0011_turnos.sql; se cierra cuando exista la otra) |
+| KR-55 | EXCLUDE de solape en turnos (con WHERE estado<>'anulado') y en bloques_agenda (sin WHERE: un bloque se borra) | db/flota/pgtap/0011_turnos.sql::el EXCLUDE excluye los anulados, como pide el §4.5 |
 | KR-56 | política RESTRICTIVE FOR SELECT de aplicar_rls_de_dinero(regclass) | db/flota/suite-bd/dinero.test.mjs::[AC-FTEN-21] el chofer NO ve montos pero su captura con costo NULL entra sin rebote |
 | KR-57 | rut_valido() módulo 11 · lista congelada de RUTs sintéticos | packages/nucleo-comun/src/rut.test.ts::[AC-FIDN-17] la lista congelada entera: los válidos pasan y los inválidos no |
 | KR-58 | reference_document UNIQUE (tipo, folio, emisor); tipos 33/39/52/61 | — (pendiente: AC-FTEN-14 (DDL) · AC-FTAR-08 · hito f · clase en pregunta 00-13) |

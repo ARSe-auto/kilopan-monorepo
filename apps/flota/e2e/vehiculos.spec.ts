@@ -4,6 +4,7 @@ import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
 import { VALIDOS } from "../../../db/flota/ruts-sinteticos.mjs";
 import { registrarBaseline, leerBaseline } from "./baseline-acciones.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
+import { limpiarFixture } from "./limpiar.mjs";
 
 // El alta de vehículo, de punta a punta y contando acciones [AC-FVEH-01] — §5.4, §5.3, §4.5.
 //
@@ -43,14 +44,7 @@ const TIPO = "Furgón eléctrico";
 
 test.beforeAll(async () => {
   await con(BD_A, async (c: Conexion) => {
-    // El orden lo dictan las FK: los turnos apuntan a los vehículos.
-    await c.sql("delete from turnos");
-    await c.sql("delete from vehiculos");
-    await c.sql("delete from solicitudes_acceso");
-    await c.sql("delete from invitaciones");
-    await c.sql("delete from dispositivos");
-    await c.sql("delete from usuarios");
-    await c.sql("delete from personas");
+    await limpiarFixture(c.sql);
     const [p] = await c.sql<{ id: string }>(
       "insert into personas (rut, nombre) values ($1, 'Dueña') returning id::text as id",
       [RUT_DUENA],
