@@ -208,3 +208,28 @@ select throws_ok(
   '23505', null,
   'dos veces la misma evidencia en el mismo tipo de carga: el operario firmaría dos veces lo mismo'
 );
+
+-- ─── El gancho `pin_destinatario` está VIVO, y por eso puede no estar sembrado [AC-FRUT-20] ──
+--
+-- El §4.9 lo quiere en el esquema desde el día 1 para que encenderlo en E2 sean FILAS y no una
+-- migración. Acá se ejerce que el DDL lo acepta de verdad: un enum que lo declara pero una tabla
+-- que lo rechazara sería el gancho muerto con cara de vivo.
+--
+-- Que ningún SEED lo ponga es lo complementario, y no lo puede probar este archivo: un test de
+-- base mira una base limpia. Lo vigila `db/flota/gate-seeds-pin-destinatario.mjs`, sobre los
+-- tres árboles por los que una fila llega a un tenant.
+
+select is(
+  (select count(*)::int from pg_enum e join pg_type t on t.oid = e.enumtypid
+    where t.typname = 'evidencia_tipo' and e.enumlabel = 'pin_destinatario'),
+  1,
+  'el enum de evidencia declara `pin_destinatario`: el gancho del §4.9 sigue VIVO'
+);
+
+insert into stop_requirement (parada_id, tipo_evidencia, obligatorio, orden)
+  select (select id from paradas where tipo = 'recarga' limit 1), 'pin_destinatario', false, 99;
+select is(
+  (select count(*)::int from stop_requirement where tipo_evidencia = 'pin_destinatario'),
+  1,
+  '`stop_requirement` ACEPTA el tipo: el gancho está vivo de verdad, no solo declarado'
+);

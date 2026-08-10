@@ -63,6 +63,13 @@ paso "documentos del contrato: runbook de brechas con sus secciones y sus exigen
 paso "ganchos §4.9: DDL-only sin pantalla y una sola implementación de telemetría" \
   node db/flota/gate-ganchos-e1.mjs
 
+# `pin_destinatario` está VIVO en el enum y NINGÚN seed lo pone (§5.2 F4). Un test de base
+# prueba que una base está limpia hoy; lo que se pierde es más silencioso: sembrado en la
+# plantilla de un vertical, la derivación del publicar lo copia a todas las paradas de ese tipo
+# de carga y el operario del andén termina pidiendo un PIN que nadie configuró. [AC-FRUT-20]
+paso "seeds: nadie siembra `pin_destinatario`, y el gancho sigue vivo en el DDL (§4.9)" \
+  node db/flota/gate-seeds-pin-destinatario.mjs
+
 # El scan de logs del §9.2: cero PIN en cualquier forma, cero RUT sin máscara, cero secreto
 # de dispositivo. Estático y no sobre la salida de los tests, porque la línea que filtra un
 # PIN es casi siempre la del `catch` que nadie ejerció. [AC-FIDN-06]
