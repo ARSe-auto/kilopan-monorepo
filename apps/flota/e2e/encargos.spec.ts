@@ -361,3 +361,95 @@ test("[AC-FRUT-02] un archivo sin las columnas necesarias lo dice, con los nombr
   expect(cuerpo.mensaje).toContain("destino");
   expect(cuerpo.mensaje).toContain("bultos");
 });
+
+// ─── «Duplicar encargos de ayer» [AC-FRUT-17] — §5.2-F1, §3.E1.5, §9.3.1 ────────────
+//
+// Vía masiva SEPARADA de la CSV. La panadería que reparte a las mismas doce sucursales todos los
+// días no tiene un Excel: tiene el día de ayer.
+//
+// Lo que este bloque protege es el segundo clic. La pantalla tarda, alguien insiste, y con un
+// identificador al azar por intento el día entero se duplicaría — veinte encargos fantasma que
+// alguien tiene que borrar a mano antes de armar las rutas.
+
+const AYER = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+
+const duplicar = (request: import("@playwright/test").APIRequestContext) =>
+  request.post("/api/encargos/duplicar", { headers: comoOperador, data: { origen: AYER } });
+
+test("[AC-FRUT-17] duplicar crea encargos NUEVOS de hoy, conservando lo del original", async ({
+  request,
+}) => {
+  await con(BD_A, async (c: Conexion) => {
+    await c.sql("delete from encargos");
+    await c.sql(
+      `insert into encargos (empresa_cliente_id, destino_id, bultos, fecha_servicio)
+       values ($1, $2, 17, $3::date)`,
+      [empresaId, destinoId, AYER],
+    );
+  });
+
+  const respuesta = await duplicar(request);
+  expect(respuesta.ok()).toBe(true);
+  expect((await respuesta.json()) as { creados: number }).toMatchObject({ creados: 1 });
+
+  await con(BD_A, async (c: Conexion) => {
+    const filas = await c.sql<{ fecha: string; bultos: string; id: string }>(
+      `select to_char(fecha_servicio, 'YYYY-MM-DD') as fecha, bultos::text as bultos,
+              id::text as id
+         from encargos order by fecha_servicio`,
+      [],
+    );
+    // DOS encargos: el de ayer sigue donde estaba. Moverle la fecha le borraría el día a la
+    // historia y dejaría su entrega firmada colgando de un encargo que dice ser de hoy.
+    expect(filas).toHaveLength(2);
+    expect(filas[0]!.fecha).toBe(AYER);
+    expect(filas[1]!.fecha).toBe(new Date().toISOString().slice(0, 10));
+    // Y lo copiado se conservó.
+    expect(filas[1]!.bultos).toBe("17");
+    expect(filas[1]!.id).not.toBe(filas[0]!.id);
+  });
+});
+
+test("[AC-FRUT-17] el segundo clic no duplica el día: 1 fila por client_uuid", async ({
+  request,
+}) => {
+  await con(BD_A, async (c: Conexion) => {
+    await c.sql("delete from encargos");
+    await c.sql(
+      `insert into encargos (empresa_cliente_id, destino_id, bultos, fecha_servicio)
+       values ($1, $2, 5, $3::date), ($1, $2, 9, $3::date)`,
+      [empresaId, destinoId, AYER],
+    );
+  });
+
+  const primera = await duplicar(request);
+  const segunda = await duplicar(request);
+
+  expect((await primera.json()) as { creados: number; repetidos: number }).toMatchObject({
+    creados: 2,
+    repetidos: 0,
+  });
+  // El centinela 1: el replay deja exactamente una fila por `client_uuid` (§9.3.1).
+  expect((await segunda.json()) as { creados: number; repetidos: number }).toMatchObject({
+    creados: 0,
+    repetidos: 2,
+  });
+
+  await con(BD_A, async (c: Conexion) => {
+    const [n] = await c.sql<{ n: string }>(
+      `select count(*)::text as n from encargos
+        where fecha_servicio = (now() at time zone 'America/Santiago')::date`,
+    );
+    expect(n!.n).toBe("2");
+  });
+});
+
+test("[AC-FRUT-17] un ayer vacío no crea nada y lo dice", async ({ request }) => {
+  await con(BD_A, async (c: Conexion) => await c.sql("delete from encargos"));
+
+  const respuesta = await duplicar(request);
+  expect(respuesta.ok()).toBe(true);
+  // No es un error: ayer no hubo reparto. Un 422 acá le enseñaría al operador a desconfiar del
+  // botón (§5.7).
+  expect((await respuesta.json()) as { creados: number }).toMatchObject({ creados: 0 });
+});

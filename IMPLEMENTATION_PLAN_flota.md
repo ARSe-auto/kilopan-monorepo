@@ -162,7 +162,7 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 - [ ] (P1) `empresas_cliente` con la implícita creada por trigger en mi_flota (UI contraída); conmutación de modo conserva TODO con la implícita intacta (centinela 11) — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-14]
 - [x] (P2) Destinos: lat/lng NULL con CHECK de caja Chile; enum geo_confianza completo (solo manual|sin_geo producibles); parada sin_geo opera igual — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-15]
 - [ ] (P1) Camino dorado de custodia del piloto B: 14 días consecutivos ≥95% entregas con evidencia con custodia limpia (oráculo producción — DONE-adopción, no bloquea el loop) — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-16]
-- [ ] (P2) «Duplicar encargos de ayer»: encargos NUEVOS conservando empresa/destino/bultos/attrs; replay doble ⇒ 1 fila — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-17]
+- [x] (P2) «Duplicar encargos de ayer»: encargos NUEVOS conservando empresa/destino/bultos/attrs; replay doble ⇒ 1 fila — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-17]
 - [x] (P1) Bloque de agenda tipo `recarga` materializado como parada tipo `recarga` en la ruta publicada, en su orden — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-18]
 - [ ] (P2) Telemetría `toques_flujo` de los flujos del módulo a `client_metric` en lote por el endpoint de sync; conteo coincide con el e2e — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-19]
 - [x] (P2) Gancho `pin_destinatario` DDL-only: el tipo existe y NINGÚN seed E1 siembra stop_requirements de ese tipo — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-20]

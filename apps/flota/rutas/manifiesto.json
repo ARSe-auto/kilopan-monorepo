@@ -130,6 +130,18 @@
       }
     },
     {
+      "ruta": "/api/encargos/duplicar",
+      "archivo": "src/app/api/encargos/duplicar/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "«Duplicar encargos de ayer» (§5.2-F1) [AC-FRUT-17]. No recibe identificador por URL: la fecha de origen es un parámetro del cuerpo y los encargos salen de la propia base del tenant resuelto. MUTA en masa, así que enciende el comparador de huella de la BD de B —duplicarle el día al vecino le mete veinte encargos fantasma que alguien tiene que borrar a mano antes de armar sus rutas, y si no los ve, salen en un camión—. El caso genérico va sin credencial y la guardia contesta 404 pelado antes de mirar el cuerpo."
+      }
+    },
+    {
       "ruta": "/api/encargos/importar",
       "archivo": "src/app/api/encargos/importar/route.ts",
       "metodos": [

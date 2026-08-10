@@ -43,6 +43,7 @@ export default function Bandeja() {
   const [bultos, setBultos] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [rebote, setRebote] = useState<string | null>(null);
+  const [duplicado, setDuplicado] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     const [e, d, n] = await Promise.all([
@@ -61,6 +62,23 @@ export default function Bandeja() {
   useEffect(() => {
     void cargar();
   }, [cargar]);
+
+  async function duplicarAyer() {
+    const respuesta = await pedir("/api/encargos/duplicar", { method: "POST", body: "{}" }).catch(
+      () => null,
+    );
+    if (!respuesta?.ok) return setDuplicado("No se pudo repetir el día de ayer. Volvé a intentar.");
+    const { creados, repetidos } = (await respuesta.json()) as { creados: number; repetidos: number };
+    // Los repetidos se DICEN. Un «listo» a secas después del segundo clic deja a quien mira sin
+    // saber si se duplicó el día o si no pasó nada, y la respuesta correcta es distinta.
+    setDuplicado(
+      creados === 0 && repetidos === 0
+        ? "Ayer no había encargos para repetir."
+        : `Se agregaron ${creados}. ${repetidos > 0 ? `${repetidos} ya estaban.` : ""}`.trim(),
+    );
+    await cargar();
+    return undefined;
+  }
 
   async function guardar() {
     setRebote(null);
@@ -152,6 +170,20 @@ export default function Bandeja() {
         <h2 style={{ ...cuerpo, margin: 0 }}>
           En la bandeja <span data-testid="conteo-bandeja">{encargos ? encargos.length : "…"}</span>
         </h2>
+
+        {/* «Duplicar encargos de ayer» (§3.E1.5) [AC-FRUT-17]. La panadería que reparte a las
+            mismas doce sucursales todos los días no tiene un Excel: tiene el día de ayer.
+            Apretarlo dos veces no duplica nada — el identificador de cada copia se deriva del
+            encargo original y de la fecha, y ese es el caso real: la pantalla tarda y alguien
+            insiste. */}
+        <BotonPrimario testid="duplicar-ayer" variante="neutro" onClick={() => void duplicarAyer()}>
+          Repetir los encargos de ayer
+        </BotonPrimario>
+        {duplicado && (
+          <p data-testid="resultado-duplicado" style={{ ...pie, color: superficie.textoDim }}>
+            {duplicado}
+          </p>
+        )}
         {encargos?.length === 0 && (
           <EstadoVacio mensaje="La bandeja de hoy está vacía. Agregá el primer encargo acá arriba y después armá las rutas." />
         )}

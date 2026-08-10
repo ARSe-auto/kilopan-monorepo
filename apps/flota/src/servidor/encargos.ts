@@ -291,6 +291,97 @@ export async function importarEncargos(
   });
 }
 
+// ─── «Duplicar encargos de ayer» [AC-FRUT-17] — §5.2-F1, §3.E1.5, §9.3.1 ────────────
+//
+// ─── ES UNA VÍA MASIVA SEPARADA DEL CSV, Y NO POR PROLIJIDAD ────────────────────────
+//
+// La panadería que reparte a las mismas doce sucursales todos los días no tiene un Excel: tiene
+// el día de ayer. Pedirle que exporte y vuelva a subir un archivo para repetirlo sería devolverle
+// el trabajo que esta pantalla vino a sacarle.
+//
+// ─── ENCARGOS NUEVOS, JAMÁS LOS DE AYER MOVIDOS DE FECHA ───────────────────────────
+//
+// El de ayer YA OCURRIÓ: tiene su ruta, su parada y —si el módulo 04 ya corrió— su POD. Cambiarle
+// la fecha de servicio le borraría el día a la historia y dejaría una entrega firmada colgando de
+// un encargo que dice ser de hoy. Se copia empresa, destino, bultos y `attrs`; el resto nace de
+// cero, incluido el estado.
+//
+// ─── EL `client_uuid` SE DERIVA DEL ORIGEN Y DEL DESTINO ───────────────────────────
+//
+// El centinela 1 pide que el replay doble deje exactamente una fila por `client_uuid`. Derivarlo
+// del encargo original MÁS la fecha a la que se copia da las dos cosas que hacen falta: apretar
+// el botón dos veces no duplica nada, y mañana el mismo encargo de ayer se puede volver a
+// duplicar porque la fecha cambió. Un uuid al azar por intento duplicaría el día entero al
+// segundo clic — que es exactamente lo que pasa cuando la pantalla tarda y alguien insiste.
+
+export type Duplicacion = { creados: number; repetidos: number; origen: string };
+
+export async function duplicarEncargos(
+  pool: Pool,
+  sesion: Sesion,
+  origen: string | null,
+  destino: string | null,
+): Promise<Duplicacion> {
+  return enActo(pool, async (c) => {
+    const { rows: fechas } = await c.query<{ origen: string; destino: string }>(
+      `select to_char(coalesce($1::date, (now() at time zone 'America/Santiago')::date - 1),
+                      'YYYY-MM-DD') as origen,
+              to_char(coalesce($2::date, (now() at time zone 'America/Santiago')::date),
+                      'YYYY-MM-DD') as destino`,
+      [origen, destino],
+    );
+    const { origen: deAyer, destino: paraHoy } = fechas[0]!;
+
+    const { rows: previos } = await c.query<{
+      id: string;
+      empresa_cliente_id: string;
+      destino_id: string;
+      bultos: number;
+      attrs: Record<string, unknown>;
+      cargo_type_id: string | null;
+    }>(
+      `select id::text as id, empresa_cliente_id::text as empresa_cliente_id,
+              destino_id::text as destino_id, bultos, attrs, cargo_type_id::text as cargo_type_id
+         from encargos where fecha_servicio = $1::date order by creado_en`,
+      [deAyer],
+    );
+
+    let creados = 0;
+    let repetidos = 0;
+    for (const previo of previos) {
+      const { rows } = await c.query<{ id: string }>(
+        `insert into encargos
+           (empresa_cliente_id, destino_id, bultos, attrs, cargo_type_id, fecha_servicio, client_uuid)
+         values ($1, $2, $3, $4::jsonb, $5, $6::date, $7)
+           on conflict (tenant_id, client_uuid) do nothing
+         returning id::text as id`,
+        [
+          previo.empresa_cliente_id,
+          previo.destino_id,
+          previo.bultos,
+          JSON.stringify(previo.attrs),
+          previo.cargo_type_id,
+          paraHoy,
+          uuidDeterminista(`duplicado|${previo.id}|${paraHoy}`),
+        ],
+      );
+      if (!rows[0]) {
+        repetidos++;
+        continue;
+      }
+      creados++;
+      await registrarEvento(c, {
+        codigo: EVENTOS_OPERACION.encargo_creado,
+        objetoTabla: "encargos",
+        objetoId: rows[0].id,
+        sesion,
+        payload: { bultos: previo.bultos, origen: "duplicado", duplicado_de: previo.id },
+      });
+    }
+    return { creados, repetidos, origen: deAyer };
+  });
+}
+
 /**
  * Un UUID v5-ish derivado del contenido de la fila: el mismo archivo produce los mismos
  * identificadores en cada intento, que es lo que hace posible el centinela 1 sin pedirle al
