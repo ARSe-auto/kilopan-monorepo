@@ -44,6 +44,13 @@ paso "matriz KiloRuta: N filas, IDs únicos y cada test referenciado existe" \
 paso "familia canónica de constantes: cero números mágicos duplicados (§0)" \
   node db/flota/gate-constantes.mjs
 
+# La otra mitad del §0: `gate-constantes` vigila los VALORES de la familia de energía; este
+# vigila la ARITMÉTICA. Nadie copia el factor de consumo a mano —el otro gate lo atrapa—, pero
+# cualquiera escribe la multiplicación en la pantalla que está armando, y a partir de ahí hay
+# dos fórmulas y la reserva se resta dos veces. [AC-FVEH-09]
+paso "fórmula de energía: implementada en UN solo archivo (§0)" \
+  node db/flota/gate-formula-energia.mjs
+
 paso "reglas estáticas del §7.2: privilegio, SET de sesión, cross-database y wrapper" \
   node db/flota/gate-reglas-estaticas.mjs
 
