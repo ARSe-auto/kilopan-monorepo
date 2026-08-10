@@ -137,6 +137,19 @@ async function sembrarIdentidadDelVecino(slug) {
       `insert into motivos (codigo, etiqueta, estado_asociado, orden)
        values ('local_cerrado_del_vecino', 'Local cerrado del vecino', 'parada_fallida', 1)`,
     );
+    // Y una PARADA de carga del vecino [AC-FRUT-07]: `/api/paradas/[id]/manifiesto` es de tipo
+    // recurso y el caso del centinela 2 saca de acá el id REAL con el que A intenta confirmarle
+    // la carga a B. Es la mutación más difícil de deshacer del módulo: `manifiestos` es
+    // append-only, así que un traspaso escrito por un ajeno queda como constancia de algo que
+    // nadie hizo — y es la fila que el cliente del vecino va a mirar cuando reclame.
+    const [destinoDelVecino] = await sql(
+      "insert into destinos (nombre) values ('Sucursal del vecino') returning id::text as id",
+    );
+    await sql(
+      `insert into paradas (ruta_id, tipo, orden, destino_id)
+       select id, 'carga', 1, $1 from rutas where nombre = 'Ruta de la madrugada del vecino'`,
+      [destinoDelVecino.id],
+    );
   });
 }
 

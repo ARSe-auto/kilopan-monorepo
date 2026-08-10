@@ -102,6 +102,8 @@ export const EVENTOS_OPERACION = {
   encargo_asignado: "encargo.asignado",
   motivo_apagado: "motivo.apagado",
   motivo_encendido: "motivo.encendido",
+  manifiesto_confirmado: "manifiesto.confirmado",
+  manifiesto_discrepancia: "manifiesto.discrepancia",
 } as const;
 
 /** Todo código que `registrarEvento` acepta tiene que estar sembrado en `evento_tipo`: si los

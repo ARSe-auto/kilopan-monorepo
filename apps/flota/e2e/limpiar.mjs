@@ -47,9 +47,26 @@ export const TABLAS_DE_IDENTIDAD = [
  * escriba su propia lista vuelve a pagar ese costo en el AC siguiente.
  */
 export async function limpiarBandeja(sql) {
-  await sql("delete from rutas");
-  await sql("delete from encargos");
-  await sql("delete from destinos");
+  // Las rutas cuyas paradas ya tienen un manifiesto NO se borran: `manifiestos` es append-only
+  // (§7.4) y su FK sostiene la parada. Es la conducta correcta —esa carga se firmó y la historia
+  // no se tira— y por eso se excluyen con `not exists` en vez de intentar el borrado y morir con
+  // un error de restricción que no dice qué falta.
+  await sql(
+    `delete from rutas r
+      where not exists (
+        select 1 from paradas p join manifiestos m on m.parada_id = p.id where p.ruta_id = r.id
+      )`,
+  );
+  // Los encargos con ítems vivos se QUEDAN: sus ítems cuelgan de una parada que un manifiesto
+  // firmado sostiene, y esa carga no se tira.
+  await sql(
+    "delete from encargos e where not exists (select 1 from items i where i.encargo_id = e.id)",
+  );
+  await sql(
+    `delete from destinos d
+      where not exists (select 1 from encargos e where e.destino_id = d.id)
+        and not exists (select 1 from paradas p where p.destino_id = d.id)`,
+  );
   // Desde AC-FRUT-12 un usuario `cliente` apunta a SU empresa, así que las empresas no se pueden
   // borrar mientras exista uno. Se van con ella y sus aparatos primero: un contratante sin
   // empresa no es un usuario huérfano, es un estado que el CHECK de `usuarios` prohíbe.
@@ -59,7 +76,11 @@ export async function limpiarBandeja(sql) {
                      where u.persona_id = d.persona_id and u.empresa_cliente_id is not null)`,
   );
   await sql("delete from usuarios where empresa_cliente_id is not null");
-  await sql("delete from empresas_cliente");
+  await sql(
+    `delete from empresas_cliente ec
+      where not exists (select 1 from encargos e where e.empresa_cliente_id = ec.id)
+        and not exists (select 1 from manifiestos m where m.empresa_cliente_id = ec.id)`,
+  );
 }
 
 /**
@@ -87,7 +108,15 @@ export async function limpiarOperacion(sql) {
   // `rutas` va PRIMERO de todo: apunta a `vehiculos` y arrastra en cascada sus paradas, sus
   // ítems y los `stop_requirement` derivados. Sin esto, borrar un vehículo del fixture rebota
   // con una restricción que no dice qué falta.
-  await sql("delete from rutas");
+  //
+  // Las que tienen una parada con manifiesto se QUEDAN: `manifiestos` es append-only (§7.4) y esa
+  // carga se firmó. Es la misma regla que deja en pie un turno con chequeos.
+  await sql(
+    `delete from rutas r
+      where not exists (
+        select 1 from paradas p join manifiestos m on m.parada_id = p.id where p.ruta_id = r.id
+      )`,
+  );
   await sql("delete from defectos");
   await sql("delete from bloques_agenda");
   await sql(
@@ -102,6 +131,7 @@ export async function limpiarOperacion(sql) {
   await sql(
     `delete from vehiculos v
       where not exists (select 1 from energy_entry e where e.vehiculo_id = v.id)
-        and not exists (select 1 from turnos t where t.vehiculo_id = v.id)`,
+        and not exists (select 1 from turnos t where t.vehiculo_id = v.id)
+        and not exists (select 1 from rutas r where r.vehiculo_id = v.id)`,
   );
 }

@@ -431,6 +431,25 @@
       }
     },
     {
+      "ruta": "/api/paradas/[id]/manifiesto",
+      "archivo": "src/app/api/paradas/[id]/manifiesto/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "paradas",
+          "columna": "id"
+        },
+        "nota": "El sub-manifiesto del andén (§5.2 F2) [AC-FRUT-07]. Confirmar la carga de una parada de B desde una sesión de A: 404 y la BD de B sin cambios. MUTA sobre una tabla APPEND-ONLY, que es lo que lo hace peor que el resto — un manifiesto escrito por un ajeno en la operación del vecino no se puede borrar: queda como constancia de un traspaso que nadie hizo, y es la fila que su cliente va a mirar cuando reclame. El GET tampoco puede filtrar: lo declarado dice qué empresas le cargan al vecino y cuánto."
+      }
+    },
+    {
       "ruta": "/api/pin/puente",
       "archivo": "src/app/api/pin/puente/route.ts",
       "metodos": [
@@ -706,6 +725,18 @@
       "cruce": {
         "tipo": "sin_recurso",
         "nota": "Pantalla de la bandeja de encargos (F1) [AC-FRUT-01]. No recibe identificador por URL: empresa y destino se eligen con chips de las propias listas del tenant, y el alta pasa por /api/encargos, que tiene su caso. Cruce genérico — identidad de B por los canales falsificables."
+      }
+    },
+    {
+      "ruta": "/carga",
+      "archivo": "src/app/carga/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de recepción de carga en el andén (§5.2 F2) [AC-FRUT-07]. No recibe identificador por URL: el camión se elige con un chip y todo lo que hace pasa por /api/vehiculos, /api/rutas y /api/paradas/[id]/manifiesto, que tienen sus propios casos. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y pesa porque el HTML servido no puede traer las patentes del vecino ni las razones sociales de quienes le cargan antes de que haya sesión."
       }
     },
     {
