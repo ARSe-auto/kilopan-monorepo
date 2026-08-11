@@ -243,6 +243,15 @@ Reglas duras:
   'npx playwright test <su spec.ts>' en PRIMER PLANO antes de marcar nada — el check
   rápido NO corre e2e, y un [x] con e2e rojo lo pilla el gate independiente y pausa
   todo el motor (pasó el 06-ago con AC-DES-06).
+- Si tu AC agrega una RUTA HTTP o una PANTALLA, declará su caso de cruce en
+  apps/${APP}/rutas/manifiesto.json ANTES de comitear. Es lo que más veces frenó al motor
+  la noche del 10-ago-2026: 'node apps/${APP}/rutas/generar.mjs --escribir' regenera la
+  lista y deja el 'cruce' en null, y con un null el gate NO pasa. Cada ruta nueva necesita
+  su 'tipo' ('recurso' si lleva identificador en la URL, 'sin_recurso' si no), su
+  'ids_de_b' con la tabla de la que sale ese identificador cuando es 'recurso', y una
+  'nota' que diga QUÉ DAÑO haría esa ruta ejecutada contra el tenant vecino. La nota no es
+  decorativa: es lo que hace pensar si el 404 alcanza o si además hay que mirar la huella
+  de la BD de B (centinela 2, §9.3.2).
 - Un AC no se marca [x] si todavía falta parte de él. Si quedó a medias, partilo: cerrá
   lo hecho y dejá el resto como AC abierto nuevo en la spec. Un [x] cuyo texto dice
   'falta' pone el gate en rojo — y con razón.

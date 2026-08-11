@@ -625,6 +625,25 @@
       }
     },
     {
+      "ruta": "/api/rutas/[id]/cierre",
+      "archivo": "src/app/api/rutas/[id]/cierre/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "rutas",
+          "columna": "id"
+        },
+        "nota": "Cerrar la ruta de B desde una sesión de A (§5.2 F5) [AC-FRUT-11]: 404 y la BD de B sin cambios. Es el acto que fija la ecuación de custodia por empresa —cargado = entregado + devuelto + faltante— así que un cierre ajeno le deja al vecino una liquidación que él no revisó, sobre bultos que no contó, y con la ruta dada por terminada mientras su camión todavía anda."
+      }
+    },
+    {
       "ruta": "/api/rutas/[id]/paradas",
       "archivo": "src/app/api/rutas/[id]/paradas/route.ts",
       "metodos": [
@@ -863,6 +882,24 @@
       "cruce": {
         "tipo": "sin_recurso",
         "nota": "Pantalla del dueño (F-A y F-C del §5.4). No recibe identificador por URL: todo lo que hace pasa por /api/gobierno/**, que ya tiene sus propios casos declarados, y el tenant sale del ruteo. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y acá pesa porque el HTML servido no puede traer ni el slug ni la base del vecino antes siquiera de que haya sesión: sin credencial la pantalla no pinta datos de nadie."
+      }
+    },
+    {
+      "ruta": "/ruta/[id]/cerrar",
+      "archivo": "src/app/ruta/[id]/cerrar/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "rutas",
+          "columna": "id"
+        },
+        "nota": "Pantalla de cierre de ruta [AC-FRUT-11]. Recibe el identificador por URL, así que el caso del centinela 2 le pide a A la ruta de B: 404 y cuerpo sin una sola cadena del vecino — ni el nombre de la ruta, ni sus destinos, ni las razones sociales de las empresas que le cargan, que son exactamente los datos que un competidor querría."
       }
     },
     {
