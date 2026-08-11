@@ -598,3 +598,305 @@ test("[AC-FRUT-08] un tipo de documento que el SII no define no entra", async ({
   expect(rebote.status()).toBe(422);
   expect(((await rebote.json()) as { error: string }).error).toBe("documento_incompleto");
 });
+
+// ─── El traspaso de custodia [AC-FRUT-09] — §4.3, §4.5, §4.6, §7.4, centinelas 6 y 12 ──
+//
+// ─── LO QUE SOSTIENE LA DISPUTA ───────────────────────────────────────────────────
+//
+// Tres semanas después, «yo la entregué completa» y «a mí me la dieron así» son dos afirmaciones
+// sin nada en medio salvo esta fila. Por eso lleva las dos firmas, el doble reloj y quién a
+// quién — y por eso no se edita nunca.
+//
+// Los tres casos que decide este bloque: la doble firma con su excepción de UNA sola cuando el
+// que carga y el que maneja son la misma persona; que la fila sea intocable para el rol de app; y
+// que corregirla deje DOS filas con la original intacta, que es lo que separa una corrección
+// auditable de una que nadie puede distinguir de un encubrimiento.
+
+/** Un usuario con PIN de verdad: el hash lo pone `fijarPin`, que es la vía real de la app.
+ *
+ *  Fabricar el hash a mano en el fixture probaría otra cosa — el día que cambie el algoritmo,
+ *  el test seguiría verde contra una credencial que la app ya no acepta. */
+async function conPin(rut: string, nombre: string, rol: string, pin: string) {
+  const { usuarioId, personaId } = await con(BD_A, async (c: Conexion) => {
+    const [p] = await c.sql<{ id: string }>(
+      "insert into personas (rut, nombre) values ($1, $2) returning id::text as id",
+      [rut, nombre],
+    );
+    const [u] = await c.sql<{ id: string }>(
+      "insert into usuarios (persona_id, rol) values ($1, $2) returning id::text as id",
+      [p!.id, rol],
+    );
+    return { usuarioId: u!.id, personaId: p!.id };
+  });
+  const { Pool } = await import("pg");
+  const { fijarPin } = await import("../src/servidor/pin.ts");
+  const { urlDeBase } = await import("../src/servidor/conexion.ts");
+  const pool = new Pool({ connectionString: urlDeBase(BD_A) });
+  try {
+    await fijarPin(pool, usuarioId, pin);
+  } finally {
+    await pool.end();
+  }
+  return { usuarioId, personaId };
+}
+
+const PIN_DEL_ANDEN = "4417";
+const PIN_DEL_CHOFER = "9023";
+
+/** Los dos firmantes, creados UNA vez y reusados por todos los casos de custodia.
+ *
+ *  La lista congelada de RUTs tiene ocho (§7.8, AC-FIDN-21) y no se inventan más para un
+ *  fixture: un RUT nuevo en el árbol pasa por esa decisión, no por la comodidad de un test.
+ *  Además sus firmas sostienen sus dispositivos, así que crear uno por caso dejaría basura
+ *  imborrable acumulándose en cada corrida. */
+let firmanteAnden: { usuarioId: string; personaId: string };
+let firmanteChofer: { usuarioId: string; personaId: string };
+
+test.beforeAll(async () => {
+  firmanteAnden = await conPin(
+    Object.keys(VALIDOS)[6]!, "Responsable de andén", "responsable_carga", PIN_DEL_ANDEN);
+  firmanteChofer = await conPin(
+    Object.keys(VALIDOS)[7]!, "Quien maneja", "chofer", PIN_DEL_CHOFER);
+});
+
+/** El manifiesto sobre el que se traspasa la custodia, recién creado para cada caso. */
+async function unManifiesto(request: import("@playwright/test").APIRequestContext) {
+  const propia = await con(BD_A, async (c: Conexion) => {
+    const [d] = await c.sql<{ id: string }>("select id::text as id from destinos limit 1");
+    const [r] = await c.sql<{ id: string }>(
+      `insert into rutas (nombre, publicada_en, version)
+       values ('Ruta de custodia', now(), 1) returning id::text as id`,
+    );
+    const [p] = await c.sql<{ id: string }>(
+      "insert into paradas (ruta_id, tipo, orden, destino_id) values ($1, 'carga', 1, $2) returning id::text as id",
+      [r!.id, d!.id],
+    );
+    const [e] = await c.sql<{ id: string }>(
+      "insert into encargos (empresa_cliente_id, destino_id, bultos) values ($1, $2, 7) returning id::text as id",
+      [panaderia, d!.id],
+    );
+    await c.sql("insert into items (parada_id, encargo_id, qty_planificada) values ($1, $2, 7)", [
+      p!.id,
+      e!.id,
+    ]);
+    return p!.id;
+  });
+
+  const { declarado } = (await (
+    await request.get(`${EN_A}/api/paradas/${propia}/manifiesto`, { headers: comoOperador })
+  ).json()) as { declarado: { item_id: string; empresa_cliente_id: string }[] };
+
+  const hecho = await request.post(`${EN_A}/api/paradas/${propia}/manifiesto`, {
+    headers: comoOperador,
+    data: {
+      empresa_cliente_id: panaderia,
+      client_uuid: crypto.randomUUID(),
+      ts_dispositivo: new Date().toISOString(),
+      tz_offset_min: -240,
+      conteos: declarado
+        .filter((d) => d.empresa_cliente_id === panaderia)
+        .map((d) => ({ item_id: d.item_id, qty_confirmada: 7 })),
+    },
+  });
+  return ((await hecho.json()) as { manifiesto_id: string }).manifiesto_id;
+}
+
+test("[AC-FRUT-09] el traspaso escribe sus DOS firmas y su `custody_transfer`", async ({
+  request,
+}) => {
+  const manifiestoId = await unManifiesto(request);
+  const anden = firmanteAnden;
+  const chofer = firmanteChofer;
+
+  const traspaso = await request.post(`${EN_A}/api/manifiestos/${manifiestoId}/custodia`, {
+    headers: comoOperador,
+    data: {
+      libero_usuario_id: anden.usuarioId,
+      libero_pin: PIN_DEL_ANDEN,
+      recibe_usuario_id: chofer.usuarioId,
+      recibe_pin: PIN_DEL_CHOFER,
+      sello: "SELLO-0091",
+      client_uuid: crypto.randomUUID(),
+      ts_dispositivo: new Date().toISOString(),
+      tz_offset_min: -240,
+    },
+  });
+  expect(traspaso.status()).toBe(201);
+  expect((await traspaso.json()) as { firmas: number }).toMatchObject({ firmas: 2 });
+
+  await con(BD_A, async (c: Conexion) => {
+    const [t] = await c.sql<{ de: string; a: string; libero: string; recibio: string; sello: string }>(
+      `select de_persona_id::text as de, a_persona_id::text as a,
+              firma_libero_id::text as libero, firma_recibio_id::text as recibio, sello
+         from custody_transfer where manifiesto_id = $1 and supersede_de is null`,
+      [manifiestoId],
+    );
+    expect(t!.de).toBe(anden.personaId);
+    expect(t!.a).toBe(chofer.personaId);
+    // DOS firmas distintas: personas distintas responden por separado.
+    expect(t!.libero).not.toBe(t!.recibio);
+    expect(t!.sello).toBe("SELLO-0091");
+
+    // Y cada firma con su SIGNIFICADO (§4.3): `libero` y `recibio_conforme` no son lo mismo, y
+    // el día de la disputa la diferencia es toda la respuesta.
+    const significados = await c.sql<{ significado: string }>(
+      `select significado::text as significado from firmas
+        where id in ($1, $2) order by significado`,
+      [t!.libero, t!.recibio],
+    );
+    expect(significados.map((f) => f.significado)).toEqual(["libero", "recibio_conforme"]);
+  });
+});
+
+test("[AC-FRUT-09] si el que carga y el que maneja son la MISMA persona, firma una vez", async ({
+  request,
+}) => {
+  const manifiestoId = await unManifiesto(request);
+  const solo = firmanteChofer;
+
+  const traspaso = await request.post(`${EN_A}/api/manifiestos/${manifiestoId}/custodia`, {
+    headers: comoOperador,
+    data: {
+      libero_usuario_id: solo.usuarioId,
+      libero_pin: PIN_DEL_CHOFER,
+      recibe_usuario_id: solo.usuarioId,
+      recibe_pin: PIN_DEL_CHOFER,
+      client_uuid: crypto.randomUUID(),
+      ts_dispositivo: new Date().toISOString(),
+      tz_offset_min: -240,
+    },
+  });
+  expect(traspaso.status()).toBe(201);
+  // UNA sola (§4.5). Pedirle dos a quien carga y maneja lo obligaría a inventar la segunda, que
+  // es exactamente lo que vacía de sentido a la primera.
+  expect((await traspaso.json()) as { firmas: number }).toMatchObject({ firmas: 1 });
+
+  await con(BD_A, async (c: Conexion) => {
+    const [t] = await c.sql<{ libero: string; recibio: string }>(
+      `select firma_libero_id::text as libero, firma_recibio_id::text as recibio
+         from custody_transfer where manifiesto_id = $1`,
+      [manifiestoId],
+    );
+    expect(t!.libero).toBe(t!.recibio);
+  });
+});
+
+test("[AC-FRUT-09] un PIN que no coincide rebota, y no deja traspaso", async ({ request }) => {
+  const manifiestoId = await unManifiesto(request);
+  const anden = firmanteAnden;
+
+  const rebote = await request.post(`${EN_A}/api/manifiestos/${manifiestoId}/custodia`, {
+    headers: comoOperador,
+    data: {
+      libero_usuario_id: anden.usuarioId,
+      libero_pin: "0000",
+      recibe_usuario_id: anden.usuarioId,
+      recibe_pin: "0000",
+      client_uuid: crypto.randomUUID(),
+      ts_dispositivo: new Date().toISOString(),
+      tz_offset_min: -240,
+    },
+  });
+  // El ÚNICO rebote del flujo, y rebota porque ocurre con la persona presente: no es una captura
+  // que llega por sync. El mensaje no dice cuál de los dos PIN falló — quien está enfrente ya lo
+  // sabe, y decirlo le daría a un tercero la mitad de un oráculo.
+  expect(rebote.status()).toBe(422);
+  await con(BD_A, async (c: Conexion) => {
+    const [n] = await c.sql<{ n: string }>(
+      "select count(*)::text as n from custody_transfer where manifiesto_id = $1",
+      [manifiestoId],
+    );
+    expect(n!.n).toBe("0");
+  });
+});
+
+test("[AC-FRUT-09] el traspaso es INTOCABLE: UPDATE y DELETE responden 42501", async ({
+  request,
+}) => {
+  const manifiestoId = await unManifiesto(request);
+  const solo = firmanteChofer;
+  await request.post(`${EN_A}/api/manifiestos/${manifiestoId}/custodia`, {
+    headers: comoOperador,
+    data: {
+      libero_usuario_id: solo.usuarioId,
+      libero_pin: PIN_DEL_CHOFER,
+      recibe_usuario_id: solo.usuarioId,
+      recibe_pin: PIN_DEL_CHOFER,
+      client_uuid: crypto.randomUUID(),
+      ts_dispositivo: new Date().toISOString(),
+      tz_offset_min: -240,
+    },
+  });
+
+  await con(BD_A, async (c: Conexion) => {
+    const [t] = await c.sql<{ id: string }>(
+      "select id::text as id from custody_transfer where manifiesto_id = $1",
+      [manifiestoId],
+    );
+    // §7.4, las dos capas: el trigger detiene también a quien tiene más privilegios que el rol
+    // de app. Un traspaso que se puede editar no prueba nada el día de la disputa.
+    await expect(
+      c.sql("update custody_transfer set sello = 'otro' where id = $1", [t!.id]),
+    ).rejects.toThrow(/append-only|42501/);
+    await expect(
+      c.sql("delete from custody_transfer where id = $1", [t!.id]),
+    ).rejects.toThrow(/append-only|42501/);
+  });
+});
+
+test("[AC-FRUT-09] corregir es SUPERSEDE: dos filas y la original intacta (centinela 6)", async ({
+  request,
+}) => {
+  const manifiestoId = await unManifiesto(request);
+  const solo = firmanteChofer;
+  const hecho = await request.post(`${EN_A}/api/manifiestos/${manifiestoId}/custodia`, {
+    headers: comoOperador,
+    data: {
+      libero_usuario_id: solo.usuarioId,
+      libero_pin: PIN_DEL_CHOFER,
+      recibe_usuario_id: solo.usuarioId,
+      recibe_pin: PIN_DEL_CHOFER,
+      sello: "SELLO-EQUIVOCADO",
+      client_uuid: crypto.randomUUID(),
+      ts_dispositivo: new Date().toISOString(),
+      tz_offset_min: -240,
+    },
+  });
+  const original = ((await hecho.json()) as { custody_transfer_id: string }).custody_transfer_id;
+
+  // Sin motivo no se corrige: una corrección sin motivo es indistinguible de un encubrimiento.
+  const sinMotivo = await request.post(`${EN_A}/api/custodia/${original}`, {
+    headers: comoOperador,
+    data: { motivo: "" },
+  });
+  expect(sinMotivo.status()).toBe(422);
+
+  const corregido = await request.post(`${EN_A}/api/custodia/${original}`, {
+    headers: comoOperador,
+    data: { motivo: "El sello anotado era el del otro camión", sello: "SELLO-CORRECTO" },
+  });
+  expect(corregido.status()).toBe(201);
+
+  await con(BD_A, async (c: Conexion) => {
+    const filas = await c.sql<{ id: string; sello: string; supersede: string | null; motivo: string | null }>(
+      `select id::text as id, sello, supersede_de::text as supersede, supersede_motivo as motivo
+         from custody_transfer where manifiesto_id = $1 order by record_time`,
+      [manifiestoId],
+    );
+    // DOS filas: la original NO se tocó. Si desapareciera, nada probaría que alguna vez dijo
+    // otra cosa — y eso es justo lo que el centinela 6 existe para impedir.
+    expect(filas).toHaveLength(2);
+    expect(filas[0]!.sello).toBe("SELLO-EQUIVOCADO");
+    expect(filas[0]!.supersede).toBeNull();
+    expect(filas[1]!.sello).toBe("SELLO-CORRECTO");
+    expect(filas[1]!.supersede).toBe(original);
+    expect(filas[1]!.motivo).toContain("otro camión");
+
+    // Y UNO solo vigente: el corregido dejó de serlo en el mismo acto en que nació su reemplazo.
+    const [vigentes] = await c.sql<{ n: string }>(
+      "select count(*)::text as n from custody_transfer where manifiesto_id = $1 and supersede_de is null",
+      [manifiestoId],
+    );
+    expect(vigentes!.n).toBe("1");
+  });
+});

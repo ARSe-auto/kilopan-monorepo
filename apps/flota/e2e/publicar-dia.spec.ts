@@ -533,7 +533,10 @@ test("[AC-FRUT-18] una recarga de mediodía queda ENTRE las entregas, no al fina
   ).json()) as { ruta: { id: string } };
 
   // Una entrega a la mañana y otra a la tarde, cada una con su ventana.
-  const hoy = new Date().toISOString().slice(0, 10);
+  // El día en CHILE y no en UTC: `toISOString()` da el día UTC, y desde las 20:00 de Chile eso
+  // ya es el día siguiente — la ventana caería fuera del día de servicio y la recarga quedaría
+  // en otro lado. Falla cuatro horas de cada veinticuatro, justo cuando el motor construye.
+  const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago" }).format(new Date());
   await request.post(`${EN_A}/api/rutas/${ruta.ruta.id}/asignar`, {
     headers: comoOperador,
     data: {

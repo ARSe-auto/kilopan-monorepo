@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
 import { enActo, enLectura, registrarEvento, EVENTOS_OPERACION } from "./gobierno.ts";
+import { firmarConPin } from "./firmas.ts";
 import type { Sesion } from "./sesion.ts";
 
 // El sub-manifiesto del andén [AC-FRUT-07] — §5.2 F2, §4.2, §4.5, §5.3, §7.6.
@@ -362,4 +363,208 @@ export async function estadoDelGate(
     );
     return rows;
   });
+}
+
+// ─── El traspaso de custodia [AC-FRUT-09] — §4.3, §4.5, §4.6, §5.2 F2, §7.4 ─────────
+//
+// ─── ES EL MOMENTO QUE SOSTIENE LA DISPUTA ────────────────────────────────────────
+//
+// Tres semanas después, «yo la entregué completa» y «a mí me la dieron así» son dos
+// afirmaciones sin nada en medio — salvo esta fila. Por eso lleva las dos firmas, el doble
+// reloj y quién a quién, y por eso no se edita nunca.
+//
+// ─── DOBLE FIRMA, O UNA SI ES LA MISMA PERSONA ────────────────────────────────────
+//
+// El §4.5 lo dice así y la excepción no es comodidad: en un milk-run el que carga y el que
+// maneja son la misma persona. Pedirle dos firmas la obligaría a inventar la segunda, que es
+// exactamente lo que vacía de sentido a la primera. El CHECK de la 0043 deja pasar los dos
+// casos y ninguno más.
+//
+// ─── LA FIRMA EN APARATO AJENO NO DESPLAZA LA SESIÓN (centinela 12) ──────────────
+//
+// El chofer firma en el teléfono del andén y sigue sin tener sesión ahí; la del responsable de
+// carga tampoco se pierde. `firmarConPin` ya lo garantiza —recibe QUIÉN firma y DÓNDE, y no
+// toca `dispositivos`— y este archivo se apoya en eso sin repetirlo: una segunda
+// implementación del mismo cuidado es la que se olvida de actualizarse.
+
+export type Traspaso =
+  | { tipo: "ok"; custody_transfer_id: string; repetido: boolean; firmas: number }
+  | { tipo: "manifiesto_no_existe" }
+  | { tipo: "pin_invalido" }
+  | { tipo: "ya_traspasado" };
+
+/**
+ * Traspasa la custodia del manifiesto: el andén libera, el chofer recibe.
+ *
+ * `pinLibero` y `pinRecibe` pueden venir del MISMO usuario, y entonces se firma una sola vez —
+ * el milk-run. Si son personas distintas, cada una firma con su PIN en el aparato que haya a
+ * mano, que es lo que el §5.2 F2 describe.
+ */
+export async function traspasarCustodia(
+  pool: Pool,
+  sesion: Sesion,
+  datos: {
+    manifiestoId: string;
+    liberoUsuarioId: string;
+    liberoPin: string;
+    recibeUsuarioId: string;
+    recibePin: string;
+    sello: string | null;
+    clientUuid: string | null;
+    tsDispositivo: string;
+    tzOffsetMin: number;
+  },
+): Promise<Traspaso> {
+  const { rows: manifiesto } = await pool.query<{ id: string }>(
+    "select id::text as id from manifiestos where id = $1",
+    [datos.manifiestoId],
+  );
+  if (!manifiesto[0]) return { tipo: "manifiesto_no_existe" };
+
+  const laMisma = datos.liberoUsuarioId === datos.recibeUsuarioId;
+
+  // Las firmas van ANTES del traspaso y por su propia puerta: si el PIN no valida, no hay
+  // traspaso que escribir. Es la única validación que rebota en este flujo, y rebota porque
+  // ocurre con la persona presente — no es una captura que llega por sync.
+  const libero = await firmarConPin(pool, {
+    usuarioId: datos.liberoUsuarioId,
+    pin: datos.liberoPin,
+    personaId: await personaDe(pool, datos.liberoUsuarioId),
+    dispositivoId: sesion.dispositivoId,
+    objetoTabla: "manifiestos",
+    objetoId: datos.manifiestoId,
+    significado: "libero",
+  });
+  if (libero.tipo === "rebote") return { tipo: "pin_invalido" };
+
+  // Una sola firma cuando es la misma persona: el CHECK de la 0043 exige que los dos ids
+  // coincidan en ese caso, así que se reusa la que ya existe en vez de crear una gemela.
+  const recibe = laMisma
+    ? libero
+    : await firmarConPin(pool, {
+        usuarioId: datos.recibeUsuarioId,
+        pin: datos.recibePin,
+        personaId: await personaDe(pool, datos.recibeUsuarioId),
+        dispositivoId: sesion.dispositivoId,
+        objetoTabla: "manifiestos",
+        objetoId: datos.manifiestoId,
+        significado: "recibio_conforme",
+      });
+  if (recibe.tipo === "rebote") return { tipo: "pin_invalido" };
+
+  return enActo(
+    pool,
+    async (c) => {
+      const { rows } = await c.query<{ id: string }>(
+        `insert into custody_transfer
+           (manifiesto_id, de_persona_id, a_persona_id, firma_libero_id, firma_recibio_id,
+            sello, ts_dispositivo, tz_offset_min, client_uuid)
+         select $1,
+                (select persona_id from usuarios where id = $2),
+                (select persona_id from usuarios where id = $3),
+                $4, $5, $6, $7, $8, $9
+           on conflict do nothing
+         returning id::text as id`,
+        [
+          datos.manifiestoId,
+          datos.liberoUsuarioId,
+          datos.recibeUsuarioId,
+          libero.firmaId,
+          recibe.firmaId,
+          datos.sello,
+          datos.tsDispositivo,
+          datos.tzOffsetMin,
+          datos.clientUuid,
+        ],
+      );
+
+      if (!rows[0]) {
+        // O el replay del outbox, o un segundo traspaso del mismo manifiesto. Los dos LIGAN al
+        // vigente: es CAPTURA y no rebota (§4.2). Corregirlo es supersede, no un segundo intento.
+        const { rows: vigente } = await c.query<{ id: string }>(
+          `select id::text as id from custody_transfer
+            where manifiesto_id = $1 and supersede_de is null limit 1`,
+          [datos.manifiestoId],
+        );
+        return {
+          tipo: "ok",
+          custody_transfer_id: vigente[0]!.id,
+          repetido: true,
+          firmas: laMisma ? 1 : 2,
+        };
+      }
+
+      await registrarEvento(c, {
+        codigo: EVENTOS_OPERACION.custodia_traspasada,
+        objetoTabla: "custody_transfer",
+        objetoId: rows[0].id,
+        sesion,
+        payload: { manifiesto_id: datos.manifiestoId, firmas: laMisma ? 1 : 2 },
+      });
+      return { tipo: "ok", custody_transfer_id: rows[0].id, repetido: false, firmas: laMisma ? 1 : 2 };
+    },
+    sesion,
+  );
+}
+
+/** La persona detrás de un usuario. Se resuelve acá porque `firmarConPin` firma como PERSONA. */
+async function personaDe(pool: Pool, usuarioId: string): Promise<string> {
+  const { rows } = await pool.query<{ persona_id: string }>(
+    "select persona_id::text as persona_id from usuarios where id = $1",
+    [usuarioId],
+  );
+  return rows[0]?.persona_id ?? "";
+}
+
+export type Correccion =
+  | { tipo: "ok"; custody_transfer_id: string }
+  | { tipo: "no_existe" }
+  | { tipo: "falta_motivo" };
+
+/**
+ * Corrige un traspaso: SUPERSEDE con motivo y autor [AC-FRUT-09] — centinela 6.
+ *
+ * No edita ni borra. Quedan DOS filas y la original intacta, y esa es la diferencia entre una
+ * corrección auditable y una que nadie puede distinguir de un encubrimiento: si la primera
+ * desapareciera, nada probaría que alguna vez dijo otra cosa.
+ */
+export async function corregirTraspaso(
+  pool: Pool,
+  sesion: Sesion,
+  datos: { custodyTransferId: string; motivo: string; sello: string | null },
+): Promise<Correccion> {
+  if (datos.motivo.trim().length < 3) return { tipo: "falta_motivo" };
+
+  return enActo(
+    pool,
+    async (c) => {
+      const { rows } = await c.query<{ id: string }>(
+        `insert into custody_transfer
+           (manifiesto_id, de_persona_id, a_persona_id, firma_libero_id, firma_recibio_id,
+            sello, ts_dispositivo, tz_offset_min,
+            supersede_de, supersede_motivo, supersede_autor_id)
+         select v.manifiesto_id, v.de_persona_id, v.a_persona_id,
+                v.firma_libero_id, v.firma_recibio_id,
+                coalesce($3, v.sello), v.ts_dispositivo, v.tz_offset_min,
+                v.id, $2, $4
+           from custody_transfer v
+          where v.id = $1 and v.supersede_de is null
+         returning id::text as id`,
+        [datos.custodyTransferId, datos.motivo.trim(), datos.sello, sesion.usuarioId],
+      );
+      // Sin fila: o no existe, o ya fue corregido. Corregir dos veces la misma versión dejaría
+      // dos «vigentes» y el índice parcial lo impide — que es donde tiene que impedirse.
+      if (!rows[0]) return { tipo: "no_existe" };
+
+      await registrarEvento(c, {
+        codigo: EVENTOS_OPERACION.custodia_corregida,
+        objetoTabla: "custody_transfer",
+        objetoId: rows[0].id,
+        sesion,
+        payload: { supersede_de: datos.custodyTransferId, motivo: datos.motivo.trim() },
+      });
+      return { tipo: "ok", custody_transfer_id: rows[0].id };
+    },
+    sesion,
+  );
 }

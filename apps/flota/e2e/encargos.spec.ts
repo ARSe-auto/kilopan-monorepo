@@ -371,7 +371,18 @@ test("[AC-FRUT-02] un archivo sin las columnas necesarias lo dice, con los nombr
 // identificador al azar por intento el día entero se duplicaría — veinte encargos fantasma que
 // alguien tiene que borrar a mano antes de armar las rutas.
 
-const AYER = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+/**
+ * El día en CHILE, no en UTC.
+ *
+ * Bug real encontrado el 10-ago-2026 a las 21:20 de Chile: `toISOString()` da el día en UTC, y
+ * desde las 20:00 de Chile eso YA es el día siguiente. La app fecha todo con
+ * `America/Santiago` (§0), así que el test comparaba contra un día que la base nunca escribió y
+ * fallaba CUATRO HORAS DE CADA VEINTICUATRO — justo la franja en que el motor construye de noche.
+ */
+const diaEnChile = (cuando: Date): string =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "America/Santiago" }).format(cuando);
+
+const AYER = diaEnChile(new Date(Date.now() - 86_400_000));
 
 const duplicar = (request: import("@playwright/test").APIRequestContext) =>
   request.post("/api/encargos/duplicar", { headers: comoOperador, data: { origen: AYER } });
@@ -403,7 +414,7 @@ test("[AC-FRUT-17] duplicar crea encargos NUEVOS de hoy, conservando lo del orig
     // historia y dejaría su entrega firmada colgando de un encargo que dice ser de hoy.
     expect(filas).toHaveLength(2);
     expect(filas[0]!.fecha).toBe(AYER);
-    expect(filas[1]!.fecha).toBe(new Date().toISOString().slice(0, 10));
+    expect(filas[1]!.fecha).toBe(diaEnChile(new Date()));
     // Y lo copiado se conservó.
     expect(filas[1]!.bultos).toBe("17");
     expect(filas[1]!.id).not.toBe(filas[0]!.id);

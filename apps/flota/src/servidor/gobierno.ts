@@ -106,6 +106,8 @@ export const EVENTOS_OPERACION = {
   manifiesto_discrepancia: "manifiesto.discrepancia",
   manifiesto_documento_asociado: "manifiesto.documento_asociado",
   manifiesto_item_bajado: "manifiesto.item_bajado",
+  custodia_traspasada: "custodia.traspasada",
+  custodia_corregida: "custodia.corregida",
 } as const;
 
 /** Todo código que `registrarEvento` acepta tiene que estar sembrado en `evento_tipo`: si los

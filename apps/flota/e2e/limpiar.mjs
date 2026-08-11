@@ -107,9 +107,20 @@ export async function limpiarFixture(sql) {
       );
       continue;
     }
+    if (tabla === "dispositivos") {
+      // Un dispositivo donde se FIRMÓ no se borra: `firmas` es append-only (§7.4) y lo
+      // referencia. El aparato en que alguien firmó es parte de la prueba, no un detalle.
+      await sql(
+        "delete from dispositivos d where not exists (select 1 from firmas f where f.dispositivo_id = d.id)",
+      );
+      continue;
+    }
     if (tabla === "personas") {
       await sql(
-        "delete from personas p where not exists (select 1 from usuarios u where u.persona_id = p.id)",
+        `delete from personas p
+          where not exists (select 1 from usuarios u where u.persona_id = p.id)
+            and not exists (select 1 from firmas f where f.persona_id = p.id)
+            and not exists (select 1 from dispositivos d where d.persona_id = p.id)`,
       );
       continue;
     }

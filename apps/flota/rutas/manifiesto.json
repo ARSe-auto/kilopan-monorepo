@@ -75,6 +75,24 @@
       }
     },
     {
+      "ruta": "/api/custodia/[id]",
+      "archivo": "src/app/api/custodia/[id]/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "custody_transfer",
+          "columna": "id"
+        },
+        "nota": "Corregir un traspaso de B desde una sesión de A ⇒ 404 y la BD de B sin cambios. Es la vía de SUPERSEDE: escribir por ella en la custodia del vecino le agrega una versión que dice que la anterior estaba mal, firmada por un autor de otra casa — y como las dos filas quedan, el daño no se deshace, se acumula."
+      }
+    },
+    {
       "ruta": "/api/defectos/[id]",
       "archivo": "src/app/api/defectos/[id]/route.ts",
       "metodos": [
@@ -433,6 +451,24 @@
           "columna": "id"
         },
         "nota": "Asociar el DTE de un tercero a un ítem del manifiesto de B desde una sesión de A (§7.3, art. 55 DL 825) [AC-FRUT-08]: 404 y la BD de B sin cambios. Escribe un ACTO append-only en la custodia del vecino, y eso es lo que lo hace grave: la asociación no se puede borrar ni corregir con un UPDATE, así que un documento ajeno pegado a su carga queda como constancia de que ESA mercadería viajó amparada por ESE papel — y es la fila que se mira si el SII pregunta."
+      }
+    },
+    {
+      "ruta": "/api/manifiestos/[id]/custodia",
+      "archivo": "src/app/api/manifiestos/[id]/custodia/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "manifiestos",
+          "columna": "id"
+        },
+        "nota": "El traspaso de custodia (§4.5, §5.2 F2) [AC-FRUT-09]: confirmar el paso de la carga del andén al chofer sobre un manifiesto de B desde una sesión de A ⇒ 404 y la BD de B sin cambios. Escribe firmas y un `custody_transfer` APPEND-ONLY en la operación del vecino: un traspaso ajeno queda como constancia de que SU carga cambió de manos, con personas que él no puso, y no lo puede borrar — solo supersederlo, dejando las dos filas para siempre."
       }
     },
     {

@@ -53,6 +53,16 @@ pausar () { # $1 = motivo
   { echo "$(date -Iseconds) — $1"; } > "$PAUSA"
   echo "watchdog: PAUSA — $1" | tee -a "$LOG"
   echo "watchdog: motor detenido hasta que una persona borre $PAUSA" | tee -a "$LOG"
+  # AVISAR, y no solo dejar el marcador (10-ago-2026). El motor de FLOTA pausó a las 14:37 y
+  # nadie lo supo hasta las 17: una tarde entera de máquina parada porque el único aviso era un
+  # archivo que hay que salir a mirar. La pausa es EL momento en que hace falta una persona, así
+  # que es el momento en que hay que ir a buscarla.
+  #
+  # `osascript` falla solo si no hay sesión gráfica (CI, ssh) y por eso va con `|| true`: un
+  # motor que muere porque no pudo avisar sería peor que uno que avisa a nadie.
+  if command -v osascript >/dev/null 2>&1; then
+    osascript -e "display notification \"$1\" with title \"Motor ${APP} DETENIDO\" sound name \"Basso\"" >/dev/null 2>&1 || true
+  fi
   exit 0
 }
 

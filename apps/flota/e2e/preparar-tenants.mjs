@@ -180,6 +180,24 @@ async function sembrarIdentidadDelVecino(slug) {
        values ($1, $2, 6, 6)`,
       [manifiestoDelVecino.id, itemDelVecino.id],
     );
+    // Y su TRASPASO DE CUSTODIA [AC-FRUT-09]: `/api/custodia/[id]` es de tipo recurso y el caso
+    // del centinela 2 saca de acá el id con el que A intenta SUPERSEDER la custodia de B. El
+    // daño de esa vía no se deshace: las dos filas quedan, así que una corrección ajena le
+    // agrega para siempre una versión que dice que la suya estaba mal.
+    const [firmaDelVecino] = await sql(
+      `insert into firmas (persona_id, dispositivo_id, objeto_tabla, objeto_id, significado)
+       select $1, d.id, 'manifiestos', $2, 'libero'
+         from dispositivos d where d.persona_id = $1 limit 1
+       returning id::text as id`,
+      [persona.id, manifiestoDelVecino.id],
+    );
+    await sql(
+      `insert into custody_transfer
+         (manifiesto_id, de_persona_id, a_persona_id, firma_libero_id, firma_recibio_id,
+          ts_dispositivo, tz_offset_min)
+       values ($1, $2, $2, $3, $3, now(), -240)`,
+      [manifiestoDelVecino.id, persona.id, firmaDelVecino.id],
+    );
   });
 }
 

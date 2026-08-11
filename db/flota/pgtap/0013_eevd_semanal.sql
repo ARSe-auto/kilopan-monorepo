@@ -22,6 +22,20 @@ select columns_are(
 );
 
 -- ─── El fixture del AC, literal ──────────────────────────────────────────────────────
+--
+-- TODAS las horas van ancladas al MEDIODÍA de Chile del día en curso, y no a `now()`.
+--
+-- Bug real encontrado el 10-ago-2026 a las 21:17 de Chile: el tercer turno se insertaba con
+-- `now() + interval '5 hours'` para simular una segunda jornada del mismo vehículo el mismo día,
+-- y a partir de las 19:00 esas cinco horas cruzan la medianoche. El turno caía al día siguiente,
+-- los vehículo-día pasaban a ser tres, y el test fallaba — correctamente, porque el fixture ya
+-- no decía lo que creía decir.
+--
+-- O sea: el test fallaba CINCO HORAS DE CADA VEINTICUATRO, justo la franja en que el motor
+-- autónomo construye de noche. Anclarlo al mediodía lo vuelve determinista a cualquier hora.
+create temporary table cuando as
+  select ((now() at time zone 'America/Santiago')::date + time '12:00')
+           at time zone 'America/Santiago' as mediodia;
 
 insert into vehiculos (patente, tipo) values ('EEVD001', 'furgón'), ('EEVD002', 'furgón'),
                                              ('EEVD003', 'furgón');
@@ -33,8 +47,10 @@ create temporary table e_ids as
          (select id from vehiculos where patente = 'EEVD003') as v3;
 
 -- Dos vehículos, el MISMO día.
-insert into turnos (vehiculo_id, config_version_id) select v1, config_id from e_ids;
-insert into turnos (vehiculo_id, config_version_id) select v2, config_id from e_ids;
+insert into turnos (vehiculo_id, config_version_id, abierto_en)
+  select v1, config_id, mediodia from e_ids, cuando;
+insert into turnos (vehiculo_id, config_version_id, abierto_en)
+  select v2, config_id, mediodia from e_ids, cuando;
 
 select is(
   (select vehiculos_dia from eevd_semanal
@@ -55,8 +71,10 @@ select is(
 -- inflaría el denominador y la EEVD caería sin que nadie entregara menos.
 update turnos set estado = 'cerrado', cerrado_en = abierto_en + interval '4 hours'
  where vehiculo_id = (select v1 from e_ids);
+-- Cinco horas después del MEDIODÍA, no de `now()`: a las 17:00 de Chile, que sigue siendo el
+-- mismo día a cualquier hora en que corra el gate.
 insert into turnos (vehiculo_id, config_version_id, abierto_en)
-  select v1, config_id, now() + interval '5 hours' from e_ids;
+  select v1, config_id, mediodia + interval '5 hours' from e_ids, cuando;
 
 select is(
   (select vehiculos_dia from eevd_semanal
