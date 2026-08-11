@@ -163,6 +163,54 @@ async function configDeLaCaptura(
   return { configVersionId, moduloEncendido: estado !== false };
 }
 
+/** La huella del enrolamiento es un sha256 en hexa (`dominio/secretos.ts::hashDeSecreto`), lo
+ *  mismo que el aparato deriva offline en `cliente/identidad.ts` [AC-FPOD-09]. */
+const HUELLA_DE_ENROLAMIENTO = /^[0-9a-f]{64}$/;
+
+/**
+ * A nombre de QUIÉN aterriza este lote [AC-FPOD-09] — §4.7: «las capturas de A persisten
+ * firmadas por el enrolamiento y se replayean aunque B esté autenticado».
+ *
+ * Quien transmite y quien capturó son la misma persona en el 99 % del tráfico, y ahí esto no
+ * hace nada: sin huella —o con una que esta base no conoce— manda la sesión que trae el lote.
+ * La excepción es el flush de una partición ajena (`cliente/outbox-multiusuario.ts`): el
+ * teléfono cambió de dueño y las capturas de A salen con la credencial de B. Atribuirlas a B
+ * sería registrar en `eventos` —el orden autoritativo del §4.6, del que cuelga la liquidación
+ * del §3.E1.9— que la entrega la hizo quien solo prestó el aparato.
+ *
+ * La huella NO autentica nada: quien manda el lote ya se autenticó con su propio secreto y esta
+ * guardia no le da acceso a ninguna fila que no tuviera. Lo único que decide es a qué aparato
+ * enrolado del MISMO tenant se le anota el hecho, y solo resuelve si el hash calza con un
+ * `dispositivos.secreto_hash` de esta base — un valor inventado no crea un actor, cae al
+ * `fallback`. El aparato revocado también atribuye: sus capturas de antes del corte son las del
+ * §4.3 que AC-FPOD-07 deja entrar, y borrarles el autor sería perder justo lo que hay que revisar.
+ */
+async function firmaDelEnrolamiento(
+  c: PoolClient,
+  enrolamiento: string | null,
+  sesion: Sesion,
+): Promise<Sesion> {
+  if (enrolamiento === null || !HUELLA_DE_ENROLAMIENTO.test(enrolamiento)) return sesion;
+  const { rows } = await c.query<{ dispositivo_id: string; usuario_id: string | null }>(
+    `select d.id::text as dispositivo_id, u.id::text as usuario_id
+       from dispositivos d
+       left join usuarios u on u.persona_id = d.persona_id and u.activo
+      where d.secreto_hash = $1
+      order by u.creado_en
+      limit 1`,
+    [enrolamiento],
+  );
+  const firma = rows[0];
+  if (!firma) return sesion;
+  return {
+    ...sesion,
+    dispositivoId: firma.dispositivo_id,
+    // Un aparato de andén no tiene persona dueña (§4.3): el hecho se le anota al APARATO y el
+    // actor sigue siendo quien lo sincronizó, que es la única identidad humana que hubo.
+    usuarioId: firma.usuario_id ?? sesion.usuarioId,
+  };
+}
+
 /** Deja dicho que la captura entró degradada: un evento y una fila de «Por revisar» POR FLAG
  *  (§5.6 se lee por origen; una fila genérica obligaría a abrir el jsonb de cada una). La
  *  captura YA aterrizó en `eventos` — esto nunca la rebota ni la deshace [AC-FPOD-05]. */
@@ -199,12 +247,19 @@ export async function aterrizarCapturas(
   // Cuándo se revocó el aparato que manda este lote; `null` si sigue vigente [AC-FPOD-07] — §4.3.
   // Lo trae `sesionParaSincronizarCapturas`, la única guardia que deja pasar una sesión revocada.
   revocadoEn: Date | null,
+  // La huella del enrolamiento que CAPTURÓ este lote [AC-FPOD-09] — §4.7. `null` en el camino
+  // normal, donde quien transmite es quien capturó; con valor cuando el aparato está vaciando la
+  // partición de una identidad que ya no es la activa.
+  enrolamiento: string | null = null,
 ): Promise<AcuseDeCaptura[]> {
   if (entrantes.length === 0) return [];
 
   return enActo(
     pool,
     async (c) => {
+      // El acto sigue siendo de quien manda el lote —la auditoría del §7.4 registra quién hizo la
+      // llamada—; lo que la firma cambia es a nombre de quién queda el HECHO en `eventos`.
+      const firma = await firmaDelEnrolamiento(c, enrolamiento, sesion);
       const acuses: AcuseDeCaptura[] = [];
       for (const captura of entrantes) {
         // El replay es el camino PRINCIPAL (§4.7), así que llega repetido por diseño: al
@@ -251,7 +306,8 @@ export async function aterrizarCapturas(
             : EVENTOS_OPERACION.entrega_pod_capturada,
           objetoTabla: "paradas",
           objetoId: captura.paradaId,
-          sesion,
+          // Firmado por el enrolamiento que capturó, no por el que transmitió [AC-FPOD-09].
+          sesion: firma,
           // El doble reloj del §4.6: `event_time` es cuándo el chofer tocó «Entregado» —puede
           // ser de hace tres horas, sin señal— y `record_time` lo pone la BD al aterrizar.
           eventTime: captura.tsDispositivo,
@@ -276,7 +332,9 @@ export async function aterrizarCapturas(
           await dejarDichoQueDegrado(c, {
             flags: flagsConRastro,
             paradaId: captura.paradaId,
-            sesion,
+            // Misma firma que el hecho que degradó: quien revise «Por revisar» tiene que ver el
+            // aparato que capturó, no el que hizo de cartero [AC-FPOD-09].
+            sesion: firma,
             nota: `Captura de POD para la parada ${captura.paradaId} — config_version_id ${configVersionId}`,
           });
         }

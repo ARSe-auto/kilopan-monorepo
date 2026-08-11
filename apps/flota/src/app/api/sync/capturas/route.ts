@@ -77,12 +77,19 @@ export async function POST(peticion: Request) {
     );
   }
 
+  // La huella del enrolamiento que capturó el lote [AC-FPOD-09] — §4.7. Ausente o mal formada ⇒
+  // `null`, y el hecho se atribuye a la sesión que lo trae: NO es motivo de rebote, porque el
+  // 99 % de los lotes los manda quien los capturó y una versión vieja de la PWA no manda el campo.
+  const enrolamiento =
+    typeof cuerpo.enrolamiento === "string" && cuerpo.enrolamiento !== "" ? cuerpo.enrolamiento : null;
+
   const acuses = await aterrizarCapturas(
     g.acto.pool,
     g.acto.sesion,
     g.acto.slug,
     leidas as CapturaEntrante[],
     g.acto.revocadoEn,
+    enrolamiento,
   );
   return Response.json({ acuses }, { status: 200 });
 }

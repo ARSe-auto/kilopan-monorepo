@@ -26,14 +26,20 @@ import { replayar, type Enviar } from "./outbox.ts";
 // archivo manda el lote ajeno directo al servidor, en silencio, sin tocar el estado de React: el
 // operario actual nunca se entera de que el aparato también vació una cola que no es suya.
 //
-// ─── CON QUÉ CREDENCIAL VIAJA ──────────────────────────────────────────────────────
+// ─── CON QUÉ CREDENCIAL VIAJA, Y A NOMBRE DE QUIÉN ATERRIZA ───────────────────────
 //
-// Con la del aparato, que es la de quien esté autenticado AHORA (`cliente/aparato.ts::pedir`,
-// §4.3: «la sesión ES el aparato»). El servidor no tiene ninguna noción de «actor original de
-// esta captura» distinta de la sesión que la manda —ver `servidor/capturas.ts`—, así que el hecho
-// aterriza atribuido a quien lo sincronizó. Lo que este AC exige y prueba (centinela 9) es que
-// las 3 filas de A EXISTAN tras la sincronización, no de qué sesión salió el request que las
-// llevó: perderlas por quedarse esperando a que A vuelva a este aparato sería el defecto real.
+// Viaja con la credencial del aparato, que es la de quien esté autenticado AHORA
+// (`cliente/aparato.ts::pedir`, §4.3: «la sesión ES el aparato»): la de A ya no existe en el
+// disco —autenticarse otra identidad la sobrescribió— y esperar a que A vuelva a este teléfono
+// para mandar lo suyo es exactamente la pérdida que el §4.7 prohíbe.
+//
+// Pero quien TRANSMITE no es quien CAPTURÓ, y el §4.7 pide que las capturas de A persistan
+// «firmadas por el enrolamiento». Por eso el lote ajeno viaja con `identidad.usuario`: la huella
+// del secreto de enrolamiento de A —la misma que particiona su outbox (`cliente/identidad.ts`) y
+// la misma que la BD guarda en `dispositivos.secreto_hash` (§4.3)—, con la que el servidor
+// atribuye el hecho al aparato de A. Sin eso, la entrega que A hizo en la calle aterrizaría a
+// nombre de B, y la liquidación del §3.E1.9 —que nace de la evidencia— le pagaría la parada al
+// que solo prestó el teléfono.
 
 function mismaIdentidad(a: Identidad, b: Identidad): boolean {
   return a.tenant === b.tenant && a.usuario === b.usuario;
@@ -59,7 +65,7 @@ export async function vaciarOutboxAjeno(
     const cola = colaAlArrancar(leerOutbox(almacen, identidad));
     if (cola.length === 0) continue;
 
-    const confirmadas = await replayar(cola, enviar);
+    const confirmadas = await replayar(cola, enviar, identidad.usuario);
     if (confirmadas.length === 0) continue;
 
     const restante = cola.filter((c) => !confirmadas.includes(c.clientUuid));

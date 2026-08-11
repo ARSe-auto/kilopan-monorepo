@@ -67,11 +67,20 @@ test("[AC-FPOD-09] A captura 3 offline, B se autentica: las 3 de A se replayean 
   await vaciarOutboxAjeno(disco, B, enviar);
 
   assert.equal(cuerpos.length, 1, "un solo lote para la identidad ajena");
-  const enviado = JSON.parse(cuerpos[0]!) as { capturas: { client_uuid: string }[] };
+  const enviado = JSON.parse(cuerpos[0]!) as {
+    capturas: { client_uuid: string }[];
+    enrolamiento: string | null;
+  };
   assert.deepEqual(
     enviado.capturas.map((c) => c.client_uuid).sort(),
     ["a-1", "a-2", "a-3"],
     "las 3 mutaciones de A viajan, aunque quien esté autenticado ahora sea B",
+  );
+  assert.equal(
+    enviado.enrolamiento,
+    A.usuario,
+    "y viajan FIRMADAS POR EL ENROLAMIENTO de A (§4.7): quien transmite es B, quien capturó es A, " +
+      "y sin esta huella el servidor solo puede atribuir el hecho a quien prestó el teléfono",
   );
 });
 

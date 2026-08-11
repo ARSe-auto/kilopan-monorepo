@@ -39,6 +39,8 @@ export const VALIDOS = {
   "1.111.112-2": "el chofer del módulo apagado con turno abierto (AC-FPOD-06), propio y no prestado: sexta suite de F4, sexto operario — mismo motivo que las cinco de arriba",
   "9.876.543-3": "el chofer revocado DENTRO de la ventana de 72h (AC-FPOD-07), propio y no prestado: séptima suite de F4, séptimo operario — mismo motivo que las seis de arriba",
   "1.234.567-4": "el chofer revocado FUERA de la ventana de 72h (AC-FPOD-07), propio y no prestado: la misma suite necesita un SEGUNDO operario porque cada caso enrola su propio aparato con su propio `revocado_at`",
+  "6.543.210-2": "el chofer A del centinela 9 (AC-FPOD-09), propio y no prestado: octava suite de F4, octavo operario — el que captura 3 entregas sin señal y después ya no vuelve a este teléfono",
+  "8.888.888-K": "el chofer B del centinela 9 (AC-FPOD-09): la SEGUNDA identidad que se autentica en el MISMO aparato de A: sin ella no hay quién pise el outbox, que es todo lo que el caso prueba",
 };
 
 /**

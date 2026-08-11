@@ -47,10 +47,23 @@ function paraElCable(c: CapturaDeEntrega) {
  *
  * Devolver los acusados —y no un booleano— es lo que impide vaciar la cola por el código de
  * estado: un 2xx dice que la llamada llegó, y solo el acuse dice que el hecho quedó escrito.
+ *
+ * `enrolamiento` es la huella del enrolamiento QUE CAPTURÓ este lote [AC-FPOD-09] — §4.7: «las
+ * capturas de A persisten FIRMADAS POR EL ENROLAMIENTO y se replayean aunque B esté
+ * autenticado». En el camino normal quien transmite es quien capturó y va `null`: el servidor
+ * atribuye a la sesión que manda, que es la misma. Viaja con valor solo cuando esas dos personas
+ * son DISTINTAS —el flush de una partición ajena de `outbox-multiusuario.ts`—, que es el único
+ * caso donde atribuir por la sesión que transmite le pondría la entrega de A en la planilla de B.
  */
-export async function replayar(cola: readonly CapturaDeEntrega[], enviar: Enviar): Promise<string[]> {
+export async function replayar(
+  cola: readonly CapturaDeEntrega[],
+  enviar: Enviar,
+  enrolamiento: string | null = null,
+): Promise<string[]> {
   if (cola.length === 0) return [];
-  const respuesta = await enviar(JSON.stringify({ capturas: cola.map(paraElCable) })).catch(() => null);
+  const respuesta = await enviar(
+    JSON.stringify({ capturas: cola.map(paraElCable), enrolamiento }),
+  ).catch(() => null);
   if (!respuesta || !respuesta.ok) return [];
 
   const cuerpo = (await respuesta.json().catch(() => null)) as { acuses?: AcuseCrudo[] } | null;
