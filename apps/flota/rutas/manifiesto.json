@@ -148,6 +148,60 @@
       }
     },
     {
+      "ruta": "/api/encargos/[id]",
+      "archivo": "src/app/api/encargos/[id]/route.ts",
+      "metodos": [
+        "PATCH"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "encargos",
+          "columna": "id"
+        },
+        "nota": "Corregir un encargo de B desde una sesión de A [AC-FRUT-03]. MUTA planificación: cambiarle el destino o los bultos a un encargo del vecino manda su camión a otra cuadra o le carga el doble, y el operador de B lo descubre en el andén, de madrugada, con la ruta ya publicada. El 404 no alcanza solo: el comparador de huella de la BD de B tiene que ver que no cambió ninguna fila (centinela 2, §9.3.2). El fixture del vecino ya siembra un encargo, así que el id es REAL — contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin probar nada."
+      }
+    },
+    {
+      "ruta": "/api/encargos/[id]/aceptar",
+      "archivo": "src/app/api/encargos/[id]/aceptar/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "encargos",
+          "columna": "id"
+        },
+        "nota": "Aceptar un encargo de B desde una sesión de A [AC-FRUT-03]. MUTA: la aceptación es el acto por el que la casa se compromete y el que CIERRA la ventana de edición del contratante — aceptárselo a B le quita a su cliente la posibilidad de corregir un pedido que la casa nunca miró, y deja en su bandeja algo dado por bueno por un ajeno. Por eso el caso mira además la huella de la BD de B (centinela 2, §9.3.2): un 404 con la fila ya cambiada no es aislamiento."
+      }
+    },
+    {
+      "ruta": "/api/encargos/[id]/reintentar",
+      "archivo": "src/app/api/encargos/[id]/reintentar/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "encargos",
+          "columna": "id"
+        },
+        "nota": "Reintentar un encargo de B desde una sesión de A [AC-FRUT-03]. MUTA CREANDO: un reintento escribe un encargo NUEVO en la bandeja del vecino, encadenado por `reintento_de` a uno suyo. El daño no es una fuga sino un fantasma — carga que nadie de B pidió, que su operador va a armar en una ruta de madrugada y que su cliente va a ver como un pedido propio. La huella de la BD de B es acá el guard que importa: una fila de más en `encargos` es exactamente lo que hay que ver (centinela 2, §9.3.2)."
+      }
+    },
+    {
       "ruta": "/api/encargos/duplicar",
       "archivo": "src/app/api/encargos/duplicar/route.ts",
       "metodos": [

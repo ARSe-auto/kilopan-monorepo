@@ -9,13 +9,14 @@ select no_plan();
 
 select has_table(t) from unnest(array['empresas_cliente', 'destinos', 'encargos']) as t;
 
--- El enum de estados NO se inventó: solo los dos que el texto fija. Si mañana aparecen más sin
--- que el dueño haya respondido la pregunta 1, este test lo dice.
-select is(
-  (select array_agg(e.enumlabel::text order by e.enumlabel)
-     from pg_enum e join pg_type t on t.oid = e.enumtypid where t.typname = 'encargo_estado'),
-  array['aceptado', 'solicitado'],
-  'el enum de estados tiene los DOS del maestro: los intermedios los agrega AC-FRUT-03'
+-- El enum de estados no se inventó NUNCA: nació con los dos que el maestro fija y creció recién
+-- cuando el dueño respondió la pregunta 1 (11-ago-2026, `docs/respuestas-dueno-2026-08-11-…`).
+-- La máquina completa la asierta el pgTAP 0021 [AC-FRUT-03]; acá se guarda lo que este archivo
+-- vino a guardar: que los DOS del maestro sigan siendo parte de ella y con su significado.
+select ok(
+  (select count(*)::int from pg_enum e join pg_type t on t.oid = e.enumtypid
+    where t.typname = 'encargo_estado' and e.enumlabel in ('solicitado', 'aceptado')) = 2,
+  'los dos estados que el maestro fija literalmente siguen en el enum (§4.5, §3.E1.10)'
 );
 
 -- El de `geo_confianza`, en cambio, va COMPLETO aunque E1 solo produzca dos: es del §4.5.

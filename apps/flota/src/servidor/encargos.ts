@@ -31,6 +31,8 @@ export type Encargo = {
   bultos: number;
   fecha_servicio: string;
   estado: string;
+  /** El encargo del que este es reintento (§4.5, §6). NULL en el original [AC-FRUT-03]. */
+  reintento_de?: string | null;
   /** Solo en la LISTA: el alta devuelve la fila recién escrita, sin resolver los catálogos. */
   empresa?: string;
   destino?: string;
@@ -49,7 +51,8 @@ const CHECK_VIOLATION = "23514";
 
 const COLUMNAS = `id::text as id, empresa_cliente_id::text as empresa_cliente_id,
                   destino_id::text as destino_id, bultos,
-                  to_char(fecha_servicio, 'YYYY-MM-DD') as fecha_servicio, estado::text as estado`;
+                  to_char(fecha_servicio, 'YYYY-MM-DD') as fecha_servicio, estado::text as estado,
+                  reintento_de::text as reintento_de`;
 
 export async function crearEncargo(
   pool: Pool,
@@ -86,9 +89,10 @@ export async function crearEncargo(
 
       const { rows } = await c.query<Encargo>(
         `insert into encargos
-           (empresa_cliente_id, destino_id, bultos, fecha_servicio, attrs, estado, client_uuid)
+           (empresa_cliente_id, destino_id, bultos, fecha_servicio, attrs, estado, client_uuid,
+            creado_por_usuario_id)
          values ($1, $2, $3, coalesce($4::date, (now() at time zone 'America/Santiago')::date),
-                 $5::jsonb, $6::encargo_estado, $7)
+                 $5::jsonb, $6::encargo_estado, $7, $8)
            on conflict (tenant_id, client_uuid) do nothing
          returning ${COLUMNAS}`,
         [
@@ -99,6 +103,10 @@ export async function crearEncargo(
           JSON.stringify(datos.attrs),
           estado,
           datos.clientUuid,
+          // Quién lo creó: es lo que hace verificable «editable por SU creador» (§3.E1.10).
+          // Sin esta columna, cualquier usuario de la misma empresa podría corregir el de otro,
+          // porque la política de fila confina a la EMPRESA [AC-FRUT-03].
+          sesion.usuarioId,
         ],
       );
 
@@ -173,6 +181,265 @@ export async function listarEncargos(
     );
     return rows;
   });
+}
+
+// ─── La máquina de estados del encargo [AC-FRUT-03] — §4.5, §3.E1.10, §6 ────────────
+//
+// La respuesta del dueño del 11-ago-2026 fijó la máquina completa:
+//
+//     solicitado → aceptado → asignado → publicado → entregado | no_entregado
+//
+// De sus cinco transiciones este archivo escribe UNA: la aceptación. Las otras las estampan los
+// triggers de la 0048 desde el hecho que las produce —el ítem que entra en una parada, la ruta
+// que se publica, la parada que el terreno cierra— y el rol de app tiene prohibido escribir las
+// finales. Un `entregado` que la app pudiera estampar sería un encargo dado por cumplido sin que
+// nadie hubiera capturado nada, y esa es la palabra con la que se cobra.
+//
+// Acá abajo van, entonces, los tres actos HUMANOS de la máquina: aceptar, corregir mientras se
+// puede, y reintentar lo que no se entregó.
+
+/** Los códigos con que la BD rebota las guardas de la 0048 (§4.2: PLANIFICACIÓN rebota). */
+const CHECK_O_PRIVILEGIO = new Set(["23514", "42501"]);
+
+export type Aceptacion =
+  | { tipo: "ok"; encargo: Encargo }
+  | { tipo: "no_existe" }
+  | { tipo: "no_estaba_solicitado"; estado: string };
+
+/**
+ * `solicitado → aceptado`: el único paso de la máquina que estampa la app.
+ *
+ * Es un acto humano del operador y no se deriva de ningún hecho de terreno — por eso no hay
+ * trigger que pueda estamparlo. Y es el que CIERRA la ventana de edición del contratante
+ * (§3.E1.10): de ahí en adelante, la guarda de la base rebota cualquier cambio de payload.
+ */
+export async function aceptarEncargo(
+  pool: Pool,
+  sesion: Sesion,
+  encargoId: string,
+): Promise<Aceptacion> {
+  return enActo(
+    pool,
+    async (c) => {
+      const { rows: previo } = await c.query<{ estado: string }>(
+        "select estado::text as estado from encargos where id = $1",
+        [encargoId],
+      );
+      if (!previo[0]) return { tipo: "no_existe" };
+      if (previo[0].estado !== "solicitado") {
+        return { tipo: "no_estaba_solicitado", estado: previo[0].estado };
+      }
+
+      const { rows } = await c.query<Encargo>(
+        `update encargos set estado = 'aceptado'::encargo_estado
+           where id = $1 and estado = 'solicitado'
+         returning ${COLUMNAS}`,
+        [encargoId],
+      );
+      await registrarEvento(c, {
+        codigo: EVENTOS_OPERACION.encargo_aceptado,
+        objetoTabla: "encargos",
+        objetoId: encargoId,
+        sesion,
+        payload: { desde: "solicitado" },
+      });
+      return { tipo: "ok", encargo: rows[0]! };
+    },
+    sesion,
+  );
+}
+
+export type Edicion =
+  | { tipo: "ok"; encargo: Encargo }
+  | { tipo: "no_existe" }
+  | { tipo: "no_es_de_su_creador" }
+  | { tipo: "ya_aceptado"; estado: string }
+  | { tipo: "bultos_fuera_de_rango" }
+  | { tipo: "attrs_invalidos"; detalle: string };
+
+/**
+ * El contratante corrige su encargo, y SOLO hasta que el operador lo acepte (§3.E1.10).
+ *
+ * Dos condiciones, y cada una la verifica quien puede:
+ *
+ *   · **su creador** — la app, que es la única que sabe qué usuario está pidiendo. La empresa ya
+ *     la confina la política de fila (AC-FRUT-12); esto es más fino: dentro de la misma empresa,
+ *     el encargo lo corrige quien lo pidió.
+ *   · **hasta la aceptación** — la BD, en la guarda de la 0048. Es el invariante, y un invariante
+ *     que solo viva en un `if` de TypeScript se salta con la ruta HTTP que se escriba mañana.
+ *
+ * Es PLANIFICACIÓN: rebota 422 con 0 filas (§4.2). Nadie perdió ningún hecho del mundo por
+ * rebotar una corrección; dejarla pasar sobre un encargo ya aceptado mueve un camión.
+ */
+export async function editarEncargo(
+  pool: Pool,
+  sesion: Sesion,
+  encargoId: string,
+  cambios: {
+    destinoId?: string;
+    bultos?: number;
+    attrs?: Record<string, unknown>;
+    fechaServicio?: string;
+  },
+): Promise<Edicion> {
+  if (cambios.bultos !== undefined) {
+    if (!Number.isInteger(cambios.bultos) || cambios.bultos < 1 || cambios.bultos > 500) {
+      return { tipo: "bultos_fuera_de_rango" };
+    }
+  }
+
+  try {
+    return await enActo(
+      pool,
+      async (c) => {
+        const { rows: previo } = await c.query<{ estado: string; creador: string | null }>(
+          `select estado::text as estado, creado_por_usuario_id::text as creador
+             from encargos where id = $1`,
+          [encargoId],
+        );
+        if (!previo[0]) return { tipo: "no_existe" };
+        // El rol `cliente` corrige lo SUYO. El operador de la casa no está atado a esa mitad: el
+        // §3.E1.10 habla del contratante, y la bandeja es de la casa. La otra mitad —la ventana
+        // que cierra la aceptación— la aplica la base para los dos.
+        if (sesion.rol === "cliente" && previo[0].creador !== sesion.usuarioId) {
+          return { tipo: "no_es_de_su_creador" };
+        }
+        if (previo[0].estado !== "solicitado") {
+          return { tipo: "ya_aceptado", estado: previo[0].estado };
+        }
+
+        const { rows } = await c.query<Encargo>(
+          `update encargos
+              set destino_id     = coalesce($2, destino_id),
+                  bultos         = coalesce($3, bultos),
+                  attrs          = coalesce($4::jsonb, attrs),
+                  fecha_servicio = coalesce($5::date, fecha_servicio)
+            where id = $1 and estado = 'solicitado'
+          returning ${COLUMNAS}`,
+          [
+            encargoId,
+            cambios.destinoId ?? null,
+            cambios.bultos ?? null,
+            cambios.attrs ? JSON.stringify(cambios.attrs) : null,
+            cambios.fechaServicio ?? null,
+          ],
+        );
+        await registrarEvento(c, {
+          codigo: EVENTOS_OPERACION.encargo_editado,
+          objetoTabla: "encargos",
+          objetoId: encargoId,
+          sesion,
+          payload: { campos: Object.keys(cambios) },
+        });
+        return { tipo: "ok", encargo: rows[0]! };
+      },
+      sesion,
+    );
+  } catch (error) {
+    const e = error as { code?: string; message?: string };
+    if (e.code && CHECK_O_PRIVILEGIO.has(e.code)) {
+      if ((e.message ?? "").includes("ventana de edición")) {
+        return { tipo: "ya_aceptado", estado: "aceptado" };
+      }
+      if ((e.message ?? "").includes("bultos")) return { tipo: "bultos_fuera_de_rango" };
+      return { tipo: "attrs_invalidos", detalle: e.message ?? "" };
+    }
+    throw error;
+  }
+}
+
+export type Reintento =
+  | { tipo: "ok"; encargo: Encargo; repetido: boolean }
+  | { tipo: "no_existe" }
+  | { tipo: "no_fue_un_fracaso"; estado: string };
+
+/**
+ * Reintentar es un encargo NUEVO que apunta al original (§4.5, patrón OptimoRoute del §6).
+ *
+ * ─── POR QUÉ NO SE REABRE EL ORIGINAL ─────────────────────────────────────────────
+ *
+ * El original YA OCURRIÓ: salió en un camión, tiene su parada, su manifiesto firmado y su motivo
+ * de no-entrega. Volverlo a `aceptado` borraría el día en que el cliente no recibió, que es
+ * justo el dato de la disputa. Por eso el final es final —la 0048 rebota reabrirlo— y la
+ * historia completa se conserva: dos filas encadenadas por `reintento_de`.
+ *
+ * ─── Y POR QUÉ EXIGE QUE EL ORIGINAL SEA `no_entregado` ───────────────────────────
+ *
+ * Alexis lo fijó el 11-ago-2026: `reintento_de` es para cuando el camión SALIÓ y no entregó. Un
+ * ítem bajado del manifiesto sin DTE no es eso —la mercadería sigue en el andén— y se resuelve
+ * desasignándolo y volviéndolo a planificar el MISMO día, sin reintento (AC-FRUT-24). Sin esta
+ * guarda, «reintentar» sería el botón con el que se duplica cualquier encargo y la cadena
+ * dejaría de significar «esto ya falló una vez».
+ */
+export async function reintentarEncargo(
+  pool: Pool,
+  sesion: Sesion,
+  encargoId: string,
+  fechaServicio: string | null,
+): Promise<Reintento> {
+  return enActo(
+    pool,
+    async (c) => {
+      const { rows: previo } = await c.query<{
+        estado: string;
+        empresa_cliente_id: string;
+        destino_id: string;
+        bultos: number;
+        attrs: Record<string, unknown>;
+        cargo_type_id: string | null;
+      }>(
+        `select estado::text as estado, empresa_cliente_id::text as empresa_cliente_id,
+                destino_id::text as destino_id, bultos, attrs, cargo_type_id::text as cargo_type_id
+           from encargos where id = $1`,
+        [encargoId],
+      );
+      if (!previo[0]) return { tipo: "no_existe" };
+      if (previo[0].estado !== "no_entregado") {
+        return { tipo: "no_fue_un_fracaso", estado: previo[0].estado };
+      }
+
+      // El `client_uuid` se DERIVA del original y de la fecha a la que se reintenta, con el mismo
+      // criterio que la duplicación de ayer: el segundo clic no crea un segundo reintento, y
+      // pasado mañana el mismo encargo se puede volver a reintentar porque la fecha cambió.
+      const clientUuid = uuidDeterminista(`reintento|${encargoId}|${fechaServicio ?? "hoy"}`);
+      const { rows } = await c.query<Encargo>(
+        `insert into encargos
+           (empresa_cliente_id, destino_id, bultos, attrs, cargo_type_id, fecha_servicio,
+            reintento_de, client_uuid, creado_por_usuario_id)
+         values ($1, $2, $3, $4::jsonb, $5,
+                 coalesce($6::date, (now() at time zone 'America/Santiago')::date), $7, $8, $9)
+           on conflict (tenant_id, client_uuid) do nothing
+         returning ${COLUMNAS}`,
+        [
+          previo[0].empresa_cliente_id,
+          previo[0].destino_id,
+          previo[0].bultos,
+          JSON.stringify(previo[0].attrs),
+          previo[0].cargo_type_id,
+          fechaServicio,
+          encargoId,
+          clientUuid,
+          sesion.usuarioId,
+        ],
+      );
+      if (!rows[0]) {
+        const { rows: yaEstaba } = await c.query<Encargo>(
+          `select ${COLUMNAS} from encargos where client_uuid = $1`,
+          [clientUuid],
+        );
+        return { tipo: "ok", encargo: yaEstaba[0]!, repetido: true };
+      }
+      await registrarEvento(c, {
+        codigo: EVENTOS_OPERACION.encargo_reintentado,
+        objetoTabla: "encargos",
+        objetoId: rows[0].id,
+        sesion,
+        payload: { reintento_de: encargoId },
+      });
+      return { tipo: "ok", encargo: rows[0], repetido: false };
+    },
+    sesion,
+  );
 }
 
 // ─── Importación CSV de la bandeja [AC-FRUT-02] — §5.2-F1, §4.2, §9.3.1 ─────────────

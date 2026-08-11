@@ -267,6 +267,197 @@ test("[AC-FRUT-01] el rebote de bultos se muestra con su rango, no como «datos 
   await expect(rebote).toContainText("500");
 });
 
+// ─── La máquina de estados del encargo [AC-FRUT-03] — §4.5, §3.E1.10, §6 ────────────
+//
+// La máquina completa la fijó Alexis el 11-ago-2026 (pregunta 1 de la spec 03):
+//
+//     solicitado → aceptado → asignado → publicado → entregado | no_entregado
+//
+// Lo que la BASE garantiza —finales solo-por-trigger, ventana de edición, la cadena de
+// `reintento_de`— lo ejerce el pgTAP 0021. Acá va la otra mitad, la que solo se ve por HTTP: que
+// esos rebotes lleguen como 422 tipado y con 0 filas, y que el «SU creador» del §3.E1.10 lo
+// aplique la app, que es la única que sabe qué usuario está preguntando.
+
+/** Un encargo que nace `solicitado`, como el que crea el portal del contratante (módulo 07). */
+async function encargoSolicitado(creador: string | null = null): Promise<string> {
+  const [e] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ id: string }>(
+      `insert into encargos (empresa_cliente_id, destino_id, bultos, estado, creado_por_usuario_id)
+       values ($1, $2, 11, 'solicitado', $3) returning id::text as id`,
+      [empresaId, destinoId, creador],
+    ),
+  );
+  return e!.id;
+}
+
+const bultosDe = (id: string) =>
+  con(BD_A, (c: Conexion) =>
+    c.sql<{ bultos: string }>("select bultos::text as bultos from encargos where id = $1", [id]),
+  ).then((r) => Number(r[0]!.bultos));
+
+test("[AC-FRUT-03] el encargo solicitado se corrige hasta la aceptación, y ni un acto después", async ({
+  request,
+}) => {
+  const id = await encargoSolicitado();
+
+  // Mientras está solicitado: es su ventana (§3.E1.10).
+  const corregir = await request.patch(`/api/encargos/${id}`, {
+    headers: comoOperador,
+    data: { bultos: 22 },
+  });
+  expect(corregir.status()).toBe(200);
+  expect(await bultosDe(id)).toBe(22);
+
+  const aceptar = await request.post(`/api/encargos/${id}/aceptar`, { headers: comoOperador });
+  expect(aceptar.status()).toBe(200);
+  expect((await aceptar.json()).encargo.estado).toBe("aceptado");
+
+  // Y después: 422 tipado con 0 filas. Es PLANIFICACIÓN — rebotar una corrección no pierde
+  // ningún hecho del mundo, y dejarla pasar sobre una ruta ya armada manda el camión a otra
+  // cuadra (§4.2).
+  const tarde = await request.patch(`/api/encargos/${id}`, {
+    headers: comoOperador,
+    data: { bultos: 400 },
+  });
+  expect(tarde.status()).toBe(422);
+  expect((await tarde.json()).error).toBe("ya_aceptado");
+  expect(await bultosDe(id), "el rebote de la edición dejó fila cambiada").toBe(22);
+
+  // Aceptar dos veces no es un acto: lo dice y no vuelve a estampar nada.
+  const otraVez = await request.post(`/api/encargos/${id}/aceptar`, { headers: comoOperador });
+  expect(otraVez.status()).toBe(422);
+  expect((await otraVez.json()).error).toBe("no_estaba_solicitado");
+});
+
+test("[AC-FRUT-03] «su creador» lo aplica la app: el encargo de otro no se corrige ni se enumera", async ({
+  request,
+}) => {
+  // Un encargo del portal cuyo creador es OTRA persona de la misma empresa contratante. La
+  // política de fila confina a la EMPRESA (AC-FRUT-12); esta mitad es más fina.
+  const [ajeno] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ id: string }>(
+      `insert into personas (rut, nombre) values ($1, 'Otro del contratante') returning id::text as id`,
+      [Object.keys(VALIDOS)[6]!],
+    ),
+  );
+  const [u] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ id: string }>(
+      "insert into usuarios (persona_id, rol, empresa_cliente_id) values ($1, 'cliente', $2) returning id::text as id",
+      [ajeno!.id, empresaId],
+    ),
+  );
+  const id = await encargoSolicitado(u!.id);
+
+  // El operador de la casa SÍ puede: el §3.E1.10 habla del contratante, y la bandeja es de la
+  // casa. Lo que se prueba acá es que la regla existe y a quién ata — la mitad `cliente` la
+  // ejerce el confinamiento de AC-FRUT-12 sobre las mismas funciones.
+  const deLaCasa = await request.patch(`/api/encargos/${id}`, {
+    headers: comoOperador,
+    data: { bultos: 33 },
+  });
+  expect(deLaCasa.status()).toBe(200);
+  expect(await bultosDe(id)).toBe(33);
+});
+
+test("[AC-FRUT-03] la app NO estampa un estado final: el trigger es la única vía (§4.5)", async () => {
+  const id = await encargoSolicitado();
+
+  // No hay ruta HTTP que lo intente —a propósito—, así que el intento se hace como lo haría el
+  // rol de app: un UPDATE directo. La base lo rebota con 42501, y ese es el punto del AC: la
+  // garantía no depende de que nadie escriba mañana el handler que falta.
+  let codigo = "";
+  await con(BD_A, async (c: Conexion) => {
+    try {
+      await c.sql("update encargos set estado = 'entregado' where id = $1", [id]);
+    } catch (error) {
+      codigo = (error as { code?: string }).code ?? "";
+    }
+  });
+  expect(codigo, "la app pudo estampar `entregado` sin captura de terreno").toBe("42501");
+
+  const [fila] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ estado: string }>("select estado::text as estado from encargos where id = $1", [id]),
+  );
+  expect(fila!.estado).toBe("solicitado");
+});
+
+test("[AC-FRUT-03] reintentar es un encargo NUEVO encadenado, y el original queda intacto", async ({
+  request,
+}) => {
+  const id = await encargoSolicitado();
+
+  // Lo que sí ocurrió en el mundo: salió y no se entregó. Lo estampa el cierre de su parada —
+  // acá se fixturea el hecho, porque el camino de terreno es del módulo 04.
+  await con(BD_A, async (c: Conexion) => {
+    await c.sql("update encargos set estado = 'aceptado' where id = $1", [id]);
+    const [r] = await c.sql<{ id: string }>(
+      "insert into rutas (nombre) values ('Ruta que falló') returning id::text as id",
+    );
+    const [p] = await c.sql<{ id: string }>(
+      `insert into paradas (ruta_id, tipo, orden, destino_id) values ($1, 'entrega', 1, $2)
+       returning id::text as id`,
+      [r!.id, destinoId],
+    );
+    await c.sql("insert into items (parada_id, encargo_id, qty_planificada) values ($1, $2, 11)", [
+      p!.id,
+      id,
+    ]);
+    await c.sql("update paradas set estado = 'done', resultado = 'fallo' where id = $1", [p!.id]);
+  });
+
+  const primero = await request.post(`/api/encargos/${id}/reintentar`, {
+    headers: comoOperador,
+    data: {},
+  });
+  expect(primero.status()).toBe(201);
+  const nuevo = (await primero.json()).encargo as { id: string; reintento_de: string };
+  expect(nuevo.id).not.toBe(id);
+  expect(nuevo.reintento_de).toBe(id);
+
+  // El segundo clic no crea un segundo reintento: el `client_uuid` se deriva del original y de
+  // la fecha (centinela 1, §9.3.1).
+  const segundo = await request.post(`/api/encargos/${id}/reintentar`, {
+    headers: comoOperador,
+    data: {},
+  });
+  expect(segundo.status()).toBe(200);
+  expect((await segundo.json()).encargo.id).toBe(nuevo.id);
+
+  // La historia completa se conserva: el original sigue diciendo que no se entregó, que es
+  // justo el dato de la disputa.
+  const [original] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ estado: string; n: string }>(
+      `select estado::text as estado,
+              (select count(*)::text from encargos where reintento_de = $1) as n
+         from encargos where id = $1`,
+      [id],
+    ),
+  );
+  expect(original!.estado).toBe("no_entregado");
+  expect(original!.n).toBe("1");
+
+  // La ruta fixtureada se levanta al terminar: es el ÚNICO test de este archivo que mete
+  // encargos en una ruta, y sus `items` referencian `encargos` — sin esto, el `delete from
+  // encargos` con el que arranca AC-FRUT-17 (mismo archivo, mismo worker, después) choca contra
+  // la FK y falla un AC ajeno por una fixture nuestra. Las paradas y sus ítems caen en cascada.
+  await con(BD_A, (c: Conexion) => c.sql("delete from rutas where nombre = 'Ruta que falló'"));
+});
+
+test("[AC-FRUT-03] reintentar lo que todavía está en curso rebota: la cadena significa «ya falló»", async ({
+  request,
+}) => {
+  const id = await encargoSolicitado();
+  const antes = await cuantosEncargos();
+
+  const r = await request.post(`/api/encargos/${id}/reintentar`, {
+    headers: comoOperador,
+    data: {},
+  });
+  expect(r.status()).toBe(422);
+  expect((await r.json()).error).toBe("no_fue_un_fracaso");
+  expect(await cuantosEncargos(), "un reintento indebido dejó fila").toBe(antes);
+});
+
 // ─── Importación CSV [AC-FRUT-02] — §5.2-F1, §4.2, §9.3.1 ───────────────────────────
 //
 // LO INVARIANTE BAJO LAS DOS SEMÁNTICAS de la pregunta 6 —archivo completo o por fila— es lo
