@@ -122,7 +122,17 @@ for (const arbol of ARBOL_DE_CODIGO) {
     for (const fuente of FUENTES_DE_E4) {
       // Se busca la fuente como CADENA: una implementación de telemetría real tiene que
       // nombrar su fuente para escribir en `reading.fuente`, y por ahí es por donde entra.
-      if (new RegExp(String.raw`['"\`]${fuente}['"\`]`).test(codigo)) {
+      //
+      // Pero `archivo_logger` vive en DOS enums distintos: es una fuente de `reading` (E4,
+      // prohibida) y también un tipo de `evidencia` (§4.6, DDL desde el día 1 y legítimo). Un
+      // MIEMBRO DE UNIÓN de TypeScript —la línea que empieza con `|`— es lo segundo, y morderlo
+      // marcaba como telemetría de E4 la lista de tipos de evidencia que el POD necesita
+      // escribir. Pasó el 11-ago-2026 y frenó al motor con el AC ya terminado.
+      const lineasVivas = codigo
+        .split("\n")
+        .filter((l) => !/^\s*\|\s*['"`][a-z_]+['"`]\s*,?\s*$/.test(l))
+        .join("\n");
+      if (new RegExp(String.raw`['"\`]${fuente}['"\`]`).test(lineasVivas)) {
         problemas.push(
           `${rel} usa la fuente «${fuente}»: en E1 la única implementación de ` +
             `ProveedorTelemetria es «${FUENTE_UNICA}» (§4.9, §3-FUERA)`,

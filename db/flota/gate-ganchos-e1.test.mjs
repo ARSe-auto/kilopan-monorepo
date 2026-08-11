@@ -116,3 +116,40 @@ test("los comentarios se vacían sin correr los números de línea", () => {
   assert.equal(limpio.split("\n").length, texto.split("\n").length);
   assert.equal(limpio.split("\n")[3].trim(), "cuatro");
 });
+
+// ─── Miembro de unión ≠ fuente de telemetría [11-ago-2026] ──────────────────────────
+//
+// `archivo_logger` vive en DOS enums: es una fuente de `reading` —E4, prohibida en E1— y también
+// un tipo de `evidencia` (§4.6), que existe en el DDL desde el día 1 y que el POD necesita
+// nombrar para saber qué evidencia pedir. El gate los confundía y marcaba la lista de tipos de
+// evidencia como telemetría de E4: frenó al motor con un AC ya terminado y sus tests en verde.
+//
+// La marca que los separa es sintáctica y no ambigua: un miembro de unión de TypeScript es una
+// línea que empieza con `|` y no tiene nada más.
+
+test("un miembro de unión de tipos NO es una fuente de telemetría", () => {
+  const union = `export type TipoDeEvidencia =
+  | "firma"
+  | "foto"
+  | "archivo_logger"
+  | "documento";`;
+  assert.equal(sinComentarios(union).includes("archivo_logger"), true, "el fixture perdió el valor");
+  // Lo que se ejerce es el filtro del gate, no el `includes` de arriba: la línea de unión se
+  // descarta antes de buscar la fuente.
+  const vivas = sinComentarios(union)
+    .split("\n")
+    .filter((l) => !/^\s*\|\s*['"`][a-z_]+['"`]\s*,?\s*$/.test(l))
+    .join("\n");
+  assert.equal(/['"`]archivo_logger['"`]/.test(vivas), false, "el miembro de unión se leyó como fuente");
+});
+
+test("y una fuente DE VERDAD sigue cayendo, que es el punto del gate", () => {
+  // Sin este gemelo, «no muerde las uniones» lo cumpliría un gate que no mira nada.
+  const real = `const fuente = "archivo_logger";
+await c.query("insert into reading (fuente) values ($1)", [fuente]);`;
+  const vivas = real
+    .split("\n")
+    .filter((l) => !/^\s*\|\s*['"`][a-z_]+['"`]\s*,?\s*$/.test(l))
+    .join("\n");
+  assert.equal(/['"`]archivo_logger['"`]/.test(vivas), true, "una fuente real dejó de detectarse");
+});

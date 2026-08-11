@@ -6,6 +6,8 @@ import {
   CifraGrande,
   EstadoCargando,
   EstadoError,
+  SelectorUnToque,
+  TecladoNumerico,
 } from "@kilopan/miga/componentes/index.tsx";
 import { tipografia, superficie, grilla, enfasis } from "@kilopan/miga/tokens.ts";
 import { semantico } from "@kilopan/miga/estructura.ts";
@@ -17,11 +19,18 @@ import {
   paradaActual,
   llegar,
   entregar,
+  entregarParcial,
+  noEntregar,
+  dejarEnPunto,
+  exigeEncuadre,
+  requisitosPendientes,
   deshacer,
   cerrarLaVentana,
   terminado,
+  type EvidenciaCapturada,
   type ParadaDeRuta,
   type Recorrido,
+  type TipoDeEvidencia,
 } from "../../dominio/pod-terreno.ts";
 
 // La tarjeta de la parada de entrega (F4) [AC-FRUT-22, AC-FPOD-01] — KR-29, §4.2, §5.2 F4,
@@ -63,18 +72,69 @@ import {
 export type EmpresaEnRespuesta = { id: string; razon_social: string };
 export type RespuestaCandado = { abierta: boolean; empresas_faltantes: EmpresaEnRespuesta[] };
 
+/** Un motivo del catálogo del tenant (§4.5, AC-FRUT-13): el mismo sirve para «no entregado»
+ *  (`paradas.motivo_id`) y para `motivo_item` de la variante parcial (§4.5) — no hay un
+ *  catálogo separado por variante. */
+export type MotivoDisponible = { id: string; etiqueta: string };
+
+/** Los modos de la tarjeta en la parada actual [AC-FPOD-02]. `elegir` es el camino feliz
+ *  —«Entregado» a un toque— con el stepper de la parcial a la vista y las otras dos variantes
+ *  cerradas como salida secundaria. La parcial NO tiene modo propio: su stepper vive sobre la
+ *  entrega abierta, y ese toque que no se cobra es lo que la deja en 3 acciones y, con un
+ *  requisito de evidencia encima, en las 4 que el §5.2 F4 fija como techo del operario. */
+type ModoDeCierre = "elegir" | "no_entregado" | "dejado_en_punto";
+
+/** El texto es-CL de cada tipo del enum de evidencia (§4.6), resuelto por el TIPO que la parada
+ *  trae en sus datos. Es un `Record` completo a propósito: agregar un valor al enum sin darle
+ *  etiqueta no compila, en vez de dejarle al chofer un requisito sin nombre. Cero condicionales
+ *  por vertical — acá no se nombra ni un solo vertical (§4.6). */
+const ETIQUETA_DE_EVIDENCIA: Record<TipoDeEvidencia, string> = {
+  firma: "Firmar la recepción",
+  foto: "Sacar la foto",
+  lectura: "Registrar la lectura",
+  indicador_visual: "Mirar el indicador",
+  archivo_logger: "Adjuntar el registro",
+  documento: "Adjuntar el documento",
+  pin_destinatario: "Pedir el PIN al destinatario",
+  escaneo_codigo: "Escanear el código",
+};
+
 export default function TarjetaDeEntrega({
   secuencia,
   indice,
+  motivos,
+  bultosMaxSinReceptor,
 }: {
   secuencia: ParadaDeRuta[];
   indice: number;
+  motivos: MotivoDisponible[];
+  bultosMaxSinReceptor: number | null;
 }) {
   const [recorrido, setRecorrido] = useState<Recorrido>(() =>
     iniciarRecorrido(secuencia, Math.max(indice, 0)),
   );
   const [datos, setDatos] = useState<RespuestaCandado | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [modo, setModo] = useState<ModoDeCierre>("elegir");
+  // Parcial: cantidad tecleada (texto crudo del teclado propio) y motivo por ítem ajustado
+  // (§4.5: `motivo_item` es por ítem, no por parada).
+  const [cantidades, setCantidades] = useState<Record<string, string>>({});
+  const [motivoPorItem, setMotivoPorItem] = useState<Record<string, string>>({});
+  // No entregado: un solo motivo, de `paradas.motivo_id`.
+  const [motivoNoEntrega, setMotivoNoEntrega] = useState<string | null>(null);
+  // Dejado en punto: si el encuadre ya se capturó (AC-FPOD-17 decide CÓMO se llena este booleano
+  // — cámara concedida, denegada y su degradación —; acá solo se lee).
+  const [encuadreCapturado, setEncuadreCapturado] = useState(false);
+  // Los `stop_requirement` de esta parada que ya se cumplieron (§4.6).
+  const [evidencias, setEvidencias] = useState<EvidenciaCapturada[]>([]);
+
+  function volverAElegir() {
+    setModo("elegir");
+    setCantidades({});
+    setMotivoPorItem({});
+    setMotivoNoEntrega(null);
+    setEncuadreCapturado(false);
+  }
 
   const parada = paradaActual(recorrido);
   const paradaId = parada?.id ?? null;
@@ -94,6 +154,17 @@ export default function TarjetaDeEntrega({
 
   useEffect(() => {
     void cargar();
+    // Nueva parada: el modo y lo tecleado de la anterior no le sirven a esta. Sin esto, un
+    // «Parcial» a medio llenar sobreviviría al avance automático y quedaría flotando sobre una
+    // parada que no es la que lo originó. Los setters de React son estables entre renders, así
+    // que inlinearlos acá no le agrega dependencias al efecto (a diferencia de llamar a una
+    // función declarada en el cuerpo del componente).
+    setModo("elegir");
+    setCantidades({});
+    setMotivoPorItem({});
+    setMotivoNoEntrega(null);
+    setEncuadreCapturado(false);
+    setEvidencias([]);
   }, [cargar]);
 
   // La ventana de undo: ocho segundos en los que el toque todavía no es un hecho. Vencida, la
@@ -105,14 +176,67 @@ export default function TarjetaDeEntrega({
     return () => window.clearTimeout(temporizador);
   }, [enVentana]);
 
+  function selloDelAparato() {
+    return {
+      clientUuid: crypto.randomUUID(),
+      tsDispositivo: new Date().toISOString(),
+      tzOffsetMin: -new Date().getTimezoneOffset(),
+    };
+  }
+
   function entregado() {
+    setRecorrido((r) => entregar(r, selloDelAparato(), evidencias));
+  }
+
+  // La evidencia que ESTA parada exige [AC-FPOD-02]: pendientes primero, y hasta que no quede
+  // ninguna las salidas de entrega efectuada no se ofrecen. El flujo se arma por DATOS: lo que
+  // decide qué se pide es la fila de `stop_requirement`, jamás el vertical del tenant (§4.6).
+  const pendientes = parada === null ? [] : requisitosPendientes(parada, evidencias);
+
+  function capturarEvidencia(requisitoId: string, tipo: TipoDeEvidencia) {
+    setEvidencias((previas) => [...previas, { requisitoId, tipo }]);
+  }
+
+  // Variante parcial [AC-FPOD-02]: acción final del stepper — cierra la parada Y avanza, igual
+  // que «Entregado» del camino feliz. Solo entran los ítems con cantidad tecleada Y motivo; los
+  // que el chofer no tocó se entregaron completos.
+  function confirmarParcial() {
+    if (parada === null) return;
+    const ajustes = parada.items
+      .filter(
+        (it) =>
+          cantidades[it.id] !== undefined &&
+          cantidades[it.id] !== "" &&
+          motivoPorItem[it.id] !== undefined,
+      )
+      .map((it) => {
+        const entregada = Number(cantidades[it.id]!.replace(",", "."));
+        return {
+          itemId: it.id,
+          qtyEntregada: entregada,
+          qtyRechazada: it.qtyPlanificada - entregada,
+          motivoId: motivoPorItem[it.id]!,
+        };
+      });
+    setRecorrido((r) => entregarParcial(r, ajustes, selloDelAparato(), evidencias));
+    volverAElegir();
+  }
+
+  // Variante no entregado [AC-FPOD-02]: motivo + confirmar, 3 acciones exactas.
+  function confirmarNoEntregado() {
+    if (motivoNoEntrega === null) return;
+    setRecorrido((r) => noEntregar(r, motivoNoEntrega, selloDelAparato()));
+    volverAElegir();
+  }
+
+  // Variante dejado en punto [AC-FPOD-02]: entrega EFECTUADA sin receptor (§4.5). El dominio
+  // rechaza el cierre si falta el encuadre exigido —acá solo se ofrece o no el paso, el candado
+  // real vive en `dejarEnPunto`/`exigeEncuadre`.
+  function confirmarDejadoEnPunto() {
     setRecorrido((r) =>
-      entregar(r, {
-        clientUuid: crypto.randomUUID(),
-        tsDispositivo: new Date().toISOString(),
-        tzOffsetMin: -new Date().getTimezoneOffset(),
-      }),
+      dejarEnPunto(r, selloDelAparato(), { encuadreCapturado, bultosMaxSinReceptor }, evidencias),
     );
+    volverAElegir();
   }
 
   const candado =
@@ -181,12 +305,130 @@ export default function TarjetaDeEntrega({
         </section>
       )}
 
-      {candado !== null && candado.abierta && recorrido.llegada && (
+      {candado !== null && candado.abierta && recorrido.llegada && modo === "elegir" && parada !== null && (
         <section data-testid="entrega-en-curso" style={bloque}>
-          <p style={cuerpo}>Entrega abierta.</p>
-          <BotonPrimario testid="entregado" onClick={entregado}>
-            Entregado
+          {/* La evidencia que esta parada exige, ANTES de poder darla por entregada
+              [AC-FPOD-02]. Sin filas en `stop_requirement` —lo normal en E1— esta sección no
+              existe y el camino feliz sigue costando sus dos toques (AC-FPOD-01). */}
+          {pendientes.length > 0 ? (
+            <div data-testid="evidencia-exigida" style={bloque}>
+              <p style={cuerpo}>Esta parada pide evidencia antes de cerrarla.</p>
+              {pendientes.map((req) => (
+                <BotonPrimario
+                  key={req.id}
+                  testid={`requisito-${req.id}`}
+                  onClick={() => capturarEvidencia(req.id, req.tipo)}
+                >
+                  {ETIQUETA_DE_EVIDENCIA[req.tipo]}
+                </BotonPrimario>
+              ))}
+            </div>
+          ) : (
+            <>
+              <p style={cuerpo}>Entrega abierta.</p>
+              <BotonPrimario testid="entregado" onClick={entregado}>
+                Entregado
+              </BotonPrimario>
+
+              {/* Parcial [AC-FPOD-02]: stepper por ítem + motivo_item (§4.5), a la vista sobre
+                  la entrega abierta y sin toque propio de apertura — con un solo ítem cuesta 3
+                  acciones: la cantidad, el motivo, confirmar. */}
+              <div data-testid="modo-parcial-panel" style={bloque}>
+                {parada.items.map((it) => (
+                  <div key={it.id} data-testid={`ajuste-item-${it.id}`} style={bloque}>
+                    <p style={{ ...cuerpo, margin: 0, fontWeight: enfasis.medio }}>
+                      {it.empresa} — planificado {it.qtyPlanificada}
+                    </p>
+                    <div data-testid={`cantidad-item-${it.id}`}>
+                      <TecladoNumerico
+                        valor={cantidades[it.id] ?? ""}
+                        onCambiar={(v) => setCantidades((prev) => ({ ...prev, [it.id]: v }))}
+                      />
+                    </div>
+                    {cantidades[it.id] !== undefined && cantidades[it.id] !== "" && (
+                      <div data-testid={`motivo-item-${it.id}`}>
+                        <SelectorUnToque
+                          opciones={motivos.map((m) => ({ valor: m.id, etiqueta: m.etiqueta }))}
+                          valor={motivoPorItem[it.id] ?? null}
+                          onCambiar={(motivoId) =>
+                            setMotivoPorItem((prev) => ({ ...prev, [it.id]: motivoId }))
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {/* Basta UN ítem ajustado: los demás se entregaron completos, y cobrarle un
+                    toque por cada uno sería subir el conteo por bultos que sí llegaron. */}
+                {parada.items.some(
+                  (it) =>
+                    cantidades[it.id] !== undefined &&
+                    cantidades[it.id] !== "" &&
+                    motivoPorItem[it.id] !== undefined,
+                ) && (
+                  <BotonPrimario testid="confirmar-parcial" onClick={confirmarParcial}>
+                    Confirmar entrega parcial
+                  </BotonPrimario>
+                )}
+              </div>
+
+              <BotonPrimario
+                testid="modo-dejado-en-punto"
+                variante="neutro"
+                onClick={() => setModo("dejado_en_punto")}
+              >
+                Dejado en punto
+              </BotonPrimario>
+            </>
+          )}
+
+          {/* «No pude entregar» se ofrece SIEMPRE, con evidencia pendiente o sin ella: el
+              requisito es evidencia DE LA ENTREGA y una parada fallida no tiene ninguna que
+              dar — el local cerrado no firma (§4.2, §7.6). */}
+          <BotonPrimario testid="modo-no-entregado" variante="neutro" onClick={() => setModo("no_entregado")}>
+            No pude entregar
           </BotonPrimario>
+        </section>
+      )}
+
+      {/* No entregado [AC-FPOD-02]: motivo de catálogo + confirmar, 3 acciones exactas. */}
+      {candado !== null && candado.abierta && recorrido.llegada && modo === "no_entregado" && (
+        <section data-testid="modo-no-entregado-panel" style={bloque}>
+          <div data-testid="motivo-no-entrega">
+            <SelectorUnToque
+              opciones={motivos.map((m) => ({ valor: m.id, etiqueta: m.etiqueta }))}
+              valor={motivoNoEntrega}
+              onCambiar={setMotivoNoEntrega}
+            />
+          </div>
+          <BotonPrimario testid="volver-a-elegir" variante="neutro" onClick={volverAElegir}>
+            Volver
+          </BotonPrimario>
+          {motivoNoEntrega !== null && (
+            <BotonPrimario testid="confirmar-no-entregado" onClick={confirmarNoEntregado}>
+              Confirmar
+            </BotonPrimario>
+          )}
+        </section>
+      )}
+
+      {/* Dejado en punto [AC-FPOD-02]: de primera clase (§4.5), 3 acciones cuando el encuadre
+          se exige (§4.4), menos cuando no. */}
+      {candado !== null && candado.abierta && recorrido.llegada && modo === "dejado_en_punto" && parada !== null && (
+        <section data-testid="modo-dejado-en-punto-panel" style={bloque}>
+          {exigeEncuadre(parada, bultosMaxSinReceptor) && !encuadreCapturado && (
+            <BotonPrimario testid="encuadrar-dejado-en-punto" onClick={() => setEncuadreCapturado(true)}>
+              Encuadrar bultos
+            </BotonPrimario>
+          )}
+          <BotonPrimario testid="volver-a-elegir" variante="neutro" onClick={volverAElegir}>
+            Volver
+          </BotonPrimario>
+          {(!exigeEncuadre(parada, bultosMaxSinReceptor) || encuadreCapturado) && (
+            <BotonPrimario testid="confirmar-dejado-en-punto" onClick={confirmarDejadoEnPunto}>
+              Confirmar
+            </BotonPrimario>
+          )}
         </section>
       )}
     </main>

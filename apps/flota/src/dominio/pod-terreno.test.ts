@@ -7,6 +7,11 @@ import {
   paradaActual,
   llegar,
   entregar,
+  entregarParcial,
+  noEntregar,
+  dejarEnPunto,
+  exigeEncuadre,
+  requisitosPendientes,
   deshacer,
   cerrarLaVentana,
   terminado,
@@ -22,9 +27,33 @@ import {
 // (`e2e/pod-feliz.spec.ts`); acá se protege el bucle aunque la pantalla cambie de forma.
 
 const PARADAS: ParadaDeRuta[] = [
-  { id: "p1", orden: 1, destino: "Sucursal Independencia", ventana: "08:00 a 10:00", bultos: 12 },
-  { id: "p2", orden: 2, destino: "Sucursal Recoleta", ventana: null, bultos: 4 },
-  { id: "p3", orden: 3, destino: "Sucursal Conchalí", ventana: null, bultos: 7 },
+  {
+    id: "p1",
+    orden: 1,
+    destino: "Sucursal Independencia",
+    ventana: "08:00 a 10:00",
+    bultos: 12,
+    items: [{ id: "i1", empresa: "Panadería del bucle", qtyPlanificada: 12 }],
+    requisitos: [],
+  },
+  {
+    id: "p2",
+    orden: 2,
+    destino: "Sucursal Recoleta",
+    ventana: null,
+    bultos: 4,
+    items: [{ id: "i2", empresa: "Panadería del bucle", qtyPlanificada: 4 }],
+    requisitos: [],
+  },
+  {
+    id: "p3",
+    orden: 3,
+    destino: "Sucursal Conchalí",
+    ventana: null,
+    bultos: 7,
+    items: [{ id: "i3", empresa: "Panadería del bucle", qtyPlanificada: 7 }],
+    requisitos: [],
+  },
 ];
 
 const SELLO = {
@@ -142,4 +171,232 @@ test("[AC-FPOD-01] «Llegué» dos veces es una sola llegada", () => {
   const unaVez = llegar(iniciarRecorrido(PARADAS));
 
   assert.deepEqual(llegar(unaVez), unaVez);
+});
+
+// ─── Variantes cerradas [AC-FPOD-02] — §5.2 F4, §5.3, §4.5, §4.4 ──────────────────────
+
+const MOTIVO_LOCAL_CERRADO = "019853b7-0000-7000-8000-0000000000f1";
+
+test("[AC-FPOD-02] parcial escribe el ajuste por ítem con resultado 'parcial' y avanza sola", () => {
+  const r = entregarParcial(
+    llegar(iniciarRecorrido(PARADAS)),
+    [{ itemId: "i1", qtyEntregada: 8, qtyRechazada: 4, motivoId: MOTIVO_LOCAL_CERRADO }],
+    SELLO,
+  );
+
+  assert.equal(r.captura?.resultado, "parcial");
+  assert.equal(r.captura?.metodoEntrega, null, "una parcial no tiene método de entrega");
+  assert.deepEqual(r.captura?.items, [
+    { itemId: "i1", qtyEntregada: 8, qtyRechazada: 4, motivoId: MOTIVO_LOCAL_CERRADO },
+  ]);
+  // El avance automático es el mismo que el camino feliz: la tarjeta a la vista ya es p2.
+  assert.equal(paradaActual(r)?.id, "p2");
+  assert.equal(r.llegada, false);
+});
+
+test("[AC-FPOD-02] parcial sin ajustar ningún ítem no es una transición", () => {
+  const sinAjustes = entregarParcial(llegar(iniciarRecorrido(PARADAS)), [], SELLO);
+
+  assert.deepEqual(sinAjustes, llegar(iniciarRecorrido(PARADAS)));
+});
+
+test("[AC-FPOD-02] parcial sin haber llegado no cierra la parada", () => {
+  const sinLlegar = entregarParcial(
+    iniciarRecorrido(PARADAS),
+    [{ itemId: "i1", qtyEntregada: 8, qtyRechazada: 4, motivoId: MOTIVO_LOCAL_CERRADO }],
+    SELLO,
+  );
+
+  assert.deepEqual(sinLlegar, iniciarRecorrido(PARADAS));
+});
+
+test("[AC-FPOD-02] no entregado escribe resultado 'fallo' con su motivo y avanza sola", () => {
+  const r = noEntregar(llegar(iniciarRecorrido(PARADAS)), MOTIVO_LOCAL_CERRADO, SELLO);
+
+  assert.equal(r.captura?.resultado, "fallo");
+  assert.equal(r.captura?.metodoEntrega, null);
+  assert.equal(r.captura?.motivoId, MOTIVO_LOCAL_CERRADO);
+  assert.equal(r.captura?.items, null);
+  assert.equal(paradaActual(r)?.id, "p2");
+});
+
+test("[AC-FPOD-02] no entregado sin haber llegado no cierra la parada", () => {
+  const sinLlegar = noEntregar(iniciarRecorrido(PARADAS), MOTIVO_LOCAL_CERRADO, SELLO);
+
+  assert.deepEqual(sinLlegar, iniciarRecorrido(PARADAS));
+});
+
+test("[AC-FPOD-02] dejado en punto sin umbral sembrado (parámetro NULL) nunca exige encuadre", () => {
+  assert.equal(exigeEncuadre(PARADAS[0]!, null), false);
+
+  const r = dejarEnPunto(llegar(iniciarRecorrido(PARADAS)), SELLO, {
+    encuadreCapturado: false,
+    bultosMaxSinReceptor: null,
+  });
+
+  assert.equal(r.captura?.resultado, "exito");
+  assert.equal(r.captura?.metodoEntrega, "dejado_en_punto");
+  assert.equal(paradaActual(r)?.id, "p2");
+});
+
+test("[AC-FPOD-02] dejado en punto bajo el umbral no exige encuadre", () => {
+  // p1 trae 12 bultos; con el umbral en 20 no lo supera.
+  assert.equal(exigeEncuadre(PARADAS[0]!, 20), false);
+
+  const r = dejarEnPunto(llegar(iniciarRecorrido(PARADAS)), SELLO, {
+    encuadreCapturado: false,
+    bultosMaxSinReceptor: 20,
+  });
+
+  assert.equal(r.captura?.resultado, "exito");
+  assert.equal(paradaActual(r)?.id, "p2");
+});
+
+test("[AC-FPOD-02] dejado en punto sobre el umbral exige encuadre: sin él no cierra la parada", () => {
+  // p1 trae 12 bultos; con el umbral en 6 lo supera.
+  assert.equal(exigeEncuadre(PARADAS[0]!, 6), true);
+
+  const sinEncuadre = dejarEnPunto(llegar(iniciarRecorrido(PARADAS)), SELLO, {
+    encuadreCapturado: false,
+    bultosMaxSinReceptor: 6,
+  });
+  assert.deepEqual(sinEncuadre, llegar(iniciarRecorrido(PARADAS)), "sin encuadre no avanza");
+
+  const conEncuadre = dejarEnPunto(llegar(iniciarRecorrido(PARADAS)), SELLO, {
+    encuadreCapturado: true,
+    bultosMaxSinReceptor: 6,
+  });
+  assert.equal(conEncuadre.captura?.resultado, "exito");
+  assert.equal(conEncuadre.captura?.metodoEntrega, "dejado_en_punto");
+  assert.equal(paradaActual(conEncuadre)?.id, "p2");
+});
+
+test("[AC-FPOD-02] dejado en punto sin haber llegado no cierra la parada", () => {
+  const sinLlegar = dejarEnPunto(iniciarRecorrido(PARADAS), SELLO, {
+    encuadreCapturado: true,
+    bultosMaxSinReceptor: null,
+  });
+
+  assert.deepEqual(sinLlegar, iniciarRecorrido(PARADAS));
+});
+
+// ─── Evidencia extra armada POR DATOS [AC-FPOD-02] — §5.2 F4, §4.6 ────────────────────
+
+/** Una parada que pide firma (obligatoria) y una foto opcional. Los tipos salen del enum del
+ *  §4.6; ninguna función del dominio pregunta de qué vertical vienen. */
+const CON_REQUISITOS: ParadaDeRuta[] = [
+  {
+    ...PARADAS[0]!,
+    requisitos: [
+      { id: "r1", tipo: "firma", obligatorio: true, orden: 1 },
+      { id: "r2", tipo: "foto", obligatorio: false, orden: 2 },
+    ],
+  },
+  PARADAS[1]!,
+];
+
+const FIRMA_CAPTURADA = [{ requisitoId: "r1", tipo: "firma" as const }];
+
+test("[AC-FPOD-02] sin filas en stop_requirement no se pide evidencia extra: el camino feliz no cambia", () => {
+  assert.deepEqual(requisitosPendientes(PARADAS[0]!, []), []);
+
+  const c = contador(iniciarRecorrido(PARADAS));
+  c.tocar(llegar);
+  c.tocar((r) => entregar(r, SELLO));
+
+  assert.equal(c.acciones, ENTREGA_FELIZ_ACCIONES, "una parada sin requisitos sigue costando 2");
+  assert.deepEqual(c.estado.captura?.evidencias, []);
+});
+
+test("[AC-FPOD-02] el requisito OBLIGATORIO pendiente impide cerrar la entrega; capturado, la deja cerrar", () => {
+  const llegado = llegar(iniciarRecorrido(CON_REQUISITOS));
+
+  // Los pendientes salen en el orden que la parada pide, y el opcional NO es pendiente: la
+  // columna `obligatorio` es justo la que separa «hay que capturarlo» de «se puede».
+  assert.deepEqual(
+    requisitosPendientes(CON_REQUISITOS[0]!, []).map((req) => req.id),
+    ["r1"],
+  );
+
+  assert.deepEqual(entregar(llegado, SELLO), llegado, "con la firma pendiente no hay transición");
+
+  const conFirma = entregar(llegado, SELLO, FIRMA_CAPTURADA);
+  assert.equal(conFirma.captura?.resultado, "exito");
+  assert.deepEqual(conFirma.captura?.evidencias, FIRMA_CAPTURADA);
+  assert.equal(paradaActual(conFirma)?.id, "p2");
+});
+
+test("[AC-FPOD-02] el requisito pendiente también frena la parcial y el dejado en punto", () => {
+  const llegado = llegar(iniciarRecorrido(CON_REQUISITOS));
+  const ajustes = [{ itemId: "i1", qtyEntregada: 8, qtyRechazada: 4, motivoId: MOTIVO_LOCAL_CERRADO }];
+
+  assert.deepEqual(entregarParcial(llegado, ajustes, SELLO), llegado);
+  assert.deepEqual(
+    dejarEnPunto(llegado, SELLO, { encuadreCapturado: true, bultosMaxSinReceptor: null }),
+    llegado,
+  );
+
+  const parcial = entregarParcial(llegado, ajustes, SELLO, FIRMA_CAPTURADA);
+  assert.equal(parcial.captura?.resultado, "parcial");
+  assert.deepEqual(parcial.captura?.evidencias, FIRMA_CAPTURADA);
+
+  const dejada = dejarEnPunto(
+    llegado,
+    SELLO,
+    { encuadreCapturado: true, bultosMaxSinReceptor: null },
+    FIRMA_CAPTURADA,
+  );
+  assert.equal(dejada.captura?.metodoEntrega, "dejado_en_punto");
+});
+
+test("[AC-FPOD-02] «no pude entregar» NO exige la evidencia: el local cerrado no firma", () => {
+  const llegado = llegar(iniciarRecorrido(CON_REQUISITOS));
+  const fallida = noEntregar(llegado, MOTIVO_LOCAL_CERRADO, SELLO);
+
+  // Exigirle la firma de un receptor que no está dejaría la parada sin manera de cerrarse, que
+  // es el rebote en terreno que el §4.2 y el §7.6 prohíben. Su evidencia es el motivo.
+  assert.equal(fallida.captura?.resultado, "fallo");
+  assert.equal(fallida.captura?.motivoId, MOTIVO_LOCAL_CERRADO);
+  assert.deepEqual(fallida.captura?.evidencias, []);
+  assert.equal(paradaActual(fallida)?.id, "p2");
+});
+
+test("[AC-FPOD-02] la parcial con evidencia exigida cierra en UNA transición, no en dos capturas", () => {
+  // El techo de 4 acciones del §5.2 F4 lo mide el e2e sobre la pantalla real
+  // (`e2e/pod-variantes.spec.ts`), que es donde los toques existen. Lo que se protege ACÁ es lo
+  // que haría imposible ese techo: que la evidencia obligara a una captura aparte. Viaja DENTRO
+  // de la misma, así que la parada se cierra una sola vez y el conteo no se duplica.
+  const parcial = entregarParcial(
+    llegar(iniciarRecorrido(CON_REQUISITOS)),
+    [{ itemId: "i1", qtyEntregada: 8, qtyRechazada: 4, motivoId: MOTIVO_LOCAL_CERRADO }],
+    SELLO,
+    FIRMA_CAPTURADA,
+  );
+
+  assert.equal(parcial.captura?.resultado, "parcial");
+  assert.deepEqual(parcial.captura?.evidencias, FIRMA_CAPTURADA);
+  assert.equal(parcial.cola.length, 0, "una sola captura: nada se cerró antes por la evidencia");
+  assert.equal(paradaActual(parcial)?.id, "p2");
+});
+
+test("[AC-FPOD-02] una variante cerrada respeta el mismo undo de 8 s que el camino feliz", () => {
+  const conParcial = entregarParcial(
+    llegar(iniciarRecorrido(PARADAS)),
+    [{ itemId: "i1", qtyEntregada: 8, qtyRechazada: 4, motivoId: MOTIVO_LOCAL_CERRADO }],
+    SELLO,
+  );
+
+  // Deshacer DENTRO de la ventana cancela la captura y devuelve a la parada, igual que el
+  // camino feliz (AC-FPOD-01): es la MISMA máquina, `cerrarParada`, la que las dos reusan.
+  const deshecha = deshacer(conParcial);
+  assert.equal(paradaActual(deshecha)?.id, "p1");
+  assert.equal(deshecha.llegada, true);
+  assert.equal(deshecha.captura, null);
+  assert.deepEqual(deshecha.cola, [], "la mutación se canceló ANTES del replay (§4.7)");
+
+  // Vencida la ventana, la captura parcial pasa a la cola igual que una feliz.
+  const cerrada = cerrarLaVentana(conParcial);
+  assert.equal(cerrada.cola.length, 1);
+  assert.equal(cerrada.cola[0]?.resultado, "parcial");
+  assert.equal(cerrada.cola[0]?.estado, "por_replicar");
 });
