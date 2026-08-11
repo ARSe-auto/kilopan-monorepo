@@ -163,7 +163,18 @@ export type CapturaDeEntrega = {
   /** Los `stop_requirement` que se cumplieron para poder cerrar esta parada (§4.6). */
   evidencias: EvidenciaCapturada[];
   estado: typeof UNDO.estado_local | "por_replicar";
+  /** El `client_uuid` de la captura que ESTA corrige, cuando el undo llegó después del replay
+   *  [AC-FPOD-08] — §4.7. `null` en toda captura de terreno. */
+  supersedeDe: string | null;
+  /** Por qué se supersedió. `undo` es el deshacer de 8 s del chofer, EXCLUIDO del métrico de
+   *  gaming del §10 por definición SQL [AC-FPOD-08]. `null` cuando no supersede a nadie. */
+  motivoSupersede: typeof UNDO.motivo_supersede | null;
 };
+
+/** Una captura recién cerrada en terreno, antes de que `cerrarParada` le ponga lo que toda
+ *  captura del outbox lleva: su estado y el par supersede (vacío — el terreno no corrige, cierra
+ *  paradas) [AC-FPOD-08]. */
+type CapturaDeTerreno = Omit<CapturaDeEntrega, "estado" | "supersedeDe" | "motivoSupersede">;
 
 /** El sello del dispositivo en el momento del toque: lo pone quien llama, para que la máquina
  *  siga siendo pura y el test pueda fijar el reloj. */
@@ -185,8 +196,15 @@ export type Recorrido = {
   cola: CapturaDeEntrega[];
 };
 
-export function iniciarRecorrido(paradas: ParadaDeRuta[], indice = 0): Recorrido {
-  return { paradas, indice, llegada: false, captura: null, cola: [] };
+/** `cola` arranca con lo que el outbox durable traía de la sesión anterior [AC-FPOD-08]: una app
+ *  que se cerró con capturas sin replicar las vuelve a tener al abrir, o el hecho se perdería
+ *  justo en el aparato que el §4.7 declara su único dueño mientras no hay señal. */
+export function iniciarRecorrido(
+  paradas: ParadaDeRuta[],
+  indice = 0,
+  cola: CapturaDeEntrega[] = [],
+): Recorrido {
+  return { paradas, indice, llegada: false, captura: null, cola };
 }
 
 export function paradaActual(r: Recorrido): ParadaDeRuta | null {
@@ -207,11 +225,13 @@ export function llegar(r: Recorrido): Recorrido {
  * que sigue. Una sola implementación para que el undo de 8 s y el avance automático no puedan
  * desalinearse entre el camino feliz y sus variantes (§5.2 F4, §4.7).
  */
-function cerrarParada(r: Recorrido, captura: CapturaDeEntrega): Recorrido {
+function cerrarParada(r: Recorrido, captura: CapturaDeTerreno): Recorrido {
   return {
     ...r,
     cola: r.captura === null ? r.cola : [...r.cola, { ...r.captura, estado: "por_replicar" }],
-    captura,
+    // Nace en `pending_undo` y con el par supersede vacío: una captura de terreno cierra una
+    // parada, jamás corrige otra captura (§4.7) [AC-FPOD-08].
+    captura: { ...captura, estado: UNDO.estado_local, supersedeDe: null, motivoSupersede: null },
     indice: r.indice + 1,
     llegada: false,
   };
@@ -247,7 +267,6 @@ export function entregar(
     motivoId: null,
     items: null,
     evidencias,
-    estado: UNDO.estado_local,
   });
 }
 
@@ -297,7 +316,6 @@ export function entregarParcial(
     motivoId: null,
     items: ajustes,
     evidencias,
-    estado: UNDO.estado_local,
   });
 }
 
@@ -323,7 +341,6 @@ export function noEntregar(r: Recorrido, motivoId: string, sello: SelloDelAparat
     motivoId,
     items: null,
     evidencias: [],
-    estado: UNDO.estado_local,
   });
 }
 
@@ -360,7 +377,6 @@ export function dejarEnPunto(
     motivoId: null,
     items: null,
     evidencias,
-    estado: UNDO.estado_local,
   });
 }
 

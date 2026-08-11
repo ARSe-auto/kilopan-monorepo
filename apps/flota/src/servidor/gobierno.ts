@@ -141,6 +141,11 @@ export const EVENTOS_OPERACION = {
   // de señal y se marca con su flag sin abrir rastro (`dominio/revocacion.ts`, AC-FIDN-09) — un
   // evento por cada aparato que pasó la noche sin cobertura ahogaría el que sí importa.
   entrega_post_revocacion_tardia: "entrega.post_revocacion_tardia",
+  // El undo que llegó DESPUÉS del replay [AC-FPOD-08] — §4.7: la captura ya está en el orden
+  // autoritativo, así que la corrección es una fila NUEVA que la supersede con su motivo, jamás
+  // un UPDATE (§7.4). Con motivo `undo` queda excluida del métrico de gaming del §10 por la
+  // definición SQL de `pods_supersedidos_semanal`, no por un filtro repetido en cada panel.
+  entrega_pod_deshecha: "entrega.pod_deshecha",
 } as const;
 
 /** Todo código que `registrarEvento` acepta tiene que estar sembrado en `evento_tipo`: si los

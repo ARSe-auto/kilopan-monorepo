@@ -55,6 +55,12 @@ export type CapturaEntrante = {
   /** El turno cuya config CONGELADA juzga esta captura (§4.4) [AC-FPOD-06]. `null` cuando la
    *  entrega no tiene turno asociado — juzga contra la vigente, igual que `lecturas.ts`. */
   turnoId: string | null;
+  /** El `client_uuid` de la captura que ESTA corrige [AC-FPOD-08] (§4.7): el undo que llegó
+   *  cuando el replay ya había ocurrido. `null` en toda captura de terreno. */
+  supersedeDe: string | null;
+  /** Por qué. `undo` es el deshacer de 8 s del chofer, EXCLUIDO del métrico de gaming del §10
+   *  por la definición SQL de `pods_supersedidos_semanal` [AC-FPOD-08]. */
+  motivo: string | null;
 };
 
 /** El acuse por captura. `aceptada` es lo que el aparato usa para SACARLA de la cola: sin ese
@@ -85,7 +91,11 @@ export function capturaBienFormada(c: Partial<CapturaEntrante>): boolean {
     !Number.isNaN(c.tsDispositivo.getTime()) &&
     Number.isInteger(c.tzOffsetMin) &&
     typeof c.resultado === "string" &&
-    RESULTADOS.includes(c.resultado)
+    RESULTADOS.includes(c.resultado) &&
+    // El supersede es opcional, pero si viene tiene que APUNTAR a algo: un `supersede_de` que no
+    // es un identificador deja una corrección sin original y el métrico del §10 sin sujeto
+    // [AC-FPOD-08]. No es terreno degradado, es una llamada mal formada.
+    (c.supersedeDe === null || c.supersedeDe === undefined || esUuid(c.supersedeDe))
   );
 }
 
@@ -228,8 +238,17 @@ export async function aterrizarCapturas(
           continue;
         }
 
+        // El undo post-replay aterriza como una fila NUEVA que supersede a la original, jamás
+        // como un UPDATE (§7.4, §4.7) [AC-FPOD-08]: quedan DOS filas y la primera se sigue
+        // leyendo tal como el terreno la mandó. El código distinto es lo que le da al métrico de
+        // gaming del §10 algo que contar sin abrir el jsonb de cada captura, y el `motivo` del
+        // payload es lo que la definición SQL de `pods_supersedidos_semanal` excluye cuando dice
+        // `undo`.
+        const esSupersede = captura.supersedeDe !== null;
         await registrarEvento(c, {
-          codigo: EVENTOS_OPERACION.entrega_pod_capturada,
+          codigo: esSupersede
+            ? EVENTOS_OPERACION.entrega_pod_deshecha
+            : EVENTOS_OPERACION.entrega_pod_capturada,
           objetoTabla: "paradas",
           objetoId: captura.paradaId,
           sesion,
@@ -244,6 +263,8 @@ export async function aterrizarCapturas(
             motivo_id: captura.motivoId,
             items: captura.items ?? null,
             evidencias: captura.evidencias ?? [],
+            supersede_de: captura.supersedeDe,
+            motivo: captura.motivo,
           },
         });
 

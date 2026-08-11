@@ -24,7 +24,6 @@ import {
   dejarEnPunto,
   exigeEncuadre,
   requisitosPendientes,
-  deshacer,
   cerrarLaVentana,
   terminado,
   type EvidenciaCapturada,
@@ -32,6 +31,8 @@ import {
   type Recorrido,
   type TipoDeEvidencia,
 } from "../../dominio/pod-terreno.ts";
+import { colaAlArrancar, deshacerCaptura, outboxDeRecorrido } from "../../dominio/outbox-undo.ts";
+import { guardarOutbox, leerOutbox } from "../../cliente/outbox-local.ts";
 
 // La tarjeta de la parada de entrega (F4) [AC-FRUT-22, AC-FPOD-01] — KR-29, §4.2, §5.2 F4,
 // §5.3, §4.7, §7.6.
@@ -196,6 +197,48 @@ export default function TarjetaDeEntrega({
     return () => window.clearTimeout(temporizador);
   }, [enVentana]);
 
+  // ─── EL OUTBOX DURABLE [AC-FPOD-08] (§4.7) ───────────────────────────────────────
+  //
+  // Al montar —y solo en el navegador: el almacén no existe en el render del servidor— vuelve lo
+  // que la sesión anterior dejó escrito. Una app que murió a los tres segundos del toque
+  // —batería, el sistema que la cierra— reabre con esa captura en la cola, y el efecto de replay
+  // de arriba la manda sin que el chofer toque nada. Lo que quedó en `pending_undo` pasa a
+  // `por_replicar`: la ventana era del gesto, no del archivo.
+  //
+  // En un efecto y no en el inicializador de `useState` porque este componente se renderiza
+  // también en el servidor: leer el disco ahí es un `window` que no existe, y sembrarlo solo en
+  // el cliente desalinearía la hidratación de la sección «por sincronizar».
+  const [outboxCargado, setOutboxCargado] = useState(false);
+  useEffect(() => {
+    const guardado = colaAlArrancar(leerOutbox(window.localStorage));
+    setRecorrido((r) => (guardado.length === 0 ? r : { ...r, cola: [...guardado, ...r.cola] }));
+    setOutboxCargado(true);
+  }, []);
+
+  // Y se escribe INMEDIATAMENTE, no al vencer la ventana (§4.7). Este efecto corre en el commit
+  // del mismo toque que cerró la parada, así que la captura queda en el aparato con su
+  // `pending_undo` antes de que el chofer levante el dedo. Diferirlo hasta los 8 s es exactamente
+  // el hueco por el que se pierde la entrega cuando el teléfono se apaga a los 3.
+  //
+  // Salvo antes de que el disco se haya leído: guardar la cola vacía del primer render borraría
+  // justo lo que el efecto de arriba está por recuperar.
+  useEffect(() => {
+    if (!outboxCargado) return;
+    guardarOutbox(window.localStorage, outboxDeRecorrido(recorrido));
+  }, [outboxCargado, recorrido.captura, recorrido.cola]);
+
+  /**
+   * El toque de «Deshacer», con la rama que corresponde al estado REAL de la captura
+   * [AC-FPOD-08] (§4.7): dentro de la ventana se cancela y no sale del aparato; si el
+   * temporizador ganó la carrera y ya está en la cola, la corrección es un supersede con
+   * motivo `undo` —dos filas, la original intacta (§7.4)— que el métrico de gaming del §10
+   * excluye por definición SQL. Sin esta segunda rama, el toque a los 7,9 s se perdía en
+   * silencio y la entrega salía igual.
+   */
+  function deshacerToque() {
+    setRecorrido((r) => deshacerCaptura(r, selloDelAparato()).recorrido);
+  }
+
   function selloDelAparato() {
     return {
       clientUuid: crypto.randomUUID(),
@@ -271,7 +314,7 @@ export default function TarjetaDeEntrega({
       {recorrido.captura !== null && (
         <section data-testid="banda-undo" style={banda}>
           <p style={{ ...cuerpo, margin: 0 }}>Entregado. Se guarda en unos segundos.</p>
-          <BotonPrimario testid="deshacer" variante="neutro" onClick={() => setRecorrido(deshacer)}>
+          <BotonPrimario testid="deshacer" variante="neutro" onClick={deshacerToque}>
             Deshacer
           </BotonPrimario>
         </section>

@@ -185,7 +185,7 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 - [x] (P1) Regla de oro en el endpoint: CAPTURA 2xx SIEMPRE + flag + evento + review_queue (SOC >100, odómetro menor, drift >5 min); rechazos = 0 (centinela 4) — spec: specs/flota/04-pod-offline-sync.md [AC-FPOD-05]
 - [x] (P1) Módulo apagado con turno abierto: captura 2xx + flag `modulo_apagado` + Por revisar mandando `turno.config_version_id`; suite offline cubre snapshot congelado — spec: specs/flota/04-pod-offline-sync.md [AC-FPOD-06]
 - [x] (P1) Capturas de dispositivo revocado: ≤72 h cuarentena, >72 h severidad alta; JAMÁS descartadas ni rebotadas — spec: specs/flota/04-pod-offline-sync.md [AC-FPOD-07]
-- [ ] (P1) Undo 8 s cerrado: `pending_undo` inmediato; kill a los 3 s ⇒ replayea; undo post-replay = supersede motivo=undo excluido del métrico de gaming — spec: specs/flota/04-pod-offline-sync.md [AC-FPOD-08]
+- [x] (P1) Undo 8 s cerrado: `pending_undo` inmediato; kill a los 3 s ⇒ replayea; undo post-replay = supersede motivo=undo excluido del métrico de gaming — spec: specs/flota/04-pod-offline-sync.md [AC-FPOD-08]
 - [ ] (P1) Outbox por (tenant, usuario) JAMÁS purgado: B se autentica y las 3 mutaciones de A sobreviven y se replayean (centinela 9) — spec: specs/flota/04-pod-offline-sync.md [AC-FPOD-09]
 - [ ] (P1) Secuencia monotónica por dispositivo (huecos ⇒ evento + Por revisar); replay-on-startup/online como camino principal; suite pasa sin Background Sync — spec: specs/flota/04-pod-offline-sync.md [AC-FPOD-10]
 - [ ] (P1) Inmutabilidad SQL: el DDL de `entregas_pod` nace en ESTE módulo (write-once + UNIQUE(encargo) parcial + COMMENT CAPTURA); UPDATE/DELETE ⇒ 42501; supersede ⇒ 2 filas (centinela 6) — spec: specs/flota/04-pod-offline-sync.md [AC-FPOD-11]

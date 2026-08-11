@@ -32,6 +32,12 @@ function leer(cruda: CapturaCruda): Partial<CapturaEntrante> {
     // El turno cuya config CONGELADA juzga la captura [AC-FPOD-06]. Mal formado o ausente ⇒
     // `null`, que juzga contra la vigente — no es motivo de rebote: la captura es CAPTURA.
     turnoId: esUuid(String(cruda.turno_id ?? "")) ? String(cruda.turno_id) : null,
+    // El undo post-replay [AC-FPOD-08] (§4.7). Ausente ⇒ `null`: es una captura de terreno, que
+    // es el 99 % del tráfico. Mal formado NO se convierte en null acá — lo mira
+    // `capturaBienFormada`, porque una corrección sin original a la que apuntar es una llamada
+    // sin sujeto, no un dato del terreno degradado.
+    supersedeDe: cruda.supersede_de === undefined || cruda.supersede_de === null ? null : String(cruda.supersede_de),
+    motivo: cruda.motivo === undefined || cruda.motivo === null ? null : String(cruda.motivo),
   };
 }
 

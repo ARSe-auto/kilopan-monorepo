@@ -34,6 +34,11 @@ function paraElCable(c: CapturaDeEntrega) {
     motivo_id: c.motivoId,
     items: c.items,
     evidencias: c.evidencias,
+    // El par supersede del undo post-replay [AC-FPOD-08] (§4.7). Viaja SIEMPRE, también en null:
+    // un campo que aparece solo a veces obliga al servidor a distinguir «no supersede a nadie» de
+    // «una versión vieja del cliente que no sabía del campo», y esas dos cosas se leen igual.
+    supersede_de: c.supersedeDe,
+    motivo: c.motivoSupersede,
   };
 }
 
