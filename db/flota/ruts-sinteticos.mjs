@@ -33,7 +33,30 @@ export const VALIDOS = {
   // objeto (`Object.keys(VALIDOS)[6]`), y meter uno en el medio se los corre a todos en silencio.
   "6.666.666-2": "el chofer del bucle de terreno de F4 (AC-FPOD-01), propio y no prestado: el índice «un dispositivo personal ACTIVO por operario» (§4.3) impide que dos suites que comparten persona tengan cada una su aparato enrolado, y la segunda en correr se pone roja por un choque de fixture que no tiene nada que ver con lo que prueba",
   "8.765.432-K": "el chofer de las variantes cerradas de F4 (AC-FPOD-02), propio y no prestado: mismo motivo que el de arriba — un dispositivo personal por operario — así que esta suite necesita el suyo, no el de AC-FPOD-01",
+  "4.444.444-5": "el chofer del POD sin red (AC-FPOD-03), propio y no prestado: tercera suite de F4, tercer operario — la regla de un dispositivo personal por persona no admite compartirlo con las dos de arriba",
 };
+
+/**
+ * El RUT sintético número `indice`, o un error que dice qué falta.
+ *
+ * Existe porque `Object.keys(VALIDOS)[n]!` MIENTE: el `!` de TypeScript le promete al compilador
+ * que hay algo ahí, y si no lo hay el fixture inserta `undefined` como RUT. Eso no explota donde
+ * se escribió — explota mucho más lejos, como una violación de `personas_anonimizacion_completa`
+ * (una persona sin RUT parece anonimizada), y el rojo no menciona ni el índice ni esta lista.
+ * Pasó de verdad el 11-ago-2026 con AC-FPOD-03, que pidió el índice 11 de una lista de 10.
+ */
+export function rutDeFixture(indice) {
+  const claves = Object.keys(VALIDOS);
+  const rut = claves[indice];
+  if (rut === undefined) {
+    throw new Error(
+      `ruts-sinteticos: no existe el índice ${indice}; la lista congelada tiene ${claves.length} ` +
+        `(0..${claves.length - 1}). Si esta suite necesita su propia persona, agregá un RUT AL ` +
+        `FINAL de VALIDOS con su razón — nunca en el medio, que corre los índices de las demás.`,
+    );
+  }
+  return rut;
+}
 
 /**
  * Cadenas con FORMA de RUT que NO pasan el módulo 11, y están a propósito: son los fixtures

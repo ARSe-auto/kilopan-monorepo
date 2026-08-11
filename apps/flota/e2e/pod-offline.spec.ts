@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { con, bdDeTenant } from "../../../db/flota/conectar.mjs";
 import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
-import { VALIDOS } from "../../../db/flota/ruts-sinteticos.mjs";
+import { rutDeFixture } from "../../../db/flota/ruts-sinteticos.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
 import { UNDO } from "../../../packages/nucleo-comun/src/constants.ts";
 
@@ -24,8 +24,8 @@ type Conexion = { sql: <T = Record<string, string>>(t: string, p?: unknown[]) =>
 const SECRETO = secretoNuevo();
 /** Chofer PROPIO de esta suite: el §4.3 admite un dispositivo personal activo por operario, y
  *  compartir la persona con otra suite es que la segunda en correr no pueda enrolar. */
-const RUT_CHOFER = Object.keys(VALIDOS)[11]!;
-const RUT_PANADERIA = Object.keys(VALIDOS)[6]!;
+const RUT_CHOFER = rutDeFixture(10);
+const RUT_PANADERIA = rutDeFixture(6);
 
 test.beforeAll(async () => {
   await con(BD_A, async (c: Conexion) => {
