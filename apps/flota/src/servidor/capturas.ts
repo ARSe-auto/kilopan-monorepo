@@ -6,6 +6,8 @@ import {
   clasificarCapturaPod,
   dejaRastro,
   severidadDeFlag,
+  esHuecoDeSecuencia,
+  maximaConSecuencia,
   type FlagDeCapturaPod,
 } from "../dominio/pod-sync.ts";
 
@@ -55,6 +57,11 @@ export type CapturaEntrante = {
   /** El turno cuya config CONGELADA juzga esta captura (§4.4) [AC-FPOD-06]. `null` cuando la
    *  entrega no tiene turno asociado — juzga contra la vigente, igual que `lecturas.ts`. */
   turnoId: string | null;
+  /** La secuencia monotónica del dispositivo [AC-FPOD-10] — §4.7. `null` cuando no viene o llegó
+   *  ilegible (un cuerpo mal formado, no un dato del terreno degradado): una versión vieja de la
+   *  PWA que todavía no manda el campo no puede convertirse en un rebote 422. Sin ella no hay
+   *  con qué comparar, así que la captura simplemente no participa en la detección de huecos. */
+  secuenciaDispositivo: number | null;
   /** El `client_uuid` de la captura que ESTA corrige [AC-FPOD-08] (§4.7): el undo que llegó
    *  cuando el replay ya había ocurrido. `null` en toda captura de terreno. */
   supersedeDe: string | null;
@@ -132,6 +139,8 @@ const EVENTO_DE_FLAG: Record<
   // Solo la tardía: la que llega DENTRO de la ventana se marca con su flag y no abre rastro
   // (§4.3; `dominio/revocacion.ts`, AC-FIDN-09) [AC-FPOD-07].
   post_revocacion_tardia: EVENTOS_OPERACION.entrega_post_revocacion_tardia,
+  // El hueco de la secuencia monotónica del dispositivo [AC-FPOD-10] — §4.7.
+  secuencia_hueco: EVENTOS_OPERACION.entrega_secuencia_hueco,
 };
 
 /**
@@ -260,6 +269,22 @@ export async function aterrizarCapturas(
       // El acto sigue siendo de quien manda el lote —la auditoría del §7.4 registra quién hizo la
       // llamada—; lo que la firma cambia es a nombre de quién queda el HECHO en `eventos`.
       const firma = await firmaDelEnrolamiento(c, enrolamiento, sesion);
+
+      // La secuencia monotónica del dispositivo [AC-FPOD-10] — §4.7. El lote entero comparte el
+      // mismo `firma.dispositivoId` (la firma se calcula UNA vez arriba, no por captura), así
+      // que basta con leer y escribir `dispositivos.secuencia_maxima` una vez por llamada. El
+      // `for update` serializa contra otro lote del MISMO dispositivo en vuelo — dos réplicas
+      // del outbox mandando a la vez no pueden pisarse la máxima.
+      let secuenciaMaxima: number | null = null;
+      const necesitaSecuencia = entrantes.some((e) => e.secuenciaDispositivo !== null);
+      if (necesitaSecuencia) {
+        const { rows } = await c.query<{ secuencia_maxima: string | null }>(
+          "select secuencia_maxima from dispositivos where id = $1 for update",
+          [firma.dispositivoId],
+        );
+        secuenciaMaxima = rows[0]?.secuencia_maxima == null ? null : Number(rows[0].secuencia_maxima);
+      }
+
       const acuses: AcuseDeCaptura[] = [];
       for (const captura of entrantes) {
         // El replay es el camino PRINCIPAL (§4.7), así que llega repetido por diseño: al
@@ -272,11 +297,22 @@ export async function aterrizarCapturas(
         );
 
         const { configVersionId, moduloEncendido } = await configDeLaCaptura(c, slug, captura.turnoId);
+
+        // Solo las capturas NUEVAS avanzan la máxima [AC-FPOD-10]: un replay que ya aterrizó no
+        // puede volver a competir por el mismo número, y recalcular su hueco contra la máxima ya
+        // avanzada daría un veredicto distinto al que se dejó dicho la primera vez.
+        let secuenciaHueco = false;
+        if (!previo[0] && captura.secuenciaDispositivo !== null) {
+          secuenciaHueco = esHuecoDeSecuencia(secuenciaMaxima, captura.secuenciaDispositivo);
+          secuenciaMaxima = maximaConSecuencia(secuenciaMaxima, captura.secuenciaDispositivo);
+        }
+
         const flags = clasificarCapturaPod({
           tsDispositivo: captura.tsDispositivo,
           recibidaEn: new Date(),
           moduloEncendido,
           revocadoEn,
+          secuenciaHueco,
         });
 
         if (previo[0]) {
@@ -321,6 +357,7 @@ export async function aterrizarCapturas(
             evidencias: captura.evidencias ?? [],
             supersede_de: captura.supersedeDe,
             motivo: captura.motivo,
+            secuencia_dispositivo: captura.secuenciaDispositivo,
           },
         });
 
@@ -347,6 +384,14 @@ export async function aterrizarCapturas(
           config_version_id: configVersionId,
         });
       }
+
+      if (necesitaSecuencia) {
+        await c.query("update dispositivos set secuencia_maxima = $1 where id = $2", [
+          secuenciaMaxima,
+          firma.dispositivoId,
+        ]);
+      }
+
       return acuses;
     },
     sesion,

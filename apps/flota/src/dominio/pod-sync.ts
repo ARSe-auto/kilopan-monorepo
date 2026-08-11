@@ -49,6 +49,7 @@ export const FLAGS_DE_CAPTURA_POD = [
   "reloj_desfasado",
   "post_revocacion",
   "post_revocacion_tardia",
+  "secuencia_hueco",
 ] as const;
 export type FlagDeCapturaPod = (typeof FLAGS_DE_CAPTURA_POD)[number];
 
@@ -67,6 +68,11 @@ export type CapturaPod = {
    *  Capturas` la deja pasar igual, a diferencia de cualquier otra ruta— así que este es el
    *  único dato de la revocación que le llega a este módulo. */
   revocadoEn: Date | null;
+  /** Si la secuencia monotónica que trajo esta captura dejó un hueco respecto de la última que
+   *  este dispositivo dejó aterrizar [AC-FPOD-10] — §4.7. Lo decide `servidor/capturas.ts` con
+   *  `esHuecoDeSecuencia` contra `dispositivos.secuencia_maxima`: este módulo no toca la BD, solo
+   *  traduce el veredicto a un flag más del mismo catálogo. */
+  secuenciaHueco: boolean;
 };
 
 /** Milisegundos de desfase tolerado entre el reloj del aparato y el del servidor (§0). */
@@ -97,7 +103,30 @@ export function clasificarCapturaPod(captura: CapturaPod): FlagDeCapturaPod[] {
     flags.push(claseDeRevocacion);
   }
 
+  // El hueco de secuencia [AC-FPOD-10] — §4.7: evicción del outbox o manipulación, nunca
+  // pérdida silenciosa. La captura aterriza igual (centinela 4: rechazos = 0).
+  if (captura.secuenciaHueco) flags.push("secuencia_hueco");
+
   return flags;
+}
+
+/**
+ * ¿La secuencia que trae esta captura deja un hueco respecto de la última que este dispositivo
+ * dejó aterrizar [AC-FPOD-10]? `maximaAterrizada` es `null` cuando el dispositivo todavía no
+ * tiene ninguna captura CON secuencia aterrizada: no hay contra qué comparar, así que la primera
+ * nunca es un hueco — es la que fija el punto de partida. A partir de ahí, cualquier valor que no
+ * sea exactamente el siguiente exacto deja un hueco (una repetición o un retroceso no lo son: eso
+ * es el replay del mismo lote o un reloj de contador que no avanzó, y ya lo cubre la idempotencia
+ * por `client_uuid` del §0 — este AC solo mira huecos hacia ADELANTE).
+ */
+export function esHuecoDeSecuencia(maximaAterrizada: number | null, secuencia: number): boolean {
+  return maximaAterrizada !== null && secuencia > maximaAterrizada + 1;
+}
+
+/** La nueva `secuencia_maxima` del dispositivo después de aterrizar esta captura [AC-FPOD-10]:
+ *  el mayor valor visto hasta ahora, exista o no hueco — un hueco no descarta lo que sí llegó. */
+export function maximaConSecuencia(maximaAterrizada: number | null, secuencia: number): number {
+  return maximaAterrizada === null ? secuencia : Math.max(maximaAterrizada, secuencia);
 }
 
 /**

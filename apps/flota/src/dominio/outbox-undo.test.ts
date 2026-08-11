@@ -40,8 +40,8 @@ function paradas(n: number): ParadaDeRuta[] {
   }));
 }
 
-function sello(uuid: string) {
-  return { clientUuid: uuid, tsDispositivo: "2026-08-11T12:00:00.000Z", tzOffsetMin: -240 };
+function sello(uuid: string, secuenciaDispositivo = 1) {
+  return { clientUuid: uuid, tsDispositivo: "2026-08-11T12:00:00.000Z", tzOffsetMin: -240, secuenciaDispositivo };
 }
 
 /** Este AC (-08) no prueba la partición en sí —eso es `cliente/outbox-local.test.ts`
@@ -106,8 +106,10 @@ test("[AC-FPOD-08] la app muere a los 3 s: al reabrir la captura existe y queda 
 });
 
 test("[AC-FPOD-08] undo DESPUÉS del replay: supersede con motivo undo, 2 filas y la original intacta", () => {
-  const conVentanaVencida = cerrarLaVentana(entregar(llegar(iniciarRecorrido(paradas(3))), sello("uuid-1")));
-  const resultado = deshacerCaptura(conVentanaVencida, sello("uuid-del-undo"));
+  const conVentanaVencida = cerrarLaVentana(
+    entregar(llegar(iniciarRecorrido(paradas(3))), sello("uuid-1", 5)),
+  );
+  const resultado = deshacerCaptura(conVentanaVencida, sello("uuid-del-undo", 6));
 
   assert.equal(resultado.tipo, "supersedida", "el hecho ya salió: borrarlo sería reescribir el pasado (§7.4)");
   const outbox = outboxDeRecorrido(resultado.recorrido);
@@ -119,6 +121,12 @@ test("[AC-FPOD-08] undo DESPUÉS del replay: supersede con motivo undo, 2 filas 
   assert.equal(supersede!.supersedeDe, "uuid-1");
   assert.equal(supersede!.motivoSupersede, UNDO.motivo_supersede);
   assert.equal(supersede!.paradaId, original!.paradaId);
+  // La secuencia del dispositivo [AC-FPOD-10] es la del TOQUE del undo, no la heredada de la
+  // original: el supersede consume su propio lugar en la historia del aparato, igual que
+  // consume su propio `client_uuid` — heredarla repetiría un número ya usado y el hueco que eso
+  // finge no existe.
+  assert.equal(original!.secuenciaDispositivo, 5);
+  assert.equal(supersede!.secuenciaDispositivo, 6, "el supersede NO hereda la secuencia de la original");
 });
 
 test("[AC-FPOD-08] una captura ya supersedida no se vuelve a deshacer", () => {

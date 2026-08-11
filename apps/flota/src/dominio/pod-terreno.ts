@@ -163,6 +163,12 @@ export type CapturaDeEntrega = {
   /** Los `stop_requirement` que se cumplieron para poder cerrar esta parada (§4.6). */
   evidencias: EvidenciaCapturada[];
   estado: typeof UNDO.estado_local | "por_replicar";
+  /** La secuencia monotónica de ESTE dispositivo [AC-FPOD-10] — §4.7: crece de a uno en cada
+   *  captura que el aparato cierra (terreno o supersede), nunca se reinicia mientras el aparato
+   *  siga vivo. No es el `client_uuid` —ese identifica el hecho, esto ordena la HISTORIA del
+   *  aparato— y es lo que el servidor usa para notar un hueco (evicción del outbox o
+   *  manipulación) sin depender de que el reloj del teléfono esté bien. */
+  secuenciaDispositivo: number;
   /** El `client_uuid` de la captura que ESTA corrige, cuando el undo llegó después del replay
    *  [AC-FPOD-08] — §4.7. `null` en toda captura de terreno. */
   supersedeDe: string | null;
@@ -182,6 +188,10 @@ export type SelloDelAparato = {
   clientUuid: string;
   tsDispositivo: string;
   tzOffsetMin: number;
+  /** La secuencia monotónica del dispositivo para ESTE cierre [AC-FPOD-10] — §4.7. La asigna
+   *  quien llama (`cliente/secuencia-dispositivo.ts`), con el mismo criterio que `clientUuid`:
+   *  la máquina se queda pura y el test fija el valor sin tocar el disco. */
+  secuenciaDispositivo: number;
 };
 
 export type Recorrido = {
@@ -262,6 +272,7 @@ export function entregar(
     clientUuid: sello.clientUuid,
     tsDispositivo: sello.tsDispositivo,
     tzOffsetMin: sello.tzOffsetMin,
+    secuenciaDispositivo: sello.secuenciaDispositivo,
     resultado: "exito",
     metodoEntrega: "receptor",
     motivoId: null,
@@ -311,6 +322,7 @@ export function entregarParcial(
     clientUuid: sello.clientUuid,
     tsDispositivo: sello.tsDispositivo,
     tzOffsetMin: sello.tzOffsetMin,
+    secuenciaDispositivo: sello.secuenciaDispositivo,
     resultado: "parcial",
     metodoEntrega: null,
     motivoId: null,
@@ -336,6 +348,7 @@ export function noEntregar(r: Recorrido, motivoId: string, sello: SelloDelAparat
     clientUuid: sello.clientUuid,
     tsDispositivo: sello.tsDispositivo,
     tzOffsetMin: sello.tzOffsetMin,
+    secuenciaDispositivo: sello.secuenciaDispositivo,
     resultado: "fallo",
     metodoEntrega: null,
     motivoId,
@@ -372,6 +385,7 @@ export function dejarEnPunto(
     clientUuid: sello.clientUuid,
     tsDispositivo: sello.tsDispositivo,
     tzOffsetMin: sello.tzOffsetMin,
+    secuenciaDispositivo: sello.secuenciaDispositivo,
     resultado: "exito",
     metodoEntrega: "dejado_en_punto",
     motivoId: null,

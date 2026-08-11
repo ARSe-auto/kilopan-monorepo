@@ -6,6 +6,8 @@ import {
   rechaza,
   dejaRastro,
   severidadDeFlag,
+  esHuecoDeSecuencia,
+  maximaConSecuencia,
   SEVERIDAD_DE_CAPTURA_POD,
   FLAGS_DE_CAPTURA_POD,
   type CapturaPod,
@@ -29,6 +31,7 @@ const base: CapturaPod = {
   recibidaEn: AHORA,
   moduloEncendido: true,
   revocadoEn: null,
+  secuenciaHueco: false,
 };
 
 test("ninguna combinación de flags rechaza jamás (centinela 4)", () => {
@@ -148,15 +151,74 @@ test("revocación Y reloj corrido se marcan los DOS, y ninguno de más", () => {
   assert.equal(rechaza(flags), false);
 });
 
-test("post_revocacion no deja rastro; las demás sí, incluida la revocación tardía", () => {
+test("post_revocacion no deja rastro; las demás sí, incluida la revocación tardía y el hueco de secuencia", () => {
   assert.equal(dejaRastro("post_revocacion"), false);
-  for (const flag of ["modulo_apagado", "reloj_desfasado", "post_revocacion_tardia"] as const) {
+  for (const flag of [
+    "modulo_apagado",
+    "reloj_desfasado",
+    "post_revocacion_tardia",
+    "secuencia_hueco",
+  ] as const) {
     assert.equal(dejaRastro(flag), true, `${flag} debería dejar rastro`);
   }
 });
 
-test("severidad: post_revocacion_tardia sube a alta; el resto queda en la severidad de siempre", () => {
+test("severidad: post_revocacion_tardia sube a alta; el resto —incluido el hueco de secuencia— queda en la de siempre", () => {
   assert.equal(severidadDeFlag("post_revocacion_tardia"), "alta");
   assert.equal(severidadDeFlag("modulo_apagado"), SEVERIDAD_DE_CAPTURA_POD);
   assert.equal(severidadDeFlag("reloj_desfasado"), SEVERIDAD_DE_CAPTURA_POD);
+  assert.equal(severidadDeFlag("secuencia_hueco"), SEVERIDAD_DE_CAPTURA_POD);
+});
+
+// ─── Secuencia monotónica por dispositivo [AC-FPOD-10] — §4.7, centinela 4 §9.3 ─────
+
+test("secuenciaHueco=true marca la captura, y no rechaza", () => {
+  const conHueco: CapturaPod = { ...base, secuenciaHueco: true };
+  const flags = clasificarCapturaPod(conHueco);
+  assert.deepEqual(flags, ["secuencia_hueco"]);
+  assert.equal(rechaza(flags), false);
+});
+
+test("hueco de secuencia Y reloj corrido se marcan los DOS, y ninguno de más", () => {
+  const desfasada: CapturaPod = {
+    tsDispositivo: AHORA,
+    recibidaEn: enMinutos(AHORA, RELOJ.drift_max_minutos + 1),
+    moduloEncendido: true,
+    revocadoEn: null,
+    secuenciaHueco: true,
+  };
+  const flags = clasificarCapturaPod(desfasada);
+  assert.deepEqual(flags, ["reloj_desfasado", "secuencia_hueco"]);
+  assert.equal(rechaza(flags), false);
+});
+
+test("esHuecoDeSecuencia: sin captura previa aterrizada, la primera NUNCA es un hueco — fija el punto de partida", () => {
+  for (const secuencia of [1, 2, 47, 9_999]) {
+    assert.equal(esHuecoDeSecuencia(null, secuencia), false, `secuencia ${secuencia}`);
+  }
+});
+
+test("esHuecoDeSecuencia: el siguiente exacto nunca es un hueco", () => {
+  for (const maxima of [1, 2, 99]) {
+    assert.equal(esHuecoDeSecuencia(maxima, maxima + 1), false, `maxima ${maxima}`);
+  }
+});
+
+test("esHuecoDeSecuencia: saltarse un número —evicción del outbox o manipulación— SÍ es un hueco", () => {
+  assert.equal(esHuecoDeSecuencia(5, 7), true, "saltó el 6");
+  assert.equal(esHuecoDeSecuencia(5, 100), true, "saltó 94 números");
+});
+
+test("esHuecoDeSecuencia: una repetición o un retroceso NO son un hueco — eso lo cubre la idempotencia del client_uuid", () => {
+  assert.equal(esHuecoDeSecuencia(5, 5), false, "repetida");
+  assert.equal(esHuecoDeSecuencia(5, 3), false, "retrocedida");
+});
+
+test("maximaConSecuencia: sin máxima previa, la primera secuencia ES la máxima", () => {
+  assert.equal(maximaConSecuencia(null, 7), 7);
+});
+
+test("maximaConSecuencia: crece con lo más alto visto, y un hueco no descarta lo que sí llegó", () => {
+  assert.equal(maximaConSecuencia(5, 7), 7, "saltó el 6, pero el 7 sí aterrizó y ahora es la máxima");
+  assert.equal(maximaConSecuencia(5, 3), 5, "una llegada retrasada no baja la máxima ya vista");
 });

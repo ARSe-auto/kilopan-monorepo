@@ -146,6 +146,10 @@ export const EVENTOS_OPERACION = {
   // un UPDATE (§7.4). Con motivo `undo` queda excluida del métrico de gaming del §10 por la
   // definición SQL de `pods_supersedidos_semanal`, no por un filtro repetido en cada panel.
   entrega_pod_deshecha: "entrega.pod_deshecha",
+  // La secuencia monotónica del dispositivo saltó un número al aterrizar esta captura
+  // [AC-FPOD-10] — §4.7: evicción del outbox o manipulación, jamás pérdida silenciosa. La
+  // captura entra igual (centinela 4: rechazos = 0); esto solo deja dicho que hay que revisarla.
+  entrega_secuencia_hueco: "entrega.secuencia_hueco",
 } as const;
 
 /** Todo código que `registrarEvento` acepta tiene que estar sembrado en `evento_tipo`: si los

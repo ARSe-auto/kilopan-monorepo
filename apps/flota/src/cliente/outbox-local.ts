@@ -110,6 +110,7 @@ function esCaptura(x: unknown): x is CapturaDeEntrega {
     typeof c.tsDispositivo === "string" &&
     typeof c.tzOffsetMin === "number" &&
     typeof c.resultado === "string" &&
+    Number.isInteger(c.secuenciaDispositivo) &&
     (c.estado === "pending_undo" || c.estado === "por_replicar") &&
     (c.supersedeDe === null || typeof c.supersedeDe === "string") &&
     (c.motivoSupersede === null || typeof c.motivoSupersede === "string")

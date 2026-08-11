@@ -90,6 +90,11 @@ export function deshacerCaptura(r: Recorrido, sello: SelloDelAparato): Resultado
     clientUuid: sello.clientUuid,
     tsDispositivo: sello.tsDispositivo,
     tzOffsetMin: sello.tzOffsetMin,
+    // El supersede es un hecho NUEVO del dispositivo [AC-FPOD-10] — §4.7: hereda la secuencia de
+    // `original` sería repetir un número ya usado, y el hueco que eso finge no existe. El toque
+    // de «Deshacer» consume su propio lugar en la secuencia, igual que consume su propio
+    // `client_uuid` (§0).
+    secuenciaDispositivo: sello.secuenciaDispositivo,
     estado: "por_replicar",
     supersedeDe: original.clientUuid,
     motivoSupersede: UNDO.motivo_supersede,

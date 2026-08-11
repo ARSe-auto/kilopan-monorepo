@@ -37,6 +37,7 @@ function captura(clientUuid: string) {
     paradaId: "parada-1",
     tsDispositivo: "2026-08-11T12:00:00.000Z",
     tzOffsetMin: -240,
+    secuenciaDispositivo: 1,
     resultado: "exito" as const,
     metodoEntrega: "receptor" as const,
     motivoId: null,

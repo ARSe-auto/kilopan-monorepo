@@ -35,6 +35,7 @@ import { colaAlArrancar, deshacerCaptura, outboxDeRecorrido } from "../../domini
 import { guardarOutbox, leerOutbox, type Identidad } from "../../cliente/outbox-local.ts";
 import { identidadDelAparato } from "../../cliente/identidad.ts";
 import { vaciarOutboxAjeno } from "../../cliente/outbox-multiusuario.ts";
+import { siguienteSecuenciaDispositivo } from "../../cliente/secuencia-dispositivo.ts";
 
 // La tarjeta de la parada de entrega (F4) [AC-FRUT-22, AC-FPOD-01] — KR-29, §4.2, §5.2 F4,
 // §5.3, §4.7, §7.6.
@@ -287,6 +288,9 @@ export default function TarjetaDeEntrega({
       clientUuid: crypto.randomUUID(),
       tsDispositivo: new Date().toISOString(),
       tzOffsetMin: -new Date().getTimezoneOffset(),
+      // La secuencia monotónica del dispositivo [AC-FPOD-10] — §4.7. Se reserva en el mismo
+      // gesto que el resto del sello: dos toques seguidos jamás comparten número.
+      secuenciaDispositivo: siguienteSecuenciaDispositivo(window.localStorage),
     };
   }
 

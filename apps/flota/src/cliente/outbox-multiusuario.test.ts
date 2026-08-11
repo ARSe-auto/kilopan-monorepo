@@ -33,6 +33,7 @@ function captura(clientUuid: string, estado: "pending_undo" | "por_replicar" = "
     paradaId: "parada-de-a",
     tsDispositivo: "2026-08-11T12:00:00.000Z",
     tzOffsetMin: -240,
+    secuenciaDispositivo: 1,
     resultado: "exito" as const,
     metodoEntrega: "receptor" as const,
     motivoId: null,

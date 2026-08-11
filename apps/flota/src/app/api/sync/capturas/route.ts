@@ -38,7 +38,16 @@ function leer(cruda: CapturaCruda): Partial<CapturaEntrante> {
     // sin sujeto, no un dato del terreno degradado.
     supersedeDe: cruda.supersede_de === undefined || cruda.supersede_de === null ? null : String(cruda.supersede_de),
     motivo: cruda.motivo === undefined || cruda.motivo === null ? null : String(cruda.motivo),
+    // La secuencia monotónica del dispositivo [AC-FPOD-10] — §4.7. Ausente o ilegible ⇒ `null`:
+    // NO es motivo de rebote, una PWA vieja que todavía no manda el campo sigue siendo una
+    // captura real.
+    secuenciaDispositivo: secuenciaLegible(cruda.secuencia_dispositivo),
   };
+}
+
+function secuenciaLegible(valor: unknown): number | null {
+  const n = Number(valor);
+  return Number.isInteger(n) && n > 0 ? n : null;
 }
 
 export async function POST(peticion: Request) {

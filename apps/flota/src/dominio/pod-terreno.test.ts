@@ -61,6 +61,7 @@ const SELLO = {
   clientUuid: "019853b7-0000-7000-8000-00000000aaaa",
   tsDispositivo: "2026-08-11T13:20:00.000Z",
   tzOffsetMin: -240,
+  secuenciaDispositivo: 1,
 };
 
 /** Cuenta ACCIONES con la convención cerrada del §5.3, igual que el e2e. */
