@@ -1,5 +1,5 @@
 import { headers } from "next/headers";
-import { sesionDelTenant } from "../../../../servidor/gobierno.ts";
+import { sesionDelTenant, esUuid } from "../../../../servidor/gobierno.ts";
 import { aterrizarCapturas, capturaBienFormada, type CapturaEntrante } from "../../../../servidor/capturas.ts";
 
 // El endpoint de sync de capturas del POD [AC-FPOD-03] — §4.2, §0 (fila HTTP), §4.6, §5.2 F4.
@@ -29,6 +29,9 @@ function leer(cruda: CapturaCruda): Partial<CapturaEntrante> {
     motivoId: cruda.motivo_id === undefined || cruda.motivo_id === null ? null : String(cruda.motivo_id),
     items: cruda.items ?? null,
     evidencias: cruda.evidencias ?? [],
+    // El turno cuya config CONGELADA juzga la captura [AC-FPOD-06]. Mal formado o ausente ⇒
+    // `null`, que juzga contra la vigente — no es motivo de rebote: la captura es CAPTURA.
+    turnoId: esUuid(String(cruda.turno_id ?? "")) ? String(cruda.turno_id) : null,
   };
 }
 
@@ -66,6 +69,11 @@ export async function POST(peticion: Request) {
     );
   }
 
-  const acuses = await aterrizarCapturas(g.acto.pool, g.acto.sesion, leidas as CapturaEntrante[]);
+  const acuses = await aterrizarCapturas(
+    g.acto.pool,
+    g.acto.sesion,
+    g.acto.slug,
+    leidas as CapturaEntrante[],
+  );
   return Response.json({ acuses }, { status: 200 });
 }

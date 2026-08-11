@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import { enActo, registrarEvento, EVENTOS_OPERACION, esUuid } from "./gobierno.ts";
 import type { Sesion } from "./sesion.ts";
+import { versionVigente, estadoDeFeature, FEATURES } from "./config.ts";
 import {
   clasificarCapturaPod,
   SEVERIDAD_DE_CAPTURA_POD,
@@ -50,11 +51,24 @@ export type CapturaEntrante = {
   motivoId: string | null;
   items: unknown;
   evidencias: unknown;
+  /** El turno cuya config CONGELADA juzga esta captura (§4.4) [AC-FPOD-06]. `null` cuando la
+   *  entrega no tiene turno asociado — juzga contra la vigente, igual que `lecturas.ts`. */
+  turnoId: string | null;
 };
 
 /** El acuse por captura. `aceptada` es lo que el aparato usa para SACARLA de la cola: sin ese
  *  acuse la captura se queda, que es lo que impide que un 2xx vacíe una cola sin guardar nada. */
-export type AcuseDeCaptura = { client_uuid: string; aceptada: true; repetida: boolean };
+export type AcuseDeCaptura = {
+  client_uuid: string;
+  aceptada: true;
+  repetida: boolean;
+  /** Lo que no cuadró, y que igual entró [AC-FPOD-05, AC-FPOD-06]. Vacío = captura limpia. */
+  flags: FlagDeCapturaPod[];
+  /** La versión de config con la que se juzgó. El §0 la pide en la respuesta: sin ella, quien
+   *  mira un `modulo_apagado` no puede saber CUÁL configuración estaba vigente al entrar
+   *  [AC-FPOD-06]. */
+  config_version_id: string;
+};
 
 /** Las cuatro salidas de F4 (§4.5: `resultado exito|fallo|parcial`). */
 const RESULTADOS = ["exito", "fallo", "parcial"];
@@ -94,8 +108,38 @@ export function capturaBienFormada(c: Partial<CapturaEntrante>): boolean {
  */
 
 const EVENTO_DE_FLAG: Record<FlagDeCapturaPod, (typeof EVENTOS_OPERACION)[keyof typeof EVENTOS_OPERACION]> = {
+  modulo_apagado: EVENTOS_OPERACION.entrega_modulo_apagado,
   reloj_desfasado: EVENTOS_OPERACION.entrega_reloj_desfasado,
 };
+
+/**
+ * Con qué configuración se juzga esta captura, y si el módulo de encargos estaba encendido en
+ * ella [AC-FPOD-06] — §4.4, §5.5.
+ *
+ * La CONGELADA del turno manda, no la vigente: un turno corre entero con una versión, y apagar
+ * el módulo a mitad de la jornada no puede cambiar cómo se juzga lo que ese turno sigue
+ * capturando en la calle sin señal. Mismo patrón que `lecturas.ts` (AC-FVEH-18) y
+ * `manifiestos.ts` (AC-FRUT-10): la parada de POD vive bajo el mismo módulo de encargos/rutas.
+ *
+ * SIN CONFIGURAR cuenta como encendido — la ausencia no es una decisión humana con motivo.
+ */
+async function configDeLaCaptura(
+  c: PoolClient,
+  slug: string,
+  turnoId: string | null,
+): Promise<{ configVersionId: string; moduloEncendido: boolean }> {
+  let configVersionId: string | null = null;
+  if (turnoId) {
+    const { rows } = await c.query<{ id: string }>(
+      "select config_version_id::text as id from turnos where id = $1",
+      [turnoId],
+    );
+    configVersionId = rows[0]?.id ?? null;
+  }
+  configVersionId ??= await versionVigente(c, slug);
+  const estado = await estadoDeFeature(c, configVersionId, FEATURES.modulo_encargos);
+  return { configVersionId, moduloEncendido: estado !== false };
+}
 
 /** Deja dicho que la captura entró degradada: un evento y una fila de «Por revisar» POR FLAG
  *  (§5.6 se lee por origen; una fila genérica obligaría a abrir el jsonb de cada una). La
@@ -123,6 +167,7 @@ async function dejarDichoQueDegrado(
 export async function aterrizarCapturas(
   pool: Pool,
   sesion: Sesion,
+  slug: string,
   entrantes: CapturaEntrante[],
 ): Promise<AcuseDeCaptura[]> {
   if (entrantes.length === 0) return [];
@@ -140,8 +185,25 @@ export async function aterrizarCapturas(
           "select id::text as id from eventos where client_uuid = $1",
           [captura.clientUuid],
         );
+
+        const { configVersionId, moduloEncendido } = await configDeLaCaptura(c, slug, captura.turnoId);
+        const flags = clasificarCapturaPod({
+          tsDispositivo: captura.tsDispositivo,
+          recibidaEn: new Date(),
+          moduloEncendido,
+        });
+
         if (previo[0]) {
-          acuses.push({ client_uuid: captura.clientUuid, aceptada: true, repetida: true });
+          // El replay NO vuelve a degradar (§5.6, §9.3.1): los flags viajan igual en la
+          // respuesta —el aparato tiene que poder mostrar qué quedó marcado— pero no escriben
+          // evento ni fila de revisión de más.
+          acuses.push({
+            client_uuid: captura.clientUuid,
+            aceptada: true,
+            repetida: true,
+            flags,
+            config_version_id: configVersionId,
+          });
           continue;
         }
 
@@ -164,17 +226,22 @@ export async function aterrizarCapturas(
           },
         });
 
-        const flags = clasificarCapturaPod({ tsDispositivo: captura.tsDispositivo, recibidaEn: new Date() });
         if (flags.length > 0) {
           await dejarDichoQueDegrado(c, {
             flags,
             paradaId: captura.paradaId,
             sesion,
-            nota: `Captura de POD para la parada ${captura.paradaId} con el reloj del aparato fuera de tolerancia`,
+            nota: `Captura de POD para la parada ${captura.paradaId} — config_version_id ${configVersionId}`,
           });
         }
 
-        acuses.push({ client_uuid: captura.clientUuid, aceptada: true, repetida: false });
+        acuses.push({
+          client_uuid: captura.clientUuid,
+          aceptada: true,
+          repetida: false,
+          flags,
+          config_version_id: configVersionId,
+        });
       }
       return acuses;
     },

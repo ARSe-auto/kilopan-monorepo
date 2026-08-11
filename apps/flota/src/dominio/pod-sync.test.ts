@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { RELOJ } from "../../../../packages/nucleo-comun/src/constants.ts";
 import { clasificarCapturaPod, rechaza, FLAGS_DE_CAPTURA_POD, type CapturaPod } from "./pod-sync.ts";
 
-// Mutantes de la degradación de una captura de POD [AC-FPOD-05] — centinela 4 del §9.3.
+// Mutantes de la degradación de una captura de POD [AC-FPOD-05, AC-FPOD-06] — centinela 4 §9.3.
 //
 // El borde se deriva de `RELOJ.drift_max_minutos` del §0 y no se escribe literal: el gate de
 // constantes marcaría una copia, y el test seguiría diciendo lo de antes si el dueño moviera el
@@ -16,7 +16,7 @@ import { clasificarCapturaPod, rechaza, FLAGS_DE_CAPTURA_POD, type CapturaPod } 
 const AHORA = new Date("2026-08-11T12:00:00Z");
 const enMinutos = (base: Date, m: number) => new Date(base.getTime() + m * 60 * 1000);
 
-const base: CapturaPod = { tsDispositivo: AHORA, recibidaEn: AHORA };
+const base: CapturaPod = { tsDispositivo: AHORA, recibidaEn: AHORA, moduloEncendido: true };
 
 test("ninguna combinación de flags rechaza jamás (centinela 4)", () => {
   const total = 1 << FLAGS_DE_CAPTURA_POD.length;
@@ -57,7 +57,31 @@ test("un replay offline de horas después también flaguea, y tampoco rechaza", 
   // eso la respuesta NO es rechazar (el chofer ya se fue de la parada, §3.E1.7): es dejarlo
   // dicho en «Por revisar» y que una persona lo mire con el resto del contexto.
   const recibidaEn = enMinutos(AHORA, 180);
-  const flags = clasificarCapturaPod({ tsDispositivo: AHORA, recibidaEn });
+  const flags = clasificarCapturaPod({ ...base, recibidaEn });
   assert.deepEqual(flags, ["reloj_desfasado"]);
   assert.equal(rechaza(flags), false);
+});
+
+// ─── El módulo apagado con turno abierto [AC-FPOD-06] — §0 HTTP, §5.5, §4.4 ─────────
+
+test("el módulo apagado en la config CONGELADA del turno marca la captura, y no rechaza", () => {
+  const apagado: CapturaPod = { ...base, moduloEncendido: false };
+  const flags = clasificarCapturaPod(apagado);
+  assert.deepEqual(flags, ["modulo_apagado"]);
+  assert.equal(rechaza(flags), false);
+});
+
+test("módulo apagado Y reloj corrido se marcan los DOS, y ninguno de más", () => {
+  const desfasada: CapturaPod = {
+    tsDispositivo: AHORA,
+    recibidaEn: enMinutos(AHORA, RELOJ.drift_max_minutos + 1),
+    moduloEncendido: false,
+  };
+  const flags = clasificarCapturaPod(desfasada);
+  assert.deepEqual(flags, ["modulo_apagado", "reloj_desfasado"]);
+  assert.equal(rechaza(flags), false);
+});
+
+test("módulo encendido no deja ningún rastro del flag", () => {
+  assert.deepEqual(clasificarCapturaPod({ ...base, moduloEncendido: true }), []);
 });

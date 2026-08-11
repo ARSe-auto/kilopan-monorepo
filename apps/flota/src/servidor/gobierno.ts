@@ -133,6 +133,9 @@ export const EVENTOS_OPERACION = {
   // La regla de oro aplicada al reloj de la captura de POD [AC-FPOD-05]: la entrega aterriza
   // igual y este flag deja dicho que el aparato traía la hora corrida (§0, §4.6).
   entrega_reloj_desfasado: "entrega.reloj_desfasado",
+  // El módulo apagado en la config CONGELADA del turno [AC-FPOD-06] — §0 HTTP, §5.5, §4.4: la
+  // entrega aterriza igual y este flag deja dicho que el módulo estaba apagado cuando se capturó.
+  entrega_modulo_apagado: "entrega.modulo_apagado",
 } as const;
 
 /** Todo código que `registrarEvento` acepta tiene que estar sembrado en `evento_tipo`: si los

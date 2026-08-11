@@ -19,13 +19,21 @@ import { RELOJ } from "../../../../packages/nucleo-comun/src/constants.ts";
 // motor de `aterrizarCapturas` no lo miraba — la entrega aterrizaba con la hora que trajera el
 // aparato, por desfasada que estuviera, sin flag ni fila en «Por revisar».
 //
+// ─── EL MÓDULO APAGADO CON TURNO ABIERTO [AC-FPOD-06] — §0 HTTP, §5.5, §4.4 ─────────
+//
+// Mismo criterio que `lecturas.ts` (AC-FVEH-18) y `custodia.ts` (AC-FRUT-10), aplicado acá
+// porque la parada de POD vive bajo el mismo módulo de encargos/rutas (§0 «módulo apagado = 403
+// SOLO en planificación/lectura; sync de captura = 2xx siempre… con flag `modulo_apagado`»). El
+// juicio de si el módulo estaba encendido lo hace el SERVIDOR contra la config CONGELADA del
+// turno (§4.4) — acá solo se recibe el veredicto y se marca.
+//
 // ─── NINGUNA CONDICIÓN RECHAZA. ESA ES TODA LA REGLA (§4.2, centinela 4) ────────────
 //
 // La entrega es CAPTURA: el chofer ya tocó «Entregado» y ya se fue de la parada. Un 422 acá no
-// le devuelve la parada, se la borra. Lo que corresponde es DEJAR DICHO que el reloj no cuadra:
+// le devuelve la parada, se la borra. Lo que corresponde es DEJAR DICHO que algo no cuadra:
 // flag + evento + fila en `review_queue`, y la captura aterriza igual.
 
-export const FLAGS_DE_CAPTURA_POD = ["reloj_desfasado"] as const;
+export const FLAGS_DE_CAPTURA_POD = ["modulo_apagado", "reloj_desfasado"] as const;
 export type FlagDeCapturaPod = (typeof FLAGS_DE_CAPTURA_POD)[number];
 
 export type CapturaPod = {
@@ -33,6 +41,11 @@ export type CapturaPod = {
    *  cuándo lo supo el servidor al aterrizar el evento. */
   tsDispositivo: Date;
   recibidaEn: Date;
+  /** Si el módulo estaba encendido en la config CONGELADA del turno (§4.4, §5.5) [AC-FPOD-06].
+   *  SIN CONFIGURAR cuenta como encendido — mismo motivo que `lecturas.ts`: el flag supone una
+   *  acción humana con motivo, y leer la ausencia como «apagado» llenaría «Por revisar» de ruido
+   *  desde el primer día de cada tenant. */
+  moduloEncendido: boolean;
 };
 
 /** Milisegundos de desfase tolerado entre el reloj del aparato y el del servidor (§0). */
@@ -48,6 +61,8 @@ const TOLERANCIA_DE_RELOJ_MS = RELOJ.drift_max_minutos * 60 * 1000;
  */
 export function clasificarCapturaPod(captura: CapturaPod): FlagDeCapturaPod[] {
   const flags: FlagDeCapturaPod[] = [];
+
+  if (!captura.moduloEncendido) flags.push("modulo_apagado");
 
   // Valor absoluto: un reloj adelantado es tan sospechoso como uno atrasado, y solo uno de los
   // dos signos se ve si se compara sin él.
