@@ -261,10 +261,24 @@ awk '/^while \[ "\$i" -lt "\$MAX_ITERACIONES" \]/{dentro=1} dentro && /-f "\$PAU
 # (c5) UN SOLO PUNTO DE ARRANQUE. Lanzado a mano hereda el PATH pero no la credencial que
 # exporta el plist; cada iteración muere en segundos y marca ACs sanos como atascados.
 # Se ejerce de verdad: se corre watchdog.sh SIN la variable y se exige que se frene.
-SAL_TOKEN="$(env -u CLAUDE_CODE_OAUTH_TOKEN KILOPAN_PANEL_DIR="$(mktemp -d)" KILOPAN_MAX_ITERACIONES=1 bash "$M/watchdog.sh" 2>&1 | head -4)"
+#
+# LOS DOS BINARIOS SE ESTUBAN, Y NO ES COMODIDAD (11-ago-2026). watchdog.sh tiene dos frenos
+# ANTES de éste —'claude' y 'pnpm' en el PATH— y en un runner de CI no existe ninguno de los
+# dos. Se frenaba por el primero, esta prueba leía ESE mensaje, no encontraba en él lo que
+# buscaba y denunciaba que faltaba el guard de la credencial: verde en la máquina de casa y
+# ROJO en GitHub Actions en CADA push, con su correo de «run failed» cada vez. Una prueba que
+# depende de qué binarios tenga la máquina no prueba el arnés, prueba la máquina. Con los dos
+# estubados, el freno que se ejerce es el de la credencial —el que esta prueba dice probar—
+# en cualquier entorno.
+BIN_ESTUBADO="$(mktemp -d)"
+for b in claude pnpm; do printf '#!/bin/sh\nexit 0\n' > "$BIN_ESTUBADO/$b"; chmod +x "$BIN_ESTUBADO/$b"; done
+SAL_TOKEN="$(env -u CLAUDE_CODE_OAUTH_TOKEN PATH="$BIN_ESTUBADO:$PATH" KILOPAN_PANEL_DIR="$(mktemp -d)" KILOPAN_MAX_ITERACIONES=1 bash "$M/watchdog.sh" 2>&1 | head -4)"
+rm -rf "$BIN_ESTUBADO"
 case "$SAL_TOKEN" in
   *CLAUDE_CODE_OAUTH_TOKEN*|*launchd*) ok "watchdog.sh se frena si lo lanzan sin la credencial del plist (no quema ACs en falso)" ;;
-  *) no "watchdog.sh arranca sin credencial: cada iteración falla en segundos y marca ACs sanos como atascados" ;;
+  # La salida REAL va en el mensaje. Sin ella, este rojo solo se diagnostica reproduciendo a
+  # mano el entorno del runner, que es exactamente lo que costó los correos de agosto.
+  *) no "watchdog.sh arranca sin credencial: cada iteración falla en segundos y marca ACs sanos como atascados — se frenó con: ${SAL_TOKEN:-(sin salida)}" ;;
 esac
 
 # (c6) EL LOCK PROTEGE EL RECURSO, NO EL ROL. El puerto 3301 es fijo para todos los
