@@ -9,6 +9,11 @@ import type {
   RequisitoDeEvidencia,
   TipoDeEvidencia,
 } from "../../dominio/pod-terreno.ts";
+import {
+  evaluarCandadoDeEntrega,
+  type CandadoDeEntrega,
+  type EmpresaDeLaEntrega,
+} from "../../dominio/candado-entrega.ts";
 import TarjetaDeEntrega from "./tarjeta-de-entrega.tsx";
 
 // La envoltura de servidor de la tarjeta de entrega [AC-FRUT-22, AC-FPOD-01] — §0 (contrato
@@ -145,6 +150,49 @@ export default async function Page({
     "select bultos_max_sin_receptor from parametros limit 1",
   );
 
+  // El candado de CADA parada, en la primera carga [AC-FPOD-03] — §4.2, §4.4 (R7), §3.E1.7.
+  //
+  // Antes se leía por parada contra `/api/paradas/[id]/entrega`: con la red cortada ANTES de
+  // llegar —que es el caso que el §3.E1.7 exige que funcione— ese viaje no vuelve y el chofer se
+  // queda mirando un error en vez de la tarjeta. El §4.2 ya dice dónde va: la validación
+  // bloqueante corre en el CLIENTE contra el SNAPSHOT, y un snapshot que hay que ir a buscar
+  // parada por parada no es un snapshot. El endpoint sigue existiendo —es la mitad «recurso» del
+  // centinela 2 (§9.3.2) y la fuente del detalle— pero la pantalla ya no depende de él.
+  const { rows: confirmadas } = await pool.query<{ empresa_cliente_id: string }>(
+    `select distinct m.empresa_cliente_id::text as empresa_cliente_id
+       from manifiestos m
+       join paradas cp on cp.id = m.parada_id
+      where cp.ruta_id = $1 and cp.tipo = 'carga'`,
+    [deLaParada[0].ruta_id],
+  );
+  const conManifiesto = new Set(confirmadas.map((f) => f.empresa_cliente_id));
+  const { rows: empresaFilas } = await pool.query<{
+    parada_id: string;
+    id: string;
+    razon_social: string;
+  }>(
+    `select distinct i.parada_id::text as parada_id, ec.id::text as id, ec.razon_social
+       from items i
+       join empresas_cliente ec on ec.id = i.empresa_cliente_id
+       join paradas p on p.id = i.parada_id
+      where p.ruta_id = $1 and p.tipo = 'entrega'
+      order by ec.razon_social`,
+    [deLaParada[0].ruta_id],
+  );
+  const empresasPorParada = new Map<string, EmpresaDeLaEntrega[]>();
+  for (const f of empresaFilas) {
+    const lista = empresasPorParada.get(f.parada_id) ?? [];
+    lista.push({ id: f.id, razonSocial: f.razon_social });
+    empresasPorParada.set(f.parada_id, lista);
+  }
+  const candados: Record<string, CandadoDeEntrega> = {};
+  for (const f of rows) {
+    candados[f.id] = evaluarCandadoDeEntrega({
+      empresasDeLaEntrega: empresasPorParada.get(f.id) ?? [],
+      empresasConManifiestoConfirmado: conManifiesto,
+    });
+  }
+
   const secuencia: ParadaDeRuta[] = rows.map((f) => ({
     id: f.id,
     orden: f.orden,
@@ -159,6 +207,7 @@ export default async function Page({
 
   return (
     <TarjetaDeEntrega
+      candados={candados}
       secuencia={secuencia}
       indice={secuencia.findIndex((p) => p.id === pedida)}
       motivos={motivosFilas}

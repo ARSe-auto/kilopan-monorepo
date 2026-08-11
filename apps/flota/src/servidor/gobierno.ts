@@ -126,6 +126,10 @@ export const EVENTOS_OPERACION = {
   cierre_descuadrado: "cierre.descuadrado",
   // La clasificación táctil materializó el detalle de un `devuelto` [AC-FRUT-21].
   devolucion_registrada: "devolucion.registrada",
+  // El terreno cerró una parada y su captura aterrizó por el motor de sync [AC-FPOD-03]. UNO
+  // solo para las cuatro variantes de F4: el resultado y el método de entrega son atributos del
+  // mismo hecho —la parada se cerró—, no hechos distintos (§4.5, §5.2 F4).
+  entrega_pod_capturada: "entrega.pod_capturada",
 } as const;
 
 /** Todo código que `registrarEvento` acepta tiene que estar sembrado en `evento_tipo`: si los
@@ -297,13 +301,23 @@ export async function registrarEvento(
     objetoId: string;
     sesion: Sesion;
     payload?: Record<string, unknown>;
+    /** El doble reloj del §4.6 cuando el hecho NO ocurrió recién: una captura de terreno pasó
+     *  cuando el aparato dice que pasó, y `record_time` (que la BD pone sola) es cuándo lo supo
+     *  el servidor. Sin esto, una entrega capturada sin señal ayer se lee como de hoy — y el
+     *  orden autoritativo del §4.6 deja de poder explicar por qué llegó tarde [AC-FPOD-03]. */
+    eventTime?: Date;
+    tzOffsetMin?: number;
+    /** La llave de idempotencia del outbox (§0): con ella, el replay de la misma captura no
+     *  escribe un segundo hecho — `UNIQUE(tenant_id, client_uuid)` lo impide en la BD. */
+    clientUuid?: string | null;
   },
 ): Promise<string> {
   const ahora = new Date();
+  const cuando = datos.eventTime ?? ahora;
   const { rows } = await c.query<{ id: string }>(
     `insert into eventos
-       (tipo_id, objeto_tabla, objeto_id, actor_id, dispositivo_id, event_time, tz_offset_min, payload)
-     select t.id, $2, $3::uuid, $4, $5, $6, $7, $8::jsonb
+       (tipo_id, objeto_tabla, objeto_id, actor_id, dispositivo_id, event_time, tz_offset_min, payload, client_uuid)
+     select t.id, $2, $3::uuid, $4, $5, $6, $7, $8::jsonb, $9::uuid
        from evento_tipo t where t.codigo = $1
      returning id::text as id`,
     [
@@ -312,9 +326,10 @@ export async function registrarEvento(
       datos.objetoId,
       datos.sesion.usuarioId,
       datos.sesion.dispositivoId,
-      ahora,
-      offsetChileMin(ahora),
+      cuando,
+      datos.tzOffsetMin ?? offsetChileMin(cuando),
       JSON.stringify(datos.payload ?? {}),
+      datos.clientUuid ?? null,
     ],
   );
   const id = rows[0]?.id;

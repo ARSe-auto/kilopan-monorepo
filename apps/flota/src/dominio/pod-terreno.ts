@@ -387,6 +387,22 @@ export function cerrarLaVentana(r: Recorrido): Recorrido {
   return { ...r, captura: null, cola: [...r.cola, { ...r.captura, estado: "por_replicar" }] };
 }
 
+/**
+ * El replay confirmó estas capturas: salen de la cola [AC-FPOD-03].
+ *
+ * Sacarlas por `clientUuid` y no vaciar la cola entera es lo que hace que el vaciado sea un
+ * HECHO y no un borrado: solo se va lo que el servidor acusó por su llave de idempotencia (§0).
+ * Una respuesta parcial —tres de cinco, porque la señal se cortó a mitad del lote— deja las dos
+ * que faltan esperando el próximo intento, en vez de perderlas creyendo que llegaron.
+ *
+ * Lo que está DENTRO de la ventana de undo no se toca: todavía no salió del dispositivo (§4.7).
+ */
+export function sacarDeLaCola(r: Recorrido, confirmadas: readonly string[]): Recorrido {
+  if (confirmadas.length === 0) return r;
+  const acusadas = new Set(confirmadas);
+  return { ...r, cola: r.cola.filter((c) => !acusadas.has(c.clientUuid)) };
+}
+
 /** La ruta terminó: no quedan paradas por delante. */
 export function terminado(r: Recorrido): boolean {
   return paradaActual(r) === null;

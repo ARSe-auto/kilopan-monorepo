@@ -788,6 +788,18 @@
       }
     },
     {
+      "ruta": "/api/sync/capturas",
+      "archivo": "src/app/api/sync/capturas/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "El motor de sync de capturas del POD (§4.2, §4.6) [AC-FPOD-03]. No lleva identificador en la URL —la parada viaja DENTRO de cada captura del lote— así que el caso genérico va sin credencial y la guardia contesta 404 pelado antes de mirar el cuerpo. Enciende el comparador de huella de la BD de B y es de los que más pesan: MUTA escribiendo en `eventos`, que el §4.6 declara orden autoritativo del tenant y origen de toda proyección, y esa tabla es append-only (§7.4) —un hecho escrito en la casa del vecino no se puede borrar ni corregir, solo supersedir—. Una captura de A con el uuid de una parada de B tiene que aterrizar en la base de A y dejar la de B sin una sola fila: el 404 no alcanza como oráculo, hay que contar los eventos de B antes y después (centinela 2, §9.3.2)."
+      }
+    },
+    {
       "ruta": "/api/tablero",
       "archivo": "src/app/api/tablero/route.ts",
       "metodos": [

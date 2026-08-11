@@ -1,11 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BotonPrimario,
   CifraGrande,
-  EstadoCargando,
-  EstadoError,
   SelectorUnToque,
   TecladoNumerico,
 } from "@kilopan/miga/componentes/index.tsx";
@@ -13,8 +11,10 @@ import { tipografia, superficie, grilla, enfasis } from "@kilopan/miga/tokens.ts
 import { semantico } from "@kilopan/miga/estructura.ts";
 import { UNDO } from "../../../../../packages/nucleo-comun/src/constants.ts";
 import { pedir } from "../../cliente/aparato.ts";
-import { textoDelCandado, type EmpresaDeLaEntrega } from "../../dominio/candado-entrega.ts";
+import { replayar } from "../../cliente/outbox.ts";
+import { textoDelCandado, type CandadoDeEntrega } from "../../dominio/candado-entrega.ts";
 import {
+  sacarDeLaCola,
   iniciarRecorrido,
   paradaActual,
   llegar,
@@ -62,16 +62,6 @@ import {
 // La única confirmación es la banda de deshacer que se abre por `UNDO.ventana_ms` (§4.7): cero
 // modales (§7.6). No cuesta una acción porque no hay que tocarla para seguir — el chofer ya
 // está caminando a la parada siguiente mientras corre.
-/** Lo que devuelve el endpoint, en la forma en que VIAJA: snake_case, como la BD.
- *
- *  No es `EmpresaDeLaEntrega[]`: ese es el tipo del DOMINIO, en camelCase. Declararlo aquí
- *  hacía que TypeScript diera por buena una traducción que no existía, y el `.map` de abajo
- *  —que sí traduce— quedaba leyendo una propiedad que el tipo juraba tener. La frontera entre
- *  el JSON y el dominio es exactamente este par de tipos: si los unificamos, el día que la
- *  columna cambie de nombre nadie se entera hasta que la pantalla muestre vacío. */
-export type EmpresaEnRespuesta = { id: string; razon_social: string };
-export type RespuestaCandado = { abierta: boolean; empresas_faltantes: EmpresaEnRespuesta[] };
-
 /** Un motivo del catálogo del tenant (§4.5, AC-FRUT-13): el mismo sirve para «no entregado»
  *  (`paradas.motivo_id`) y para `motivo_item` de la variante parcial (§4.5) — no hay un
  *  catálogo separado por variante. */
@@ -101,11 +91,16 @@ const ETIQUETA_DE_EVIDENCIA: Record<TipoDeEvidencia, string> = {
 
 export default function TarjetaDeEntrega({
   secuencia,
+  candados,
   indice,
   motivos,
   bultosMaxSinReceptor,
 }: {
   secuencia: ParadaDeRuta[];
+  /** El candado de cada parada, CONGELADO en la primera carga [AC-FPOD-03]: la validación
+   *  bloqueante corre en el cliente contra el snapshot (§4.2), no contra un viaje por parada que
+   *  en el subterráneo no vuelve. */
+  candados: Record<string, CandadoDeEntrega>;
   indice: number;
   motivos: MotivoDisponible[];
   bultosMaxSinReceptor: number | null;
@@ -113,8 +108,6 @@ export default function TarjetaDeEntrega({
   const [recorrido, setRecorrido] = useState<Recorrido>(() =>
     iniciarRecorrido(secuencia, Math.max(indice, 0)),
   );
-  const [datos, setDatos] = useState<RespuestaCandado | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [modo, setModo] = useState<ModoDeCierre>("elegir");
   // Parcial: cantidad tecleada (texto crudo del teclado propio) y motivo por ítem ajustado
   // (§4.5: `motivo_item` es por ítem, no por parada).
@@ -139,21 +132,9 @@ export default function TarjetaDeEntrega({
   const parada = paradaActual(recorrido);
   const paradaId = parada?.id ?? null;
   const enVentana = recorrido.captura?.clientUuid ?? null;
-
-  const cargar = useCallback(async () => {
-    setError(null);
-    setDatos(null);
-    // Terminada la ruta no hay candado que leer, y el de la parada anterior tiene que irse: un
-    // «Llegué» sobreviviente sobre una parada que ya no está sería un toque sin destino.
-    if (paradaId === null) return undefined;
-    const respuesta = await pedir(`/api/paradas/${paradaId}/entrega`).catch(() => null);
-    if (!respuesta?.ok) return setError("No se pudo leer el candado de esta parada. Revisá tu conexión.");
-    setDatos((await respuesta.json()) as RespuestaCandado);
-    return undefined;
-  }, [paradaId]);
+  const enCola = recorrido.cola.length;
 
   useEffect(() => {
-    void cargar();
     // Nueva parada: el modo y lo tecleado de la anterior no le sirven a esta. Sin esto, un
     // «Parcial» a medio llenar sobreviviría al avance automático y quedaría flotando sobre una
     // parada que no es la que lo originó. Los setters de React son estables entre renders, así
@@ -165,7 +146,46 @@ export default function TarjetaDeEntrega({
     setMotivoNoEntrega(null);
     setEncuadreCapturado(false);
     setEvidencias([]);
-  }, [cargar]);
+  }, [paradaId]);
+
+  // ─── EL REPLAY, SIN QUE EL CHOFER TOQUE NADA [AC-FPOD-03] ────────────────────────
+  //
+  // Dos disparos, que son los que el §4.7 llama camino PRINCIPAL: al montar la pantalla
+  // (replay-on-startup) y cuando el navegador avisa que volvió la señal (replay-on-online). Nada
+  // de Background Sync: Safari no la tiene y el §7.6 prohíbe depender de ella.
+  //
+  // El tercer disparo es que la cola CREZCA: una captura cuya ventana de undo venció con señal
+  // no tiene por qué esperar a que la red se caiga y vuelva para salir.
+  const replayando = useRef(false);
+  useEffect(() => {
+    let vivo = true;
+    async function vaciar() {
+      // Un solo lote a la vez: el `online` del navegador llega repetido y dos replays en vuelo
+      // mandarían la misma captura dos veces. La llave de idempotencia del §0 lo aguanta, pero
+      // gastar dos viajes de radio en el mismo hecho es lo que no aguanta la batería del turno.
+      if (replayando.current || recorrido.cola.length === 0) return;
+      replayando.current = true;
+      try {
+        const confirmadas = await replayar(recorrido.cola, (cuerpo) =>
+          pedir("/api/sync/capturas", { method: "POST", body: cuerpo }),
+        );
+        // Cero rechazo a la vista (§5.7): un lote que no llegó devuelve cero acuses, la cola
+        // queda igual y el chofer sigue viendo su contador. No hay error que mostrarle porque no
+        // hay nada que él pueda decidir.
+        if (vivo && confirmadas.length > 0) setRecorrido((r) => sacarDeLaCola(r, confirmadas));
+      } finally {
+        replayando.current = false;
+      }
+    }
+    void vaciar();
+    window.addEventListener("online", vaciar);
+    return () => {
+      vivo = false;
+      window.removeEventListener("online", vaciar);
+    };
+    // `recorrido.cola` entera y no solo su largo: sacar dos y capturar una deja el largo igual y
+    // la cola distinta, y ese lote nuevo también tiene que salir.
+  }, [recorrido.cola]);
 
   // La ventana de undo: ocho segundos en los que el toque todavía no es un hecho. Vencida, la
   // captura pasa a la cola que el motor de sync replayea (AC-FPOD-03/04). El plazo sale de
@@ -239,17 +259,9 @@ export default function TarjetaDeEntrega({
     volverAElegir();
   }
 
-  const candado =
-    datos === null
-      ? null
-      : datos.abierta
-        ? ({ abierta: true } as const)
-        : ({
-            abierta: false,
-            empresasFaltantes: datos.empresas_faltantes.map(
-              (e): EmpresaDeLaEntrega => ({ id: e.id, razonSocial: e.razon_social }),
-            ),
-          } as const);
+  // El candado sale del snapshot que vino con la pantalla, no de un viaje por parada: sin señal
+  // el viaje no vuelve y la tarjeta que el chofer necesita no aparece (§4.2, §3.E1.7).
+  const candado = paradaId === null ? null : (candados[paradaId] ?? null);
 
   return (
     <main data-testid="tarjeta-de-entrega">
@@ -286,8 +298,21 @@ export default function TarjetaDeEntrega({
         </section>
       )}
 
-      {parada !== null && error !== null && <EstadoError mensaje={error} alReintentar={() => void cargar()} />}
-      {parada !== null && error === null && candado === null && <EstadoCargando filas={2} />}
+      {/* La cola de salida, con el contador REAL [AC-FPOD-03] (§5.2 F4, §5.7): lo que se muestra
+          es `cola.length`, el largo del arreglo que el replay tiene que vaciar — jamás un cartel
+          fijo de «sincronizando». Cero rechazo a la vista: mientras no haya señal esto es todo
+          lo que el chofer ve de su entrega, y dice que ESTÁ ENTREGADA. */}
+      {enCola > 0 && (
+        <section data-testid="por-sincronizar" style={banda}>
+          <p style={{ ...cuerpo, margin: 0 }}>Entregada — por sincronizar</p>
+          <p style={{ ...pieDim, margin: 0 }}>
+            <span data-testid="contador-cola" style={{ fontVariantNumeric: "tabular-nums" }}>
+              {enCola}
+            </span>{" "}
+            {enCola === 1 ? "entrega esperando señal" : "entregas esperando señal"}
+          </p>
+        </section>
+      )}
 
       {candado !== null && !candado.abierta && (
         <section data-testid="candado-cerrado" style={bloque}>

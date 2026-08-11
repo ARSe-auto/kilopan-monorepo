@@ -14,6 +14,7 @@ import {
   requisitosPendientes,
   deshacer,
   cerrarLaVentana,
+  sacarDeLaCola,
   terminado,
   type Recorrido,
   type ParadaDeRuta,
@@ -399,4 +400,51 @@ test("[AC-FPOD-02] una variante cerrada respeta el mismo undo de 8 s que el cami
   assert.equal(cerrada.cola.length, 1);
   assert.equal(cerrada.cola[0]?.resultado, "parcial");
   assert.equal(cerrada.cola[0]?.estado, "por_replicar");
+});
+
+// ─── LA COLA SE VACÍA CON LO QUE EL SERVIDOR ACUSÓ, Y CON NADA MÁS [AC-FPOD-03] ───
+
+test("[AC-FPOD-03] tres entregas sin señal se apilan en la cola, y el contador es el largo real", () => {
+  let r = iniciarRecorrido(PARADAS);
+  const uuids: string[] = [];
+  for (const n of [0, 1, 2]) {
+    const sello = { ...SELLO, clientUuid: `019853b7-0000-7000-8000-0000000000c${n}` };
+    uuids.push(sello.clientUuid);
+    r = cerrarLaVentana(entregar(llegar(r), sello));
+  }
+  assert.equal(r.cola.length, 3, "el contador de «por sincronizar» es el largo de la cola, no un cartel");
+  assert.deepEqual(r.cola.map((c) => c.clientUuid), uuids);
+  assert.ok(r.cola.every((c) => c.estado === "por_replicar"));
+});
+
+test("[AC-FPOD-03] el replay saca de la cola SOLO lo que el servidor acusó por client_uuid", () => {
+  let r = iniciarRecorrido(PARADAS);
+  const uuids: string[] = [];
+  for (const n of [0, 1, 2]) {
+    const sello = { ...SELLO, clientUuid: `019853b7-0000-7000-8000-0000000000c${n}` };
+    uuids.push(sello.clientUuid);
+    r = cerrarLaVentana(entregar(llegar(r), sello));
+  }
+
+  // Lote parcial: la señal se cortó a mitad y el servidor solo acusó dos. La tercera se queda
+  // esperando el próximo intento, en vez de perderse creyendo que llegó.
+  const parcial = sacarDeLaCola(r, [uuids[0]!, uuids[2]!]);
+  assert.deepEqual(parcial.cola.map((c) => c.clientUuid), [uuids[1]!]);
+
+  // Acuse vacío —el lote no llegó— deja la cola intacta: cero rechazo, cero pérdida (§5.7).
+  assert.equal(sacarDeLaCola(parcial, []).cola.length, 1);
+  // Un acuse de algo que ya no está no borra de más.
+  assert.equal(sacarDeLaCola(parcial, [uuids[0]!]).cola.length, 1);
+  // Acusadas todas, la cola queda vacía sin que el operario toque nada.
+  assert.equal(sacarDeLaCola(parcial, [uuids[1]!]).cola.length, 0);
+});
+
+test("[AC-FPOD-03] lo que está dentro de la ventana de undo no lo toca el replay", () => {
+  const r = entregar(llegar(iniciarRecorrido(PARADAS)), SELLO);
+  assert.equal(r.captura?.estado, UNDO.estado_local);
+  // Aunque el servidor acusara ese uuid, la captura sigue en la ventana: todavía no salió del
+  // dispositivo (§4.7), y sacarla de una cola donde no está no puede inventarle un aterrizaje.
+  const despues = sacarDeLaCola(r, [SELLO.clientUuid]);
+  assert.equal(despues.captura?.clientUuid, SELLO.clientUuid);
+  assert.deepEqual(despues.cola, []);
 });
