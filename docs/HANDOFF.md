@@ -48,9 +48,13 @@
 >
 > ### Lo que le toca a la próxima sesión supervisada, en orden
 >
-> 1. **AC-FPOD-11** — el DDL de `entregas_pod` (write-once + UNIQUE parcial por encargo). Es
->    migración, y el motor tiene prohibido crearlas: solo no lo va a tomar nunca. **Cierra el
->    bloqueo de AC-FRUT-23**, uno de los dos atascados.
+> 1. **AC-FPOD-11** — el DDL de `entregas_pod` (write-once + UNIQUE parcial por encargo).
+>    **CORRECCIÓN de las 18:50: el motor SÍ lo tomó**, a las 18:45, y escribió
+>    `db/migraciones-flota/tenant/0055_entregas_pod.sql`. La prohibición que ejerce `loop.sh`
+>    mira `db/migraciones/` —el árbol de KiloPan— y NO `db/migraciones-flota/`, así que en
+>    FLOTA el motor sí crea migraciones y ya lo hizo hoy dos veces (0049 y 0055). Antes de
+>    tomar este AC, verificar si quedó cerrado. **Cierra el bloqueo de AC-FRUT-23**, uno de los
+>    dos atascados, que sigue siendo lo que hay que revisar apenas el 11 esté verde.
 > 2. **AC-FIDN-07** — atascado desde el 10-ago; nadie diagnosticó todavía POR QUÉ.
 > 3. **Anomalía menor a confirmar:** entre las 14:30 y las 17:30 hubo seis commits con id de AC y
 >    el contador subió cinco. `verify-refs` sigue verde (no hay `[x]` sin respaldo), así que es
