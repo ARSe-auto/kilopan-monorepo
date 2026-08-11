@@ -521,6 +521,24 @@
       }
     },
     {
+      "ruta": "/api/paradas/[id]/entrega",
+      "archivo": "src/app/api/paradas/[id]/entrega/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "paradas",
+          "columna": "id"
+        },
+        "nota": "El candado entrega←manifiesto (§4.2, KR-29) [AC-FRUT-22]. Leer el candado de una parada de entrega de B desde una sesión de A: 404 y la BD de B sin cambios. Es LECTURA pura —no muta nada— pero lo que devuelve son las razones sociales de las empresas cuyo sub-manifiesto todavía no confirmó en el andén del vecino: un ajeno que la viera sabría qué panaderías le cargan a B y cuáles van atrasadas, que es exactamente el dato que el §7.2 confina a la casa."
+      }
+    },
+    {
       "ruta": "/api/paradas/[id]/manifiesto",
       "archivo": "src/app/api/paradas/[id]/manifiesto/route.ts",
       "metodos": [
@@ -846,6 +864,18 @@
       "cruce": {
         "tipo": "sin_recurso",
         "nota": "Pantalla de recepción de carga en el andén (§5.2 F2) [AC-FRUT-07]. No recibe identificador por URL: el camión se elige con un chip y todo lo que hace pasa por /api/vehiculos, /api/rutas y /api/paradas/[id]/manifiesto, que tienen sus propios casos. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y pesa porque el HTML servido no puede traer las patentes del vecino ni las razones sociales de quienes le cargan antes de que haya sesión."
+      }
+    },
+    {
+      "ruta": "/entrega",
+      "archivo": "src/app/entrega/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La tarjeta de la parada de entrega (§5.2 F4, KR-29) [AC-FRUT-22]. NO recibe el identificador como segmento de la URL, por el mismo motivo que `/ruta/cerrar`: el App Router serializa el árbol de segmentos —con el valor concreto del parámetro— dentro del HTML que sirve, incluso en el 404. La parada viaja en la consulta (`?parada=`) y el tenant sale del ruteo por host; sin una parada de tipo `entrega` que exista en la base de la casa, la pantalla contesta 404 antes de pintar un título. La mitad «recurso» del centinela la ejerce `/api/paradas/[id]/entrega`, que es por donde sale el detalle —qué empresas tienen el manifiesto sin confirmar— y donde el identificador sí viaja."
       }
     },
     {
