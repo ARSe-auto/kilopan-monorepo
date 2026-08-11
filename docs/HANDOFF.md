@@ -1,33 +1,30 @@
-# HANDOFF — El MOTOR está al mando; el módulo 03 va en 14 de 22
+# HANDOFF — El motor construye y PUBLICA solo
 
-> **LO PRIMERO: hay un motor autónomo construyendo FLOTA.** No es una sesión más lo que sigue —
-> es supervisión. Antes de escribir una línea de código, mirá si está vivo:
+> **LO PRIMERO: hay un motor autónomo construyendo FLOTA, y ahora también publicando.** Lo que
+> sigue no es construir — es supervisar y arreglarle el arnés, que es lo único que él no puede.
 >
 > ```
 > ps -p $(cat packages/metodo/panel/motor-flota.pid) && tail -30 packages/metodo/panel/motor-flota.log
 > ```
 >
-> · **Vivo** → NO construyas: dos builders en el mismo worktree eligen el mismo AC y se pisan
->   los commits. Supervisá, y si hace falta arreglá el arnés (que es lo que él no puede).
-> · **Detenido con `packages/metodo/panel/PAUSA-REVISION`** → algo se rompió y pidió que lo mire
->   una persona. Leé `ultimo-loop.log`, arreglá LA CAUSA, borrá el marcador y relanzalo con
->   `bash packages/metodo/scripts/arrancar-motor-flota.sh`.
+> · **Vivo** → NO construyas en paralelo: dos builders en el mismo worktree eligen el mismo AC y
+>   se pisan. Tampoco corras `check.sh` mientras él trabaja — el gate lee un árbol que él está
+>   escribiendo y da rojos que no son de nadie. Eso pasó el 10-ago y costó una vuelta.
+> · **Detenido con `packages/metodo/panel/PAUSA-REVISION`** → leé `ultimo-loop.log`, arreglá LA
+>   CAUSA, borrá el marcador y relanzá con `bash packages/metodo/scripts/arrancar-motor-flota.sh`.
 > · **Detenido sin marcador** → terminó su tanda de 20 iteraciones. Relanzalo igual.
 >
-> Arrancarlo NO necesita `launchctl`. El plist bajo launchd existe y está instalado
-> (`~/Library/LaunchAgents/com.flota.ralph-loop.plist`) por si algún día se puede cargar: agrega
-> el arranque tras reinicio. Los dos usan el mismo watchdog y los mismos frenos.
-
-
-**Traspaso de la sesión del 10-ago-2026 (05:20 →), rama `flota/specs-e1` en
-`~/kilopan-monorepo-flota`, Opus 5 esfuerzo alto.** Once commits, diez ACs cerrados, un defecto
-propio corregido y **la deuda de `app.current_role` SALDADA**. `check.sh --app=flota --full` en **VERDE con 14 OK · 0 fallados · 1
-saltado declarado**.
-
-> Sesión nueva: retomá esto **sin re-preguntar nada**, armá tu propio despertador de 4h30m
-> (tarea Bash en background) y archivá este archivo en `docs/handoffs/2026-08-10-0930.md` al
-> absorberlo. **Alexis pidió expresamente que NO se creen chips de continuación**: el traspaso
-> es este archivo y se retoma solo.
+> **Ante una pausa, sospechá del ARNÉS antes que del AC.** Los cinco frenos de la noche del
+> 10-ago fueron todos de arnés y ninguno de código: el `unbound variable` del bash 3.2, los ACs
+> bloqueados por decisiones del dueño, el tope de stashes, las rutas sin cruce declarado, y tres
+> tests que fallaban por la hora del día.
+>
+> **La cadena está cerrada de punta a punta:** el watchdog corre el gate completo tras cada
+> commit y, si queda verde, empuja y abre o actualiza el PR — `publicar-pr.sh` en una rama de
+> trabajo, `empujar-si-verde.sh` en main. Los dos exigen que `last-green.sha` apunte al HEAD, así
+> que nunca se publica algo que el gate independiente no haya declarado verde.
+>
+> **PR de esta tanda:** https://github.com/ARSe-auto/kilopan-monorepo/pull/1
 
 ## Dónde quedó todo
 
