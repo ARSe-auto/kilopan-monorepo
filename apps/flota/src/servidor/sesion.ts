@@ -38,7 +38,19 @@ export type Sesion = {
 
 export type VeredictoSesion =
   | { tipo: "valida"; sesion: Sesion }
-  | { tipo: "invalida"; motivo: "sin_credencial" | "desconocida" | "revocada" | "usuario_inactivo" };
+  | {
+      // Revocado, pero CON identidad y CON la marca de tiempo del corte [AC-FPOD-07] — §4.3. El
+      // `tipo` sigue siendo "invalida" y el `motivo` sigue siendo "revocada" a propósito: todo
+      // llamador que solo mira `tipo !== "valida"` (guardia, sesionDelTenant, /api/sesion) sigue
+      // rebotando exactamente igual que antes — esto SOLO agrega los datos que necesita el motor
+      // de sync de capturas para clasificar lo que llega DESPUÉS de la revocación (§4.2: la
+      // captura del terreno jamás rebota, ni siquiera la de un aparato dado de baja).
+      tipo: "invalida";
+      motivo: "revocada";
+      sesion: Sesion;
+      revocadoEn: Date;
+    }
+  | { tipo: "invalida"; motivo: "sin_credencial" | "desconocida" | "usuario_inactivo" };
 
 /** `Authorization: Portador <secreto>` → el secreto, o null. */
 export function secretoDe(cabecera: string | null | undefined): string | null {
@@ -87,7 +99,27 @@ export async function resolverSesion(pool: Pool, cabecera: string | null): Promi
   // EL CORTE. Se mira en CADA request y contra la fila, no contra una copia en memoria: es lo
   // que hace que «revocar en 1 toque» tenga efecto en el request siguiente y no en el próximo
   // vencimiento de algo.
-  if (fila.revocado_at !== null) return { tipo: "invalida", motivo: "revocada" };
+  //
+  // Se mira ANTES que `usuario_inactivo` a propósito: un aparato revocado sin usuario detrás
+  // (el join no encuentra fila) no tiene con qué armar la `sesion` que pide el motor de sync
+  // [AC-FPOD-07] — ahí no hay identidad que devolver y se cae al mismo "desconocida" de siempre.
+  if (fila.revocado_at !== null) {
+    if (!fila.usuario_id || !fila.rol) return { tipo: "invalida", motivo: "desconocida" };
+    return {
+      tipo: "invalida",
+      motivo: "revocada",
+      revocadoEn: fila.revocado_at,
+      sesion: {
+        dispositivoId: fila.dispositivo_id,
+        personaId: fila.persona_id,
+        usuarioId: fila.usuario_id,
+        rol: fila.rol,
+        isStandalone: fila.is_standalone,
+        storagePersisted: fila.storage_persisted,
+        empresaClienteId: fila.empresa_cliente_id,
+      },
+    };
+  }
   // La anonimización de la 21.719 desactiva al usuario (AC-FIDN-19); un aparato que sobreviva
   // a eso no puede seguir teniendo sesión.
   if (!fila.usuario_id || fila.activo !== true) return { tipo: "invalida", motivo: "usuario_inactivo" };

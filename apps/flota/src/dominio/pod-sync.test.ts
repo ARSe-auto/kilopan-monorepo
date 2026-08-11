@@ -1,7 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { RELOJ } from "../../../../packages/nucleo-comun/src/constants.ts";
-import { clasificarCapturaPod, rechaza, FLAGS_DE_CAPTURA_POD, type CapturaPod } from "./pod-sync.ts";
+import { RELOJ, REVOCACION } from "../../../../packages/nucleo-comun/src/constants.ts";
+import {
+  clasificarCapturaPod,
+  rechaza,
+  dejaRastro,
+  severidadDeFlag,
+  SEVERIDAD_DE_CAPTURA_POD,
+  FLAGS_DE_CAPTURA_POD,
+  type CapturaPod,
+} from "./pod-sync.ts";
 
 // Mutantes de la degradación de una captura de POD [AC-FPOD-05, AC-FPOD-06] — centinela 4 §9.3.
 //
@@ -16,7 +24,12 @@ import { clasificarCapturaPod, rechaza, FLAGS_DE_CAPTURA_POD, type CapturaPod } 
 const AHORA = new Date("2026-08-11T12:00:00Z");
 const enMinutos = (base: Date, m: number) => new Date(base.getTime() + m * 60 * 1000);
 
-const base: CapturaPod = { tsDispositivo: AHORA, recibidaEn: AHORA, moduloEncendido: true };
+const base: CapturaPod = {
+  tsDispositivo: AHORA,
+  recibidaEn: AHORA,
+  moduloEncendido: true,
+  revocadoEn: null,
+};
 
 test("ninguna combinación de flags rechaza jamás (centinela 4)", () => {
   const total = 1 << FLAGS_DE_CAPTURA_POD.length;
@@ -76,6 +89,7 @@ test("módulo apagado Y reloj corrido se marcan los DOS, y ninguno de más", () 
     tsDispositivo: AHORA,
     recibidaEn: enMinutos(AHORA, RELOJ.drift_max_minutos + 1),
     moduloEncendido: false,
+    revocadoEn: null,
   };
   const flags = clasificarCapturaPod(desfasada);
   assert.deepEqual(flags, ["modulo_apagado", "reloj_desfasado"]);
@@ -84,4 +98,65 @@ test("módulo apagado Y reloj corrido se marcan los DOS, y ninguno de más", () 
 
 test("módulo encendido no deja ningún rastro del flag", () => {
   assert.deepEqual(clasificarCapturaPod({ ...base, moduloEncendido: true }), []);
+});
+
+// ─── Captura de un aparato revocado [AC-FPOD-07] — §4.3, centinela 4 §9.3 ───────────
+//
+// El umbral se lee de `REVOCACION.ventana_horas`, nunca escrito literal acá — mismo motivo que
+// arriba con `RELOJ.drift_max_minutos`: si el dueño mueve el umbral, este test sigue siendo
+// cierto, y si alguien lo copiara en el código el gate de constantes lo marcaría.
+
+const enHorasDesdeRevocacion = (revocadoEn: Date, h: number) => new Date(revocadoEn.getTime() + h * 3_600_000);
+
+test("un aparato que nunca fue revocado no marca nada", () => {
+  assert.deepEqual(clasificarCapturaPod({ ...base, revocadoEn: null }), []);
+});
+
+test("captura DENTRO de la ventana: flag post_revocacion, y JAMÁS rechaza", () => {
+  const revocadoEn = AHORA;
+  for (const h of [0, 1, REVOCACION.ventana_horas - 1, REVOCACION.ventana_horas]) {
+    // El reloj del aparato viaja CON `recibidaEn` a propósito: este test aísla la clasificación
+    // por revocación, y un desfase de horas activaría también `reloj_desfasado` sin que eso
+    // tenga que ver con lo que se está probando acá.
+    const recibidaEn = enHorasDesdeRevocacion(revocadoEn, h);
+    const flags = clasificarCapturaPod({ ...base, tsDispositivo: recibidaEn, recibidaEn, revocadoEn });
+    assert.deepEqual(flags, ["post_revocacion"], `a las ${h} h`);
+    assert.equal(rechaza(flags), false);
+  }
+});
+
+test("captura FUERA de la ventana: flag post_revocacion_tardia, y JAMÁS rechaza", () => {
+  const revocadoEn = AHORA;
+  const apenas = new Date(enHorasDesdeRevocacion(revocadoEn, REVOCACION.ventana_horas).getTime() + 1);
+  for (const recibidaEn of [apenas, enHorasDesdeRevocacion(revocadoEn, REVOCACION.ventana_horas * 10)]) {
+    const flags = clasificarCapturaPod({ ...base, tsDispositivo: recibidaEn, recibidaEn, revocadoEn });
+    assert.deepEqual(flags, ["post_revocacion_tardia"]);
+    assert.equal(rechaza(flags), false);
+  }
+});
+
+test("revocación Y reloj corrido se marcan los DOS, y ninguno de más", () => {
+  const revocadoEn = AHORA;
+  const recibidaEn = enHorasDesdeRevocacion(revocadoEn, REVOCACION.ventana_horas * 10);
+  const flags = clasificarCapturaPod({
+    tsDispositivo: enMinutos(recibidaEn, RELOJ.drift_max_minutos + 1),
+    recibidaEn,
+    moduloEncendido: true,
+    revocadoEn,
+  });
+  assert.deepEqual(flags, ["reloj_desfasado", "post_revocacion_tardia"]);
+  assert.equal(rechaza(flags), false);
+});
+
+test("post_revocacion no deja rastro; las demás sí, incluida la revocación tardía", () => {
+  assert.equal(dejaRastro("post_revocacion"), false);
+  for (const flag of ["modulo_apagado", "reloj_desfasado", "post_revocacion_tardia"] as const) {
+    assert.equal(dejaRastro(flag), true, `${flag} debería dejar rastro`);
+  }
+});
+
+test("severidad: post_revocacion_tardia sube a alta; el resto queda en la severidad de siempre", () => {
+  assert.equal(severidadDeFlag("post_revocacion_tardia"), "alta");
+  assert.equal(severidadDeFlag("modulo_apagado"), SEVERIDAD_DE_CAPTURA_POD);
+  assert.equal(severidadDeFlag("reloj_desfasado"), SEVERIDAD_DE_CAPTURA_POD);
 });

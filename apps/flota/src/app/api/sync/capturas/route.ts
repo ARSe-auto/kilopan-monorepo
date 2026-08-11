@@ -1,5 +1,5 @@
 import { headers } from "next/headers";
-import { sesionDelTenant, esUuid } from "../../../../servidor/gobierno.ts";
+import { sesionParaSincronizarCapturas, esUuid } from "../../../../servidor/gobierno.ts";
 import { aterrizarCapturas, capturaBienFormada, type CapturaEntrante } from "../../../../servidor/capturas.ts";
 
 // El endpoint de sync de capturas del POD [AC-FPOD-03] — §4.2, §0 (fila HTTP), §4.6, §5.2 F4.
@@ -36,7 +36,9 @@ function leer(cruda: CapturaCruda): Partial<CapturaEntrante> {
 }
 
 export async function POST(peticion: Request) {
-  const g = await sesionDelTenant(await headers());
+  // La única guardia que deja pasar un aparato revocado [AC-FPOD-07] — §4.3, §4.2: la captura
+  // que trae de ANTES de la revocación no rebota, se clasifica por `g.acto.revocadoEn`.
+  const g = await sesionParaSincronizarCapturas(await headers());
   if (g.tipo === "rebote") return g.respuesta;
 
   let cuerpo: Record<string, unknown>;
@@ -74,6 +76,7 @@ export async function POST(peticion: Request) {
     g.acto.sesion,
     g.acto.slug,
     leidas as CapturaEntrante[],
+    g.acto.revocadoEn,
   );
   return Response.json({ acuses }, { status: 200 });
 }

@@ -4,7 +4,8 @@ import type { Sesion } from "./sesion.ts";
 import { versionVigente, estadoDeFeature, FEATURES } from "./config.ts";
 import {
   clasificarCapturaPod,
-  SEVERIDAD_DE_CAPTURA_POD,
+  dejaRastro,
+  severidadDeFlag,
   type FlagDeCapturaPod,
 } from "../dominio/pod-sync.ts";
 
@@ -62,7 +63,8 @@ export type AcuseDeCaptura = {
   client_uuid: string;
   aceptada: true;
   repetida: boolean;
-  /** Lo que no cuadró, y que igual entró [AC-FPOD-05, AC-FPOD-06]. Vacío = captura limpia. */
+  /** Lo que no cuadró, y que igual entró [AC-FPOD-05, AC-FPOD-06, AC-FPOD-07]. Vacío = captura
+   *  limpia. */
   flags: FlagDeCapturaPod[];
   /** La versión de config con la que se juzgó. El §0 la pide en la respuesta: sin ella, quien
    *  mira un `modulo_apagado` no puede saber CUÁL configuración estaba vigente al entrar
@@ -107,9 +109,19 @@ export function capturaBienFormada(c: Partial<CapturaEntrante>): boolean {
  * se va por el `continue` de arriba y no repite el flag.
  */
 
-const EVENTO_DE_FLAG: Record<FlagDeCapturaPod, (typeof EVENTOS_OPERACION)[keyof typeof EVENTOS_OPERACION]> = {
+// `post_revocacion` (dentro de la ventana de 72h) no tiene entrada acá a propósito: `dejaRastro`
+// la filtra ANTES de llegar a este mapa, así que el tipo la excluye — un flag nuevo que alguien
+// agregue a `FLAGS_DE_CAPTURA_POD` sin decidir si deja rastro rompe la build, no el runtime
+// [AC-FPOD-07].
+const EVENTO_DE_FLAG: Record<
+  Exclude<FlagDeCapturaPod, "post_revocacion">,
+  (typeof EVENTOS_OPERACION)[keyof typeof EVENTOS_OPERACION]
+> = {
   modulo_apagado: EVENTOS_OPERACION.entrega_modulo_apagado,
   reloj_desfasado: EVENTOS_OPERACION.entrega_reloj_desfasado,
+  // Solo la tardía: la que llega DENTRO de la ventana se marca con su flag y no abre rastro
+  // (§4.3; `dominio/revocacion.ts`, AC-FIDN-09) [AC-FPOD-07].
+  post_revocacion_tardia: EVENTOS_OPERACION.entrega_post_revocacion_tardia,
 };
 
 /**
@@ -146,7 +158,12 @@ async function configDeLaCaptura(
  *  captura YA aterrizó en `eventos` — esto nunca la rebota ni la deshace [AC-FPOD-05]. */
 async function dejarDichoQueDegrado(
   c: PoolClient,
-  datos: { flags: readonly FlagDeCapturaPod[]; paradaId: string; sesion: Sesion; nota: string },
+  datos: {
+    flags: readonly Exclude<FlagDeCapturaPod, "post_revocacion">[];
+    paradaId: string;
+    sesion: Sesion;
+    nota: string;
+  },
 ): Promise<void> {
   for (const flag of datos.flags) {
     await registrarEvento(c, {
@@ -158,7 +175,7 @@ async function dejarDichoQueDegrado(
     });
     await c.query("insert into review_queue (origen, severidad, nota) values ($1, $2, $3)", [
       `entrega.${flag}`,
-      SEVERIDAD_DE_CAPTURA_POD,
+      severidadDeFlag(flag),
       datos.nota,
     ]);
   }
@@ -169,6 +186,9 @@ export async function aterrizarCapturas(
   sesion: Sesion,
   slug: string,
   entrantes: CapturaEntrante[],
+  // Cuándo se revocó el aparato que manda este lote; `null` si sigue vigente [AC-FPOD-07] — §4.3.
+  // Lo trae `sesionParaSincronizarCapturas`, la única guardia que deja pasar una sesión revocada.
+  revocadoEn: Date | null,
 ): Promise<AcuseDeCaptura[]> {
   if (entrantes.length === 0) return [];
 
@@ -191,6 +211,7 @@ export async function aterrizarCapturas(
           tsDispositivo: captura.tsDispositivo,
           recibidaEn: new Date(),
           moduloEncendido,
+          revocadoEn,
         });
 
         if (previo[0]) {
@@ -226,9 +247,13 @@ export async function aterrizarCapturas(
           },
         });
 
-        if (flags.length > 0) {
+        // `post_revocacion` viaja en el acuse (el aparato tiene que poder mostrar la cuarentena)
+        // pero no deja rastro: filtrarla ACÁ, y no en `dejarDichoQueDegrado`, es lo que evita que
+        // el mapa `EVENTO_DE_FLAG` necesite una entrada que nunca se usaría [AC-FPOD-07].
+        const flagsConRastro = flags.filter(dejaRastro);
+        if (flagsConRastro.length > 0) {
           await dejarDichoQueDegrado(c, {
-            flags,
+            flags: flagsConRastro,
             paradaId: captura.paradaId,
             sesion,
             nota: `Captura de POD para la parada ${captura.paradaId} — config_version_id ${configVersionId}`,

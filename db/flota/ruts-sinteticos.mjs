@@ -37,6 +37,8 @@ export const VALIDOS = {
   "3.333.333-1": "el chofer de la idempotencia del outbox (AC-FPOD-04), propio y no prestado: cuarta suite de F4, cuarto operario — mismo motivo que los tres de arriba",
   "2.222.222-8": "el chofer de la regla de oro con reloj corrido (AC-FPOD-05), propio y no prestado: quinta suite de F4, quinto operario — mismo motivo que los cuatro de arriba",
   "1.111.112-2": "el chofer del módulo apagado con turno abierto (AC-FPOD-06), propio y no prestado: sexta suite de F4, sexto operario — mismo motivo que las cinco de arriba",
+  "9.876.543-3": "el chofer revocado DENTRO de la ventana de 72h (AC-FPOD-07), propio y no prestado: séptima suite de F4, séptimo operario — mismo motivo que las seis de arriba",
+  "1.234.567-4": "el chofer revocado FUERA de la ventana de 72h (AC-FPOD-07), propio y no prestado: la misma suite necesita un SEGUNDO operario porque cada caso enrola su propio aparato con su propio `revocado_at`",
 };
 
 /**

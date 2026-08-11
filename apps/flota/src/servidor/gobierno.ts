@@ -136,6 +136,11 @@ export const EVENTOS_OPERACION = {
   // El módulo apagado en la config CONGELADA del turno [AC-FPOD-06] — §0 HTTP, §5.5, §4.4: la
   // entrega aterriza igual y este flag deja dicho que el módulo estaba apagado cuando se capturó.
   entrega_modulo_apagado: "entrega.modulo_apagado",
+  // Captura de un aparato revocado hace más de `REVOCACION.ventana_horas` [AC-FPOD-07] — §4.3.
+  // Solo la TARDÍA tiene evento propio: la que llega dentro de la ventana se explica por falta
+  // de señal y se marca con su flag sin abrir rastro (`dominio/revocacion.ts`, AC-FIDN-09) — un
+  // evento por cada aparato que pasó la noche sin cobertura ahogaría el que sí importa.
+  entrega_post_revocacion_tardia: "entrega.post_revocacion_tardia",
 } as const;
 
 /** Todo código que `registrarEvento` acepta tiene que estar sembrado en `evento_tipo`: si los
@@ -204,6 +209,43 @@ export async function sesionDelTenant(
   const veredicto = await resolverSesion(pool, cabeceras.get("authorization"));
   if (veredicto.tipo !== "valida") return { tipo: "rebote", respuesta: NO_EXISTE() };
   return { tipo: "ok", acto: { pool, sesion: veredicto.sesion, slug } };
+}
+
+/** El acto del motor de sync de capturas, con el dato extra que ningún otro acto necesita. */
+export type ActoDeCaptura = Acto & { revocadoEn: Date | null };
+
+/**
+ * La tercera mitad, y la única con el corte al REVÉS [AC-FPOD-07] — §4.3, §4.2. Todo el resto
+ * de este archivo (`guardia`, `sesionDelTenant`) trata un aparato revocado como si no existiera:
+ * eso es correcto HACIA ADELANTE (planificación, lectura, cualquier pantalla) y es exactamente
+ * lo que hace que «revocar en 1 toque» signifique algo. Pero la captura que ese mismo aparato
+ * trae de ANTES de la revocación no es una petición nueva, es trabajo del terreno que ya
+ * ocurrió — y el §4.2 prohíbe de frente que una CAPTURA rebote. Por eso, y SOLO para
+ * `/api/sync/capturas`, una sesión "revocada" con identidad (`resolverSesion`) no se bota: se
+ * deja pasar con `revocadoEn`, y es `dominio/pod-sync.ts` (reusando `dominio/revocacion.ts`,
+ * AC-FIDN-09) quien decide si la captura entra en cuarentena o con severidad alta — pero JAMÁS
+ * si entra.
+ *
+ * Ninguna otra ruta debe usar esto: reabriría la sesión que el dueño acaba de cerrar.
+ */
+export async function sesionParaSincronizarCapturas(
+  cabeceras: Headers,
+): Promise<{ tipo: "ok"; acto: ActoDeCaptura } | { tipo: "rebote"; respuesta: Response }> {
+  const bd = cabeceras.get("x-flota-tenant-bd");
+  const slug = cabeceras.get("x-flota-tenant-slug");
+  if (!bd || !slug) return { tipo: "rebote", respuesta: NO_EXISTE() };
+  const pool = poolDe(bd);
+  const veredicto = await resolverSesion(pool, cabeceras.get("authorization"));
+  if (veredicto.tipo === "valida") {
+    return { tipo: "ok", acto: { pool, sesion: veredicto.sesion, slug, revocadoEn: null } };
+  }
+  if (veredicto.tipo === "invalida" && veredicto.motivo === "revocada") {
+    return {
+      tipo: "ok",
+      acto: { pool, sesion: veredicto.sesion, slug, revocadoEn: veredicto.revocadoEn },
+    };
+  }
+  return { tipo: "rebote", respuesta: NO_EXISTE() };
 }
 
 // ─── El acto: una transacción que muta y registra, o no hace ninguna de las dos ────────

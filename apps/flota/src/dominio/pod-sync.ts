@@ -1,4 +1,5 @@
 import { RELOJ } from "../../../../packages/nucleo-comun/src/constants.ts";
+import { clasificar as clasificarRevocacion, revisionDe as revisionDeRevocacion } from "./revocacion.ts";
 
 // La regla de oro del motor de sync aplicada a la captura del POD [AC-FPOD-05] — §4.2, §4.6, §0,
 // §9.3 centinela 4.
@@ -32,8 +33,23 @@ import { RELOJ } from "../../../../packages/nucleo-comun/src/constants.ts";
 // La entrega es CAPTURA: el chofer ya tocó «Entregado» y ya se fue de la parada. Un 422 acá no
 // le devuelve la parada, se la borra. Lo que corresponde es DEJAR DICHO que algo no cuadra:
 // flag + evento + fila en `review_queue`, y la captura aterriza igual.
+//
+// ─── CAPTURA DE UN APARATO REVOCADO [AC-FPOD-07] — §4.3 ─────────────────────────────
+//
+// El corte del §5.4 F-F es SECO hacia adelante (el aparato revocado no vuelve a tener sesión),
+// pero hacia atrás no se rechaza nada: lo que traía capturado de antes entra igual. Ese criterio
+// —clasificar por cuán vieja es la ventana de `REVOCACION.ventana_horas`, jamás rechazar— ya lo
+// resolvió `dominio/revocacion.ts` para AC-FIDN-09; este módulo lo REÚSA, no lo reimplementa
+// (mismo principio que el drift de reloj de arriba: dos copias del mismo corte se separan el
+// día que alguien mueve el umbral). Lo único nuevo acá es traducir su `ClaseDeCaptura` a un flag
+// más del catálogo de esta captura.
 
-export const FLAGS_DE_CAPTURA_POD = ["modulo_apagado", "reloj_desfasado"] as const;
+export const FLAGS_DE_CAPTURA_POD = [
+  "modulo_apagado",
+  "reloj_desfasado",
+  "post_revocacion",
+  "post_revocacion_tardia",
+] as const;
 export type FlagDeCapturaPod = (typeof FLAGS_DE_CAPTURA_POD)[number];
 
 export type CapturaPod = {
@@ -46,6 +62,11 @@ export type CapturaPod = {
    *  acción humana con motivo, y leer la ausencia como «apagado» llenaría «Por revisar» de ruido
    *  desde el primer día de cada tenant. */
   moduloEncendido: boolean;
+  /** Cuándo se revocó el aparato que mandó esta captura; `null` si sigue vigente [AC-FPOD-07].
+   *  La sesión que resuelve esta captura NO es "válida" en ese caso —`sesionParaSincronizar
+   *  Capturas` la deja pasar igual, a diferencia de cualquier otra ruta— así que este es el
+   *  único dato de la revocación que le llega a este módulo. */
+  revocadoEn: Date | null;
 };
 
 /** Milisegundos de desfase tolerado entre el reloj del aparato y el del servidor (§0). */
@@ -69,7 +90,38 @@ export function clasificarCapturaPod(captura: CapturaPod): FlagDeCapturaPod[] {
   const desfase = Math.abs(captura.recibidaEn.getTime() - captura.tsDispositivo.getTime());
   if (desfase > TOLERANCIA_DE_RELOJ_MS) flags.push("reloj_desfasado");
 
+  // El reloj del SERVIDOR mide la ventana (§4.3), no el del aparato: es el único de los dos que
+  // no se puede correr cambiando la hora del teléfono [AC-FPOD-07].
+  const claseDeRevocacion = clasificarRevocacion(captura.revocadoEn, captura.recibidaEn);
+  if (claseDeRevocacion === "post_revocacion" || claseDeRevocacion === "post_revocacion_tardia") {
+    flags.push(claseDeRevocacion);
+  }
+
   return flags;
+}
+
+/**
+ * ¿Esta bandera deja rastro —evento + fila en «Por revisar»— o se queda solo como flag visible
+ * en el acuse? Todas menos `post_revocacion` [AC-FPOD-07, §4.3]: la que llega DENTRO de la
+ * ventana de `REVOCACION.ventana_horas` se explica por falta de señal, y `revisionDe` (AC-FIDN-
+ * 09) ya decidió que esa NO abre revisión — abrir una por cada aparato que pasó la noche sin
+ * cobertura ahogaría la fila tardía, que es la que de verdad importa mirar.
+ */
+export function dejaRastro(flag: FlagDeCapturaPod): flag is Exclude<FlagDeCapturaPod, "post_revocacion"> {
+  return flag !== "post_revocacion";
+}
+
+/**
+ * Severidad de revisión por bandera. Todas entran con `SEVERIDAD_DE_CAPTURA_POD` salvo la
+ * revocación tardía, que el §4.3 sube a `alta` — la misma severidad que decide `revisionDe`
+ * (AC-FIDN-09): un aparato dado de baja que sigue sincronizando tres días después ya no se
+ * explica por el terreno [AC-FPOD-07].
+ */
+export function severidadDeFlag(flag: FlagDeCapturaPod): string {
+  if (flag === "post_revocacion_tardia") {
+    return revisionDeRevocacion("post_revocacion_tardia")!.severidad;
+  }
+  return SEVERIDAD_DE_CAPTURA_POD;
 }
 
 /**
