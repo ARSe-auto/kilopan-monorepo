@@ -36,6 +36,8 @@ import { guardarOutbox, leerOutbox, type Identidad } from "../../cliente/outbox-
 import { identidadDelAparato } from "../../cliente/identidad.ts";
 import { vaciarOutboxAjeno } from "../../cliente/outbox-multiusuario.ts";
 import { siguienteSecuenciaDispositivo } from "../../cliente/secuencia-dispositivo.ts";
+import { capturarFoto } from "../../cliente/camara.ts";
+import { capturarGps } from "../../cliente/gps.ts";
 
 // La tarjeta de la parada de entrega (F4) [AC-FRUT-22, AC-FPOD-01] — KR-29, §4.2, §5.2 F4,
 // §5.3, §4.7, §7.6.
@@ -124,6 +126,11 @@ export default function TarjetaDeEntrega({
   const [encuadreCapturado, setEncuadreCapturado] = useState(false);
   // Los `stop_requirement` de esta parada que ya se cumplieron (§4.6).
   const [evidencias, setEvidencias] = useState<EvidenciaCapturada[]>([]);
+  // GPS denegado [AC-FPOD-12] (§7.6): el aviso visible al operario, y el candado que evita
+  // volver a pedirle el permiso al navegador una vez que ya sabemos que lo negó — el mismo
+  // motivo por el que la ventana de undo no reintenta un guardado que ya sabe que va a fallar.
+  const [gpsDenegado, setGpsDenegado] = useState(false);
+  const gpsPermisoDenegadoRef = useRef(false);
 
   function volverAElegir() {
     setModo("elegir");
@@ -150,7 +157,31 @@ export default function TarjetaDeEntrega({
     setMotivoNoEntrega(null);
     setEncuadreCapturado(false);
     setEvidencias([]);
+    setGpsDenegado(false);
   }, [paradaId]);
+
+  // ─── LA LECTURA PUNTUAL DE GPS AL LLEGAR [AC-FPOD-12] (§7.6, §3.E1.15) ────────────
+  //
+  // Una sola lectura por parada, disparada por el mismo toque de «Llegué» — nunca seguimiento
+  // continuo (la minimización del §3.E1.15 es sobre ESO, no sobre una lectura suelta). Si el
+  // operario ya negó el permiso una vez, no se lo vuelve a pedir (el navegador lo negaría
+  // igual) y el aviso se repone directo desde el candado.
+  useEffect(() => {
+    if (!recorrido.llegada || parada === null) return;
+    if (gpsPermisoDenegadoRef.current) {
+      setGpsDenegado(true);
+      return;
+    }
+    let vivo = true;
+    void capturarGps().then((resultado) => {
+      if (!vivo) return;
+      if (resultado.motivo === "permiso_denegado") gpsPermisoDenegadoRef.current = true;
+      setGpsDenegado(resultado.avisar);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [paradaId, recorrido.llegada]);
 
   // ─── EL REPLAY, SIN QUE EL CHOFER TOQUE NADA [AC-FPOD-03] ────────────────────────
   //
@@ -303,7 +334,11 @@ export default function TarjetaDeEntrega({
   // decide qué se pide es la fila de `stop_requirement`, jamás el vertical del tenant (§4.6).
   const pendientes = parada === null ? [] : requisitosPendientes(parada, evidencias);
 
-  function capturarEvidencia(requisitoId: string, tipo: TipoDeEvidencia) {
+  // Cámara denegada ⇒ el requisito `foto` se cumple igual, sin foto y con flag — jamás
+  // bloquea el cierre de la parada [AC-FPOD-12] (§7.6, §3.E1.7). `capturarFoto` nunca lanza:
+  // resuelve el permiso, no el binario (eso es AC-FPOD-19).
+  async function capturarEvidencia(requisitoId: string, tipo: TipoDeEvidencia) {
+    if (tipo === "foto") await capturarFoto();
     setEvidencias((previas) => [...previas, { requisitoId, tipo }]);
   }
 
@@ -400,6 +435,16 @@ export default function TarjetaDeEntrega({
               {enCola}
             </span>{" "}
             {enCola === 1 ? "entrega esperando señal" : "entregas esperando señal"}
+          </p>
+        </section>
+      )}
+
+      {/* GPS denegado [AC-FPOD-12] (§7.6): aviso visible, cero modal — lo bloqueado es SOLO la
+          coordenada, jamás el cierre de la parada ni su sync. */}
+      {gpsDenegado && (
+        <section data-testid="aviso-gps-denegado" style={banda}>
+          <p style={{ ...cuerpo, margin: 0 }}>
+            Sin ubicación — permiso de GPS denegado. La entrega se sigue guardando igual.
           </p>
         </section>
       )}
