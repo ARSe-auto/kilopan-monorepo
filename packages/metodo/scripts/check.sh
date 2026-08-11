@@ -40,6 +40,7 @@ LOG_FILE="$LOG_DIR/ultimo-check.log"
 PASSED=()
 FAILED=()
 SKIPPED=()
+NO_APLICA=()
 
 run_step () {
   local name="$1"; shift
@@ -56,6 +57,21 @@ run_step () {
 skip_step () {
   echo "== $1 == (SALTADO: $2)" | tee -a "$LOG_FILE"
   SKIPPED+=("$1 ($2)")
+}
+
+# Un paso que NO APLICA a esta app no es lo mismo que un paso que no se probó, y confundirlos
+# tenía una consecuencia concreta: el marcador de verde exige cero saltados, y el gate de FLOTA
+# salta SIEMPRE los invariantes de BD —son de KiloPan; los suyos corren en db/flota/gate.sh y sí
+# se ejecutan—. O sea que el gate de FLOTA podía correr verde entero y NUNCA estampar su
+# marcador, y como la publicación automática lo exige para tocar el remoto, el trabajo del motor
+# se quedaba local para siempre. Descubierto el 11-ago-2026, con el marcador dos días atrasado.
+#
+# Se sigue listando como SALTADO en el resumen —esconderlo sería peor—, pero no bloquea el
+# marcador: lo que ese paso verifica, en esta app, lo verifica otro que sí corrió.
+no_aplica () {
+  echo "== $1 == (NO APLICA: $2)" | tee -a "$LOG_FILE"
+  SKIPPED+=("$1 ($2)")
+  NO_APLICA+=("$1")
 }
 
 # Casilla 5 del prevuelo: infra caída NO es árbol rojo. Un gate que devuelve el mismo
@@ -190,7 +206,7 @@ if [ "$FULL" -eq 1 ]; then
   # como paso propio: un verde que no dice nada de FLOTA y un rojo que tampoco sería suyo.
   # Los invariantes de FLOTA viven en su `db/flota/gate.sh` (cluster real, §4.1).
   if [ "$APP" != "kilopan" ]; then
-    skip_step "invariantes de BD" "son de KiloPan; los de $APP corren en db/$APP/gate.sh"
+    no_aplica "invariantes de BD" "son de KiloPan; los de $APP corren en db/$APP/gate.sh"
   elif [ -f db/migraciones/0001_identidad.sql ]; then
     run_step "invariantes de BD (violar cada CHECK/trigger y esperar rebote)" \
       node db/test-invariantes.mjs
@@ -222,7 +238,10 @@ echo "verde" > "$LOG_DIR/ultimo-check.estado"
 # agente. Solo el gate COMPLETO estampa el verde — un --fast en verde no acredita nada,
 # porque se saltó e2e e invariantes. El watchdog compara este tag contra HEAD para saber
 # si hubo progreso real desde el último verde de verdad.
-if [ "$FULL" -eq 1 ] && [ "${#SKIPPED[@]}" -eq 0 ]; then
+# Cuentan solo los saltados REALES: los que no aplican a esta app ya se verificaron en otro
+# paso que sí corrió, y exigirlos acá dejaba a FLOTA sin poder estampar nunca su verde.
+SALTADOS_REALES=$(( ${#SKIPPED[@]} - ${#NO_APLICA[@]} ))
+if [ "$FULL" -eq 1 ] && [ "$SALTADOS_REALES" -eq 0 ]; then
   TAG="verde-$(date +%Y%m%d-%H%M%S)"
   git tag -f "$TAG" >/dev/null 2>&1 && printf '%s\n' "$TAG" > "$LOG_DIR/last-green.tag"
   printf '%s\n' "$(git rev-parse HEAD 2>/dev/null)" > "$LOG_DIR/last-green.sha"
