@@ -52,8 +52,15 @@ mkdir -p "$PANEL"
 # «command not found» en la línea siguiente al arranque— y no hace falta. Al terminar este
 # script su hijo queda huérfano, lo adopta launchd como init, y `nohup` lo blinda del SIGHUP
 # que manda la terminal al cerrarse. Sobrevive a la sesión que lo lanzó, que es lo que importa.
+# El umbral de stashes (10-ago-2026). El loop pausa al pasar de `KILOPAN_MAX_STASHES` porque una
+# pila que crece sin parar suele significar que algo deja WIP en cada vuelta — y eso es cierto.
+# Pero los stashes JAMÁS se borran (son trabajo real que alguien puede necesitar), así que la pila
+# solo sube. Acá se archivaron los once que había como ramas `wip/motor-wip-*`, donde el contenido
+# queda recuperable con `git checkout`, y el tope se levanta para que el freno vuelva a significar
+# lo que dice: «está pasando algo raro AHORA», y no «este árbol ya tiene historia».
 CLAUDE_CODE_OAUTH_TOKEN="$(cat "$TOKEN_FILE")" \
 KILOPAN_APP=flota \
+KILOPAN_MAX_STASHES=40 \
 PATH="$HOME/.local/lib/nodejs/current/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" \
   nohup bash packages/metodo/scripts/watchdog.sh >> "$LOG" 2>&1 &
 
