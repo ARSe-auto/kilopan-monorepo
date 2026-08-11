@@ -885,21 +885,15 @@
       }
     },
     {
-      "ruta": "/ruta/[id]/cerrar",
-      "archivo": "src/app/ruta/[id]/cerrar/page.tsx",
+      "ruta": "/ruta/cerrar",
+      "archivo": "src/app/ruta/cerrar/page.tsx",
       "metodos": [
         "GET"
       ],
-      "params": [
-        "id"
-      ],
+      "params": [],
       "cruce": {
-        "tipo": "recurso",
-        "ids_de_b": {
-          "tabla": "rutas",
-          "columna": "id"
-        },
-        "nota": "Pantalla de cierre de ruta [AC-FRUT-11]. Recibe el identificador por URL, así que el caso del centinela 2 le pide a A la ruta de B: 404 y cuerpo sin una sola cadena del vecino — ni el nombre de la ruta, ni sus destinos, ni las razones sociales de las empresas que le cargan, que son exactamente los datos que un competidor querría."
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de cierre de ruta [AC-FRUT-11]. NO recibe el identificador como segmento de la URL, y esa es una decisión del centinela 2 y no de estilo: el App Router serializa el árbol de segmentos —con el valor concreto del parámetro— dentro del HTML que sirve, incluso cuando la pantalla muere en 404, así que una ruta `/ruta/<id>/cerrar` devolvería ese id en su cuerpo pase lo que pase. La ruta a cerrar viaja en la consulta y el tenant sale del ruteo por host; el caso que aplica es el genérico —identidad de B por los canales falsificables— y acá pesa porque el HTML servido no puede traer ni el slug ni la base del vecino. Sin `?ruta=` que exista en la base de la casa, la pantalla contesta 404 antes de pintar un título; la mitad «recurso» del centinela la ejerce `/api/rutas/[id]/cierre`, que es por donde salen los datos y donde el identificador sí viaja."
       }
     },
     {

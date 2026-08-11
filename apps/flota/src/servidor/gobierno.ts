@@ -116,6 +116,11 @@ export const EVENTOS_OPERACION = {
   custodia_reloj_desfasado: "custodia.reloj_desfasado",
   custodia_modulo_apagado: "custodia.modulo_apagado",
   custodia_sha256_mismatch: "custodia.sha256_mismatch",
+  // El cierre de la ruta y su ecuación por empresa [AC-FRUT-11]. El descuadrado lleva código
+  // propio porque es lo que alimenta la señal Caja/custodia del semáforo (Anexo B): contarlo
+  // desde un evento genérico obligaría a abrir el jsonb de cada cierre del mes.
+  cierre_ruta_cerrada: "cierre.ruta_cerrada",
+  cierre_descuadrado: "cierre.descuadrado",
 } as const;
 
 /** Todo código que `registrarEvento` acepta tiene que estar sembrado en `evento_tipo`: si los

@@ -156,7 +156,12 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 - [x] (P1) DTE gate: sin `reference_document` no queda a bordo; vía «bajar del manifiesto» explícita con evento; única modal permitida; grep cero emisión de DTE — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-08]
 - [x] (P1) Custodia íntegra: firmas por rol + custody_transfer; doble firma o UNA si misma persona; UPDATE/DELETE ⇒ 42501; supersede ⇒ 2 filas (centinelas 6 y 12) — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-09]
 - [x] (P1) La captura de custodia JAMÁS rebota: válida ⇒ 2xx limpia; degradadas (manifiesto incompleto, sin DTE, drift, módulo apagado, sha256 mismatch) ⇒ 2xx + flag + cola; DTE repetido liga sin violar UNIQUE — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-10]
-- [ ] (P1) Ecuación de cierre por empresa vía SECURITY DEFINER (cargado = entregado + devuelto + faltante); no cierra descuadrada en cliente; por sync degrada; chofer sin CLP — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-11]
+- [x] (P1) Ecuación de cierre por empresa vía SECURITY DEFINER (cargado = entregado + devuelto + faltante); no cierra descuadrada en cliente; por sync degrada; chofer sin CLP — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-11]
+      Probado: unit sobre los mutantes de la ecuación y de la clasificación táctil
+      (`src/dominio/cierre.test.ts`) + e2e `e2e/cierre-ruta.spec.ts` en verde — la ruta
+      descuadrada no ofrece «Cerrar la ruta» y un toque la cuadra escribiendo `devuelto`;
+      el cierre sin clasificar llegado por la API entra 201 con flag, evento y «Por
+      revisar», y el replay no duplica ni fila ni aviso; la pantalla no muestra un CLP.
 - [x] (P1) Aislamiento del módulo: IDs de B ⇒ 404 sin centinelas y BD intacta (centinela 2); cliente de X ⇒ 0 filas de Y (centinela 3) — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-12]
 - [x] (P1) Motivos por tenant sembrados de `vertical_template.motivos[]`: se apagan jamás DELETE; históricos intactos; require_notes exigido en cliente — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-13]
 - [x] (P1) `empresas_cliente` con la implícita creada por trigger en mi_flota (UI contraída); conmutación de modo conserva TODO con la implícita intacta (centinela 11) — spec: specs/flota/03-encargos-rutas-custodia.md [AC-FRUT-14]
