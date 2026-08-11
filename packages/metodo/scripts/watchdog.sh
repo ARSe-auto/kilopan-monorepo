@@ -167,7 +167,21 @@ while [ "$i" -lt "$MAX_ITERACIONES" ]; do
       # el HEAD que el gate independiente acaba de declarar verde (ver empujar-si-verde.sh).
       # Un push fallido (red caída, remoto adelantado) se registra y NO frena el motor:
       # es infraestructura, no un veredicto sobre el código.
-      bash packages/metodo/scripts/empujar-si-verde.sh 2>&1 | tee -a "$LOG" || \
+      # Dos publicadores, uno por forma de trabajo, y el que corre depende de la rama:
+      #
+      #   · en `main` → `empujar-si-verde.sh`, que empuja directo.
+      #   · en una rama de trabajo → `publicar-pr.sh`, que empuja Y abre o actualiza su PR.
+      #
+      # Sin el segundo, el motor de una rama construía toda la noche y el trabajo se quedaba
+      # local: `empujar-si-verde.sh` se niega a empujar cualquier cosa que no sea `main`, con
+      # razón, pero eso dejaba la cadena cortada justo al final. Los dos exigen lo mismo antes
+      # de tocar el remoto —`last-green.sha` apuntando al HEAD—, así que la garantía es la misma.
+      if [ "$(git rev-parse --abbrev-ref HEAD)" = "main" ]; then
+        PUBLICADOR="packages/metodo/scripts/empujar-si-verde.sh"
+      else
+        PUBLICADOR="packages/metodo/scripts/publicar-pr.sh"
+      fi
+      bash "$PUBLICADOR" --app="$APP" 2>&1 | tee -a "$LOG" || \
         echo "watchdog: el push no salió; sigo construyendo, queda para la próxima vuelta." | tee -a "$LOG"
       ;;
     10)
