@@ -1,6 +1,11 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { enActo, registrarEvento, EVENTOS_OPERACION, esUuid } from "./gobierno.ts";
 import type { Sesion } from "./sesion.ts";
+import {
+  clasificarCapturaPod,
+  SEVERIDAD_DE_CAPTURA_POD,
+  type FlagDeCapturaPod,
+} from "../dominio/pod-sync.ts";
 
 // El aterrizaje de las capturas del POD que trae el replay del outbox [AC-FPOD-03] — §4.2
 // (regla de oro), §4.6 (eventos append-only, doble reloj, `client_uuid`), §5.2 F4, §3.E1.7.
@@ -77,7 +82,44 @@ export function capturaBienFormada(c: Partial<CapturaEntrante>): boolean {
  * capturas de paradas distintas y de horas distintas, y una que falle no puede llevarse las que
  * ya estaban bien — pero tampoco pueden aterrizar a medias, porque lo que el aparato borra de su
  * cola es lo que este acuse le confirma.
+ *
+ * ─── LA REGLA DE ORO, CON RELOJ [AC-FPOD-05] ────────────────────────────────────────
+ *
+ * Después de aterrizar el hecho se clasifica el desfase de reloj (`dominio/pod-sync.ts`): si el
+ * `ts_dispositivo` que trajo la captura se aleja de `record_time` más de `RELOJ.drift_max_
+ * minutos` (§0), se deja dicho con un evento `entrega.reloj_desfasado` y una fila en
+ * `review_queue` — la captura YA aterrizó, nada de esto la rebota ni la deshace (centinela 4
+ * §9.3: rechazos = 0). Solo se clasifica en la primera llegada: un replay que ve `previo[0]`
+ * se va por el `continue` de arriba y no repite el flag.
  */
+
+const EVENTO_DE_FLAG: Record<FlagDeCapturaPod, (typeof EVENTOS_OPERACION)[keyof typeof EVENTOS_OPERACION]> = {
+  reloj_desfasado: EVENTOS_OPERACION.entrega_reloj_desfasado,
+};
+
+/** Deja dicho que la captura entró degradada: un evento y una fila de «Por revisar» POR FLAG
+ *  (§5.6 se lee por origen; una fila genérica obligaría a abrir el jsonb de cada una). La
+ *  captura YA aterrizó en `eventos` — esto nunca la rebota ni la deshace [AC-FPOD-05]. */
+async function dejarDichoQueDegrado(
+  c: PoolClient,
+  datos: { flags: readonly FlagDeCapturaPod[]; paradaId: string; sesion: Sesion; nota: string },
+): Promise<void> {
+  for (const flag of datos.flags) {
+    await registrarEvento(c, {
+      codigo: EVENTO_DE_FLAG[flag],
+      objetoTabla: "paradas",
+      objetoId: datos.paradaId,
+      sesion: datos.sesion,
+      payload: { flag },
+    });
+    await c.query("insert into review_queue (origen, severidad, nota) values ($1, $2, $3)", [
+      `entrega.${flag}`,
+      SEVERIDAD_DE_CAPTURA_POD,
+      datos.nota,
+    ]);
+  }
+}
+
 export async function aterrizarCapturas(
   pool: Pool,
   sesion: Sesion,
@@ -121,6 +163,17 @@ export async function aterrizarCapturas(
             evidencias: captura.evidencias ?? [],
           },
         });
+
+        const flags = clasificarCapturaPod({ tsDispositivo: captura.tsDispositivo, recibidaEn: new Date() });
+        if (flags.length > 0) {
+          await dejarDichoQueDegrado(c, {
+            flags,
+            paradaId: captura.paradaId,
+            sesion,
+            nota: `Captura de POD para la parada ${captura.paradaId} con el reloj del aparato fuera de tolerancia`,
+          });
+        }
+
         acuses.push({ client_uuid: captura.clientUuid, aceptada: true, repetida: false });
       }
       return acuses;

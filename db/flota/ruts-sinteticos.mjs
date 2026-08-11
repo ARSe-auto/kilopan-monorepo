@@ -35,6 +35,7 @@ export const VALIDOS = {
   "8.765.432-K": "el chofer de las variantes cerradas de F4 (AC-FPOD-02), propio y no prestado: mismo motivo que el de arriba — un dispositivo personal por operario — así que esta suite necesita el suyo, no el de AC-FPOD-01",
   "4.444.444-5": "el chofer del POD sin red (AC-FPOD-03), propio y no prestado: tercera suite de F4, tercer operario — la regla de un dispositivo personal por persona no admite compartirlo con las dos de arriba",
   "3.333.333-1": "el chofer de la idempotencia del outbox (AC-FPOD-04), propio y no prestado: cuarta suite de F4, cuarto operario — mismo motivo que los tres de arriba",
+  "2.222.222-8": "el chofer de la regla de oro con reloj corrido (AC-FPOD-05), propio y no prestado: quinta suite de F4, quinto operario — mismo motivo que los cuatro de arriba",
 };
 
 /**

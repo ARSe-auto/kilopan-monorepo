@@ -130,6 +130,9 @@ export const EVENTOS_OPERACION = {
   // solo para las cuatro variantes de F4: el resultado y el método de entrega son atributos del
   // mismo hecho —la parada se cerró—, no hechos distintos (§4.5, §5.2 F4).
   entrega_pod_capturada: "entrega.pod_capturada",
+  // La regla de oro aplicada al reloj de la captura de POD [AC-FPOD-05]: la entrega aterriza
+  // igual y este flag deja dicho que el aparato traía la hora corrida (§0, §4.6).
+  entrega_reloj_desfasado: "entrega.reloj_desfasado",
 } as const;
 
 /** Todo código que `registrarEvento` acepta tiene que estar sembrado en `evento_tipo`: si los
