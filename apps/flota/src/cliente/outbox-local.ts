@@ -1,6 +1,7 @@
 import type { CapturaDeEntrega } from "../dominio/pod-terreno.ts";
 
-// El outbox DURABLE del aparato [AC-FPOD-08] — §4.7.
+// El outbox DURABLE del aparato [AC-FPOD-08], particionado por (tenant, usuario) [AC-FPOD-09] —
+// §4.7.
 //
 // ─── POR QUÉ ESTO EXISTE COMO ARCHIVO APARTE ──────────────────────────────────────
 //
@@ -9,13 +10,26 @@ import type { CapturaDeEntrega } from "../dominio/pod-terreno.ts";
 // §4.7 sin navegador y, al mismo tiempo, que el guardado se ejerza de verdad en el e2e con un
 // cierre de app real.
 //
+// ─── LA PARTICIÓN ES LA LLAVE, NO UN CAMPO DENTRO DEL VALOR [AC-FPOD-09] ──────────
+//
+// El §4.7 es literal: «autenticarse otra identidad en el mismo dispositivo purga SOLO el
+// snapshot». Antes de este AC la llave era UNA constante compartida por todo el aparato: si un
+// segundo operario se autenticaba en el mismo teléfono —el `dispositivo tipo anden` compartido,
+// o un teléfono personal que cambia de dueño sin que alguien lo borre— su outbox pisaba el mismo
+// `localStorage.setItem`, y las capturas de A que todavía esperaban replay se leían de vuelta
+// como si fueran de B (o directamente se perdían bajo el `setItem` del primer guardado de B).
+// Particionar por `(tenant, usuario)` en la LLAVE —no en un campo `tenant`/`usuario` dentro del
+// array guardado— es lo que hace que dos identidades JAMÁS puedan pisarse: son dos entradas de
+// `localStorage` distintas, y nada que este módulo escriba borra la otra. «Jamás purgado» no es
+// una promesa de código que decide no borrar: es la ausencia de cualquier código que tenga la
+// llave ajena para borrar. Quién replayea lo que quedó bajo la llave de una identidad que ya no
+// es la activa es responsabilidad de `cliente/outbox-multiusuario.ts`, no de este archivo.
+//
 // ─── QUÉ NO RESUELVE ESTE AC ──────────────────────────────────────────────────────
 //
-// La partición por (tenant, usuario) y la prohibición de purgar son AC-FPOD-09; los huecos de la
-// secuencia monotónica y la evicción de IndexedDB, AC-FPOD-10. Acá el contrato es más chico y
-// entero: lo escrito ANTES de que la ventana venza sigue estando después de cerrar la app. El
-// almacén entra como parámetro —no se toca `window` desde el módulo— para que el AC que agregue
-// la partición cambie el almacén y no la semántica.
+// Los huecos de la secuencia monotónica y la evicción de IndexedDB son AC-FPOD-10. El almacén
+// entra como parámetro —no se toca `window` desde el módulo— para que el test lo ejerza sin
+// navegador.
 //
 // ─── UN DATO ILEGIBLE NO ES UNA ENTREGA ───────────────────────────────────────────
 //
@@ -25,14 +39,67 @@ import type { CapturaDeEntrega } from "../dominio/pod-terreno.ts";
 // tantas veces como reintentos haya.
 
 /** Lo mínimo del `Storage` del navegador que este outbox usa. Tipar solo eso deja que el test lo
- *  reemplace con un objeto de tres líneas y que el AC-FPOD-09 lo cambie por IndexedDB. */
+ *  reemplace con un objeto de tres líneas. */
 export type AlmacenLocal = {
   getItem(llave: string): string | null;
   setItem(llave: string, valor: string): void;
 };
 
-/** La llave del outbox del POD. El sufijo por (tenant, usuario) es AC-FPOD-09. */
-export const LLAVE_OUTBOX_POD = "flota.outbox.pod";
+/** Quién es «usuario» en la partición del §4.7 [AC-FPOD-09]. `tenant` es el origen del aparato
+ *  (cada tenant vive en su propio subdominio, así que ya viene aislado por el navegador; se
+ *  repite en la llave a propósito, para no depender solo de esa garantía implícita). `usuario`
+ *  es un identificador estable de la credencial activa —ver `cliente/identidad.ts`, que lo
+ *  deriva del secreto de sesión sin tocar la red—, NUNCA la credencial en claro: esta llave vive
+ *  en `localStorage`, que lee cualquier script de la página (mismo criterio que `cliente/
+ *  aparato.ts` para no poner el secreto ahí). */
+export type Identidad = { tenant: string; usuario: string };
+
+/** La llave del outbox del POD para UNA identidad. Dos identidades ⇒ dos llaves distintas ⇒
+ *  ningún `setItem` de una puede pisar el `getItem` de la otra [AC-FPOD-09]. */
+export function llaveOutboxPod(identidad: Identidad): string {
+  return `flota.outbox.pod.${identidad.tenant}.${identidad.usuario}`;
+}
+
+/** El índice de qué identidades tienen (o tuvieron) outbox en este aparato [AC-FPOD-09]. Sin
+ *  esto, replayar «lo de la identidad anterior» exigiría enumerar `localStorage` entero —que
+ *  `AlmacenLocal` no ofrece a propósito, para que el test siga siendo un objeto de tres líneas—
+ *  o, peor, exigiría que alguien SIGA SABIENDO cuál era la identidad anterior después de que
+ *  otra la reemplazó. El índice es la única memoria de «quién más escribió acá». */
+const LLAVE_INDICE_IDENTIDADES = "flota.outbox.identidades";
+
+function esIdentidad(x: unknown): x is Identidad {
+  if (typeof x !== "object" || x === null) return false;
+  const i = x as Partial<Identidad>;
+  return typeof i.tenant === "string" && typeof i.usuario === "string";
+}
+
+/** Todas las identidades que alguna vez guardaron outbox en este aparato, más antigua primero. */
+export function listarIdentidadesConOutbox(almacen: AlmacenLocal): Identidad[] {
+  let crudo: string | null;
+  try {
+    crudo = almacen.getItem(LLAVE_INDICE_IDENTIDADES);
+  } catch {
+    return [];
+  }
+  if (crudo === null) return [];
+  let leido: unknown;
+  try {
+    leido = JSON.parse(crudo);
+  } catch {
+    return [];
+  }
+  return Array.isArray(leido) ? leido.filter(esIdentidad) : [];
+}
+
+function registrarIdentidad(almacen: AlmacenLocal, identidad: Identidad): void {
+  const previas = listarIdentidadesConOutbox(almacen);
+  if (previas.some((i) => i.tenant === identidad.tenant && i.usuario === identidad.usuario)) return;
+  try {
+    almacen.setItem(LLAVE_INDICE_IDENTIDADES, JSON.stringify([...previas, identidad]));
+  } catch {
+    /* mismo criterio que `guardarOutbox`: un almacén lleno o negado no rebota. */
+  }
+}
 
 function esCaptura(x: unknown): x is CapturaDeEntrega {
   if (typeof x !== "object" || x === null) return false;
@@ -49,10 +116,10 @@ function esCaptura(x: unknown): x is CapturaDeEntrega {
   );
 }
 
-export function leerOutbox(almacen: AlmacenLocal): CapturaDeEntrega[] {
+export function leerOutbox(almacen: AlmacenLocal, identidad: Identidad): CapturaDeEntrega[] {
   let crudo: string | null;
   try {
-    crudo = almacen.getItem(LLAVE_OUTBOX_POD);
+    crudo = almacen.getItem(llaveOutboxPod(identidad));
   } catch {
     return [];
   }
@@ -66,13 +133,21 @@ export function leerOutbox(almacen: AlmacenLocal): CapturaDeEntrega[] {
   return Array.isArray(leido) ? leido.filter(esCaptura) : [];
 }
 
-/** Escribe el outbox entero. Se llama en el MISMO gesto que cierra la parada: el §4.7 dice
- *  «inmediatamente», y un guardado diferido es exactamente el hueco que la app que muere a los
- *  3 s aprovecha. Un almacén lleno o negado no puede tumbar la entrega en curso —el hecho ya
- *  ocurrió (§4.2)—, así que la excepción se traga y la captura sigue viva en memoria. */
-export function guardarOutbox(almacen: AlmacenLocal, outbox: readonly CapturaDeEntrega[]): void {
+/** Escribe el outbox entero DE ESTA IDENTIDAD [AC-FPOD-09]. Se llama en el MISMO gesto que
+ *  cierra la parada: el §4.7 dice «inmediatamente», y un guardado diferido es exactamente el
+ *  hueco que la app que muere a los 3 s aprovecha. Un almacén lleno o negado no puede tumbar la
+ *  entrega en curso —el hecho ya ocurrió (§4.2)—, así que la excepción se traga y la captura
+ *  sigue viva en memoria. Escribir bajo la llave particionada es lo que garantiza que este
+ *  `setItem` jamás toca el outbox de otra identidad que se haya autenticado antes en el mismo
+ *  aparato. */
+export function guardarOutbox(
+  almacen: AlmacenLocal,
+  identidad: Identidad,
+  outbox: readonly CapturaDeEntrega[],
+): void {
+  registrarIdentidad(almacen, identidad);
   try {
-    almacen.setItem(LLAVE_OUTBOX_POD, JSON.stringify(outbox));
+    almacen.setItem(llaveOutboxPod(identidad), JSON.stringify(outbox));
   } catch {
     /* `persist()` denegado o cuota llena: es telemetría de AC-FPOD-14, jamás un rebote acá. */
   }

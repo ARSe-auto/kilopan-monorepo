@@ -32,7 +32,9 @@ import {
   type TipoDeEvidencia,
 } from "../../dominio/pod-terreno.ts";
 import { colaAlArrancar, deshacerCaptura, outboxDeRecorrido } from "../../dominio/outbox-undo.ts";
-import { guardarOutbox, leerOutbox } from "../../cliente/outbox-local.ts";
+import { guardarOutbox, leerOutbox, type Identidad } from "../../cliente/outbox-local.ts";
+import { identidadDelAparato } from "../../cliente/identidad.ts";
+import { vaciarOutboxAjeno } from "../../cliente/outbox-multiusuario.ts";
 
 // La tarjeta de la parada de entrega (F4) [AC-FRUT-22, AC-FPOD-01] — KR-29, §4.2, §5.2 F4,
 // §5.3, §4.7, §7.6.
@@ -208,12 +210,31 @@ export default function TarjetaDeEntrega({
   // En un efecto y no en el inicializador de `useState` porque este componente se renderiza
   // también en el servidor: leer el disco ahí es un `window` que no existe, y sembrarlo solo en
   // el cliente desalinearía la hidratación de la sección «por sincronizar».
+  //
+  // ─── LA IDENTIDAD SE RESUELVE ANTES DE TOCAR EL DISCO [AC-FPOD-09] ────────────────
+  //
+  // El outbox vive particionado por (tenant, usuario) —§4.7—: leer o escribir sin saber de QUIÉN
+  // es la partición volvería a la llave única que este AC elimina. `identidadDelAparato()` no
+  // pega a la red (deriva del secreto que ya está en IndexedDB), así que resuelve offline igual
+  // que el resto de este efecto.
+  const [identidad, setIdentidad] = useState<Identidad | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    void identidadDelAparato().then((resuelta) => {
+      if (vivo) setIdentidad(resuelta);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
   const [outboxCargado, setOutboxCargado] = useState(false);
   useEffect(() => {
-    const guardado = colaAlArrancar(leerOutbox(window.localStorage));
+    if (identidad === null) return;
+    const guardado = colaAlArrancar(leerOutbox(window.localStorage, identidad));
     setRecorrido((r) => (guardado.length === 0 ? r : { ...r, cola: [...guardado, ...r.cola] }));
     setOutboxCargado(true);
-  }, []);
+  }, [identidad]);
 
   // Y se escribe INMEDIATAMENTE, no al vencer la ventana (§4.7). Este efecto corre en el commit
   // del mismo toque que cerró la parada, así que la captura queda en el aparato con su
@@ -221,11 +242,33 @@ export default function TarjetaDeEntrega({
   // el hueco por el que se pierde la entrega cuando el teléfono se apaga a los 3.
   //
   // Salvo antes de que el disco se haya leído: guardar la cola vacía del primer render borraría
-  // justo lo que el efecto de arriba está por recuperar.
+  // justo lo que el efecto de arriba está por recuperar. Escribe bajo la llave de LA identidad
+  // resuelta — jamás la de otra que haya usado antes este mismo aparato (§4.7) [AC-FPOD-09].
   useEffect(() => {
-    if (!outboxCargado) return;
-    guardarOutbox(window.localStorage, outboxDeRecorrido(recorrido));
-  }, [outboxCargado, recorrido.captura, recorrido.cola]);
+    if (!outboxCargado || identidad === null) return;
+    guardarOutbox(window.localStorage, identidad, outboxDeRecorrido(recorrido));
+  }, [outboxCargado, identidad, recorrido.captura, recorrido.cola]);
+
+  // ─── LO QUE OTRA IDENTIDAD DEJÓ ESPERANDO EN ESTE MISMO APARATO [AC-FPOD-09] ──────
+  //
+  // Si A capturó offline y después B se autenticó en este teléfono, el outbox de A sigue en el
+  // disco bajo SU partición (`outbox-local.ts` ya lo protege de que B lo pise) — pero nadie más
+  // que este efecto lo va a mandar, porque la cola visible de la pantalla es la de B. Corre en
+  // los mismos dos disparos que el replay de arriba (al montar y al volver la señal) y en
+  // silencio: el operario actual jamás se entera de que el aparato también vació una cola ajena.
+  useEffect(() => {
+    if (identidad === null) return;
+    // Ninguna de las dos llamadas toca `setState`: no hay nada que desmontar en carrera, a
+    // diferencia del replay de la cola visible de arriba.
+    function vaciarAjeno() {
+      void vaciarOutboxAjeno(window.localStorage, identidad, (cuerpo) =>
+        pedir("/api/sync/capturas", { method: "POST", body: cuerpo }),
+      );
+    }
+    vaciarAjeno();
+    window.addEventListener("online", vaciarAjeno);
+    return () => window.removeEventListener("online", vaciarAjeno);
+  }, [identidad]);
 
   /**
    * El toque de «Deshacer», con la rama que corresponde al estado REAL de la captura

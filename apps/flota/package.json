@@ -12,7 +12,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "//test": "El guardián del manifiesto de rutas corre ANTES que sus propios mutantes y en el gate RÁPIDO, no solo en --full: una ruta que entra sin caso de cruce tiene que frenarse en la iteración en que se escribió, no diez minutos después. La suite HTTP que sale del manifiesto corre en `e2e` (AC-FTEN-26).",
-    "test": "node rutas/generar.mjs && node --test rutas/*.test.mjs src/dominio/*.test.ts",
+    "test": "node rutas/generar.mjs && node --test rutas/*.test.mjs src/dominio/*.test.ts src/cliente/*.test.ts",
     "e2e": "playwright test"
   },
   "dependencies": {

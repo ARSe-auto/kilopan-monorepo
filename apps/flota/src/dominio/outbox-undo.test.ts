@@ -1,7 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { colaAlArrancar, deshacerCaptura, outboxDeRecorrido } from "./outbox-undo.ts";
-import { leerOutbox, guardarOutbox, type AlmacenLocal } from "../cliente/outbox-local.ts";
+import {
+  leerOutbox,
+  guardarOutbox,
+  llaveOutboxPod,
+  type AlmacenLocal,
+  type Identidad,
+} from "../cliente/outbox-local.ts";
 import {
   iniciarRecorrido,
   llegar,
@@ -37,6 +43,11 @@ function paradas(n: number): ParadaDeRuta[] {
 function sello(uuid: string) {
   return { clientUuid: uuid, tsDispositivo: "2026-08-11T12:00:00.000Z", tzOffsetMin: -240 };
 }
+
+/** Este AC (-08) no prueba la partición en sí —eso es `cliente/outbox-local.test.ts`
+ *  [AC-FPOD-09]—, así que toda llamada de este archivo usa la MISMA identidad: lo que se
+ *  ejercita acá es la durabilidad del outbox, no de quién es. */
+const IDENTIDAD: Identidad = { tenant: "hechos.localhost", usuario: "quien-se-arrepiente" };
 
 /** Un `Storage` de tres líneas: lo que este AC prueba es la durabilidad, no el navegador. */
 function almacen(): AlmacenLocal & { crudo(): string | null } {
@@ -78,9 +89,9 @@ test("[AC-FPOD-08] la app muere a los 3 s: al reabrir la captura existe y queda 
   const r = entregar(llegar(iniciarRecorrido(paradas(3))), sello("uuid-1"));
   // El efecto de la pantalla, sin la pantalla: se guarda en el mismo gesto. Y acá la app muere —
   // nadie llama a `cerrarLaVentana`, porque el temporizador de los 8 s se fue con el proceso.
-  guardarOutbox(disco, outboxDeRecorrido(r));
+  guardarOutbox(disco, IDENTIDAD, outboxDeRecorrido(r));
 
-  const alAbrir = colaAlArrancar(leerOutbox(disco));
+  const alAbrir = colaAlArrancar(leerOutbox(disco, IDENTIDAD));
   assert.equal(alAbrir.length, 1, "la mutación EXISTE al reabrir: no se perdió con el proceso");
   assert.equal(alAbrir[0]!.clientUuid, "uuid-1");
   assert.equal(
@@ -140,18 +151,22 @@ test("[AC-FPOD-08] el supersede se hace sobre la ÚLTIMA captura sin corregir, n
 
 test("[AC-FPOD-08] un outbox guardado ilegible no se replayea como si fueran entregas", () => {
   const disco = almacen();
-  disco.setItem("flota.outbox.pod", '[{"clientUuid":"a"},"basura",null]');
-  assert.deepEqual(leerOutbox(disco), [], "una captura sin doble reloj ni estado no tiene llave con la que replayar");
+  disco.setItem(llaveOutboxPod(IDENTIDAD), '[{"clientUuid":"a"},"basura",null]');
+  assert.deepEqual(
+    leerOutbox(disco, IDENTIDAD),
+    [],
+    "una captura sin doble reloj ni estado no tiene llave con la que replayar",
+  );
 
-  disco.setItem("flota.outbox.pod", "{no es json");
-  assert.deepEqual(leerOutbox(disco), []);
+  disco.setItem(llaveOutboxPod(IDENTIDAD), "{no es json");
+  assert.deepEqual(leerOutbox(disco, IDENTIDAD), []);
 });
 
 test("[AC-FPOD-08] el ida y vuelta por el disco conserva la captura entera", () => {
   const disco = almacen();
   const r = entregar(llegar(iniciarRecorrido(paradas(3))), sello("uuid-1"));
-  guardarOutbox(disco, outboxDeRecorrido(r));
+  guardarOutbox(disco, IDENTIDAD, outboxDeRecorrido(r));
 
-  const [leida] = leerOutbox(disco);
+  const [leida] = leerOutbox(disco, IDENTIDAD);
   assert.deepEqual(leida, outboxDeRecorrido(r)[0]);
 });
