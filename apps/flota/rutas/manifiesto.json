@@ -472,6 +472,24 @@
       }
     },
     {
+      "ruta": "/api/manifiestos/[id]/foto",
+      "archivo": "src/app/api/manifiestos/[id]/foto/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "manifiestos",
+          "columna": "id"
+        },
+        "nota": "El binario de la foto del sub-manifiesto de B desde una sesión de A [AC-FRUT-10]: 404 y la BD de B sin cambios. Escribe `evidence` APPEND-ONLY colgada de su manifiesto, con un sha256 write-once — una foto ajena pegada a su carga queda como constancia de cómo llegó esa mercadería y no se puede borrar. El manifiesto de B tiene que ser REAL, porque contra un uuid inventado el 404 no distingue al handler que mira el tenant primero del que no."
+      }
+    },
+    {
       "ruta": "/api/motivos",
       "archivo": "src/app/api/motivos/route.ts",
       "metodos": [

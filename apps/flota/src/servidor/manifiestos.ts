@@ -1,7 +1,14 @@
-import type { Pool } from "pg";
+import { createHash } from "node:crypto";
+import type { Pool, PoolClient } from "pg";
 import { enActo, enLectura, registrarEvento, EVENTOS_OPERACION } from "./gobierno.ts";
 import { firmarConPin } from "./firmas.ts";
 import type { Sesion } from "./sesion.ts";
+import { versionVigente, estadoDeFeature, FEATURES } from "./config.ts";
+import {
+  clasificarCustodia,
+  SEVERIDAD_DE_CUSTODIA,
+  type FlagDeCustodia,
+} from "../dominio/custodia.ts";
 
 // El sub-manifiesto del andén [AC-FRUT-07] — §5.2 F2, §4.2, §4.5, §5.3, §7.6.
 //
@@ -28,6 +35,91 @@ import type { Sesion } from "./sesion.ts";
 // evento propio para que la señal de custodia del Anexo B tenga de dónde leer, y NO se pide
 // justificación para dejarla entrar: el §7.6 prohíbe el tipeo libre obligatorio en terreno, y un
 // campo requerido acá produce notas como «ok» que enseñan a ignorar el recuadro.
+
+// ─── La degradación de la captura [AC-FRUT-10] — §4.2, §4.6, §5.6, §9.3.1, §9.3.4 ───
+//
+// Lo que sigue es la MITAD que hace verdadera la regla de oro. «Jamás rebota» sin esto sería
+// «se pierde en silencio»: la captura entra igual, y lo que no cuadra queda dicho con su flag,
+// su evento y su fila en «Por revisar». Se degrada SOLO la validación que falla — la cola del
+// §5.6 tiende a cero cada día, y una bandeja que amanece con cien filas deja de mirarse.
+//
+// El juicio vive en `dominio/custodia.ts` y no acá: el mismo criterio lo necesita el CLIENTE
+// para avisar ANTES de sincronizar (§4.2), y dos copias se separan el día que alguien ajusta una.
+
+const EVENTO_DE_FLAG: Record<
+  FlagDeCustodia,
+  (typeof EVENTOS_OPERACION)[keyof typeof EVENTOS_OPERACION]
+> = {
+  manifiesto_incompleto: EVENTOS_OPERACION.custodia_manifiesto_incompleto,
+  item_sin_dte: EVENTOS_OPERACION.custodia_item_sin_dte,
+  reloj_desfasado: EVENTOS_OPERACION.custodia_reloj_desfasado,
+  modulo_apagado: EVENTOS_OPERACION.custodia_modulo_apagado,
+  sha256_mismatch: EVENTOS_OPERACION.custodia_sha256_mismatch,
+};
+
+/**
+ * Deja dicho que la captura entró degradada: un evento y una fila de «Por revisar» POR FLAG.
+ *
+ * Por flag y no por captura, porque la bandeja se lee por origen: «cuántas cargas salieron sin
+ * documento este mes» (art. 55 DL 825) y «cuántos teléfonos tienen la hora corrida» son dos
+ * preguntas, y una fila genérica obliga a abrir el jsonb de cada una para separarlas.
+ */
+async function dejarDichoQueDegrado(
+  c: PoolClient,
+  datos: {
+    flags: readonly FlagDeCustodia[];
+    objetoTabla: string;
+    objetoId: string;
+    sesion: Sesion;
+    nota: string;
+    payload: Record<string, unknown>;
+  },
+): Promise<void> {
+  for (const flag of datos.flags) {
+    await registrarEvento(c, {
+      codigo: EVENTO_DE_FLAG[flag],
+      objetoTabla: datos.objetoTabla,
+      objetoId: datos.objetoId,
+      sesion: datos.sesion,
+      payload: datos.payload,
+    });
+    await c.query("insert into review_queue (origen, severidad, nota) values ($1, $2, $3)", [
+      `custodia.${flag}`,
+      SEVERIDAD_DE_CUSTODIA,
+      datos.nota,
+    ]);
+  }
+}
+
+/**
+ * Con qué configuración se juzga esta captura, y si el módulo estaba encendido en ella.
+ *
+ * La CONGELADA del turno manda (§4.4). No la vigente: un turno corre entero con una versión, y
+ * apagar el módulo a mitad de la jornada no puede cambiar cómo se juzga lo que ese turno sigue
+ * capturando en un andén sin señal.
+ *
+ * SIN CONFIGURAR cuenta como encendido, y es la decisión importante: el flag `modulo_apagado`
+ * del §0 supone una acción humana con motivo. Hoy `plan_features` está vacío en todo tenant
+ * —los planes los siembra el hito (g)—, así que leer la ausencia como «apagado» marcaría cada
+ * manifiesto de cada andén y llenaría «Por revisar» de ruido desde el primer día.
+ */
+async function configDeLaCaptura(
+  c: PoolClient,
+  slug: string,
+  turnoId: string | null,
+): Promise<{ configVersionId: string; moduloEncendido: boolean }> {
+  let configVersionId: string | null = null;
+  if (turnoId) {
+    const { rows } = await c.query<{ id: string }>(
+      "select config_version_id::text as id from turnos where id = $1",
+      [turnoId],
+    );
+    configVersionId = rows[0]?.id ?? null;
+  }
+  configVersionId ??= await versionVigente(c, slug);
+  const estado = await estadoDeFeature(c, configVersionId, FEATURES.modulo_encargos);
+  return { configVersionId, moduloEncendido: estado !== false };
+}
 
 export type ItemDeclarado = {
   item_id: string;
@@ -69,6 +161,11 @@ export type Confirmacion = {
   repetido: boolean;
   items: number;
   discrepancias: number;
+  /** Lo que no cuadró, y que igual entró [AC-FRUT-10]. Vacío = captura limpia. */
+  flags: FlagDeCustodia[];
+  /** La versión de config con la que se juzgó. El §0 la pide en la respuesta: sin ella, quien
+   *  mira un `modulo_apagado` no puede saber CUÁL configuración estaba vigente al entrar. */
+  config_version_id: string;
 };
 
 /**
@@ -81,6 +178,7 @@ export type Confirmacion = {
 export async function confirmarManifiesto(
   pool: Pool,
   sesion: Sesion,
+  slug: string,
   datos: {
     paradaId: string;
     empresaClienteId: string;
@@ -88,11 +186,18 @@ export async function confirmarManifiesto(
     clientUuid: string | null;
     tsDispositivo: string;
     tzOffsetMin: number;
+    /** El andén respondió la ÚNICA modal del sistema: sabe que faltó contar (§7.6). */
+    incompletoConfirmado: boolean;
+    /** El turno cuya config CONGELADA juzga esta captura (§4.4). */
+    turnoId: string | null;
+    /** El sha256 de la foto, que viaja en la mutación ANTES que el binario (§4.6). */
+    fotoSha256: string | null;
   },
 ): Promise<Confirmacion> {
   return enActo(
     pool,
     async (c) => {
+      const { configVersionId, moduloEncendido } = await configDeLaCaptura(c, slug, datos.turnoId);
       // DOS conflictos posibles, y ninguno puede rebotar (§4.2): el replay del outbox —mismo
       // `client_uuid`— y el segundo «Conforme» sobre la misma parada y empresa desde otro
       // aparato, que trae un uuid distinto. El segundo es el caso real del andén compartido: dos
@@ -127,11 +232,22 @@ export async function confirmarManifiesto(
             limit 1`,
           [datos.clientUuid, datos.paradaId, datos.empresaClienteId],
         );
+        // El replay NO vuelve a degradar: repetir el aviso haría que la bandeja contara tres
+        // veces un andén que se contó una, y esa es la forma exacta en que «Por revisar» deja de
+        // mirarse. Los flags viajan igual en la respuesta —el aparato tiene que poder mostrar
+        // qué quedó marcado— pero no escriben nada nuevo (§5.6, §9.3.1).
         return {
           manifiesto_id: previo[0]!.id,
           repetido: true,
           items: Number(previo[0]!.items),
           discrepancias: Number(previo[0]!.discrepancias),
+          flags: await flagsDeLaConfirmacion(c, {
+            ...datos,
+            manifiestoId: previo[0]!.id,
+            escritos: Number(previo[0]!.items),
+            moduloEncendido,
+          }),
+          config_version_id: configVersionId,
         };
       }
 
@@ -168,7 +284,15 @@ export async function confirmarManifiesto(
         objetoTabla: "manifiestos",
         objetoId: manifiestoId,
         sesion,
-        payload: { parada_id: datos.paradaId, items: escritos, discrepancias },
+        // `foto_sha256` viaja acá y no en una columna: el §4.6 pide que el hash llegue ANTES que
+        // el binario, y `eventos` es append-only — la promesa queda donde nadie la puede editar
+        // para que calce después con lo que se suba [AC-FRUT-10].
+        payload: {
+          parada_id: datos.paradaId,
+          items: escritos,
+          discrepancias,
+          foto_sha256: datos.fotoSha256,
+        },
       });
 
       // La discrepancia lleva su PROPIO evento: la señal de Caja/custodia del Anexo B tiene que
@@ -183,7 +307,182 @@ export async function confirmarManifiesto(
         });
       }
 
-      return { manifiesto_id: manifiestoId, repetido: false, items: escritos, discrepancias };
+      const flags = await flagsDeLaConfirmacion(c, {
+        ...datos,
+        manifiestoId,
+        escritos,
+        moduloEncendido,
+      });
+      await dejarDichoQueDegrado(c, {
+        flags,
+        objetoTabla: "manifiestos",
+        objetoId: manifiestoId,
+        sesion,
+        nota: `Sub-manifiesto de la parada ${datos.paradaId} con ${escritos} ítem(s) contado(s).`,
+        payload: { parada_id: datos.paradaId, items: escritos, config_version_id: configVersionId },
+      });
+
+      return {
+        manifiesto_id: manifiestoId,
+        repetido: false,
+        items: escritos,
+        discrepancias,
+        flags,
+        config_version_id: configVersionId,
+      };
+    },
+    sesion,
+  );
+}
+
+/**
+ * Qué tiene de raro ESTA confirmación. El juicio es del dominio; acá solo se juntan sus insumos.
+ *
+ * `item_sin_dte` no se mira en este momento y no es un olvido: el documento se asocia DESPUÉS de
+ * contar (§5.2 F2), así que preguntarlo acá marcaría todo manifiesto del mundo. Su momento es el
+ * traspaso — cuando la carga efectivamente sale.
+ */
+async function flagsDeLaConfirmacion(
+  c: PoolClient,
+  datos: {
+    paradaId: string;
+    empresaClienteId: string;
+    manifiestoId: string;
+    escritos: number;
+    incompletoConfirmado: boolean;
+    moduloEncendido: boolean;
+    tsDispositivo: string;
+  },
+): Promise<FlagDeCustodia[]> {
+  const { rows } = await c.query<{ n: string }>(
+    "select count(*)::text as n from items where parada_id = $1 and empresa_cliente_id = $2",
+    [datos.paradaId, datos.empresaClienteId],
+  );
+  return clasificarCustodia({
+    itemsDeclarados: Number(rows[0]?.n ?? "0"),
+    itemsContados: datos.escritos,
+    incompletoConfirmado: datos.incompletoConfirmado,
+    itemsSinDte: 0,
+    tsDispositivo: new Date(datos.tsDispositivo),
+    recibidaEn: new Date(),
+    moduloEncendido: datos.moduloEncendido,
+    shaPrometido: null,
+    shaRecalculado: null,
+  });
+}
+
+// ─── La foto: el hash viaja ANTES, el binario después [AC-FRUT-10] — §4.6, §7.6 ─────
+//
+// El §4.6 lo fija con estas palabras: «el hash viaja en la mutación ANTES el binario, mismatch al
+// re-hashear ⇒ flag, no rebote». Las dos mitades importan. Que viaje antes es lo que hace que el
+// servidor pueda COMPARAR en vez de creer — si el hash llegara con el archivo, quien mandara el
+// archivo equivocado mandaría también el hash equivocado y todo cuadraría siempre.
+//
+// Y que el mismatch no rebote es la regla de oro otra vez: la foto es mejora progresiva del §7.6,
+// jamás dependencia. Un binario cortado a mitad de subida en el andén no puede invalidar el
+// CONTEO, que es el dato por el que existe el manifiesto. Entra, se guarda con el hash REAL —el
+// de los bytes que efectivamente tenemos, no el prometido— y queda marcado para que alguien mire.
+
+const SHA256_HEX = /^[0-9a-f]{64}$/i;
+
+export type FotoRegistrada =
+  | { tipo: "ok"; evidence_id: string; repetida: boolean; flags: FlagDeCustodia[] }
+  | { tipo: "manifiesto_no_existe" };
+
+/**
+ * Recibe el binario de la foto de un manifiesto y lo contrasta con el sha256 que ya viajó.
+ *
+ * NUNCA rebota por el contenido: sin promesa previa, con promesa que no calza o con el módulo
+ * apagado, la evidencia entra igual. Lo único que contesta 404 es un manifiesto que no es de
+ * este tenant, y eso no es degradar una captura — es no existir (§0, §5.5).
+ */
+export async function registrarFotoDeManifiesto(
+  pool: Pool,
+  sesion: Sesion,
+  slug: string,
+  datos: {
+    manifiestoId: string;
+    contenidoB64: string;
+    clientUuid: string | null;
+    tsDispositivo: string;
+    tzOffsetMin: number;
+    turnoId: string | null;
+  },
+): Promise<FotoRegistrada> {
+  return enActo(
+    pool,
+    async (c) => {
+      const { rows: manifiesto } = await c.query<{ id: string }>(
+        "select id::text as id from manifiestos where id = $1",
+        [datos.manifiestoId],
+      );
+      if (!manifiesto[0]) return { tipo: "manifiesto_no_existe" };
+
+      const { moduloEncendido } = await configDeLaCaptura(c, slug, datos.turnoId);
+
+      // La promesa se busca en el evento de la confirmación, que es append-only: nadie pudo
+      // moverla después para que calzara con lo que subió.
+      const { rows: prometido } = await c.query<{ sha: string | null }>(
+        `select payload ->> 'foto_sha256' as sha
+           from eventos e join evento_tipo t on t.id = e.tipo_id
+          where e.objeto_tabla = 'manifiestos' and e.objeto_id = $1
+            and t.codigo = 'manifiesto.confirmado'
+          order by e.id desc limit 1`,
+        [datos.manifiestoId],
+      );
+      const shaPrometido = prometido[0]?.sha ?? null;
+
+      const binario = Buffer.from(datos.contenidoB64, "base64");
+      const shaRecalculado = createHash("sha256").update(binario).digest("hex");
+
+      const flags = clasificarCustodia({
+        itemsDeclarados: 0,
+        itemsContados: 0,
+        incompletoConfirmado: false,
+        itemsSinDte: 0,
+        tsDispositivo: new Date(datos.tsDispositivo),
+        recibidaEn: new Date(),
+        moduloEncendido,
+        shaPrometido: shaPrometido !== null && SHA256_HEX.test(shaPrometido) ? shaPrometido : null,
+        shaRecalculado,
+      });
+
+      // Se guarda el hash REAL. Guardar el prometido dejaría una fila que dice que el archivo es
+      // otro del que tenemos, y entonces el sha256 write-once del §4.6 no probaría nada.
+      const { rows } = await c.query<{ id: string }>(
+        `insert into evidence (tipo, objeto_tabla, objeto_id, sha256, capturada_en, tz_offset_min, client_uuid)
+         values ('foto', 'manifiestos', $1, decode($2, 'hex'), $3, $4, $5)
+           on conflict (tenant_id, client_uuid) do nothing
+         returning id::text as id`,
+        [
+          datos.manifiestoId,
+          shaRecalculado,
+          datos.tsDispositivo,
+          datos.tzOffsetMin,
+          datos.clientUuid,
+        ],
+      );
+
+      if (!rows[0]) {
+        // Replay del outbox: la evidencia ya estaba. No se degrada de nuevo — repetir el aviso
+        // contaría dos veces una foto que se subió una (§9.3.1).
+        const { rows: previa } = await c.query<{ id: string }>(
+          "select id::text as id from evidence where client_uuid = $1",
+          [datos.clientUuid],
+        );
+        return { tipo: "ok", evidence_id: previa[0]!.id, repetida: true, flags };
+      }
+
+      await dejarDichoQueDegrado(c, {
+        flags,
+        objetoTabla: "evidence",
+        objetoId: rows[0].id,
+        sesion,
+        nota: `Foto del manifiesto ${datos.manifiestoId}: el binario no re-hasheó como lo prometido.`,
+        payload: { manifiesto_id: datos.manifiestoId, sha256_prometido: shaPrometido },
+      });
+
+      return { tipo: "ok", evidence_id: rows[0].id, repetida: false, flags };
     },
     sesion,
   );
@@ -388,7 +687,15 @@ export async function estadoDelGate(
 // implementación del mismo cuidado es la que se olvida de actualizarse.
 
 export type Traspaso =
-  | { tipo: "ok"; custody_transfer_id: string; repetido: boolean; firmas: number }
+  | {
+      tipo: "ok";
+      custody_transfer_id: string;
+      repetido: boolean;
+      firmas: number;
+      /** Lo que no cuadró, y que igual salió [AC-FRUT-10]. Vacío = traspaso limpio. */
+      flags: FlagDeCustodia[];
+      config_version_id: string;
+    }
   | { tipo: "manifiesto_no_existe" }
   | { tipo: "pin_invalido" }
   | { tipo: "ya_traspasado" };
@@ -403,7 +710,9 @@ export type Traspaso =
 export async function traspasarCustodia(
   pool: Pool,
   sesion: Sesion,
+  slug: string,
   datos: {
+    turnoId: string | null;
     manifiestoId: string;
     liberoUsuarioId: string;
     liberoPin: string;
@@ -455,6 +764,31 @@ export async function traspasarCustodia(
   return enActo(
     pool,
     async (c) => {
+      const { configVersionId, moduloEncendido } = await configDeLaCaptura(c, slug, datos.turnoId);
+      // ACÁ sí se pregunta por el DTE, y este es su momento: la carga está saliendo. El gate
+      // BLOQUEA en el andén con la vía explícita «bajar del manifiesto» (AC-FRUT-08); si el
+      // traspaso igual llegó por sync, el camión ya está en la calle y rebotar no lo baja —
+      // solo borra la constancia de que salió así (art. 55 DL 825, §4.2).
+      const { rows: sinDte } = await c.query<{ n: string }>(
+        `select count(*)::text as n
+           from manifiesto_items mi
+           left join manifiesto_item_documento d on d.manifiesto_item_id = mi.id
+          where mi.manifiesto_id = $1 and mi.qty_confirmada > 0
+            and d.reference_document_id is null and d.bajado_motivo is null`,
+        [datos.manifiestoId],
+      );
+      const flags = clasificarCustodia({
+        itemsDeclarados: 0,
+        itemsContados: 0,
+        incompletoConfirmado: false,
+        itemsSinDte: Number(sinDte[0]?.n ?? "0"),
+        tsDispositivo: new Date(datos.tsDispositivo),
+        recibidaEn: new Date(),
+        moduloEncendido,
+        shaPrometido: null,
+        shaRecalculado: null,
+      });
+
       const { rows } = await c.query<{ id: string }>(
         `insert into custody_transfer
            (manifiesto_id, de_persona_id, a_persona_id, firma_libero_id, firma_recibio_id,
@@ -491,6 +825,8 @@ export async function traspasarCustodia(
           custody_transfer_id: vigente[0]!.id,
           repetido: true,
           firmas: laMisma ? 1 : 2,
+          flags,
+          config_version_id: configVersionId,
         };
       }
 
@@ -501,7 +837,23 @@ export async function traspasarCustodia(
         sesion,
         payload: { manifiesto_id: datos.manifiestoId, firmas: laMisma ? 1 : 2 },
       });
-      return { tipo: "ok", custody_transfer_id: rows[0].id, repetido: false, firmas: laMisma ? 1 : 2 };
+      await dejarDichoQueDegrado(c, {
+        flags,
+        objetoTabla: "custody_transfer",
+        objetoId: rows[0].id,
+        sesion,
+        nota: `Traspaso del manifiesto ${datos.manifiestoId} con ${sinDte[0]?.n ?? "0"} ítem(s) sin documento.`,
+        payload: { manifiesto_id: datos.manifiestoId, config_version_id: configVersionId },
+      });
+
+      return {
+        tipo: "ok",
+        custody_transfer_id: rows[0].id,
+        repetido: false,
+        firmas: laMisma ? 1 : 2,
+        flags,
+        config_version_id: configVersionId,
+      };
     },
     sesion,
   );

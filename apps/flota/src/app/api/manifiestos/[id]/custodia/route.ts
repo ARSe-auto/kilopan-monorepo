@@ -39,7 +39,8 @@ export async function POST(peticion: Request, contexto: { params: Promise<{ id: 
     );
   }
 
-  const traspaso = await traspasarCustodia(g.acto.pool, g.acto.sesion, {
+  const traspaso = await traspasarCustodia(g.acto.pool, g.acto.sesion, g.acto.slug, {
+    turnoId: esUuid(String(cuerpo.turno_id ?? "")) ? String(cuerpo.turno_id) : null,
     manifiestoId: id,
     liberoUsuarioId,
     liberoPin: String(cuerpo.libero_pin ?? ""),

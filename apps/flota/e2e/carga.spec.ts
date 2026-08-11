@@ -5,7 +5,8 @@ import { VALIDOS } from "../../../db/flota/ruts-sinteticos.mjs";
 import { limpiarFixture, limpiarBandeja } from "./limpiar.mjs";
 import { registrarBaseline } from "./baseline-acciones.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
-import { CIFRA_OPERATIVA, UNDO } from "../../../packages/nucleo-comun/src/constants.ts";
+import { CIFRA_OPERATIVA, RELOJ, UNDO } from "../../../packages/nucleo-comun/src/constants.ts";
+import { createHash } from "node:crypto";
 
 // La recepción de carga en el andén (F2) [AC-FRUT-07] — §5.2 F2, §5.3, §0, §4.7, §7.6.
 //
@@ -898,5 +899,410 @@ test("[AC-FRUT-09] corregir es SUPERSEDE: dos filas y la original intacta (centi
       [manifiestoId],
     );
     expect(vigentes!.n).toBe("1");
+  });
+});
+
+// ─── La captura que JAMÁS rebota [AC-FRUT-10] — §4.2, §4.6, §5.6, §9.3.1, §9.3.4 ─────
+//
+// ─── LO QUE ESTE BLOQUE PROTEGE, Y POR QUÉ SON DOS COSAS Y NO UNA ──────────────────
+//
+// La custodia está nombrada con todas las letras en la lista CAPTURA del §4.2: cuando esto llega,
+// el camión ya se cargó y ya salió. Un 422 no le devuelve al andén el conteo que hizo a las
+// cuatro de la mañana — se lo borra, y con él la única constancia de qué subió, de quién y contra
+// qué papel. Tres semanas después, cuando el cliente dice que faltaron seis bandejas, esa fila
+// que no se escribió es la que habría contestado. Por eso acá rechazos = 0, y el conjunto
+// potencia de `dominio/custodia.test.ts` lo asserta sobre cualquier combinación futura de flags.
+//
+// Y la contracara, que es la mitad que se olvida: una captura LIMPIA no deja flag ni fila en
+// «Por revisar». Marcar de más sale gratis en el momento y hace que la cola del §5.6 —que tiene
+// que tender a cero cada día— amanezca con cien filas y deje de mirarse en una semana. Ahí se
+// pierden las cinco que importaban. Por eso el caso (a) tiene test propio, y por eso cada caso
+// degradado asserta los flags que hay Y que no haya ninguno de más.
+
+/** Una parada de carga recién nacida, para que ningún caso previo contamine lo que se mide. */
+async function paradaPropia(nombre: string, bultos: number) {
+  return con(BD_A, async (c: Conexion) => {
+    const [d] = await c.sql<{ id: string }>("select id::text as id from destinos limit 1");
+    const [r] = await c.sql<{ id: string }>(
+      "insert into rutas (nombre, publicada_en, version) values ($1, now(), 1) returning id::text as id",
+      [nombre],
+    );
+    const [p] = await c.sql<{ id: string }>(
+      "insert into paradas (ruta_id, tipo, orden, destino_id) values ($1, 'carga', 1, $2) returning id::text as id",
+      [r!.id, d!.id],
+    );
+    const [e] = await c.sql<{ id: string }>(
+      "insert into encargos (empresa_cliente_id, destino_id, bultos) values ($1, $2, $3) returning id::text as id",
+      [panaderia, d!.id, bultos],
+    );
+    await c.sql("insert into items (parada_id, encargo_id, qty_planificada) values ($1, $2, $3)", [
+      p!.id,
+      e!.id,
+      bultos,
+    ]);
+    return p!.id;
+  });
+}
+
+type Confirmada = {
+  manifiesto_id: string;
+  repetido: boolean;
+  flags: string[];
+  config_version_id: string;
+};
+
+/** «Conforme» sobre la totalidad de lo declarado, más lo que el caso quiera agregarle encima. */
+async function confirmarTodo(
+  request: import("@playwright/test").APIRequestContext,
+  paradaId: string,
+  extra: Record<string, unknown> = {},
+) {
+  const { declarado } = (await (
+    await request.get(`${EN_A}/api/paradas/${paradaId}/manifiesto`, { headers: comoOperador })
+  ).json()) as {
+    declarado: { item_id: string; empresa_cliente_id: string; qty_declarada: number }[];
+  };
+  return request.post(`${EN_A}/api/paradas/${paradaId}/manifiesto`, {
+    headers: comoOperador,
+    data: {
+      empresa_cliente_id: panaderia,
+      client_uuid: crypto.randomUUID(),
+      ts_dispositivo: new Date().toISOString(),
+      tz_offset_min: -240,
+      conteos: declarado
+        .filter((d) => d.empresa_cliente_id === panaderia)
+        .map((d) => ({ item_id: d.item_id, qty_confirmada: d.qty_declarada })),
+      ...extra,
+    },
+  });
+}
+
+/** Las filas de «Por revisar» que nacieron por ESTA captura. La aguja es el id que la nota lleva
+ *  escrito: contar la tabla entera mediría también lo que dejaron los otros casos del archivo. */
+type Revision = { origen: string; severidad: string; estado: string };
+const revisiones = (aguja: string): Promise<Revision[]> =>
+  con(BD_A, (c: Conexion) =>
+    c.sql<{ origen: string; severidad: string; estado: string }>(
+      "select origen, severidad, estado::text as estado from review_queue where nota like $1 order by origen",
+      [`%${aguja}%`],
+    ),
+  );
+
+/** Los códigos que marcan una captura DEGRADADA. Enumerados y no `custodia.%`: el traspaso feliz
+ *  también emite `custodia.traspasada`, y contarlo como degradación haría que el caso limpio
+ *  fallara por el evento que prueba que funcionó. */
+const EVENTOS_DEGRADADOS = [
+  "custodia.manifiesto_incompleto",
+  "custodia.item_sin_dte",
+  "custodia.reloj_desfasado",
+  "custodia.modulo_apagado",
+  "custodia.sha256_mismatch",
+];
+
+/** Los eventos de degradación colgados de un objeto. Un código por flag: la bandeja se lee por
+ *  origen, y «cuántas cargas salieron sin documento» no se contesta abriendo un jsonb por fila. */
+const eventosDeCustodia = (objetoId: string): Promise<{ codigo: string }[]> =>
+  con(BD_A, (c: Conexion) =>
+    c.sql<{ codigo: string }>(
+      `select t.codigo from eventos e join evento_tipo t on t.id = e.tipo_id
+        where e.objeto_id = $1 and t.codigo = any($2) order by t.codigo`,
+      [objetoId, EVENTOS_DEGRADADOS],
+    ),
+  );
+
+/** El ítem de manifiesto de una parada, para colgarle su documento. */
+const itemDeManifiestoEn = (paradaId: string) =>
+  con(BD_A, (c: Conexion) =>
+    c.sql<{ id: string }>(
+      `select mi.id::text as id from manifiesto_items mi join manifiestos m on m.id = mi.manifiesto_id
+        where m.parada_id = $1`,
+      [paradaId],
+    ),
+  ).then((r: { id: string }[]) => r[0]!.id);
+
+// ─── (a) La captura limpia no ensucia la bandeja ────────────────────────────────────
+
+test("[AC-FRUT-10] la captura conforme entra LIMPIA: 2xx, sin flag y sin «Por revisar»", async ({
+  request,
+}) => {
+  const parada = await paradaPropia("Ruta de la captura limpia", 6);
+  const conforme = await confirmarTodo(request, parada);
+  expect(conforme.status()).toBe(201);
+  const capturada = (await conforme.json()) as Confirmada;
+  expect(capturada.flags).toEqual([]);
+  // El §0 pide la versión de config EN la respuesta: sin ella, quien mire un flag mañana no
+  // puede saber CUÁL configuración estaba vigente cuando la captura entró.
+  expect(capturada.config_version_id).toMatch(/^[0-9a-f-]{36}$/);
+
+  // Y su traspaso, con el documento del tercero ya asociado, tampoco degrada: la mitad que se
+  // olvida es que el camino feliz tiene que salir del servidor sin dejar rastro en la cola.
+  await request.post(`${EN_A}/api/manifiesto-items/${await itemDeManifiestoEn(parada)}/documento`, {
+    headers: comoOperador,
+    data: { tipo: "52", folio: "5510001", emisor: "76.111.111-6" },
+  });
+  const traspaso = await request.post(
+    `${EN_A}/api/manifiestos/${capturada.manifiesto_id}/custodia`,
+    {
+      headers: comoOperador,
+      data: {
+        libero_usuario_id: firmanteAnden.usuarioId,
+        libero_pin: PIN_DEL_ANDEN,
+        recibe_usuario_id: firmanteChofer.usuarioId,
+        recibe_pin: PIN_DEL_CHOFER,
+        client_uuid: crypto.randomUUID(),
+        ts_dispositivo: new Date().toISOString(),
+        tz_offset_min: -240,
+      },
+    },
+  );
+  expect(traspaso.status()).toBe(201);
+  expect(((await traspaso.json()) as { flags: string[] }).flags).toEqual([]);
+
+  expect(await revisiones(parada)).toEqual([]);
+  expect(await revisiones(capturada.manifiesto_id)).toEqual([]);
+  expect(await eventosDeCustodia(capturada.manifiesto_id)).toEqual([]);
+});
+
+// ─── (b) Los casos degradados enumerados, uno por uno ───────────────────────────────
+
+test("[AC-FRUT-10] el manifiesto incompleto y el reloj corrido entran 2xx, con UN flag cada uno", async ({
+  request,
+}) => {
+  const parada = await paradaPropia("Ruta del andén incompleto", 5);
+  const desfase = RELOJ.drift_max_minutos + 30;
+  const cuerpo = {
+    client_uuid: crypto.randomUUID(),
+    // La ÚNICA modal del sistema, ya respondida en el andén (§7.6): repetir la pregunta en el
+    // servidor no agrega información, solo pierde el conteo.
+    incompleto_confirmado: true,
+    ts_dispositivo: new Date(Date.now() - desfase * 60_000).toISOString(),
+  };
+
+  const degradada = await confirmarTodo(request, parada, cuerpo);
+  expect(degradada.status()).toBe(201);
+  const capturada = (await degradada.json()) as Confirmada;
+  expect([...capturada.flags].sort()).toEqual(["manifiesto_incompleto", "reloj_desfasado"]);
+
+  // Un evento y una fila POR FLAG, y ninguno de más.
+  expect((await eventosDeCustodia(capturada.manifiesto_id)).map((e) => e.codigo)).toEqual([
+    "custodia.manifiesto_incompleto",
+    "custodia.reloj_desfasado",
+  ]);
+  const cola = await revisiones(parada);
+  expect(cola.map((r) => r.origen)).toEqual([
+    "custodia.manifiesto_incompleto",
+    "custodia.reloj_desfasado",
+  ]);
+  expect(cola.every((r) => r.estado === "nueva")).toBe(true);
+
+  // El replay NO vuelve a degradar: contar tres veces un andén que se contó una es la forma
+  // exacta en que «Por revisar» deja de mirarse (§5.6, §9.3.1).
+  const replay = await confirmarTodo(request, parada, cuerpo);
+  expect(replay.status()).toBe(200);
+  const repetida = (await replay.json()) as Confirmada;
+  expect(repetida.repetido).toBe(true);
+  // Los flags viajan igual —el aparato tiene que poder mostrar qué quedó marcado— pero no
+  // escriben nada nuevo.
+  expect([...repetida.flags].sort()).toEqual(["manifiesto_incompleto", "reloj_desfasado"]);
+  expect((await revisiones(parada)).length).toBe(2);
+  expect((await eventosDeCustodia(capturada.manifiesto_id)).length).toBe(2);
+});
+
+test("[AC-FRUT-10] el ítem sin DTE no baja el camión de la calle: entra 2xx con su flag", async ({
+  request,
+}) => {
+  // El gate BLOQUEA en el andén, con la vía explícita «bajar del manifiesto» (AC-FRUT-08). Si el
+  // traspaso igual llegó por sync, el camión ya salió: rebotar no lo baja, solo borra la
+  // constancia de que salió así (art. 55 DL 825, §4.2).
+  const manifiestoId = await unManifiesto(request);
+  const traspaso = await request.post(`${EN_A}/api/manifiestos/${manifiestoId}/custodia`, {
+    headers: comoOperador,
+    data: {
+      libero_usuario_id: firmanteAnden.usuarioId,
+      libero_pin: PIN_DEL_ANDEN,
+      recibe_usuario_id: firmanteChofer.usuarioId,
+      recibe_pin: PIN_DEL_CHOFER,
+      client_uuid: crypto.randomUUID(),
+      ts_dispositivo: new Date().toISOString(),
+      tz_offset_min: -240,
+    },
+  });
+  expect(traspaso.status()).toBe(201);
+  const salida = (await traspaso.json()) as { custody_transfer_id: string; flags: string[] };
+  expect(salida.flags).toEqual(["item_sin_dte"]);
+
+  expect((await eventosDeCustodia(salida.custody_transfer_id)).map((e) => e.codigo)).toEqual([
+    "custodia.item_sin_dte",
+  ]);
+  const cola = await revisiones(manifiestoId);
+  expect(cola.map((r) => r.origen)).toEqual(["custodia.item_sin_dte"]);
+  // `media`, la misma que las lecturas: es una anomalía que el terreno explica, no un incidente.
+  // La `alta` está reservada para lo que ya no se explica así (§4.3, §7.9).
+  expect(cola[0]!.severidad).toBe("media");
+});
+
+test("[AC-FRUT-10] el módulo apagado marca la captura del turno abierto, y no la rebota", async ({
+  request,
+}) => {
+  const { turnoId, apagada } = await con(BD_A, async (c: Conexion) => {
+    const [v] = await c.sql<{ id: string }>(
+      `insert into vehiculos (patente, tipo) values ('KLPC10', 'furgon')
+         on conflict (tenant_id, patente) do update set tipo = excluded.tipo
+       returning id::text as id`,
+    );
+    // El centinela 5 impide dos turnos vivos del mismo vehículo, y esta suite corre muchas veces
+    // sobre el tenant de los HECHOS: el turno de la corrida anterior se anula, que es la vía que
+    // el §4.5 deja abierta para un turno que no debió ocupar el día.
+    await c.sql(
+      "update turnos set estado = 'anulado' where vehiculo_id = $1 and estado = 'abierto'",
+      [v!.id],
+    );
+    const [off] = await c.sql<{ id: string }>(
+      "select crear_config_version($1, $2::jsonb)::text as id",
+      ["el dueño apagó el módulo de encargos", JSON.stringify({ modulo_encargos: false })],
+    );
+    const [t] = await c.sql<{ id: string }>(
+      "insert into turnos (vehiculo_id, config_version_id) values ($1, $2) returning id::text as id",
+      [v!.id, off!.id],
+    );
+    // Y una versión NUEVA encendida encima: así la vigente dice «encendido» y la del turno dice
+    // «apagado». Si la captura se juzgara con la vigente, este caso saldría limpio — es
+    // exactamente la confusión que el §4.4 previene congelando la config en el turno.
+    await c.sql("select crear_config_version($1, $2::jsonb)", [
+      "el dueño lo volvió a encender, con el turno ya corriendo",
+      JSON.stringify({ modulo_encargos: true }),
+    ]);
+    return { turnoId: t!.id, apagada: off!.id };
+  });
+
+  const parada = await paradaPropia("Ruta del módulo apagado", 4);
+  const captura = await confirmarTodo(request, parada, { turno_id: turnoId });
+  // 2xx, no 403: el 403 del módulo apagado es SOLO de planificación y lectura (§0, §5.5).
+  expect(captura.status()).toBe(201);
+  const capturada = (await captura.json()) as Confirmada;
+  expect(capturada.flags).toEqual(["modulo_apagado"]);
+  expect(capturada.config_version_id).toBe(apagada);
+  expect((await revisiones(parada)).map((r) => r.origen)).toEqual(["custodia.modulo_apagado"]);
+});
+
+test("[AC-FRUT-10] la foto que no re-hashea entra igual, con el hash REAL y su flag", async ({
+  request,
+}) => {
+  const sha = (b: Buffer) => createHash("sha256").update(b).digest("hex");
+  const laQueSubio = Buffer.from("el binario que efectivamente llegó del andén");
+  const laQuePrometio = Buffer.from("la foto que el aparato dijo que iba a subir");
+
+  // El hash viaja en la mutación ANTES que el binario (§4.6). Que viaje antes es lo que permite
+  // COMPARAR en vez de creer: si llegara con el archivo, quien mandara el archivo equivocado
+  // mandaría también el hash equivocado y todo cuadraría siempre.
+  const parada = await paradaPropia("Ruta de la foto que no calza", 3);
+  const capturada = (await (
+    await confirmarTodo(request, parada, { foto_sha256: sha(laQuePrometio) })
+  ).json()) as Confirmada;
+  expect(capturada.flags).toEqual([]);
+
+  const subida = await request.post(`${EN_A}/api/manifiestos/${capturada.manifiesto_id}/foto`, {
+    headers: comoOperador,
+    data: {
+      contenido_b64: laQueSubio.toString("base64"),
+      client_uuid: crypto.randomUUID(),
+      ts_dispositivo: new Date().toISOString(),
+      tz_offset_min: -240,
+    },
+  });
+  // La foto es mejora progresiva del §7.6, jamás dependencia: un binario cortado a mitad de
+  // subida en el andén no puede invalidar el CONTEO, que es el dato por el que existe el
+  // manifiesto.
+  expect(subida.status()).toBe(201);
+  const evidencia = (await subida.json()) as { evidence_id: string; flags: string[] };
+  expect(evidencia.flags).toEqual(["sha256_mismatch"]);
+  expect((await revisiones(capturada.manifiesto_id)).map((r) => r.origen)).toEqual([
+    "custodia.sha256_mismatch",
+  ]);
+
+  await con(BD_A, async (c: Conexion) => {
+    const [e] = await c.sql<{ sha: string }>(
+      "select encode(sha256, 'hex') as sha from evidence where id = $1",
+      [evidencia.evidence_id],
+    );
+    // Se guarda el hash REAL, el de los bytes que tenemos. Guardar el prometido dejaría una fila
+    // diciendo que el archivo es otro del que hay, y el sha256 write-once no probaría nada.
+    expect(e!.sha).toBe(sha(laQueSubio));
+    expect(e!.sha).not.toBe(sha(laQuePrometio));
+  });
+
+  // Y la foto que SÍ calza no degrada: sin este caso, «marca el mismatch» sería cierto marcando
+  // siempre.
+  const otra = await paradaPropia("Ruta de la foto que calza", 3);
+  const buena = (await (
+    await confirmarTodo(request, otra, { foto_sha256: sha(laQueSubio) })
+  ).json()) as Confirmada;
+  const limpia = await request.post(`${EN_A}/api/manifiestos/${buena.manifiesto_id}/foto`, {
+    headers: comoOperador,
+    data: {
+      contenido_b64: laQueSubio.toString("base64"),
+      client_uuid: crypto.randomUUID(),
+      ts_dispositivo: new Date().toISOString(),
+      tz_offset_min: -240,
+    },
+  });
+  expect(limpia.status()).toBe(201);
+  expect(((await limpia.json()) as { flags: string[] }).flags).toEqual([]);
+  expect(await revisiones(buena.manifiesto_id)).toEqual([]);
+});
+
+// ─── (c) El mismo DTE otra vez LIGA, y el UNIQUE queda intacto ──────────────────────
+
+test("[AC-FRUT-10] el mismo (tipo, folio, emisor) LIGA a la fila que hay, sin violar el UNIQUE", async ({
+  request,
+}) => {
+  // Varios bultos en la misma guía es el caso NORMAL del andén, no el raro. Si la segunda
+  // asociación rebotara por el UNIQUE, la app estaría exigiendo un folio distinto por bulto —
+  // que es pedirle al operario que invente documentos tributarios (§7.3, art. 97 N°4 CT).
+  // El emisor sale de la lista congelada del §7.8: un RUT nuevo en el árbol pasa por esa
+  // decisión, no por la comodidad de un fixture. Lo que distingue este documento del anterior
+  // es el folio, que es justamente la parte del UNIQUE que el caso ejerce.
+  const documento = { tipo: "52", folio: "5520002", emisor: "76.111.111-6" };
+
+  const primero = await request.post(
+    `${EN_A}/api/manifiesto-items/${await unItemAConfirmar(request)}/documento`,
+    { headers: comoOperador, data: documento },
+  );
+  expect(primero.status()).toBe(201);
+  const creado = (await primero.json()) as { reference_document_id: string; ligado: boolean };
+  expect(creado.ligado).toBe(false);
+
+  const segundo = await request.post(
+    `${EN_A}/api/manifiesto-items/${await unItemAConfirmar(request)}/documento`,
+    { headers: comoOperador, data: documento },
+  );
+  // 2xx y LIGA: la semántica «creando/ligando» de la sección 3, sin que la captura rebote jamás.
+  expect(segundo.status()).toBe(201);
+  const ligado = (await segundo.json()) as { reference_document_id: string; ligado: boolean };
+  expect(ligado.ligado).toBe(true);
+  expect(ligado.reference_document_id).toBe(creado.reference_document_id);
+
+  await con(BD_A, async (c: Conexion) => {
+    const [n] = await c.sql<{ n: string }>(
+      "select count(*)::text as n from reference_document where tipo = $1 and folio = $2 and emisor = $3",
+      [documento.tipo, documento.folio, documento.emisor],
+    );
+    expect(n!.n).toBe("1");
+    // El UNIQUE sigue puesto: ligar no es haberlo aflojado. Si alguien lo bajara para «arreglar»
+    // el rebote, dos filas del mismo DTE contarían la misma mercadería dos veces.
+    await expect(
+      c.sql("insert into reference_document (tipo, folio, emisor) values ($1, $2, $3)", [
+        documento.tipo,
+        documento.folio,
+        documento.emisor,
+      ]),
+    ).rejects.toThrow();
+
+    // Y los DOS ítems quedaron amparados por la MISMA fila.
+    const [ligas] = await c.sql<{ n: string }>(
+      "select count(*)::text as n from manifiesto_item_documento where reference_document_id = $1",
+      [creado.reference_document_id],
+    );
+    expect(ligas!.n).toBe("2");
   });
 });

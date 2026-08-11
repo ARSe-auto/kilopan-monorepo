@@ -102,4 +102,7 @@ export const FEATURES = {
   documentos_vencidos_bloquean: "documentos_vencidos_bloquean",
   modulo_vehiculos: "modulo_vehiculos",
   certificaciones_vencidas_bloquean: "certificaciones_vencidas_bloquean",
+  // El módulo de encargos, rutas y custodia. Apagarlo NO rebota una captura de terreno: la
+  // marca con `modulo_apagado` y la deja entrar [AC-FRUT-10] (§0, §5.5).
+  modulo_encargos: "modulo_encargos",
 } as const;

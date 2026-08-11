@@ -48,13 +48,21 @@ export async function POST(peticion: Request, contexto: { params: Promise<{ id: 
         }))
     : [];
 
-  const confirmacion = await confirmarManifiesto(g.acto.pool, g.acto.sesion, {
+  const turnoId = esUuid(String(cuerpo.turno_id ?? "")) ? String(cuerpo.turno_id) : null;
+  const fotoSha256 = cuerpo.foto_sha256 ? String(cuerpo.foto_sha256) : null;
+
+  const confirmacion = await confirmarManifiesto(g.acto.pool, g.acto.sesion, g.acto.slug, {
     paradaId: id,
     empresaClienteId,
     conteos,
     clientUuid: cuerpo.client_uuid ? String(cuerpo.client_uuid) : null,
     tsDispositivo: cuerpo.ts_dispositivo ? String(cuerpo.ts_dispositivo) : new Date().toISOString(),
     tzOffsetMin: Number(cuerpo.tz_offset_min ?? 0),
+    // La ÚNICA modal del sistema, ya respondida en el andén (§7.6) [AC-FRUT-10]. Repetir la
+    // pregunta acá no agregaría información: solo perdería el conteo.
+    incompletoConfirmado: cuerpo.incompleto_confirmado === true,
+    turnoId,
+    fotoSha256,
   });
 
   // 2xx SIEMPRE (§4.2). El 200 del replay lo distingue del 201 de la primera vez, sin que

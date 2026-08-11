@@ -108,6 +108,14 @@ export const EVENTOS_OPERACION = {
   manifiesto_item_bajado: "manifiesto.item_bajado",
   custodia_traspasada: "custodia.traspasada",
   custodia_corregida: "custodia.corregida",
+  // La captura que entra DEGRADADA [AC-FRUT-10]. Uno por flag y no uno genérico: «cuántas
+  // cargas salieron sin documento» y «cuántos teléfonos tienen la hora corrida» son preguntas
+  // distintas, y con un código único las dos obligan a abrir el jsonb de cada evento.
+  custodia_manifiesto_incompleto: "custodia.manifiesto_incompleto",
+  custodia_item_sin_dte: "custodia.item_sin_dte",
+  custodia_reloj_desfasado: "custodia.reloj_desfasado",
+  custodia_modulo_apagado: "custodia.modulo_apagado",
+  custodia_sha256_mismatch: "custodia.sha256_mismatch",
 } as const;
 
 /** Todo código que `registrarEvento` acepta tiene que estar sembrado en `evento_tipo`: si los
