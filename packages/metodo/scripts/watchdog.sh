@@ -158,7 +158,40 @@ while [ "$i" -lt "$MAX_ITERACIONES" ]; do
         fi
       fi
       if ! bash packages/metodo/scripts/check.sh --app="$APP" --full 2>&1 | tee -a "$LOG"; then
-        pausar "el gate independiente NO dio verde sobre el HEAD que el agente acaba de comitear ($(git rev-parse --short HEAD)). El auto-reporte del agente no es evidencia; revisar a mano."
+        # TRABAJO EN CURSO DECLARADO ≠ AGENTE QUE MIENTE (bug real, 11-ago-2026, dos veces
+        # en un día). El agente se queda sin presupuesto a mitad de un AC y hace lo correcto:
+        # comitea lo construido y declara que el AC queda ABIERTO porque no alcanzó a correr
+        # su e2e. Este gate encontraba ese HEAD rojo —por el e2e que el propio agente escribió
+        # y no corrió— y pausaba TODO hasta que una persona mirara. Nadie mira hasta la mañana
+        # siguiente, así que el motor pasaba la noche detenido sobre trabajo sano.
+        #
+        # La pausa sigue existiendo para el caso que la justifica: el agente que afirma verde
+        # sobre algo que no lo está (§9.2, «el verde lo estampa el exit code del gate, jamás un
+        # agente»). Los dos casos se distinguen con DOS condiciones, y hacen falta las dos:
+        #
+        #   1 · HEAD trae la línea canónica `AC-ABIERTO: <id>`, y
+        #   2 · ese <id> sigue SIN marcar [x] en el plan.
+        #
+        # La segunda es la que impide que la línea se vuelva un salvoconducto: un agente que
+        # marcó el AC como cerrado Y dejó el gate rojo está afirmando un verde que no existe,
+        # y eso pausa igual, traiga la línea o no.
+        #
+        # Seguir construyendo sobre un HEAD rojo así es seguro porque la PUBLICACIÓN no depende
+        # de esto: los dos publicadores exigen `last-green.sha == HEAD`, y un HEAD rojo nunca
+        # estampa ese marcador. El trabajo a medio camino se queda local hasta que una vuelta
+        # lo termine y lo ponga verde. Lo único que cambia es que el motor sigue solo.
+        # El veredicto vive en su propio guion para que prueba-arnes.sh lo ejerza con fixtures,
+        # sin fabricar commits ni gastar una invocación real del agente.
+        # El veredicto se toma del exit code del guion, NO de una tubería: `cmd | tee` devuelve
+        # el código de `tee`, que es 0 siempre — encadenarlo acá haría que todo rojo pareciera
+        # trabajo en curso y la pausa no volviera a dispararse nunca.
+        VEREDICTO_WIP="$(bash packages/metodo/scripts/trabajo-en-curso.sh --app="$APP" 2>&1)" && ES_WIP=0 || ES_WIP=1
+        echo "$VEREDICTO_WIP" | tee -a "$LOG"
+        if [ "$ES_WIP" -eq 0 ]; then
+          echo "watchdog: gate rojo sobre un HEAD que DECLARA trabajo en curso — no es un verde falso, es un AC a medio camino. Sigo: la próxima vuelta lo termina, y nada se publica hasta que esté verde." | tee -a "$LOG"
+        else
+          pausar "el gate independiente NO dio verde sobre el HEAD que el agente acaba de comitear ($(git rev-parse --short HEAD)). El auto-reporte del agente no es evidencia; revisar a mano."
+        fi
       fi
       # Publicar lo ya verificado. `loop.sh` comitea local y el agente no tiene permiso de
       # `git push` (.claude/settings.json) — sin este paso el trabajo del motor no llegaba

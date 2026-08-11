@@ -320,6 +320,46 @@ case "$SALIDA_PAUSA" in
 esac
 
 echo
+echo "== 3b-d2. Trabajo a medio camino DECLARADO no pausa el motor (11-ago-2026) =="
+# BUG REAL, dos veces en un día: el agente se queda sin presupuesto a mitad de un AC, comitea lo
+# construido y declara el AC ABIERTO —la conducta correcta—, el gate independiente encuentra ese
+# HEAD rojo por el e2e que él mismo escribió y no corrió, y el watchdog pausaba TODO hasta que
+# una persona mirara. El motor pasaba la noche detenido sobre trabajo sano.
+#
+# Las cuatro aserciones son las cuatro esquinas de la decisión, y la tercera es la que importa:
+# sin ella la línea sería un salvoconducto y la pausa no volvería a dispararse jamás.
+TEC="$M/trabajo-en-curso.sh"
+PLAN_FIX="$(mktemp -d)/plan.md"
+printf -- '- [ ] (P1) algo sin terminar [%s-%s-%s]\n- [x] (P1) algo cerrado [%s-%s-%s]\n' \
+  "AC" "FPOD" "03" "AC" "FPOD" "01" > "$PLAN_FIX"
+AC_ABIERTO_FIX="$(printf 'AC-%s-%s' 'FPOD' '03')"
+AC_CERRADO_FIX="$(printf 'AC-%s-%s' 'FPOD' '01')"
+
+bash "$TEC" --app=flota --plan="$PLAN_FIX" \
+  --mensaje="$(printf 'feat: a medio camino\n\nAC-ABIERTO: %s — el e2e no se corrió, presupuesto agotado' "$AC_ABIERTO_FIX")" >/dev/null 2>&1 \
+  && ok "un commit que declara su AC abierto, y sigue abierto en el plan, NO pausa el motor" \
+  || no "el trabajo a medio camino declarado sigue pausando: el motor pasa la noche detenido sobre trabajo sano"
+
+bash "$TEC" --app=flota --plan="$PLAN_FIX" --mensaje="feat: dice que está listo y no lo está" >/dev/null 2>&1 \
+  && no "un commit SIN declaración pasa como trabajo en curso: un verde falso ya no frena nada" \
+  || ok "un commit sin la declaración canónica sigue pausando (el verde falso es lo que la pausa protege)"
+
+bash "$TEC" --app=flota --plan="$PLAN_FIX" \
+  --mensaje="$(printf 'feat: marcado y rojo\n\nAC-ABIERTO: %s — pero lo marqué igual' "$AC_CERRADO_FIX")" >/dev/null 2>&1 \
+  && no "la declaración se volvió un salvoconducto: un AC marcado con el gate rojo ya no pausa" \
+  || ok "declarar abierto un AC que está marcado como cerrado NO salva del pausado (es afirmar un verde que no existe)"
+
+bash "$TEC" --app=flota --plan="$PLAN_FIX" \
+  --mensaje="$(printf 'feat: lo menciono en prosa\n\nHablé de AC-ABIERTO: %s en medio de un párrafo' "$AC_ABIERTO_FIX")" >/dev/null 2>&1 \
+  && no "una mención en prosa cuenta como declaración: cualquier commit que nombre la línea evade la pausa" \
+  || ok "la declaración se ancla al principio de línea (mencionarla en prosa no cuenta)"
+
+# La otra mitad del contrato: al agente hay que PEDIRLE la línea, o nunca la va a escribir.
+grep -q "AC-ABIERTO:" "$M/loop.sh" \
+  && ok "loop.sh le pide al agente la línea canónica al dejar un AC abierto (sin eso, la regla no se ejerce nunca)" \
+  || no "loop.sh no le pide la declaración: el watchdog espera una línea que nadie escribe y todo sigue pausando"
+
+echo
 echo "== 3b-e. Un AC atascado no pausa el motor entero (3-ago-2026) =="
 # BUG REAL: KILOPAN_MAX_FALLOS_AC y MAX_SIN_AVANCE valen 3 los dos, y siguiente_ac()
 # reelige el MISMO AC hasta que queda atascado — sus 3 fallos consecutivos eran SIEMPRE
