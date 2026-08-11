@@ -109,7 +109,15 @@ La numeración fina 00–08 la fija el índice del orquestador; lo vinculante es
 
 ## Preguntas al dueño
 
-1. **Máquina de estados completa del encargo:** el maestro fija `solicitado` (§4.5), «finales solo-por-trigger» (§4.5), `reintento_de` (§4.5) y «editable solo hasta aceptación» (§3.E1.10), pero NO enumera los estados intermedios ni sus nombres canónicos (¿qué hay entre `solicitado`/creado y los finales? ¿cuáles son exactamente los finales?). Incluye: ¿a qué estado vuelve un encargo cuyo ítem fue «bajado del manifiesto» — re-planificable el mismo día o requiere reintento nuevo?
+1. ~~**Máquina de estados completa del encargo.**~~ **RESPONDIDA** por Alexis el
+   11-ago-2026: `solicitado → aceptado → asignado → publicado → entregado | no_entregado`
+   —CON seguimiento de ruta explícito en el propio encargo, no solo derivable de
+   `paradas`/`items`—; los finales siguen solo-por-trigger (§4.5, ya fijado). Y un ítem
+   BAJADO del manifiesto sin DTE (AC-FRUT-08) **NO** cierra su encargo como `no_entregado`:
+   se desasigna de la parada y es **re-planificable el MISMO día**, sin `reintento_de` — se
+   trata como contratiempo operativo (la mercadería sigue en el andén), no como fracaso de
+   entrega. `reintento_de` queda para cuando el camión SALIÓ y no entregó. Registro:
+   `docs/respuestas-dueno-2026-08-11-spec01-spec03.md`. Se implementa en AC-FRUT-03.
 2. **Instanciación día-desde-maestra:** ¿la ruta del día nace como COPIA (filas nuevas de ruta/paradas con origen=`maestra`) o como referencia a la maestra con overrides? El maestro pide maestras editables y rutas del día versionadas (§3.E1.6, §4.5) sin cerrar el mecanismo. AC-FRUT-06 exige solo lo observable.
 3. **Encargo creado en andén (seed del tenant B, §10):** ¿su creación es PLANIFICACIÓN (rebota — exige red en el andén) o necesita una vía de CAPTURA (entra siempre, incluso offline, con flag)? El `COMMENT ON TABLE` de `encargos` admite UNA sola clase (§4.2) y el maestro no clasifica este caso.
 4. **ETA vivo en E1:** `promesa_original` se congela «aparte del ETA vivo» (§4.5) y el semáforo Entregas usa «ETA proyectada + tolerancia» (Anexo B), pero sin VRP (E2) el maestro no define cómo se computa un ETA en E1. ¿Se opera solo contra la ventana comprometida hasta E2, o hay una regla simple de proyección que deba sembrar este módulo? Esta es la pregunta CANÓNICA sobre el ETA (este módulo posee promesas y rutas): la spec 05 (semáforo «Hoy», dominio Entregas) depende de su respuesta.

@@ -969,9 +969,13 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
    **sesión web**, sin PWA instalada ni `persist()`: esas exigencias existen porque el operario
    captura offline en terreno, y el contratante solo lee su liquidación. Fija además que el
    portal de la spec 07 no exige enrolamiento de aparato.
-4. **Passkey del admin:** ¿cuándo se registra (wizard de alta vs primer uso de
-   «transferir propiedad») y cuál es la vía de recuperación si se pierde (¿break-glass
-   §7.9)? El maestro no lo dice.
+4. ~~**Passkey del admin:** ¿cuándo se registra y cuál es la vía de recuperación?~~
+   **RESPONDIDA** por Alexis el 11-ago-2026: se registra **al primer uso de «transferir
+   propiedad»** —el alta del tenant queda liviana—, y si se pierde se recupera por
+   **break-glass del §7.9**: el mismo mecanismo ya aprobado el 09-ago para soporte, dos
+   personas DISTINTAS de la plataforma con aviso por correo y panel persistente. No nace un
+   secreto de recuperación nuevo que administrar. Registro:
+   `docs/respuestas-dueno-2026-08-11-spec01-spec03.md`. Se implementa en AC-FIDN-13.
 5. ~~**Distribución de la invitación** y formato del código corto.~~ **RESPONDIDA** por
    Alexis el 09-ago-2026: **share-sheet del propio teléfono del dueño** (o copiar), SIN
    pasarela de SMS ni de WhatsApp — cero integraciones, cero costo por mensaje, y sin meter en
@@ -994,13 +998,14 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
    que lo justifica. El aviso va por el mismo canal que las brechas (P10 de la spec 00):
    **correo Y aviso persistente en el panel hasta que lo reconozca**, sin depender de push.
    Con esto, AC-FIDN-18 deja de estar bloqueado.
-8. **ARCO y retención:** ¿QUIÉN acciona el export ARCO — solo `admin_tenant` como
-   acto de gobierno (§5.4), o también autoservicio del titular? (el maestro solo dice
-   «export ARCO» sin actor, §3.E1.15; bajo la Ley 21.719 el titular del derecho es la
-   persona). Además: formato (¿JSON/CSV/PDF?) y alcance exacto; y plazos de
-   `retention_policy` para invitaciones vencidas, solicitudes rechazadas,
-   dispositivos revocados y grants expirados — el DDL de la tabla nace en este módulo
-   (AC-FIDN-01) pero el maestro no fija valores.
+8. ~~**ARCO y retención.**~~ **RESPONDIDA** por Alexis el 11-ago-2026: el export lo
+   acciona **solo `admin_tenant`, como acto de gobierno (§5.4)** — el trabajador lo pide
+   por fuera de la app y el dueño lo genera; sin autoservicio nuevo que asegurar. Formato:
+   **JSON estructurado**, completo y auditable; PDF/CSV se generan desde ahí con otra
+   herramienta si hace falta. `retention_policy`: invitaciones vencidas **30 días**,
+   solicitudes rechazadas **90 días**, dispositivos revocados **1 año**, grants expirados
+   **1 año**. Registro: `docs/respuestas-dueno-2026-08-11-spec01-spec03.md`. Se implementa
+   en AC-FIDN-15.
 9. ~~**Curva del backoff del PIN.**~~ **RESPONDIDA** por Alexis el 09-ago-2026: la espera se
    DUPLICA a partir de medio minuto (30 s, 1, 2, 4, 8 min) y se topa en un cuarto de hora; un
    PIN correcto resetea el contador a cero. Razón: quien se equivoca de verdad es casi siempre

@@ -18,9 +18,11 @@
 # fácil.
 
 # ─── Bloqueados por una pregunta al dueño sin responder ─────────────────────────────
-AC-FRUT-03   # spec 03, pregunta 1: el maestro no enumera los estados intermedios ni los finales del encargo. El enum tiene los DOS que fija literalmente y el pgTAP lo asierta para que nadie los amplíe inventando.
-AC-FIDN-13   # spec 01, pregunta 4: passkey del admin. Sin la decisión, el mecanismo se inventaría.
-AC-FIDN-15   # spec 01, pregunta 8: export ARCO de la Ley 21.719 — qué se entrega y en qué forma.
+#
+# (11-ago-2026: AC-FRUT-03, AC-FIDN-13 y AC-FIDN-15 SALIERON de esta lista — Alexis respondió
+# spec 03 P1 y spec 01 P4/P8. Registro: docs/respuestas-dueno-2026-08-11-spec01-spec03.md.
+# Quedan sin línea propia porque no hay más ACs bloqueados por decisión hoy; si aparece uno
+# nuevo, se agrega con su razón al lado, como el resto de este archivo.)
 
 # ─── De oráculo HUMANO: no se cierran con código, JAMÁS bloquean al loop (§9.2, §10) ──
 AC-FVEH-16   # DONE-adopción: alta real cronometrada en menos de dos minutos y lectura del semáforo sin ayuda. Dueño nombrado: Alexis.
