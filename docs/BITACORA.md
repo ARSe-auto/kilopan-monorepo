@@ -2213,3 +2213,32 @@ el conteo, como el AC exige.
 `check.sh --app=flota --full` en VERDE: **14 OK · 0 fallados · 1 saltado declarado**. Última
 migración: `0039_empresa_implicita`. 60 rutas con su cruce declarado. pgTAP: 21 suites, la 0020
 con 34 casos.
+
+## 11-ago-2026, 18:45 — El CI estuvo rojo días por una prueba que medía la máquina
+
+`check.sh` daba VERDE en el Mac y GitHub Actions daba ROJO en cada push, dos veces por commit
+(el workflow corre en `push` de cualquier rama y en `pull_request` contra main). El único paso
+rojo era `prueba-arnes`, y dentro de sus 111 casos, uno solo: el (c5), que corre `watchdog.sh`
+sin `CLAUDE_CODE_OAUTH_TOKEN` y exige que se frene POR ESO.
+
+`watchdog.sh` tiene dos frenos ANTES de ese: `claude` y `pnpm` en el PATH. En un runner de
+GitHub no existe ninguno de los dos, así que se frenaba por el primero; la prueba leía ese otro
+mensaje, no encontraba en él lo que buscaba y concluía que el guard de la credencial no estaba.
+Ninguna de las dos máquinas mentía sobre el código: la prueba dependía de qué binarios tuviera
+la máquina que la corría.
+
+Arreglado en `cd748ea`: se le arma un PATH con `claude` y `pnpm` estubados, de modo que el freno
+ejercido sea el de la credencial —el que la prueba dice probar— en cualquier entorno. Y el
+mensaje del caso rojo ahora incluye la salida REAL con la que el watchdog se frenó: sin ella, el
+rojo solo se diagnostica reproduciendo el entorno del runner a mano, que es lo que lo mantuvo
+vivo tanto tiempo.
+
+Después del arreglo, todos los pushes salieron verdes, incluidos los del motor autónomo.
+`main` queda rojo a propósito hasta que se mergee el PR #1: nadie empuja ahí, así que no genera
+correos, y un commit suelto dispararía un run que puede fallar por un e2e viejo ya arreglado en
+la rama.
+
+**Lo que hay que recordar:** una prueba del arnés que depende del entorno no prueba el arnés,
+prueba el entorno — y un gate local verde no es el veredicto de CI. El detalle de un rojo de CI
+NO está en la consola del step (solo el resumen `OK/FALLÓ`), sino en el artefacto `gate-logs`,
+que trae `ultimo-check.log`.
