@@ -58,6 +58,8 @@ export async function POST(peticion: Request) {
     tsDispositivo,
     tzOffsetMin: cuerpo.tz_offset_min === undefined ? null : Number(cuerpo.tz_offset_min),
     contexto: cuerpo.contexto ? String(cuerpo.contexto) : null,
+    instrumentoId: cuerpo.instrumento_id ? String(cuerpo.instrumento_id) : null,
+    sensor: cuerpo.sensor ? String(cuerpo.sensor) : null,
   });
 
   if (resultado.tipo === "magnitud_desconocida") {

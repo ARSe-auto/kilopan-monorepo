@@ -45,6 +45,12 @@ export type LecturaEntrante = {
   tsDispositivo: Date;
   tzOffsetMin: number | null;
   contexto: string | null;
+  /** La segunda llave de la idempotencia DOBLE del §4.6 [AC-FPOD-04]: el archivo de un logger
+   *  reimportado, o el mismo instrumento repetido con OTRO client_uuid, no puede duplicar la
+   *  fila. `null` en cualquiera de las dos deja a esta llave inerte (§0: NULL nunca choca contra
+   *  NULL en un UNIQUE), que es lo que corresponde a una lectura declarada sin instrumento. */
+  instrumentoId: string | null;
+  sensor: string | null;
 };
 
 export type Registrada = {
@@ -171,9 +177,13 @@ export async function registrarLectura(
 
     const { rows } = await c.query<{ id: string }>(
       `insert into reading
-         (magnitud_id, valor_int, fuente, contexto, turno_id, ts_dispositivo, tz_offset_min, client_uuid)
-       values ($1, $2, $3::lectura_fuente, $4, $5, $6, $7, $8)
-         on conflict (tenant_id, client_uuid) do nothing
+         (magnitud_id, valor_int, fuente, contexto, instrumento_id, sensor, turno_id, ts_dispositivo, tz_offset_min, client_uuid)
+       values ($1, $2, $3::lectura_fuente, $4, $5, $6, $7, $8, $9, $10)
+         -- Sin conflict_target: catch de CUALQUIER arbiter UNIQUE de la tabla (§0, §4.6). Con un
+         -- target fijo en (tenant_id, client_uuid) —como estaba antes— la OTRA llave de la
+         -- idempotencia DOBLE (instrumento, sensor, ts_dispositivo) tumbaba la transacción con un
+         -- 23505 sin capturar: justo lo que el §4.2 prohíbe para una CAPTURA [AC-FPOD-04].
+         on conflict do nothing
        returning id::text as id`,
       [
         mag[0].id,
@@ -182,6 +192,8 @@ export async function registrarLectura(
         // canónica y no escrita a mano, para que el día que exista OBD haya UN lugar que tocar.
         EV.fuente_por_defecto,
         entrante.contexto,
+        entrante.instrumentoId,
+        entrante.sensor,
         antes ? entrante.turnoId : null,
         entrante.tsDispositivo,
         entrante.tzOffsetMin ?? offsetChileMin(entrante.tsDispositivo),
@@ -190,10 +202,17 @@ export async function registrarLectura(
     );
 
     if (!rows[0]) {
-      // Replay: la fila ya estaba. Se devuelve LA MISMA, sin evento ni revisión de más.
+      // Replay: la fila ya estaba —por `client_uuid` (el mismo aparato reintentando) o por la
+      // tripleta (instrumento, sensor, ts_dispositivo) (el mismo instrumento con OTRO client_uuid,
+      // §4.6, AC-FPOD-04). Se devuelve LA MISMA, sin evento ni revisión de más.
       const { rows: previa } = await c.query<{ id: string }>(
-        "select id::text as id from reading where client_uuid = $1",
-        [entrante.clientUuid],
+        `select id::text as id from reading
+          where (client_uuid is not null and client_uuid = $1)
+             or (instrumento_id is not null and sensor is not null
+                 and instrumento_id = $2 and sensor = $3 and ts_dispositivo = $4)
+          order by record_time asc
+          limit 1`,
+        [entrante.clientUuid, entrante.instrumentoId, entrante.sensor, entrante.tsDispositivo],
       );
       const despues = await proyeccionDelTurno(c, entrante.turnoId);
       return {

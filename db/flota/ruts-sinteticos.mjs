@@ -34,6 +34,7 @@ export const VALIDOS = {
   "6.666.666-2": "el chofer del bucle de terreno de F4 (AC-FPOD-01), propio y no prestado: el índice «un dispositivo personal ACTIVO por operario» (§4.3) impide que dos suites que comparten persona tengan cada una su aparato enrolado, y la segunda en correr se pone roja por un choque de fixture que no tiene nada que ver con lo que prueba",
   "8.765.432-K": "el chofer de las variantes cerradas de F4 (AC-FPOD-02), propio y no prestado: mismo motivo que el de arriba — un dispositivo personal por operario — así que esta suite necesita el suyo, no el de AC-FPOD-01",
   "4.444.444-5": "el chofer del POD sin red (AC-FPOD-03), propio y no prestado: tercera suite de F4, tercer operario — la regla de un dispositivo personal por persona no admite compartirlo con las dos de arriba",
+  "3.333.333-1": "el chofer de la idempotencia del outbox (AC-FPOD-04), propio y no prestado: cuarta suite de F4, cuarto operario — mismo motivo que los tres de arriba",
 };
 
 /**
