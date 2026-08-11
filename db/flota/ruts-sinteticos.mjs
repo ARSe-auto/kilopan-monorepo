@@ -41,6 +41,8 @@ export const VALIDOS = {
   "1.234.567-4": "el chofer revocado FUERA de la ventana de 72h (AC-FPOD-07), propio y no prestado: la misma suite necesita un SEGUNDO operario porque cada caso enrola su propio aparato con su propio `revocado_at`",
   "6.543.210-2": "el chofer A del centinela 9 (AC-FPOD-09), propio y no prestado: octava suite de F4, octavo operario — el que captura 3 entregas sin señal y después ya no vuelve a este teléfono",
   "8.888.888-K": "el chofer B del centinela 9 (AC-FPOD-09): la SEGUNDA identidad que se autentica en el MISMO aparato de A: sin ella no hay quién pise el outbox, que es todo lo que el caso prueba",
+  "9.123.456-4": "el chofer de la secuencia monotónica por dispositivo (AC-FPOD-10), propio y no prestado: novena suite de F4, noveno operario — mismo motivo que las ocho de arriba",
+  "8.642.097-K": "el segundo operario de AC-FPOD-10, el que ejerce el replay-on-online con Background Sync inexistente: la misma suite necesita su propio aparato aparte del que deja el hueco de secuencia",
 };
 
 /**

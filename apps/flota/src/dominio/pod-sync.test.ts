@@ -93,6 +93,7 @@ test("módulo apagado Y reloj corrido se marcan los DOS, y ninguno de más", () 
     recibidaEn: enMinutos(AHORA, RELOJ.drift_max_minutos + 1),
     moduloEncendido: false,
     revocadoEn: null,
+    secuenciaHueco: false,
   };
   const flags = clasificarCapturaPod(desfasada);
   assert.deepEqual(flags, ["modulo_apagado", "reloj_desfasado"]);
@@ -146,6 +147,7 @@ test("revocación Y reloj corrido se marcan los DOS, y ninguno de más", () => {
     recibidaEn,
     moduloEncendido: true,
     revocadoEn,
+    secuenciaHueco: false,
   });
   assert.deepEqual(flags, ["reloj_desfasado", "post_revocacion_tardia"]);
   assert.equal(rechaza(flags), false);

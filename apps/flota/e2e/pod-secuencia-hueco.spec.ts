@@ -15,7 +15,7 @@ const A = TENANTS.filter((t) => t.estado === "activo")[0]!;
 const BD_A = bdDeTenant(A.slug);
 type Conexion = { sql: <T = Record<string, string>>(t: string, p?: unknown[]) => Promise<T[]> };
 
-const RUT_CHOFER = rutDeFixture(13);
+const RUT_CHOFER = rutDeFixture(18);
 const SECRETO = secretoNuevo();
 const comoChofer = { Authorization: `Portador ${SECRETO}` };
 
@@ -156,7 +156,7 @@ test("[AC-FPOD-10] una captura sin secuencia (PWA vieja) no dispara nada: no es 
 test("[AC-FPOD-10] con Background Sync inexistente en el navegador, el replay-on-online igual vacía la cola", async ({
   page,
 }) => {
-  const RUT = rutDeFixture(14);
+  const RUT = rutDeFixture(19);
   const SECRETO_2 = secretoNuevo();
 
   const [{ id: paradaId, destino }] = await con(BD_A, async (c: Conexion) => {
@@ -189,7 +189,7 @@ test("[AC-FPOD-10] con Background Sync inexistente en el navegador, el replay-on
   });
 
   await page.addInitScript((secreto) => {
-    // @ts-expect-error — borrado deliberado para probar que el replay no depende de esta API.
+    // Borrado deliberado para probar que el replay no depende de esta API.
     delete (window.navigator as { serviceWorker?: unknown }).serviceWorker;
     const guardar = () =>
       new Promise<void>((res) => {
