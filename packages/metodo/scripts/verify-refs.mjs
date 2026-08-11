@@ -55,7 +55,11 @@ const definicionesDe = (dir) => {
       if (inicio) estado = inicio[1];
       else if (/^(#|- )/.test(linea)) estado = null;
       if (estado === null) continue;
-      const id = linea.match(/\[(AC-[A-Z0-9]+-\d+)\]/)?.[1];
+      // El ÚLTIMO corchete de la línea, no el primero — misma razón que gate_specs.mjs
+      // (11-ago-2026): una cita a mitad de frase a OTRO AC, entre corchetes, se leía como
+      // si esta línea definiera ESE otro id en vez del suyo propio.
+      const ms = [...linea.matchAll(/\[(AC-[A-Z0-9]+-\d+)\]/g)];
+      const id = ms.length ? ms[ms.length - 1][1] : undefined;
       if (id && !mapa.has(id)) mapa.set(id, { estado, archivo: f });
     }
   }

@@ -519,6 +519,41 @@ rm -f "apps/kilopan/src/comun/__prueba-arnes-huerfano.ts"
 rm -rf "specs/$APP_FX"
 
 echo
+echo "== 4c. El id de un ítem es su ÚLTIMO corchete, no el primero (11-ago-2026) =="
+# Bug real: un ítem de una spec citaba a mitad de frase, ENTRE CORCHETES, el id de un AC de
+# OTRA spec —para decir «mismo diagnóstico que allá»— y cerraba recién al final con el
+# SUYO propio. El extractor tomaba TODOS los corchetes del archivo como "ids que esta spec
+# define", no solo el último de cada ítem: el id ajeno salía «definido en dos specs»
+# (colisión contra la que sí lo definía) y el id que el ítem SÍ definía nunca quedaba
+# registrado — huérfano para verify-refs. Frenó al motor autónomo una noche entera.
+#
+# Los ids de este fixture, aunque son de prueba, NO se escriben literales ni en el código
+# ni en ESTE comentario: verify-refs recorre el árbol entero por la forma de un id de AC y
+# no distingue una cita real de un ejemplo en prosa — un id de ejemplo escrito a mano pone
+# el propio gate en rojo por documentarse a sí mismo. Por eso nacen partidos con `printf`.
+#
+# gate_specs.mjs exige una app CONOCIDA (mapea contra su maestro), así que el fixture usa
+# kilopan de verdad —archivos NUEVOS, se borran al final— y no la app sintética de 4b.
+FXA="AC-$(printf 'YYR')-01"; FXB="AC-$(printf 'YYR')-02"; FXC="AC-$(printf 'YYR')-03"
+FXD="AC-$(printf 'YYS')-01"; FXE="AC-$(printf 'YYS')-02"; FXF="AC-$(printf 'YYS')-03"
+printf '# fixture A\nFuente: §4\n- [ ] uno [%s]\n- [ ] dos [%s]\n- [ ] tres [%s]\n' \
+  "$FXA" "$FXD" "$FXE" > specs/kilopan/98-fixture-corchete-a.md
+printf '# fixture B\nFuente: §4\n- [ ] cuatro [%s]\n- [ ] cita a mitad de frase a la spec A [%s]. Cierra con su propio id — oráculo: CI [%s]\n- [ ] seis [%s]\n' \
+  "$FXB" "$FXA" "$FXC" "$FXF" > specs/kilopan/98-fixture-corchete-b.md
+if node "$M/gate_specs.mjs" --app=kilopan >/dev/null 2>&1; then
+  ok "una cita a mitad de frase, entre corchetes, no se lee como una segunda definición"
+else
+  no "gate_specs volvió a confundir la cita de mitad de frase con el id del propio ítem"
+fi
+node "$M/verify-refs.mjs" --app=kilopan --estricto >/dev/null 2>&1 \
+  && ok "y el id que el ítem SÍ define —el último corchete— queda registrado, no huérfano" \
+  || no "verify-refs perdió el id real del ítem por quedarse con la cita de mitad de frase"
+rm -f specs/kilopan/98-fixture-corchete-a.md specs/kilopan/98-fixture-corchete-b.md
+node "$M/gate_specs.mjs" --app=kilopan >/dev/null 2>&1 \
+  && ok "vuelve a verde tras restaurar" \
+  || no "quedó rojo tras restaurar — la suite ensució el repo"
+
+echo
 echo "== 5. Estructura del monorepo (AC-H0-01) =="
 [ -f pnpm-workspace.yaml ] && [ -d apps ] && [ -d packages ] && ok "pnpm workspace con apps/ y packages/" || no "estructura de monorepo ausente"
 for p in miga metodo nucleo-comun nucleo-identidad nucleo-pod nucleo-dte; do
