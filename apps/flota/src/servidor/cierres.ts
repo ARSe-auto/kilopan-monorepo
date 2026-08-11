@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from "pg";
-import { enActo, enLectura, registrarEvento, EVENTOS_OPERACION } from "./gobierno.ts";
+import { enActo, enLectura, registrarEvento, EVENTOS_OPERACION, esUuid } from "./gobierno.ts";
 import type { Sesion } from "./sesion.ts";
+import { uuidDeterminista } from "./encargos.ts";
 import {
   flagsDelCierre,
   SEVERIDAD_DEL_CIERRE,
@@ -72,6 +73,10 @@ export type Declaracion = {
   empresa_cliente_id: string;
   devuelto: number;
   faltante: number;
+  /** El motivo de catálogo elegido cuando la clasificación fue «devuelto» [AC-FRUT-21]. Sin él
+   *  no se materializa la fila de `devoluciones` — la captura igual entra, degradada de detalle
+   *  y no de existencia: la ecuación cuadra igual, porque lee `cierre_ruta_empresa`, no acá. */
+  motivo_id: string | null;
 };
 
 export type Cierre =
@@ -84,6 +89,54 @@ export type Cierre =
       /** Vacío = la ruta cerró cuadrada. Con `cierre_descuadrado` = entró igual [AC-FRUT-11]. */
       flags: string[];
     };
+
+/**
+ * Materializa el detalle de un `devuelto`: empresa, bultos y motivo del catálogo [AC-FRUT-21].
+ *
+ * El `client_uuid` se DERIVA de `(cierreId, empresaClienteId)` y no se sortea — el mismo patrón
+ * que «duplicar encargos de ayer» (AC-FRUT-17, `encargos.ts::uuidDeterminista`): `cierreId` nace
+ * UNA vez por cierre (la fila `cierres_ruta` es append-only, y `cerrarRuta` solo llega hasta acá
+ * en la rama que la crea, jamás en un replay), así que dos declaraciones para la misma empresa
+ * dentro del mismo cierre resuelven al mismo `client_uuid` y el `on conflict do nothing` deja
+ * exactamente una fila — el centinela 1 sin pedirle un uuid propio al aparato por cada devolución.
+ */
+async function materializarDevolucion(
+  c: PoolClient,
+  sesion: Sesion,
+  datos: {
+    cierreId: string;
+    empresaClienteId: string;
+    bultos: number;
+    motivoId: string;
+    tsDispositivo: string;
+    tzOffsetMin: number;
+  },
+): Promise<void> {
+  const { rows } = await c.query<{ id: string }>(
+    `insert into devoluciones
+       (cierre_id, empresa_cliente_id, bultos, motivo_id, ts_dispositivo, tz_offset_min, client_uuid)
+     values ($1, $2, $3, $4, $5, $6, $7)
+       on conflict do nothing
+     returning id::text as id`,
+    [
+      datos.cierreId,
+      datos.empresaClienteId,
+      datos.bultos,
+      datos.motivoId,
+      datos.tsDispositivo,
+      datos.tzOffsetMin,
+      uuidDeterminista(`devolucion|${datos.cierreId}|${datos.empresaClienteId}`),
+    ],
+  );
+  if (!rows[0]) return;
+  await registrarEvento(c, {
+    codigo: EVENTOS_OPERACION.devolucion_registrada,
+    objetoTabla: "devoluciones",
+    objetoId: rows[0].id,
+    sesion,
+    payload: { cierre_id: datos.cierreId, empresa_cliente_id: datos.empresaClienteId, bultos: datos.bultos },
+  });
+}
 
 /**
  * Cierra la ruta con la clasificación táctil que trae el aparato (§5.2 F5).
@@ -143,6 +196,7 @@ export async function cerrarRuta(
 
       const cierreId = rows[0].id;
       for (const d of datos.declaraciones) {
+        const devuelto = Math.max(0, Math.trunc(d.devuelto));
         // Un ítem declarado para una empresa que no es de esta ruta NO rebota el acto entero: es
         // CAPTURA. La FK lo deja entrar si la empresa existe en el tenant, y la ecuación lo
         // muestra como su propio renglón descuadrado, que es más visible que descartarlo callado.
@@ -150,13 +204,18 @@ export async function cerrarRuta(
           `insert into cierre_ruta_empresa (cierre_id, empresa_cliente_id, devuelto, faltante)
            values ($1, $2, $3, $4)
              on conflict do nothing`,
-          [
-            cierreId,
-            d.empresa_cliente_id,
-            Math.max(0, Math.trunc(d.devuelto)),
-            Math.max(0, Math.trunc(d.faltante)),
-          ],
+          [cierreId, d.empresa_cliente_id, devuelto, Math.max(0, Math.trunc(d.faltante))],
         );
+        if (devuelto > 0 && d.motivo_id && esUuid(d.motivo_id)) {
+          await materializarDevolucion(c, sesion, {
+            cierreId,
+            empresaClienteId: d.empresa_cliente_id,
+            bultos: devuelto,
+            motivoId: d.motivo_id,
+            tsDispositivo: datos.tsDispositivo,
+            tzOffsetMin: datos.tzOffsetMin,
+          });
+        }
       }
 
       const renglones = await ecuacion(c, datos.rutaId);

@@ -52,6 +52,9 @@ export async function POST(peticion: Request, contexto: { params: Promise<{ id: 
       empresa_cliente_id: String(d.empresa_cliente_id),
       devuelto: Number(d.devuelto ?? 0) || 0,
       faltante: Number(d.faltante ?? 0) || 0,
+      // El motivo de catálogo de la devolución [AC-FRUT-21]. Sin él —o inválido— la fila de
+      // `devoluciones` simplemente no se materializa; el cierre no rebota por eso (§4.2).
+      motivo_id: esUuid(String(d.motivo_id ?? "")) ? String(d.motivo_id) : null,
     }));
 
   const cierre = await cerrarRuta(g.acto.pool, g.acto.sesion, {

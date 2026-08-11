@@ -6,6 +6,7 @@ import {
   CifraGrande,
   EstadoVacio,
   EstadoError,
+  SelectorUnToque,
 } from "@kilopan/miga/componentes/index.tsx";
 import { tipografia, superficie, grilla, enfasis } from "@kilopan/miga/tokens.ts";
 import { semantico } from "@kilopan/miga/estructura.ts";
@@ -17,6 +18,15 @@ import {
   DESTINOS_DEL_DESCUADRE,
   type TerminosDeEmpresa,
 } from "../../../dominio/cierre.ts";
+
+// El motivo de la devolución, del catálogo del tenant [AC-FRUT-21] — §4.5, §5.2 F5.
+//
+// Un tercer toque, y no un campo de texto: el §7.6 no quiere tipeo libre obligatorio en terreno,
+// y `motivos` YA es la lista que el catálogo del tenant ofrece para explicar un hecho (AC-FRUT-13).
+// Se exige acá, en el CLIENTE contra el snapshot (§4.2), porque «Cerrar la ruta» es la última
+// oportunidad de preguntarlo con el camión detenido y la persona ahí — después, la captura ya no
+// rebota y la fila de `devoluciones` que no llegó con motivo simplemente no se materializa.
+type Motivo = { id: string; etiqueta: string };
 
 // El cierre de la ruta con su ecuación de custodia por empresa (F5) [AC-FRUT-11]
 // — §3.E1.6, §4.5, §5.2 F5, §4.2, §4.8, §5.7.
@@ -56,15 +66,27 @@ export default function CierreDeRuta({ rutaId }: { rutaId: string }) {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cerrada, setCerrada] = useState(false);
+  const [motivos, setMotivos] = useState<Motivo[]>([]);
+  // Empresa → motivo elegido, SOLO para las que se clasificaron «devuelto» [AC-FRUT-21]. No
+  // vive en `renglones` porque el motivo no es un término de la ecuación (§5.2 F5) — es el
+  // detalle que la fila de `devoluciones` necesita, y la ecuación cuadra sin mirarlo.
+  const [motivoElegido, setMotivoElegido] = useState<Record<string, string>>({});
 
   const cargar = useCallback(async () => {
     setError(null);
-    const respuesta = await pedir(`/api/rutas/${rutaId}/cierre`).catch(() => null);
+    const [respuesta, deMotivos] = await Promise.all([
+      pedir(`/api/rutas/${rutaId}/cierre`).catch(() => null),
+      pedir(`/api/motivos`).catch(() => null),
+    ]);
     setCargando(false);
     if (!respuesta?.ok) return setError("No se pudo leer el cierre de la ruta. Revisá tu conexión.");
     const datos = (await respuesta.json()) as { renglones: Renglon[]; cerrada: boolean };
     setRenglones(datos.renglones);
     setCerrada(datos.cerrada);
+    if (deMotivos?.ok) {
+      const catalogo = (await deMotivos.json()) as { motivos: Motivo[] };
+      setMotivos(catalogo.motivos);
+    }
     return undefined;
   }, [rutaId]);
 
@@ -90,6 +112,7 @@ export default function CierreDeRuta({ rutaId }: { rutaId: string }) {
           empresa_cliente_id: r.empresa_cliente_id,
           devuelto: r.devuelto,
           faltante: r.faltante,
+          motivo_id: r.devuelto > 0 ? (motivoElegido[r.empresa_cliente_id] ?? null) : null,
         })),
         client_uuid: crypto.randomUUID(),
         ts_dispositivo: new Date().toISOString(),
@@ -172,14 +195,30 @@ export default function CierreDeRuta({ rutaId }: { rutaId: string }) {
                   )}
                 </div>
               )}
+
+              {/* Cuadró como «devuelto»: falta el motivo antes de poder cerrar [AC-FRUT-21].
+                  Un tercer toque, del mismo catálogo que ya usa la no-entrega — jamás un campo
+                  de texto (§7.6). */}
+              {diferencia === 0 && r.devuelto > 0 && (
+                <div data-testid={`motivo-${r.empresa_cliente_id}`} style={bloque}>
+                  <p style={aviso}>¿Por qué volvieron los {r.devuelto} bulto(s)?</p>
+                  <SelectorUnToque
+                    opciones={motivos.map((m) => ({ valor: m.id, etiqueta: m.etiqueta }))}
+                    valor={motivoElegido[r.empresa_cliente_id] ?? null}
+                    onCambiar={(motivoId) =>
+                      setMotivoElegido((previos) => ({ ...previos, [r.empresa_cliente_id]: motivoId }))
+                    }
+                  />
+                </div>
+              )}
             </section>
           );
         })
       )}
 
-      {/* El botón NO EXISTE mientras no cuadre. Deshabilitado sería la misma prohibición dicha
-          peor: se ve, se toca, y no pasa nada. */}
-      {cuadrada && (
+      {/* El botón NO EXISTE mientras no cuadre NI mientras falte un motivo de devolución.
+          Deshabilitado sería la misma prohibición dicha peor: se ve, se toca, y no pasa nada. */}
+      {cuadrada && lista.every((r) => r.devuelto === 0 || motivoElegido[r.empresa_cliente_id]) && (
         <BotonPrimario testid="cerrar-ruta" onClick={() => void cerrar()}>
           Cerrar la ruta
         </BotonPrimario>

@@ -121,6 +121,8 @@ export const EVENTOS_OPERACION = {
   // desde un evento genérico obligaría a abrir el jsonb de cada cierre del mes.
   cierre_ruta_cerrada: "cierre.ruta_cerrada",
   cierre_descuadrado: "cierre.descuadrado",
+  // La clasificación táctil materializó el detalle de un `devuelto` [AC-FRUT-21].
+  devolucion_registrada: "devolucion.registrada",
 } as const;
 
 /** Todo código que `registrarEvento` acepta tiene que estar sembrado en `evento_tipo`: si los

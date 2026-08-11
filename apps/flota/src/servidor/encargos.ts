@@ -399,7 +399,7 @@ export async function duplicarEncargos(
  * UUIDv7 —no lleva tiempo— y no tiene por qué serlo: el §0 exige v7 en las PK, que las genera
  * el servidor; esto es el identificador de idempotencia del cliente.
  */
-function uuidDeterminista(contenido: string): string {
+export function uuidDeterminista(contenido: string): string {
   const h = createHash("sha256").update(contenido).digest("hex");
   return [
     h.slice(0, 8),

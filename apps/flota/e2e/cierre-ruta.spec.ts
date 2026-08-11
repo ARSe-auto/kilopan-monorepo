@@ -34,7 +34,12 @@ let rutaDescuadrada = "";
 let rutaPorSync = "";
 /** La tercera es solo para MIRAR: las otras dos quedan cerradas y ya no muestran la ecuación. */
 let rutaParaMirar = "";
+/** Dedicada al cierre por sync de AC-FRUT-21: propia, para no cerrar una ruta que otro test
+ *  todavía necesita ver DESCUADRADA o SIN cerrar. */
+let rutaDevolucionSync = "";
 let empresaId = "";
+/** El catálogo de motivos del tenant [AC-FRUT-13], del que sale el de la devolución [AC-FRUT-21]. */
+let motivoId = "";
 
 /** Arma una ruta publicada con carga y entrega de UNA empresa, y su manifiesto ya confirmado. */
 async function armarRuta(
@@ -113,6 +118,12 @@ test.beforeAll(async () => {
       [Object.keys(VALIDOS)[4]!],
     );
     empresaId = emp!.id;
+    const [mot] = await c.sql<{ id: string }>(
+      `insert into motivos (codigo, etiqueta, estado_asociado, orden)
+       values ('devolucion_cierre', 'No quiso recibir', 'parada_fallida', 1)
+       returning id::text as id`,
+    );
+    motivoId = mot!.id;
     const [d] = await c.sql<{ id: string }>(
       "insert into destinos (nombre) values ('Sucursal del cierre') returning id::text as id",
     );
@@ -134,6 +145,12 @@ test.beforeAll(async () => {
       destino: d!.id,
       cargado: 4,
       entregado: 4,
+    });
+    rutaDevolucionSync = await armarRuta(c, {
+      vehiculo: v!.id,
+      destino: d!.id,
+      cargado: 5,
+      entregado: 3,
     });
   });
 });
@@ -176,6 +193,13 @@ test("[AC-FRUT-11] la ruta no cierra descuadrada, y la clasificación táctil la
   // UN toque: los tres bultos volvieron al depósito (§5.2 F5).
   await page.getByTestId(`devuelto-${empresaId}`).click();
   await expect(page.getByTestId("descuadre")).toHaveCount(0);
+
+  // El botón NO EXISTE todavía: falta el motivo de la devolución [AC-FRUT-21] — un tercer toque,
+  // del catálogo, jamás un campo de texto (§7.6).
+  await expect(page.getByTestId("cerrar-ruta")).toHaveCount(0);
+  await expect(page.getByTestId(`motivo-${empresaId}`)).toBeVisible();
+  await page.getByRole("radio", { name: "No quiso recibir" }).click();
+
   await page.getByTestId("cerrar-ruta").click();
   await expect(page.getByTestId("ruta-cerrada")).toBeVisible();
 
@@ -202,6 +226,62 @@ test("[AC-FRUT-11] la ruta no cierra descuadrada, y la clasificación táctil la
   expect(Number(ecuacion[0]!.cargado)).toBe(10);
   expect(Number(ecuacion[0]!.entregado)).toBe(7);
   expect(Number(ecuacion[0]!.diferencia)).toBe(0);
+
+  // [AC-FRUT-21] La clasificación táctil MATERIALIZÓ la devolución: empresa, bultos y motivo.
+  // Fixture equivalente al «1 devolución» del seed A (§10, hito g, aún no construido).
+  const devoluciones = await con(BD_A, (c: Conexion) =>
+    c.sql<{ bultos: string; motivo_id: string; empresa_cliente_id: string }>(
+      `select bultos::text as bultos, motivo_id::text as motivo_id,
+              empresa_cliente_id::text as empresa_cliente_id
+         from devoluciones d join cierres_ruta c on c.id = d.cierre_id
+        where c.ruta_id = $1`,
+      [rutaDescuadrada],
+    ),
+  );
+  expect(devoluciones.length).toBe(1);
+  expect(Number(devoluciones[0]!.bultos)).toBe(3);
+  expect(devoluciones[0]!.motivo_id).toBe(motivoId);
+  expect(devoluciones[0]!.empresa_cliente_id).toBe(empresaId);
+});
+
+test("[AC-FRUT-21] el motor de sync no rebota, y el replay deja exactamente 1 fila de devolución", async ({
+  page,
+}) => {
+  await sesionDe(page);
+  const comoElAparato = { Authorization: `Portador ${SECRETO}` };
+  const clientUuid = crypto.randomUUID();
+  const cuerpo = {
+    empresas: [
+      { empresa_cliente_id: empresaId, devuelto: 2, faltante: 0, motivo_id: motivoId },
+    ],
+    client_uuid: clientUuid,
+    ts_dispositivo: new Date().toISOString(),
+    tz_offset_min: -240,
+  };
+
+  const primera = await page.request.post(`${EN_A}/api/rutas/${rutaDevolucionSync}/cierre`, {
+    headers: comoElAparato,
+    data: cuerpo,
+  });
+  expect(primera.status()).toBe(201);
+
+  // El replay del outbox: 2xx otra vez (§4.2), y NO una segunda fila (§9.3.1) — ni del cierre
+  // ni de la devolución que colgó de él.
+  const replay = await page.request.post(`${EN_A}/api/rutas/${rutaDevolucionSync}/cierre`, {
+    headers: comoElAparato,
+    data: { ...cuerpo, client_uuid: clientUuid },
+  });
+  expect(replay.ok()).toBe(true);
+
+  const filas = await con(BD_A, (c: Conexion) =>
+    c.sql<{ n: string }>(
+      `select count(*)::text as n
+         from devoluciones d join cierres_ruta c on c.id = d.cierre_id
+        where c.ruta_id = $1`,
+      [rutaDevolucionSync],
+    ),
+  );
+  expect(Number(filas[0]!.n)).toBe(1);
 });
 
 test("[AC-FRUT-11] el cierre descuadrado que llega por sync entra 2xx con flag, evento y cola", async ({
