@@ -14,7 +14,13 @@ import { UNDO } from "../../../packages/nucleo-comun/src/constants.ts";
 //   (b) la UI dice «Entregada — por sincronizar» con el contador REAL de la cola, y JAMÁS un
 //       rechazo (§5.7);
 //   (c) al volver la señal el replay vacía la cola SIN que el chofer toque nada, y lo que la
-//       vacía es que el hecho quedó escrito en `eventos` — se cuenta en la BD, no en la pantalla.
+//       vacía es que el hecho quedó escrito en `eventos` — se cuenta en la BD, no en la pantalla;
+//   (d) que eso vale para el POD COMPLETO y no solo para el camino feliz: las cuatro salidas de
+//       F4 se capturan sin red y aterrizan con su `resultado` y su `metodo_entrega` propios.
+//
+// El PRESUPUESTO DE TOQUES de cada variante no se cuenta acá —es de AC-FPOD-02, y contarlo dos
+// veces sería dos baselines que se desincronizan—; lo que este AC exige de las variantes es que
+// sobrevivan al corte de red y al replay.
 
 const A = TENANTS.find((t) => t.slug === "hechos")!;
 const BD_A = bdDeTenant(A.slug);
@@ -114,6 +120,31 @@ async function rutaDeTresEntregas(nombre: string) {
     );
 
     return { entregas };
+  });
+}
+
+/** Un motivo del catálogo del tenant (§4.5): el mismo sirve para «no entregado» y para el
+ *  `motivo_item` de la parcial. Sin él, esas dos variantes no tienen con qué cerrarse. */
+async function unMotivo(codigo: string, etiqueta: string) {
+  await con(BD_A, async (c: Conexion) => {
+    await c.sql(
+      `insert into motivos (codigo, etiqueta, estado_asociado, orden) values ($1, $2, 'parada_fallida', 1)
+         on conflict (tenant_id, codigo) do update set etiqueta = excluded.etiqueta`,
+      [codigo, etiqueta],
+    );
+  });
+}
+
+/** El umbral del §4.4 que decide si `dejado_en_punto` exige encuadre. Se fija en 6 —el mismo
+ *  valor que usa la suite de AC-FPOD-02— para que las dos convivan sobre la fila única de
+ *  `parametros` sin voltearse el escenario entre sí. */
+async function umbralDeEncuadre(bultos: number) {
+  await con(BD_A, async (c: Conexion) => {
+    await c.sql(
+      `insert into parametros (bultos_max_sin_receptor) values ($1)
+         on conflict (unica) do update set bultos_max_sin_receptor = excluded.bultos_max_sin_receptor`,
+      [bultos],
+    );
   });
 }
 
@@ -226,4 +257,87 @@ test("[AC-FPOD-03] la cola se vacía porque el hecho quedó escrito, con su dobl
   });
   expect(respuesta.status()).toBe(200);
   expect(await capturasEnLaBase(ids)).toBe(1);
+});
+
+test("[AC-FPOD-03] sin red se capturan TODAS las variantes, y el replay las aterriza con el resultado de cada una", async ({
+  page,
+}) => {
+  // «El POD completo» del §3.E1.7 no es el camino feliz: es la parada que se cerró parcial, la que
+  // no se pudo entregar y la que quedó en el punto. Las tres pasan por el mismo outbox, y es
+  // justamente por eso que hay que probarlo — un `resultado` que el servidor no acepte vaciaría la
+  // cola solo para el camino feliz y dejaría las otras dos girando sin que nadie lo note.
+  await unMotivo("dano_en_transporte", "Dañado en el transporte");
+  await umbralDeEncuadre(6);
+  const { entregas } = await rutaDeTresEntregas("la ruta de las tres variantes sin señal");
+  await sesionDe(page);
+
+  await page.goto(`${EN_A}/entrega?parada=${entregas[0]!.id}`);
+  await expect(page.getByTestId("parada-actual")).toContainText(entregas[0]!.destino);
+  await page.context().setOffline(true);
+
+  // Parada 1 (4 bultos) — PARCIAL: cantidad del teclado propio + motivo por ítem (§4.5).
+  await page.getByTestId("llegue").click();
+  const itemTestid = await page
+    .getByTestId("modo-parcial-panel")
+    .locator("[data-testid^='cantidad-item-']")
+    .getAttribute("data-testid");
+  await page.getByTestId(itemTestid!).getByRole("button", { name: "3", exact: true }).click();
+  await page
+    .getByTestId(itemTestid!.replace("cantidad-item-", "motivo-item-"))
+    .getByRole("radio")
+    .first()
+    .click();
+  await page.getByTestId("confirmar-parcial").click();
+
+  // Parada 2 (8 bultos) — NO ENTREGADO: motivo del catálogo + confirmar.
+  await expect(page.getByTestId("parada-actual")).toContainText(entregas[1]!.destino);
+  await page.getByTestId("llegue").click();
+  await page.getByTestId("modo-no-entregado").click();
+  await page.getByTestId("motivo-no-entrega").getByRole("radio").first().click();
+  await page.getByTestId("confirmar-no-entregado").click();
+
+  // Parada 3 (12 bultos > 6) — DEJADO EN PUNTO, con el encuadre que el umbral del §4.4 exige.
+  await expect(page.getByTestId("parada-actual")).toContainText(entregas[2]!.destino);
+  await page.getByTestId("llegue").click();
+  await page.getByTestId("modo-dejado-en-punto").click();
+  await page.getByTestId("encuadrar-dejado-en-punto").click();
+  await page.getByTestId("confirmar-dejado-en-punto").click();
+
+  // Las tres en la cola, con el contador REAL, y ni un rechazo a la vista (§5.7).
+  await expect(page.getByTestId("contador-cola")).toHaveText("3", { timeout: UNDO.ventana_ms * 3 });
+  await expect(page.getByTestId("por-sincronizar")).toContainText("Entregada — por sincronizar");
+  const pantalla = await page.getByTestId("tarjeta-de-entrega").innerText();
+  expect(pantalla.toLowerCase()).not.toContain("rechaz");
+  expect(pantalla.toLowerCase()).not.toContain("no se pudo entregar la");
+
+  const ids: string[] = entregas.map((e: { id: string }) => e.id);
+  expect(await capturasEnLaBase(ids), "con la red cortada no aterriza ninguna variante").toBe(0);
+
+  // Vuelve la señal, y nadie toca la pantalla.
+  await page.context().setOffline(false);
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await expect(page.getByTestId("por-sincronizar")).toHaveCount(0, { timeout: 15_000 });
+  await expect.poll(() => capturasEnLaBase(ids), { timeout: 15_000 }).toBe(3);
+
+  // Y aterrizaron COMO LO QUE SON: la máquina del §4.5 viaja en el payload, no se pierde en el
+  // camino. Sin esta aserción, tres eventos idénticos pasarían por «las tres variantes llegaron».
+  type FilaDeVariante = { parada: string; resultado: string; metodo: string | null };
+  const filas: FilaDeVariante[] = await con(BD_A, (c: Conexion) =>
+    c.sql<FilaDeVariante>(
+      `select e.objeto_id::text            as parada,
+              e.payload->>'resultado'      as resultado,
+              e.payload->>'metodo_entrega' as metodo
+         from eventos e join evento_tipo t on t.id = e.tipo_id
+        where t.codigo = 'entrega.pod_capturada' and e.objeto_id = any($1::uuid[])`,
+      [ids],
+    ),
+  );
+  const porParada = new Map(filas.map((f) => [f.parada, f]));
+  expect(porParada.get(entregas[0]!.id)?.resultado, "la parcial aterriza como parcial").toBe("parcial");
+  expect(porParada.get(entregas[1]!.id)?.resultado, "la no entregada aterriza como fallo").toBe("fallo");
+  expect(porParada.get(entregas[2]!.id)?.resultado, "dejado en punto es entrega EFECTUADA").toBe("exito");
+  expect(
+    porParada.get(entregas[2]!.id)?.metodo,
+    "y se distingue del camino feliz por el método, no por el resultado (§4.5)",
+  ).toBe("dejado_en_punto");
 });
