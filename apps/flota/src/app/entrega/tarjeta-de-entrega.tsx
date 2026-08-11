@@ -29,7 +29,15 @@ import { textoDelCandado, type EmpresaDeLaEntrega } from "../../dominio/candado-
 // Escribir la frase acá, aparte, sería una segunda copia que se desalinea el día que alguien
 // ajuste una — el mismo motivo por el que `dominio/custodia.ts` es una función y no un texto
 // repetido en cada pantalla.
-export type RespuestaCandado = { abierta: boolean; empresas_faltantes: EmpresaDeLaEntrega[] };
+/** Lo que devuelve el endpoint, en la forma en que VIAJA: snake_case, como la BD.
+ *
+ *  No es `EmpresaDeLaEntrega[]`: ese es el tipo del DOMINIO, en camelCase. Declararlo aquí
+ *  hacía que TypeScript diera por buena una traducción que no existía, y el `.map` de abajo
+ *  —que sí traduce— quedaba leyendo una propiedad que el tipo juraba tener. La frontera entre
+ *  el JSON y el dominio es exactamente este par de tipos: si los unificamos, el día que la
+ *  columna cambie de nombre nadie se entera hasta que la pantalla muestre vacío. */
+export type EmpresaEnRespuesta = { id: string; razon_social: string };
+export type RespuestaCandado = { abierta: boolean; empresas_faltantes: EmpresaEnRespuesta[] };
 
 export default function TarjetaDeEntrega({ paradaId }: { paradaId: string }) {
   const [datos, setDatos] = useState<RespuestaCandado | null>(null);
