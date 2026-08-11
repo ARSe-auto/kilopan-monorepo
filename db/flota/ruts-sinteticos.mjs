@@ -29,6 +29,9 @@ export const VALIDOS = {
   "9.999.999-3": "el máximo de siete dígitos; comparte dígito verificador con 5.126.663-3, que es lo que prueba la máscara",
   "76.111.111-6": "la EMPRESA contratante de los fixtures del módulo 03 (AC-FRUT-01): rango 76.xxx de persona jurídica, que es el que usan las empresas en Chile y ninguna persona natural",
   "77.222.222-K": "la SEGUNDA empresa contratante (AC-FRUT-04): sin dos, la agrupación multi-empresa no se puede ejercer — el caso entero es que dos contratantes distintos mandan al mismo destino. Lleva K a propósito: el dígito verificador que más se rompe también aparece en una persona jurídica",
+  // Los nuevos van AL FINAL, siempre: media docena de suites toma su RUT por índice sobre este
+  // objeto (`Object.keys(VALIDOS)[6]`), y meter uno en el medio se los corre a todos en silencio.
+  "6.666.666-2": "el chofer del bucle de terreno de F4 (AC-FPOD-01), propio y no prestado: el índice «un dispositivo personal ACTIVO por operario» (§4.3) impide que dos suites que comparten persona tengan cada una su aparato enrolado, y la segunda en correr se pone roja por un choque de fixture que no tiene nada que ver con lo que prueba",
 };
 
 /**

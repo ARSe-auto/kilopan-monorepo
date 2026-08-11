@@ -177,7 +177,7 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 
 ## Hito (e) — POD offline-first + motor de sync, y semáforo «Hoy» / visibilidad
 
-- [ ] (P1) Entrega feliz = 2 acciones EXACTAS con avance automático y undo 8 s único; e2e cuenta eventos con regresión bloqueante — spec: specs/flota/04-pod-offline-sync.md [AC-FPOD-01]
+- [x] (P1) Entrega feliz = 2 acciones EXACTAS con avance automático y undo 8 s único; e2e cuenta eventos con regresión bloqueante — spec: specs/flota/04-pod-offline-sync.md [AC-FPOD-01] — probado: máquina pura del bucle F4 (`dominio/pod-terreno.ts`, 9 mutantes) + `e2e/pod-feliz.spec.ts` con 2 acciones exactas, avance sin toque, undo dentro/fuera de la ventana y cero modales; baseline en `acciones-entrega-feliz.json`
 - [ ] (P1) Variantes cerradas ≤4 acciones: parcial (stepper por ítem + motivo), no entregado (3), dejado_en_punto (3); evidencia extra solo por stop_requirement — spec: specs/flota/04-pod-offline-sync.md [AC-FPOD-02]
 - [ ] (P1) 100% offline: POD completo sin red con «Entregada — por sincronizar» + contador real; el replay vacía la cola sin intervención — spec: specs/flota/04-pod-offline-sync.md [AC-FPOD-03]
 - [ ] (P1) Idempotencia del outbox: replay DOBLE ⇒ exactamente 1 fila (centinela 1); idempotencia DOBLE de `reading` con instrumento sintético — spec: specs/flota/04-pod-offline-sync.md [AC-FPOD-04]
