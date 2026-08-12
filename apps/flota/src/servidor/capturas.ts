@@ -12,6 +12,7 @@ import {
   type FlagDeCapturaPod,
 } from "../dominio/pod-sync.ts";
 import type { TipoDeEvidencia } from "../dominio/pod-terreno.ts";
+import { candadoDeLaParadaEn } from "./paradas.ts";
 
 // El aterrizaje de las capturas del POD que trae el replay del outbox [AC-FPOD-03] — §4.2
 // (regla de oro), §4.6 (eventos append-only, doble reloj, `client_uuid`), §5.2 F4, §3.E1.7.
@@ -145,6 +146,8 @@ const EVENTO_DE_FLAG: Record<
   secuencia_hueco: EVENTOS_OPERACION.entrega_secuencia_hueco,
   // El binario de una evidencia no re-hasheó como el sha256 prometido [AC-FPOD-19] — §4.6.
   sha256_mismatch: EVENTOS_OPERACION.entrega_sha256_mismatch,
+  // El POD llegó por sync sin el manifiesto de su carga confirmado [AC-FRUT-23] — KR-29, §7.3.
+  sin_manifiesto_confirmado: EVENTOS_OPERACION.entrega_sin_manifiesto_confirmado,
 };
 
 /**
@@ -252,6 +255,109 @@ async function dejarDichoQueDegrado(
   }
 }
 
+/**
+ * Persiste la captura como el HECHO write-once del §4.5 [AC-FRUT-23]: una fila de `entregas_pod`
+ * por CADA encargo que la parada entrega. Es lo que le faltaba al camino feliz de 2 acciones
+ * («Llegué»→«Entregado») para estar completo — hasta acá la entrega existía como evento y como
+ * proyección, pero no como la declaración por encargo de la que cuelga la liquidación (§3.E1.9).
+ *
+ * ─── POR QUÉ POR ENCARGO Y NO POR PARADA ──────────────────────────────────────────
+ *
+ * El write-once del §4.5 es `UNIQUE(encargo) WHERE cerrada AND supersede IS NULL`: el sujeto de
+ * la unicidad es el encargo, no la parada. Una entrega consolidada de varias empresas (§3.E1.5)
+ * cierra varios encargos de una vez, y con una fila por parada la liquidación de cada empresa
+ * tendría que deducirse de un join en vez de leer su propia declaración.
+ *
+ * ─── QUÉ NO ESCRIBE, A PROPÓSITO ──────────────────────────────────────────────────
+ *
+ * Ninguna fila de `evidence`. El tipo que respalda la entrega feliz sin foto ni firma es la
+ * Pregunta al dueño 4 de la spec 04, sin responder: inventarle un tipo acá dejaría el numerador
+ * EEVD del §2 calculándose contra una decisión que nadie tomó.
+ *
+ * ─── Y POR QUÉ NINGUNA RAMA DE ACÁ REBOTA ────────────────────────────────────────
+ *
+ * Sigue rigiendo el centinela 4 (§9.3.4: rechazos = 0). Por eso el `motivo_id` que no existe en
+ * esta base se guarda como `null` en vez de romper la FK, el supersede sin motivo o sin autor
+ * entra como fila suelta en vez de violar el CHECK del §7.4, y el segundo POD cerrado del mismo
+ * encargo cae en el `on conflict do nothing` del índice parcial: la primera declaración es la que
+ * vale (write-once), y la vía para cambiarla es el supersede, jamás un rebote al terreno.
+ */
+async function persistirPod(
+  c: PoolClient,
+  datos: {
+    captura: CapturaEntrante;
+    sesion: Sesion;
+  },
+): Promise<void> {
+  const { captura, sesion } = datos;
+
+  const { rows: encargos } = await c.query<{ encargo_id: string }>(
+    "select distinct encargo_id::text as encargo_id from items where parada_id = $1 order by encargo_id",
+    [captura.paradaId],
+  );
+  // Sin ítems no hay encargo al que anotarle el POD. Pasa con una parada que no está en esta base
+  // —lo que el §9.3.2 exige que NO sea un rebote ni una fuga— y con una parada de recarga, que no
+  // entrega nada. El evento ya aterrizó: no se pierde nada.
+  if (encargos.length === 0) return;
+
+  // El motivo de catálogo, validado contra ESTA base. Un identificador que el aparato trae de
+  // otra ruta —o de un catálogo que el dueño apagó— no puede llevarse puesta la transacción por
+  // una FK: se guarda sin motivo, que es exactamente lo que hay que revisar después.
+  let motivoId: string | null = null;
+  if (captura.motivoId !== null && esUuid(captura.motivoId)) {
+    const { rows } = await c.query("select 1 from motivos where id = $1", [captura.motivoId]);
+    motivoId = rows[0] ? captura.motivoId : null;
+  }
+
+  // La corrección del §7.4: la fila NUEVA apunta a la que corrige. `supersede_de` viaja como el
+  // `client_uuid` de la captura original —lo único que el aparato conoce—, así que hay que
+  // resolverlo a la fila. Los dos CHECKs del esquema exigen motivo Y autor: sin cualquiera de los
+  // dos la corrección sería anónima o sin razón, indistinguible de una adulteración, y entonces
+  // esto NO es un supersede — entra como declaración suelta y el `on conflict` de abajo decide.
+  const motivo = captura.motivo === null ? "" : captura.motivo.trim();
+  const puedeSuperseder = captura.supersedeDe !== null && motivo !== "" && sesion.usuarioId !== null;
+
+  for (const { encargo_id } of encargos) {
+    let supersedeId: string | null = null;
+    if (puedeSuperseder) {
+      const { rows } = await c.query<{ id: string }>(
+        "select id::text as id from entregas_pod where client_uuid = $1 and encargo_id = $2",
+        [captura.supersedeDe, encargo_id],
+      );
+      supersedeId = rows[0]?.id ?? null;
+    }
+
+    await c.query(
+      `insert into entregas_pod
+         (encargo_id, parada_id, resultado, metodo_entrega, motivo_id, cerrada,
+          supersede_id, supersede_motivo, actor_id, dispositivo_id,
+          event_time, tz_offset_min, client_uuid)
+       values ($1, $2, $3::parada_resultado, $4, $5, true, $6, $7, $8, $9, $10, $11, $12)
+         on conflict (tenant_id, encargo_id) where cerrada and supersede_id is null do nothing`,
+      [
+        encargo_id,
+        captura.paradaId,
+        captura.resultado,
+        captura.metodoEntrega,
+        motivoId,
+        supersedeId,
+        supersedeId === null ? null : motivo,
+        sesion.usuarioId,
+        sesion.dispositivoId,
+        captura.tsDispositivo,
+        captura.tzOffsetMin,
+        // La llave del aparato identifica la CAPTURA, que es una por parada, y la unicidad de
+        // esta tabla es por tenant: en una entrega consolidada las N filas no pueden compartirla.
+        // La lleva la primera y las demás van sin ella — inventarles una derivada pondría en una
+        // columna del cliente un valor que el cliente nunca emitió. La idempotencia del replay no
+        // depende de esto: `aterrizarCapturas` corta ANTES, contra `eventos.client_uuid`, y en la
+        // misma transacción que estas filas.
+        encargo_id === encargos[0]!.encargo_id ? captura.clientUuid : null,
+      ],
+    );
+  }
+}
+
 export async function aterrizarCapturas(
   pool: Pool,
   sesion: Sesion,
@@ -311,12 +417,21 @@ export async function aterrizarCapturas(
           secuenciaMaxima = maximaConSecuencia(secuenciaMaxima, captura.secuenciaDispositivo);
         }
 
+        // El candado del servidor [AC-FRUT-23] — KR-29, §7.3: la MISMA lectura que le sirve el
+        // snapshot al cliente (`servidor/paradas.ts`), acá dentro de la transacción que aterriza
+        // la captura. Una parada que no es de entrega —o que no está en esta base (§9.3.2)— no
+        // tiene candado que mirar, y `undefined` es justamente eso: no se juzga.
+        const estadoDeLaParada = await candadoDeLaParadaEn(c, captura.paradaId);
+        const manifiestoConfirmado =
+          estadoDeLaParada.tipo === "entrega" ? estadoDeLaParada.abierta : undefined;
+
         const flags = clasificarCapturaPod({
           tsDispositivo: captura.tsDispositivo,
           recibidaEn: new Date(),
           moduloEncendido,
           revocadoEn,
           secuenciaHueco,
+          manifiestoConfirmado,
         });
 
         if (previo[0]) {
@@ -364,6 +479,11 @@ export async function aterrizarCapturas(
             secuencia_dispositivo: captura.secuenciaDispositivo,
           },
         });
+
+        // Y el HECHO write-once del §4.5, que es lo que hace completo al camino feliz de dos
+        // acciones [AC-FRUT-23]. Después del evento y no antes: `eventos` es el orden autoritativo
+        // (§4.6) y `entregas_pod` la declaración por encargo que cuelga de él.
+        await persistirPod(c, { captura, sesion: firma });
 
         // `post_revocacion` viaja en el acuse (el aparato tiene que poder mostrar la cuarentena)
         // pero no deja rastro: filtrarla ACÁ, y no en `dejarDichoQueDegrado`, es lo que evita que

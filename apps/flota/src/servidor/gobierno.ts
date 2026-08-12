@@ -154,6 +154,11 @@ export const EVENTOS_OPERACION = {
   // mutación [AC-FPOD-19] — §4.6. Mismo criterio que `custodia.sha256_mismatch`: la evidencia
   // entra igual, con el hash REAL, jamás rebota (la foto es mejora progresiva, §7.6).
   entrega_sha256_mismatch: "entrega.sha256_mismatch",
+  // El POD que aterrizó sin el sub-manifiesto por empresa de su carga confirmado [AC-FRUT-23] —
+  // KR-29, §7.3 (art. 55 DL 825), §9.3.4. Código propio y no `custodia.manifiesto_incompleto`:
+  // aquel es del andén (una carga que se confirmó incompleta) y este es de la entrega (una carga
+  // que nunca se confirmó), y contarlos juntos obligaría a abrir el jsonb de cada uno.
+  entrega_sin_manifiesto_confirmado: "entrega.sin_manifiesto_confirmado",
 } as const;
 
 /** Todo código que `registrarEvento` acepta tiene que estar sembrado en `evento_tipo`: si los

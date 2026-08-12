@@ -55,10 +55,16 @@ export async function limpiarBandeja(sql) {
   // (§7.4) y su FK sostiene la parada. Es la conducta correcta —esa carga se firmó y la historia
   // no se tira— y por eso se excluyen con `not exists` en vez de intentar el borrado y morir con
   // un error de restricción que no dice qué falta.
+  // Y desde AC-FRUT-23 tampoco las que ya tienen un POD aterrizado: `entregas_pod` es el hecho
+  // write-once del §4.5, append-only por el mismo §7.4, y su FK sostiene la parada igual que la
+  // del manifiesto. Misma conducta correcta: esa entrega ocurrió y la historia no se tira.
   await sql(
     `delete from rutas r
       where not exists (
         select 1 from paradas p join manifiestos m on m.parada_id = p.id where p.ruta_id = r.id
+      )
+        and not exists (
+        select 1 from paradas p join entregas_pod ep on ep.parada_id = p.id where p.ruta_id = r.id
       )`,
   );
   // Los encargos con ítems vivos se QUEDAN: sus ítems cuelgan de una parada que un manifiesto

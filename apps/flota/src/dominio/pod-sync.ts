@@ -53,6 +53,19 @@ import { clasificar as clasificarRevocacion, revisionDe as revisionDeRevocacion 
 // hash viaja ANTES, así que entre la mutación y la subida hay un rato en que solo existe la
 // promesa, y eso es lo normal).
 
+// ─── EL CANDADO DEL SERVIDOR SOBRE EL POD QUE LLEGA POR SYNC [AC-FRUT-23] — KR-29 ──
+//
+// El candado BLOQUEANTE es del cliente (§4.2): la tarjeta de la parada de entrega no ofrece
+// «Llegué» mientras el sub-manifiesto por empresa de su parada de carga no esté confirmado
+// (AC-FRUT-22). Pero «bloqueante en el cliente» no quiere decir «nadie mira del otro lado»: por
+// el motor de sync llega lo que capturó una PWA vieja, un aparato que venía offline desde antes
+// de que alguien bajara el ítem del manifiesto, o cualquiera que le pegue al endpoint. El §7.3
+// pone en el manifiesto confirmado el ancla del art. 55 DL 825, así que un POD sin él es
+// exactamente lo que hay que poder contar después.
+//
+// Y entra igual, como toda captura (§4.2, centinela 4 §9.3.4): el pan ya se entregó y un 422 no
+// devuelve la parada, la borra. Lo que cambia respecto de los otros flags es la SEVERIDAD: alta,
+// porque lo que quedó sin respaldo es documental, no la hora de un teléfono.
 export const FLAGS_DE_CAPTURA_POD = [
   "modulo_apagado",
   "reloj_desfasado",
@@ -60,6 +73,7 @@ export const FLAGS_DE_CAPTURA_POD = [
   "post_revocacion_tardia",
   "secuencia_hueco",
   "sha256_mismatch",
+  "sin_manifiesto_confirmado",
 ] as const;
 export type FlagDeCapturaPod = (typeof FLAGS_DE_CAPTURA_POD)[number];
 
@@ -89,6 +103,16 @@ export type CapturaPod = {
    *  clasifica la SUBIDA del binario de una evidencia. */
   shaPrometido?: string | null;
   shaRecalculado?: string | null;
+  /** Si el sub-manifiesto por empresa de la parada de carga que abastece esta entrega estaba
+   *  confirmado cuando la captura aterrizó [AC-FRUT-23] — KR-29, §7.3. Lo juzga el SERVIDOR
+   *  contra `items`/`manifiestos` (`servidor/paradas.ts::candadoDeLaParadaEn`, la misma lectura
+   *  que sirve el snapshot del cliente): acá solo se recibe el veredicto.
+   *
+   *  Opcional, y ausente NO es «sin confirmar»: la subida del binario de una evidencia
+   *  (`registrarBinarioDeEvidencia`) no vuelve a juzgar el candado —ya quedó dicho al aterrizar
+   *  la captura, y repetirlo pondría dos filas en «Por revisar» por el mismo hecho (§9.3.1)— y
+   *  una parada que no es de entrega no tiene candado que mirar. */
+  manifiestoConfirmado?: boolean;
 };
 
 /** Milisegundos de desfase tolerado entre el reloj del aparato y el del servidor (§0). */
@@ -134,6 +158,12 @@ export function clasificarCapturaPod(captura: CapturaPod): FlagDeCapturaPod[] {
     flags.push("sha256_mismatch");
   }
 
+  // El candado del servidor [AC-FRUT-23] — KR-29, §7.3. `=== false` y no `!captura.manifiesto
+  // Confirmado`: `undefined` es «acá no se juzga el candado» (la subida de un binario, una parada
+  // que no es de entrega), y leerlo como «sin confirmar» llenaría «Por revisar» de severidad alta
+  // desde el primer día — el mismo criterio con el que `moduloEncendido` trata la ausencia.
+  if (captura.manifiestoConfirmado === false) flags.push("sin_manifiesto_confirmado");
+
   return flags;
 }
 
@@ -177,6 +207,11 @@ export function severidadDeFlag(flag: FlagDeCapturaPod): string {
   if (flag === "post_revocacion_tardia") {
     return revisionDeRevocacion("post_revocacion_tardia")!.severidad;
   }
+  // El POD sin manifiesto confirmado sube a `alta` [AC-FRUT-23] — KR-29, §7.3: las otras
+  // degradaciones las explica el terreno (un teléfono con la hora corrida, un módulo que el dueño
+  // apagó), y esta no: lo que falta es el ancla documental del art. 55 DL 825 sobre una entrega
+  // que ya ocurrió. Mezclada en `media` con el resto se pierde entre el ruido de la bandeja.
+  if (flag === "sin_manifiesto_confirmado") return SEVERIDAD_SIN_MANIFIESTO_CONFIRMADO;
   return SEVERIDAD_DE_CAPTURA_POD;
 }
 
@@ -195,3 +230,8 @@ export function rechaza(_flags: readonly FlagDeCapturaPod[]): boolean {
  * hora corrida—, no un incidente.
  */
 export const SEVERIDAD_DE_CAPTURA_POD = "media";
+
+/** La severidad del POD que aterrizó sin el manifiesto de su carga confirmado [AC-FRUT-23] —
+ *  KR-29, §7.3, §9.3.4. `alta`, la misma que la revocación tardía y por el mismo motivo: no la
+ *  explica el terreno. */
+export const SEVERIDAD_SIN_MANIFIESTO_CONFIRMADO = "alta";

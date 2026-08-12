@@ -9,6 +9,7 @@ import {
   esHuecoDeSecuencia,
   maximaConSecuencia,
   SEVERIDAD_DE_CAPTURA_POD,
+  SEVERIDAD_SIN_MANIFIESTO_CONFIRMADO,
   FLAGS_DE_CAPTURA_POD,
   type CapturaPod,
 } from "./pod-sync.ts";
@@ -270,4 +271,42 @@ test("mismatch de sha256 y reloj corrido se marcan los DOS, y ninguno de más", 
 test("sha256_mismatch deja rastro y entra con la severidad de siempre", () => {
   assert.equal(dejaRastro("sha256_mismatch"), true);
   assert.equal(severidadDeFlag("sha256_mismatch"), SEVERIDAD_DE_CAPTURA_POD);
+});
+
+// ─── El candado del SERVIDOR sobre el POD que llega por sync [AC-FRUT-23] — KR-29 ────
+
+test("[AC-FRUT-23] POD sin el manifiesto de su carga confirmado: flag, y NO rechazo", () => {
+  const flags = clasificarCapturaPod({ ...base, manifiestoConfirmado: false });
+  assert.deepEqual(flags, ["sin_manifiesto_confirmado"]);
+  // §9.3.4, centinela 4: el pan ya se entregó y un rebote no devuelve la parada, la borra.
+  assert.equal(rechaza(flags), false);
+});
+
+test("[AC-FRUT-23] con el manifiesto confirmado no hay flag", () => {
+  assert.deepEqual(clasificarCapturaPod({ ...base, manifiestoConfirmado: true }), []);
+});
+
+test("[AC-FRUT-23] SIN juicio de candado (undefined) tampoco hay flag: ausencia no es «sin confirmar»", () => {
+  // La subida del binario de una evidencia y la parada que no es de entrega no juzgan candado.
+  // Leer `undefined` como «sin confirmar» llenaría «Por revisar» de severidad alta desde el día 1.
+  assert.deepEqual(clasificarCapturaPod(base), []);
+});
+
+test("[AC-FRUT-23] el POD sin manifiesto deja rastro y sube a severidad ALTA", () => {
+  assert.equal(dejaRastro("sin_manifiesto_confirmado"), true);
+  assert.equal(severidadDeFlag("sin_manifiesto_confirmado"), SEVERIDAD_SIN_MANIFIESTO_CONFIRMADO);
+  // Alta, y por eso distinta del resto: lo que falta es el ancla documental del art. 55 DL 825
+  // (§7.3), no algo que el terreno explique como un teléfono con la hora corrida.
+  assert.notEqual(SEVERIDAD_SIN_MANIFIESTO_CONFIRMADO, SEVERIDAD_DE_CAPTURA_POD);
+});
+
+test("[AC-FRUT-23] el candado se acumula con las otras degradaciones, sin tapar ninguna", () => {
+  const flags = clasificarCapturaPod({
+    ...base,
+    recibidaEn: enMinutos(AHORA, RELOJ.drift_max_minutos + 1),
+    moduloEncendido: false,
+    manifiestoConfirmado: false,
+  });
+  assert.deepEqual(flags, ["modulo_apagado", "reloj_desfasado", "sin_manifiesto_confirmado"]);
+  assert.equal(rechaza(flags), false);
 });

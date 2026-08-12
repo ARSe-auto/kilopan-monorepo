@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { enLectura } from "./gobierno.ts";
 import type { Sesion } from "./sesion.ts";
 import { evaluarCandadoDeEntrega, type CandadoDeEntrega } from "../dominio/candado-entrega.ts";
@@ -28,36 +28,50 @@ export async function candadoDeLaEntrega(
   sesion: Sesion,
   paradaId: string,
 ): Promise<EstadoDeLaParada> {
-  return enLectura(pool, sesion, async (c) => {
-    const { rows: parada } = await c.query<{ tipo: string; ruta_id: string }>(
-      "select tipo, ruta_id::text as ruta_id from paradas where id = $1",
-      [paradaId],
-    );
-    if (!parada[0] || parada[0].tipo !== "entrega") return { tipo: "no_es_entrega" as const };
+  return enLectura(pool, sesion, (c) => candadoDeLaParadaEn(c, paradaId));
+}
 
-    const { rows: empresas } = await c.query<{ id: string; razon_social: string }>(
-      `select distinct ec.id::text as id, ec.razon_social
-         from items i join empresas_cliente ec on ec.id = i.empresa_cliente_id
-        where i.parada_id = $1
-        order by ec.razon_social`,
-      [paradaId],
-    );
+/**
+ * El mismo juicio, sobre una conexión que YA está en un acto abierto [AC-FRUT-23].
+ *
+ * Existe separado de `candadoDeLaEntrega` porque el motor de sync lo necesita DENTRO de la
+ * transacción en la que la captura aterriza (`servidor/capturas.ts`): abrir un `enLectura` propio
+ * ahí adentro sería una segunda conexión que no ve lo que la transacción en vuelo escribió, y
+ * —peor— dos copias del mismo SQL que se separan el día que alguien ajuste una. El candado que el
+ * cliente ve y el que el servidor deja dicho tienen que salir de la MISMA lectura.
+ */
+export async function candadoDeLaParadaEn(
+  c: PoolClient,
+  paradaId: string,
+): Promise<EstadoDeLaParada> {
+  const { rows: parada } = await c.query<{ tipo: string; ruta_id: string }>(
+    "select tipo, ruta_id::text as ruta_id from paradas where id = $1",
+    [paradaId],
+  );
+  if (!parada[0] || parada[0].tipo !== "entrega") return { tipo: "no_es_entrega" as const };
 
-    const { rows: confirmadas } = await c.query<{ empresa_cliente_id: string }>(
-      `select distinct m.empresa_cliente_id::text as empresa_cliente_id
-         from manifiestos m
-         join paradas cp on cp.id = m.parada_id
-        where cp.ruta_id = $1 and cp.tipo = 'carga'`,
-      [parada[0].ruta_id],
-    );
+  const { rows: empresas } = await c.query<{ id: string; razon_social: string }>(
+    `select distinct ec.id::text as id, ec.razon_social
+       from items i join empresas_cliente ec on ec.id = i.empresa_cliente_id
+      where i.parada_id = $1
+      order by ec.razon_social`,
+    [paradaId],
+  );
 
-    const candado = evaluarCandadoDeEntrega({
-      empresasDeLaEntrega: empresas.map((e) => ({ id: e.id, razonSocial: e.razon_social })),
-      empresasConManifiestoConfirmado: new Set(confirmadas.map((f) => f.empresa_cliente_id)),
-    });
+  const { rows: confirmadas } = await c.query<{ empresa_cliente_id: string }>(
+    `select distinct m.empresa_cliente_id::text as empresa_cliente_id
+       from manifiestos m
+       join paradas cp on cp.id = m.parada_id
+      where cp.ruta_id = $1 and cp.tipo = 'carga'`,
+    [parada[0].ruta_id],
+  );
 
-    return { tipo: "entrega" as const, ...candado };
+  const candado = evaluarCandadoDeEntrega({
+    empresasDeLaEntrega: empresas.map((e) => ({ id: e.id, razonSocial: e.razon_social })),
+    empresasConManifiestoConfirmado: new Set(confirmadas.map((f) => f.empresa_cliente_id)),
   });
+
+  return { tipo: "entrega" as const, ...candado };
 }
 
 // ─── El estado visible: proyección de `eventos`, jamás un contador mutable [AC-FPOD-21] ────────
