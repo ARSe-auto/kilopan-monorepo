@@ -219,7 +219,8 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
     conteo de 2 toques desde «Hoy»; `e2e/cruce-tenant.spec.ts` cubre la ruta nueva
     (declarada `recurso` en `rutas/manifiesto.json`). `check.sh --full --app=flota` verde.
 - [x] (P1) Refresco: polling 15–30 s SOLO pestaña visible + ETag/304; grep cero WebSocket/EventSource; offline con digest viejo marcado — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-06]
-- [ ] (P1) Dominio Datos/sync: pendientes 65 min ⇒ amarillo; sin sync >4 h ⇒ rojo; done sin evidence ⇒ rojo; hueco de secuencia ⇒ rojo; severidad alta se proyecta ROJA — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-07]
+- [x] (P1) Dominio Datos/sync: pendientes 65 min ⇒ amarillo; sin sync >4 h ⇒ rojo; done sin evidence ⇒ rojo; hueco de secuencia ⇒ rojo; severidad alta se proyecta ROJA — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-07]
+  - Probado: `dominio/semaforo-datos-sync.test.ts` (10/10). `check.sh --full --app=flota` verde.
 - [ ] (P1) Dominio Turnos/conductores según Anexo B sobre proyecciones append-only (65 min sin eventos amarillo; >2 h rojo; medianoche rojo) — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-08]
 - [ ] (P1) Aislamiento y roles del tablero: suite A-contra-B total; manifest solo `admin_tenant` (chofer/responsable/cliente/operador/responsable_tecnico ⇒ 403); cero CLP a roles vetados — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-09]
 - [ ] (P1) Vista e-auto solo-`control` (componente contra fixtures): agregados técnicos/adopción; cero conexiones a BDs tenant; centinela 14 en rojo ante columna de dinero — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-10]

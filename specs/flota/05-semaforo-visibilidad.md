@@ -307,7 +307,28 @@ activa SOLO `admin_tenant`: mientras la pregunta 1 esté abierta, `operador` y
     nueva quedó declarada en `apps/flota/rutas/manifiesto.json` (`sin_recurso`): sin
     identificador ni sesión todavía, la respuesta es literal del fixture — cero dato de tenant
     que un cruce pueda sacar hoy.
-- [ ] (P1) Dominio Datos/sync desde `client_metric` + eventos: fixture con `outbox_edad_max` 65 min en turno ⇒ amarillo (65 min supera cualquier punto del rango seed «>30–60 min» del Anexo B sin alcanzar el rojo de 3–4 h, así el test no depende de la respuesta a la pregunta 5a); sin sync >4 h con turno abierto ⇒ rojo; parada `done` sin fila en `evidence` tras sync ⇒ rojo; hueco de secuencia por dispositivo (§4.7) ⇒ rojo; la captura degradada que originó el flag entró 2xx (jamás rebotó, §4.2) y aparece como excepción en «Por revisar», no como error del dispositivo; una fila de `review_queue` con severidad alta (captura `post_revocacion_tardia`, §4.3) se proyecta ROJA en la tarjeta Datos/sync (proyección severidad→{amarillo, rojo} sin ambigüedad, §2.4) — oráculo: CI [AC-FSEM-07]
+- [x] (P1) Dominio Datos/sync desde `client_metric` + eventos: fixture con `outbox_edad_max` 65 min en turno ⇒ amarillo (65 min supera cualquier punto del rango seed «>30–60 min» del Anexo B sin alcanzar el rojo de 3–4 h, así el test no depende de la respuesta a la pregunta 5a); sin sync >4 h con turno abierto ⇒ rojo; parada `done` sin fila en `evidence` tras sync ⇒ rojo; hueco de secuencia por dispositivo (§4.7) ⇒ rojo; la captura degradada que originó el flag entró 2xx (jamás rebotó, §4.2) y aparece como excepción en «Por revisar», no como error del dispositivo; una fila de `review_queue` con severidad alta (captura `post_revocacion_tardia`, §4.3) se proyecta ROJA en la tarjeta Datos/sync (proyección severidad→{amarillo, rojo} sin ambigüedad, §2.4) — oráculo: CI [AC-FSEM-07]
+  - Probado: `dominio/semaforo-datos-sync.test.ts` (10/10) contra `dominio/semaforo-datos-sync.ts`,
+    función pura `evaluarDatosSync` — sin migración nueva: las tres familias de hechos que
+    combina ya existen desde la migración 0002 (módulo 00) y ya las escribe el módulo 04
+    (`servidor/capturas.ts::dejarDichoQueDegrado`, AC-FPOD-05/07/10). La edad del outbox pasa por
+    `transicionColor` (histéresis, AC-FSEM-02) con los umbrales de la fila `signal_rule` sembrada
+    (`outbox_cola_edad_max_min`, migración 0059): fixture 65 min ⇒ amarillo, 4 h+1 min ⇒ rojo,
+    robustos a la pregunta 5a (mismo criterio que AC-FSEM-08/11/19); un dispositivo con turno
+    cerrado no evalúa. «Parada `done` sin evidence» y «hueco de secuencia» son binarias por Anexo
+    B: rojo directo, sin banda amarilla. El hallazgo del AC: `severidadDeFlag("secuencia_hueco")`
+    (`dominio/pod-sync.ts`, ya cerrado por AC-FPOD-10) entrega severidad `media` — la proyección
+    GENÉRICA severidad→color del §2.4 (`colorDeSeveridad`: `alta`→rojo, el resto→amarillo) por sí
+    sola daría amarillo, contradiciendo el «hueco de secuencia ⇒ rojo» explícito del Anexo B y de
+    este AC. `colorDeExcepcionReviewQueue` resuelve la conciliación: el hueco de secuencia es la
+    excepción documentada a la regla genérica (rojo siempre, por origen), y `post_revocacion_
+    tardia` sí sigue la proyección genérica (su severidad ya es `alta`, mismo resultado). Un test
+    dedicado prueba que la fila de `review_queue` aparece como una `ExcepcionCruda` más del
+    dominio (mismo shape que las demás: playbook, quien, estado) y no como un estado de error
+    aparte del dispositivo. `check.sh --full --app=flota` verde. Wiring del endpoint real
+    (`/api/semaforo/digest` contra `signal_rule`/`client_metric`/`eventos` reales, hoy sirve
+    literales de `semaforo-fixtures.ts` por AC-FSEM-06) queda para un AC posterior: no está en el
+    texto de este AC ni su oráculo lo exige (CI, no e2e).
 - [ ] (P1) Dominio Turnos/conductores (un AC por dominio, §9.2 «un AC por commit»; los demás dominios: AC-FSEM-16 a 19) evalúa según Anexo B sobre proyecciones append-only de `eventos`+`turnos`+`bloques_agenda` (jamás contadores mutables; dependencia 02): fixture sin eventos por 65 min en turno ⇒ amarillo (65 min supera cualquier punto del rango seed «30–45 min» sin alcanzar el rojo de >2 h — robusto a la pregunta 5a, misma técnica de AC-FSEM-07); turno sin cerrar >1 h tras fin de bloque ⇒ amarillo; sin señal >2 h ⇒ rojo (fixture 2,5 h); turno abierto cruzando medianoche ⇒ rojo — oráculo: CI [AC-FSEM-08]
 - [ ] (P1) Aislamiento y roles: la suite HTTP A-contra-B autogenerada cubre TODAS las rutas del módulo ⇒ 404 con body sin centinelas de B y BD de B sin cambios (mutaciones incluidas); manifest de `chofer`/`responsable_carga`/`cliente` no contiene el tablero y sus GET al digest ⇒ 403 con 0 filas; manifest de `operador` y de `responsable_tecnico` TAMPOCO contiene el tablero y sus GET al digest ⇒ 403 (§2.8: esta spec activa solo `admin_tenant`; el aserto del `operador` se revisa al responderse la pregunta 1); ninguna respuesta del módulo entrega CLP a esos roles (RLS §4.8 verificada con el rol de app real) — oráculo: CI [AC-FSEM-09]
 - [ ] (P1) Vista e-auto solo-`control`: el render se verifica a nivel de COMPONENTE/VISTA contra fixtures de `control` (sin depender del montaje/autenticación pendientes de la pregunta 2): muestra por tenant estado semafórico + actividad vs media móvil 7d, errores de sync, backlog, versión PWA, latencia p95 y EEVD agregada; el código del plano cross-tenant no abre conexión a ninguna BD `t_<slug>` (regla estática + test de privilegios); centinela 14: inyectar una columna de dinero/tarifa/cliente al payload del exportador ⇒ el test de schema falla en rojo; el e2e navegado con autenticación queda en AC-FSEM-24 — oráculo: CI [AC-FSEM-10]
