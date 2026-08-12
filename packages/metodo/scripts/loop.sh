@@ -268,6 +268,11 @@ Reglas duras:
   Usá comandos SIMPLES: sin 'cd' (ya estás en la raíz del repo), sin ';', sin '&&' y sin
   heredocs — un comando compuesto NO calza ningún patrón y muere denegado, quemando el
   turno. 'pnpm …', 'node …', 'git …', 'bash packages/metodo/scripts/…' directos sí pasan.
+  Las REDIRECCIONES a archivo tampoco pasan, aunque el comando de la izquierda esté en la
+  lista blanca: 'git show HEAD:algo > /tmp/x' muere denegado igual que si 'git show' no
+  estuviera permitido (le quemó 4 turnos al agente del 11-ago-2026). No hace falta el
+  archivo intermedio: corré 'git show HEAD:algo' a secas y leé su salida, o abrí el
+  archivo con la herramienta de lectura, que para eso está.
 - JAMÁS lances el gate ni tests en background, y tu último mensaje JAMÁS puede ser
   «espero que termine X»: en modo -p NO EXISTE el turno siguiente — morirías esperando
   (pasó el 06-ago: gate lanzado en background, sesión terminada «esperando», cero
