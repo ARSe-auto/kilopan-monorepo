@@ -36,8 +36,9 @@ export type MetodoDeEstimacion = (typeof METODOS_DE_ESTIMACION)[number];
 
 /** Puntos porcentuales sobre la reserva que encienden el amarillo (Anexo B). */
 const HOLGURA_AMARILLA_PP = 5;
-/** Retorno proyectado por debajo del cual el Anexo B pone rojo. */
-const RETORNO_MINIMO_PCT = 15;
+/** Retorno proyectado por debajo del cual el Anexo B pone rojo. Exportada: el evaluador de
+ *  dominio del semáforo [AC-FSEM-16, spec 05] la reutiliza en vez de re-especificarla. */
+export const RETORNO_MINIMO_PCT = 15;
 
 export type EstadoDeSenal = "verde" | "amarillo" | "rojo";
 

@@ -467,7 +467,28 @@ activa SOLO `admin_tenant`: mientras la pregunta 1 esté abierta, `operador` y
     en primer plano, 8/8 verde.
 - [ ] (P2) Telemetría del módulo en producción con el piloto: digest del semáforo emitido a telemetría de producto; métrica de cola al cierre del día tendiendo a cero visible en el panel §10 (la medición de minutos del dueño vive en AC-FSEM-23, condicionada a la pregunta 6 — este AC queda completable con el piloto) — oráculo: producción [AC-FSEM-14]
 - [ ] (P2) Validación en vivo del hito: revisión adversarial del hito (e) sin hallazgos críticos sobre el semáforo (datos malformados, doble-tap en ack/resolve, red cortada a mitad de drill-down, tenant A contra B); Alexis valida con capturas el camino dorado: tarjeta SLA demostrable con la farmacia del seed A, tablero del tenant B con terminología extrema, semáforo del tenant C en `mi_flota` — oráculo: humano [AC-FSEM-15]
-- [ ] (P1) Dominio Flota/energía EV (partición de AC-FSEM-08 por §9.2) consumiendo las proyecciones del módulo 02 (fórmula única del §0 — este módulo no la re-especifica): SOC proyectado al fin del bloque < reserva+5 pp ⇒ amarillo; SOC actual < consumo estimado del tramo restante ⇒ rojo (fixture: SOC 20% con consumo restante proyectado equivalente a 30%); retorno proyectado <15% ⇒ rojo (fixture: retorno proyectado 10%); «no quedó enchufado» a la hora límite ⇒ rojo — el fixture fija la fila de `parametros` de la hora límite explícitamente; su default seed sigue en la pregunta 5c — oráculo: CI [AC-FSEM-16]
+- [x] (P1) Dominio Flota/energía EV (partición de AC-FSEM-08 por §9.2) consumiendo las proyecciones del módulo 02 (fórmula única del §0 — este módulo no la re-especifica): SOC proyectado al fin del bloque < reserva+5 pp ⇒ amarillo; SOC actual < consumo estimado del tramo restante ⇒ rojo (fixture: SOC 20% con consumo restante proyectado equivalente a 30%); retorno proyectado <15% ⇒ rojo (fixture: retorno proyectado 10%); «no quedó enchufado» a la hora límite ⇒ rojo — el fixture fija la fila de `parametros` de la hora límite explícitamente; su default seed sigue en la pregunta 5c — oráculo: CI [AC-FSEM-16]
+  - Probado: `dominio/semaforo-flota-ev.test.ts` (10/10) contra `dominio/semaforo-flota-ev.ts`,
+    función pura `evaluarFlotaEv` — sin migración nueva: la fila `signal_rule` con histéresis
+    (`soc_margen_reserva_pp`, amarillo 5pp / rojo 0pp / recuperación 10pp) ya la siembra la
+    migración 0059 (AC-FSEM-03), y las proyecciones del módulo 02 (`socProyectadoPct`,
+    `consumoDelTramoPct`, `sinEnchufar`, `reservaPctDe`, todas de
+    `packages/nucleo-comun/src/senales-ev.ts`/`energia.ts`, AC-FVEH-09/11) se REUTILIZAN sin
+    re-especificar un solo número de la fórmula única — `gate-formula-energia`/`gate-constantes`
+    siguen verdes. Los dos rojos binarios del Anexo B (SOC actual < consumo del tramo; retorno
+    proyectado <15%, constante fija `RETORNO_MINIMO_PCT` exportada de `senales-ev.ts` para esta
+    reutilización) se proyectan directo, sin histéresis, mismo criterio que «turno cruzando
+    medianoche» en AC-FSEM-08; el amarillo (margen de SOC proyectado sobre la `reserva_pct` del
+    tenant, §4.4) pasa por `transicionColor` con la convención descendente invertida — un
+    tenant con reserva alta exige más margen, probado con `reservaPct=40` sobre el mismo tramo
+    que con la reserva default (15) daría verde. «No quedó enchufado» sale directo de
+    `enchufadoConfirmado`; el `null` («nadie preguntó todavía») NO dispara, mismo criterio que
+    AC-FVEH-11. Un tramo sin ficha EV completa no entra a la cola de excepciones (ni falso verde
+    ni falso rojo) y un caso de histéresis en zona intermedia prueba que el rojo previo baja a
+    amarillo, no salta directo a verde (§2.4). Wiring del endpoint real (`turnos`/`reading`/
+    `energy_entry` reales) queda para un AC posterior, mismo criterio que AC-FSEM-07/08/11: no
+    está en el texto de este AC ni su oráculo lo exige (CI, no e2e). `bash
+    packages/metodo/scripts/check.sh --full --app=flota` verde.
 - [ ] (P1) Dominio Caja/custodia/liquidación (partición de AC-FSEM-08; dependencias 03 y 06): discrepancia de custodia pendiente ⇒ amarillo (fixture del módulo 03: discrepancia registrada sin resolver); liquidación observada ⇒ amarillo — cláusula CONDICIONADA a la pregunta 11 (§3.E1.9 solo define abierta→cerrada→pagada + disputa por línea; el maestro no fija qué marca deja «observada»); descuadre confirmado sin evidencia ⇒ rojo; línea disputada ⇒ rojo (dinero disputado siempre es rojo, Anexo B); con liquidación OFF esas señales no evalúan (§5.5) — oráculo: CI [AC-FSEM-17]
 - [ ] (P1) Dominio DaaS/SLA (partición de AC-FSEM-08; solo modo `daas`, seed A con farmacia `otd_comprometido_pct=95`): OTD proyectado < comprometido −2 pp ⇒ amarillo; SLA incumplido en el período ⇒ rojo (fixture: OTD del período cerrado 90% contra 95 comprometido, computado de `paradas` cerradas vs ventana × `otd_comprometido_pct`, §4.5); empresa con `otd_comprometido_pct` NULL ⇒ su `signal_rule` no evalúa y sin tarjeta SLA para esa empresa (§4.5) — oráculo: CI [AC-FSEM-18]
 - [ ] (P1) Dominio Entregas vs plan (partición de AC-FSEM-08; dependencia 03) sobre `paradas`: ruta con 10% exacto de no-entregas ⇒ amarillo (10% cae en la banda seed «5–10%» cualquiera sea su punto y no supera el rojo «>10%» — robusto a la pregunta 5a) y ruta con 12% ⇒ rojo; compromiso vencido sin entrega ⇒ rojo, computado de `promesa_original` CONGELADA (§4.5) con ventana vencida y parada sin entrega — NO depende del ETA vivo; la señal amarilla «ETA proyectada + tolerancia (mín. 15 min) excede ventana» sigue condicionada a la pregunta 4 — oráculo: CI [AC-FSEM-19]
