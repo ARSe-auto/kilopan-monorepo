@@ -422,12 +422,26 @@ PID_LISTENER=$!
 sleep 1
 SALIDA_PET="$(bash "$PET" "--puerto=$PUERTO_LIBRE" 2>&1 || true)"
 case "$SALIDA_PET" in
-  *"YA ESTÁ TOMADO"*) ok "con el puerto ocupado lo DETECTA y lo dice (el rojo deja de parecer del AC)" ;;
+  *"está TOMADO"*) ok "con el puerto ocupado lo DETECTA y lo dice (el rojo deja de parecer del AC)" ;;
   *)                  no "no detecta un puerto ocupado: el zombi seguiría disfrazado de prueba rota" ;;
 esac
 case "$SALIDA_PET" in
   *"NO es el AC"*) ok "el aviso nombra la conclusión que importa: no es el AC, es el puerto" ;;
   *)               no "el aviso no dice que el AC está sano: quien lo lea va a revisar el lugar equivocado" ;;
+esac
+# NO DA POR MUERTO LO QUE PUEDE ESTAR VIVO (12-ago-2026). La primera versión de este aviso
+# afirmaba «es un servidor de una corrida anterior» y mandaba a matarlo. Ese día el proceso
+# del 3311 era el webServer VIVO de otra sesión: se leyó su `etime` («01:06») como una hora
+# seis cuando eran un minuto seis —el formato es [[dd-]hh:]mm:ss— y el aviso, encodando esa
+# lectura, habría matado la corrida ajena. Ahora imprime la hora ABSOLUTA de arranque, que
+# no se puede leer mal así, y deja la decisión a quien sepa de quién es el proceso.
+case "$SALIDA_PET" in
+  *"arrancó"*) ok "el aviso da la HORA DE ARRANQUE de cada proceso (una edad relativa se lee mal)" ;;
+  *)           no "el aviso no dice cuándo arrancó: no se puede distinguir un residuo de una corrida viva" ;;
+esac
+case "$SALIDA_PET" in
+  *"corrida VIVA"*) ok "advierte que puede ser una corrida viva y que hay que esperar, no matar" ;;
+  *)                no "el aviso da por muerto el proceso: manda a matar el trabajo de otra sesión" ;;
 esac
 wait "$PID_LISTENER" 2>/dev/null || true
 

@@ -64,8 +64,20 @@ if [ -z "$PIDS" ]; then
   exit 0
 fi
 
-echo "puerto-e2e-tomado: el puerto $PUERTO YA ESTÁ TOMADO por: $PIDS"
-echo "puerto-e2e-tomado: es un servidor de una corrida anterior que no se bajó. Playwright va a"
-echo "puerto-e2e-tomado: abortar con «is already used» y el rojo va a parecer de la prueba, no del"
-echo "puerto-e2e-tomado: puerto. Bajalo (kill $PIDS) y volvé a correr: NO es el AC."
+echo "puerto-e2e-tomado: el puerto $PUERTO está TOMADO. Playwright va a abortar con «is already"
+echo "puerto-e2e-tomado: used», y ese rojo va a parecer de la prueba y no del puerto: NO es el AC."
+echo "puerto-e2e-tomado: quién lo tiene, con su hora de arranque —"
+for pid in $PIDS; do
+  # LA HORA ABSOLUTA, NO LA EDAD RELATIVA. Esto no es cosmético: el 12-ago-2026 leí el
+  # `etime` de este mismo puerto como «1 h 06 min» cuando decía «1 min 06 s» —el formato es
+  # [[dd-]hh:]mm:ss— y sobre esa lectura di por muerto un servidor que estaba VIVO,
+  # sirviendo la corrida de otra sesión. Estuve a un comando de matarle el trabajo. Una
+  # marca de tiempo absoluta no se puede leer mal de esa manera.
+  echo "puerto-e2e-tomado:   pid $pid — arrancó $( { ps -p "$pid" -o lstart= 2>/dev/null || true; } | sed 's/^ *//' )"
+done
+echo "puerto-e2e-tomado: ANTES DE MATAR NADA, mirá esa hora. Si arrancó hace un momento, es una"
+echo "puerto-e2e-tomado: corrida VIVA —tuya o de otra sesión en este árbol— y Playwright lo va a"
+echo "puerto-e2e-tomado: bajar solo al terminar: esperá. Si es viejo y nadie está corriendo el"
+echo "puerto-e2e-tomado: e2e, ahí sí es un residuo. Este guion no lo decide por vos a propósito:"
+echo "puerto-e2e-tomado: matar lo que no arrancó este gate es como se pierde el trabajo del vecino."
 exit 1
