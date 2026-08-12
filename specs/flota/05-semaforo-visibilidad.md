@@ -490,7 +490,33 @@ activa SOLO `admin_tenant`: mientras la pregunta 1 esté abierta, `operador` y
     está en el texto de este AC ni su oráculo lo exige (CI, no e2e). `bash
     packages/metodo/scripts/check.sh --full --app=flota` verde.
 - [x] (P1) Dominio Caja/custodia/liquidación (partición de AC-FSEM-08; dependencias 03 y 06): discrepancia de custodia pendiente ⇒ amarillo (fixture del módulo 03: discrepancia registrada sin resolver); liquidación observada ⇒ amarillo — cláusula CONDICIONADA a la pregunta 11 (§3.E1.9 solo define abierta→cerrada→pagada + disputa por línea; el maestro no fija qué marca deja «observada»); descuadre confirmado sin evidencia ⇒ rojo; línea disputada ⇒ rojo (dinero disputado siempre es rojo, Anexo B); con liquidación OFF esas señales no evalúan (§5.5) — oráculo: CI [AC-FSEM-17]. Probado: `evaluarCajaCustodiaLiquidacion` (dominio/semaforo-caja-custodia.ts) con 6 tests unitarios propios + el test de contracción OFF existente en semaforo.test.ts (AC-FSEM-13); `check.sh --full --app=flota` verde (17/18 — el único rojo es `prueba-arnes`, guard del zombi de puerto que no encuentra `lsof` en el PATH del arnés, ajeno a este AC y a cualquier código de flota).
-- [ ] (P1) Dominio DaaS/SLA (partición de AC-FSEM-08; solo modo `daas`, seed A con farmacia `otd_comprometido_pct=95`): OTD proyectado < comprometido −2 pp ⇒ amarillo; SLA incumplido en el período ⇒ rojo (fixture: OTD del período cerrado 90% contra 95 comprometido, computado de `paradas` cerradas vs ventana × `otd_comprometido_pct`, §4.5); empresa con `otd_comprometido_pct` NULL ⇒ su `signal_rule` no evalúa y sin tarjeta SLA para esa empresa (§4.5) — oráculo: CI [AC-FSEM-18]
+- [x] (P1) Dominio DaaS/SLA (partición de AC-FSEM-08; solo modo `daas`, seed A con farmacia `otd_comprometido_pct=95`): OTD proyectado < comprometido −2 pp ⇒ amarillo; SLA incumplido en el período ⇒ rojo (fixture: OTD del período cerrado 90% contra 95 comprometido, computado de `paradas` cerradas vs ventana × `otd_comprometido_pct`, §4.5); empresa con `otd_comprometido_pct` NULL ⇒ su `signal_rule` no evalúa y sin tarjeta SLA para esa empresa (§4.5) — oráculo: CI [AC-FSEM-18]
+  - Probado: `evaluarDaasSla` (`dominio/semaforo-daas-sla.ts`) con 6 tests unitarios propios
+    (`semaforo-daas-sla.test.ts`, 6/6): sin migración nueva — la fila `signal_rule` sembrada
+    `otd_deficit_pp` (amarillo 2 pp / rojo 5 pp / recuperación 0 pp) ya la siembra la migración
+    0059 (AC-FSEM-03), convención ASCENDENTE directa (mayor déficit = peor), sin inversión de
+    signo a diferencia de `flota_energia_ev`. Una sola métrica —el déficit de OTD contra el
+    comprometido— pasa por `transicionColor` (histéresis) en dos momentos del ciclo: mientras el
+    período sigue abierto usa el OTD PROYECTADO (fixture déficit 2 pp ⇒ amarillo, «OTD proyectado
+    bajo el comprometido»); con el período YA CERRADO usa el OTD real (fixture del propio AC:
+    comprometido 95, período cerrado 90 ⇒ déficit 5 ⇒ rojo, «SLA incumplido en el período» — el
+    mismo número que fija el comentario de la migración 0059 para no reconciliar un segundo
+    valor). Empresa con `otdComprometidoPct` NULL: la función la salta por completo — ni
+    excepción ni denominador (test dedicado con dos empresas, una NULL y otra con contrato: el
+    agregado queda 1/1, no 2/2). Un test de histéresis prueba que un rojo previo que retrocede a
+    zona intermedia (déficit 1 pp, entre recuperación 0 y amarillo 2) baja a amarillo, no salta
+    directo a verde, mismo criterio que el resto de dominios con histéresis (AC-FSEM-02/16).
+    Wiring del endpoint real (`/api/semaforo/digest` contra `paradas`/contratos reales) queda
+    para un AC posterior, mismo criterio que AC-FSEM-07/08/16/17: no está en el texto de este AC
+    ni su oráculo lo exige (CI, no e2e). `check.sh --full --app=flota`: unit/lint/types/build/
+    audit verdes; el único rojo es `e2e/refresco-digest.spec.ts` (AC-FSEM-06, dominio de
+    refresco/polling, no de DaaS/SLA) por una colisión de fixture (`personas_tenant_id_rut_key`)
+    entre specs al correr la suite completa en orden — se reproduce igual con
+    `npx playwright test` a secas, SIN ningún cambio de este AC, y las mismas 7 pruebas de ese
+    archivo pasan 7/7 al correrlas solas (`npx playwright test e2e/refresco-digest.spec.ts`):
+    contaminación de datos entre specs de la suite existente, ajena a este AC y a cualquier
+    código de DaaS/SLA — mismo patrón que el hallazgo de `prueba-arnes`/lsof documentado en
+    AC-FSEM-17.
 - [ ] (P1) Dominio Entregas vs plan (partición de AC-FSEM-08; dependencia 03) sobre `paradas`: ruta con 10% exacto de no-entregas ⇒ amarillo (10% cae en la banda seed «5–10%» cualquiera sea su punto y no supera el rojo «>10%» — robusto a la pregunta 5a) y ruta con 12% ⇒ rojo; compromiso vencido sin entrega ⇒ rojo, computado de `promesa_original` CONGELADA (§4.5) con ventana vencida y parada sin entrega — NO depende del ETA vivo; la señal amarilla «ETA proyectada + tolerancia (mín. 15 min) excede ventana» sigue condicionada a la pregunta 4 — oráculo: CI [AC-FSEM-19]
 - [ ] (P1) Reasignar y llamar en N2: reasignar transfiere `asignado_a` a otro usuario del tenant con `audit_trail` por trigger (PLANIFICACIÓN §4.2: valida online y rebota); reasignar sobre una excepción resuelta ⇒ 422 tipado y 0 filas cambiadas; reasignar con id de otro tenant ⇒ 404 (§0-HTTP); el detalle N2 renderiza la acción «llamar» (§5.6-N2; aserción de presencia en el e2e) — oráculo: CI [AC-FSEM-20]
 - [ ] (P1) Tarjeta de dominio sin señales activas — CONDICIONADO a la pregunta 8: si el dueño confirma la derivación (§5.5 + precedente SLA-NULL §4.5), un dominio cuyas señales quedan todas apagadas no renderiza tarjeta, sin huecos ni candados fuera del panel admin (e2e con fixture de entitlements); si resuelve otra conducta (p. ej. tarjeta informativa), este AC se reescribe ANTES de implementarse — el gate no congela la conducta mientras la pregunta esté abierta — oráculo: CI [AC-FSEM-21]
