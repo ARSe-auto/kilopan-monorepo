@@ -783,6 +783,18 @@
       }
     },
     {
+      "ruta": "/api/semaforo/digest",
+      "archivo": "src/app/api/semaforo/digest/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "El digest del Nivel 0 [AC-FSEM-06]. Sin identificador de recurso y todavía sin sesión (la guardia de rol es AC-FSEM-09): la respuesta sale literal de `?seed=a|c`, las mismas semillas del maestro que ya sirve `hoy/page.tsx` (AC-FSEM-01) — no hay dato de ningún tenant real que un Host/cabecera falsificados puedan sacar hoy. El cruce que sí pesa es el genérico —identidad de B por los canales falsificables, respuesta idéntica a la de A, cero 5xx— y vuelve a pesar de verdad el día que este endpoint lea `signal_rule` real (AC-FSEM-07+) y exija sesión (AC-FSEM-09)."
+      }
+    },
+    {
       "ruta": "/api/semaforo/excepciones/[id]/reconocer",
       "archivo": "src/app/api/semaforo/excepciones/[id]/reconocer/route.ts",
       "metodos": [

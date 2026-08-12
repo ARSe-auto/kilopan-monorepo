@@ -8,6 +8,7 @@ import type { ColorSemaforo, TarjetaHoy } from "../../dominio/semaforo.ts";
 import type { FilaPeek } from "../../dominio/peek-n1.ts";
 import { fechaEsCl, horaEsCl } from "../../../../../packages/nucleo-comun/src/fechas.ts";
 import { PeekN1 } from "./peek-n1.tsx";
+import { useDigestSemaforo } from "./usar-digest-semaforo.ts";
 
 // Nivel 0 del «Hoy» (spec 05, §2.1) [AC-FSEM-01].
 //
@@ -30,7 +31,7 @@ const FONDO_COLOR: Record<ColorSemaforo, string> = {
 };
 
 export function TableroHoy({
-  tarjetas,
+  tarjetas: tarjetasIniciales,
   peekPorDominio,
   seed,
 }: {
@@ -43,34 +44,101 @@ export function TableroHoy({
   // La transición de verdad vive en el servidor; acá solo refleja el toque en la pantalla.
   const [reconocidasLocal, setReconocidasLocal] = useState<ReadonlySet<string>>(new Set());
 
+  // Refresco del digest [AC-FSEM-06]: polling con ETag/304 solo con la pestaña visible; en
+  // offline se queda con `tarjetasIniciales`/el último digest bueno, marcado como tal por el
+  // banner de abajo — jamás un verde fingido con datos viejos sin decirlo (§2.6).
+  const seedDigest = seed === "c" ? "c" : "a";
+  const { tarjetas, conectado, intentosFallidos, ultimoDigestEn, refrescarAhora } = useDigestSemaforo(
+    seedDigest,
+    tarjetasIniciales,
+  );
+
   const tarjetaAbierta = tarjetas.find((t) => t.clave === abiertoDominio) ?? null;
   const filasAbiertas = abiertoDominio ? (peekPorDominio[abiertoDominio] ?? []) : [];
   const filasConOverride = filasAbiertas.map((f) => (reconocidasLocal.has(f.id) ? { ...f, estado: "reconocida" as const } : f));
 
   return (
-    <div
-      data-testid="tablero-hoy"
-      style={{
-        display: "grid",
-        gap: layout.espacio.entreTarjetas,
-        gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-      }}
-    >
-      {tarjetas.map((tarjeta) => (
-        <TarjetaDelTablero
-          key={tarjeta.clave}
-          tarjeta={tarjeta}
-          onAbrir={tarjeta.color === "verde" ? undefined : () => setAbiertoDominio(tarjeta.clave)}
-        />
-      ))}
-      {tarjetaAbierta ? (
-        <PeekN1
-          titulo={tarjetaAbierta.titulo}
-          filas={filasConOverride}
-          seed={seed}
-          onCerrar={() => setAbiertoDominio(null)}
-          onReconocer={(id) => setReconocidasLocal((previo) => new Set(previo).add(id))}
-        />
+    <div style={{ display: "grid", gap: layout.espacio.entreTarjetas }}>
+      <BarraRefresco conectado={conectado} intentosFallidos={intentosFallidos} ultimoDigestEn={ultimoDigestEn} onRefrescar={refrescarAhora} />
+      <div
+        data-testid="tablero-hoy"
+        style={{
+          display: "grid",
+          gap: layout.espacio.entreTarjetas,
+          gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+        }}
+      >
+        {tarjetas.map((tarjeta) => (
+          <TarjetaDelTablero
+            key={tarjeta.clave}
+            tarjeta={tarjeta}
+            onAbrir={tarjeta.color === "verde" ? undefined : () => setAbiertoDominio(tarjeta.clave)}
+          />
+        ))}
+        {tarjetaAbierta ? (
+          <PeekN1
+            titulo={tarjetaAbierta.titulo}
+            filas={filasConOverride}
+            seed={seed}
+            onCerrar={() => setAbiertoDominio(null)}
+            onReconocer={(id) => setReconocidasLocal((previo) => new Set(previo).add(id))}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** `hace N s` / `hace N min` — la antigüedad del último digest recibido con éxito (§2.6). */
+function antiguedadTexto(ultimoDigestEn: number): string {
+  const segundos = Math.max(0, Math.floor((Date.now() - ultimoDigestEn) / 1000));
+  if (segundos < 60) return `hace ${segundos} s`;
+  return `hace ${Math.floor(segundos / 60)} min`;
+}
+
+/** Pull-to-refresh de respaldo (§2.6) + el estado «sin conexión» del §5.7: cero verde fingido —
+ *  cuando el refresco no llega, se dice, con un contador real de intentos y la antigüedad del
+ *  último digest bueno. */
+function BarraRefresco({
+  conectado,
+  intentosFallidos,
+  ultimoDigestEn,
+  onRefrescar,
+}: {
+  conectado: boolean;
+  intentosFallidos: number;
+  ultimoDigestEn: number;
+  onRefrescar: () => void;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: grilla.base, flexWrap: "wrap" }}>
+      <button
+        type="button"
+        data-testid="refrescar-ahora"
+        onClick={onRefrescar}
+        style={{
+          font: "inherit",
+          fontSize: tipografia.pie.tamano,
+          padding: `${grilla.base / 2}px ${grilla.base}px`,
+          borderRadius: layout.esquina.tarjeta,
+          border: `1px solid ${superficie.hairline}`,
+          background: superficie.tarjeta,
+          cursor: "pointer",
+        }}
+      >
+        Actualizar
+      </button>
+      {!conectado ? (
+        <span
+          data-testid="banner-sin-conexion"
+          role="status"
+          style={{ display: "inline-flex", alignItems: "center", gap: grilla.base / 2, fontSize: tipografia.pie.tamano, color: colores.error, fontWeight: enfasis.fuerte }}
+        >
+          Sin conexión —{" "}
+          <span data-testid="cola-offline">{intentosFallidos}</span>{" "}
+          {intentosFallidos === 1 ? "intento" : "intentos"} sin llegar al servidor · último dato{" "}
+          <span data-testid="antiguedad-digest">{antiguedadTexto(ultimoDigestEn)}</span>
+        </span>
       ) : null}
     </div>
   );

@@ -281,7 +281,32 @@ activa SOLO `admin_tenant`: mientras la pregunta 1 esté abierta, `operador` y
     entero ≥1, 404 cross-tenant, 403 fuera de `admin_tenant`; declarado en
     `rutas/manifiesto.json` (`recurso` sobre `review_queue`) y cubierto por la suite
     A-contra-B autogenerada (`e2e/cruce-tenant.spec.ts`).
-- [ ] (P1) Refresco degradable: polling del digest cada 15–30 s (constante) solo con pestaña visible — con pestaña oculta 0 requests en el intervalo (test con Page Visibility simulada); digest sin cambios ⇒ 304 con ETag y sin body; pull-to-refresh fuerza GET; grep del módulo: cero `WebSocket`/`EventSource`; offline ⇒ estado «sin conexión» con contador real de cola y digest viejo marcado con antigüedad — oráculo: CI [AC-FSEM-06]
+- [x] (P1) Refresco degradable: polling del digest cada 15–30 s (constante) solo con pestaña visible — con pestaña oculta 0 requests en el intervalo (test con Page Visibility simulada); digest sin cambios ⇒ 304 con ETag y sin body; pull-to-refresh fuerza GET; grep del módulo: cero `WebSocket`/`EventSource`; offline ⇒ estado «sin conexión» con contador real de cola y digest viejo marcado con antigüedad — oráculo: CI [AC-FSEM-06]
+  - Probado y verde en `check.sh --full --app=flota` + `npx playwright test e2e/refresco-digest.spec.ts`.
+    **Servidor:** `GET /api/semaforo/digest` (`src/app/api/semaforo/digest/route.ts`) sirve el
+    Nivel 0 sobre `?seed=a|c` — mismo alcance declarado por `hoy/page.tsx` (AC-FSEM-01): la
+    evaluación real de `signal_rule` es AC-FSEM-07+ y la guardia de sesión/rol es AC-FSEM-09.
+    El ETag es un sha256 SOLO de `tarjetas` (nunca de un timestamp), así que el mismo seed
+    devuelve el mismo ETag entre pedidos frescos y `If-None-Match` calza de verdad: 304 sin
+    body cuando coincide, 200 con body si no. **Cliente:** `usar-digest-semaforo.ts` (hook)
+    pollea cada `SEMAFORO.polling_segundos.min` (15 s, el piso del rango — el número sale de
+    la constante, no está escrito en el hook) SOLO con `document.visibilityState === "visible"`;
+    `visibilitychange` arranca/para el temporizador entero (pestaña oculta ⇒ el `setInterval`
+    ni existe, 0 requests — probado con Page Visibility simulada vía `Object.defineProperty`,
+    igual que pide el AC). `tablero-de-hoy.tsx` suma el botón «Actualizar» (pull-to-refresh de
+    respaldo) y el banner «sin conexión» (`banner-sin-conexion`) con el contador REAL de
+    intentos fallidos consecutivos (`cola-offline` — «Hoy» no encola capturas de terreno como
+    el outbox del chofer, así que lo único que hay de verdad para contar acá son los intentos
+    de refresco que no llegaron) y la antigüedad del último digest bueno (`antiguedad-digest`);
+    las tarjetas YA cargadas se quedan a la vista, marcadas viejas — jamás un verde fingido.
+    Bug real encontrado y corregido durante la construcción: `Response.json` serializa
+    `record_time` como texto ISO, y `fechaEsCl`/`horaEsCl` exigen un `Date` real —
+    sin revivirlo, la primera tarjeta amarilla/roja que llegaba por el digest reventaba el
+    render entero («Application error» en el navegador), tumbando de paso `hoy-nivel-0.spec.ts`,
+    `peek-n1.spec.ts` y `detalle-n2.spec.ts`; `revivirFechas` en el hook lo arregla. La ruta
+    nueva quedó declarada en `apps/flota/rutas/manifiesto.json` (`sin_recurso`): sin
+    identificador ni sesión todavía, la respuesta es literal del fixture — cero dato de tenant
+    que un cruce pueda sacar hoy.
 - [ ] (P1) Dominio Datos/sync desde `client_metric` + eventos: fixture con `outbox_edad_max` 65 min en turno ⇒ amarillo (65 min supera cualquier punto del rango seed «>30–60 min» del Anexo B sin alcanzar el rojo de 3–4 h, así el test no depende de la respuesta a la pregunta 5a); sin sync >4 h con turno abierto ⇒ rojo; parada `done` sin fila en `evidence` tras sync ⇒ rojo; hueco de secuencia por dispositivo (§4.7) ⇒ rojo; la captura degradada que originó el flag entró 2xx (jamás rebotó, §4.2) y aparece como excepción en «Por revisar», no como error del dispositivo; una fila de `review_queue` con severidad alta (captura `post_revocacion_tardia`, §4.3) se proyecta ROJA en la tarjeta Datos/sync (proyección severidad→{amarillo, rojo} sin ambigüedad, §2.4) — oráculo: CI [AC-FSEM-07]
 - [ ] (P1) Dominio Turnos/conductores (un AC por dominio, §9.2 «un AC por commit»; los demás dominios: AC-FSEM-16 a 19) evalúa según Anexo B sobre proyecciones append-only de `eventos`+`turnos`+`bloques_agenda` (jamás contadores mutables; dependencia 02): fixture sin eventos por 65 min en turno ⇒ amarillo (65 min supera cualquier punto del rango seed «30–45 min» sin alcanzar el rojo de >2 h — robusto a la pregunta 5a, misma técnica de AC-FSEM-07); turno sin cerrar >1 h tras fin de bloque ⇒ amarillo; sin señal >2 h ⇒ rojo (fixture 2,5 h); turno abierto cruzando medianoche ⇒ rojo — oráculo: CI [AC-FSEM-08]
 - [ ] (P1) Aislamiento y roles: la suite HTTP A-contra-B autogenerada cubre TODAS las rutas del módulo ⇒ 404 con body sin centinelas de B y BD de B sin cambios (mutaciones incluidas); manifest de `chofer`/`responsable_carga`/`cliente` no contiene el tablero y sus GET al digest ⇒ 403 con 0 filas; manifest de `operador` y de `responsable_tecnico` TAMPOCO contiene el tablero y sus GET al digest ⇒ 403 (§2.8: esta spec activa solo `admin_tenant`; el aserto del `operador` se revisa al responderse la pregunta 1); ninguna respuesta del módulo entrega CLP a esos roles (RLS §4.8 verificada con el rol de app real) — oráculo: CI [AC-FSEM-09]
