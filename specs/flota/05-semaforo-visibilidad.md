@@ -344,7 +344,29 @@ activa SOLO `admin_tenant`: mientras la pregunta 1 esté abierta, `operador` y
     --full --app=flota` verde. Wiring del endpoint real contra `eventos`/`turnos`/
     `bloques_agenda` reales queda para un AC posterior, igual que AC-FSEM-07: no está en el
     texto de este AC ni su oráculo lo exige (CI, no e2e).
-- [ ] (P1) Aislamiento y roles: la suite HTTP A-contra-B autogenerada cubre TODAS las rutas del módulo ⇒ 404 con body sin centinelas de B y BD de B sin cambios (mutaciones incluidas); manifest de `chofer`/`responsable_carga`/`cliente` no contiene el tablero y sus GET al digest ⇒ 403 con 0 filas; manifest de `operador` y de `responsable_tecnico` TAMPOCO contiene el tablero y sus GET al digest ⇒ 403 (§2.8: esta spec activa solo `admin_tenant`; el aserto del `operador` se revisa al responderse la pregunta 1); ninguna respuesta del módulo entrega CLP a esos roles (RLS §4.8 verificada con el rol de app real) — oráculo: CI [AC-FSEM-09]
+- [x] (P1) Aislamiento y roles: la suite HTTP A-contra-B autogenerada cubre TODAS las rutas del módulo ⇒ 404 con body sin centinelas de B y BD de B sin cambios (mutaciones incluidas); manifest de `chofer`/`responsable_carga`/`cliente` no contiene el tablero y sus GET al digest ⇒ 403 con 0 filas; manifest de `operador` y de `responsable_tecnico` TAMPOCO contiene el tablero y sus GET al digest ⇒ 403 (§2.8: esta spec activa solo `admin_tenant`; el aserto del `operador` se revisa al responderse la pregunta 1); ninguna respuesta del módulo entrega CLP a esos roles (RLS §4.8 verificada con el rol de app real) — oráculo: CI [AC-FSEM-09]
+  - Probado y verde en `check.sh --full --app=flota` + `npx playwright test e2e/semaforo-roles.spec.ts`
+    (11/11, corrido en primer plano). **Guardia:** `GET /api/semaforo/digest`
+    (`src/app/api/semaforo/digest/route.ts`) ahora pasa por `guardia()`
+    (`servidor/gobierno.ts`, misma puerta que reconocer/resolver/toques de AC-FSEM-04/05):
+    sin sesión ⇒ 404 pelado; sesión con rol distinto de `admin_tenant` ⇒ 403 y CERO cuerpo de
+    tarjetas. **Los 5 roles vetados exactos del enum** (`chofer`, `responsable_carga`,
+    `cliente`, `operador`, `responsable_tecnico` — sale de `ROLES.filter(r => r !==
+    "admin_tenant")`, no de una lista escrita a mano que se desincroniza del enum) devuelven
+    403 con 0 filas; `admin_tenant` recibe 200 con tarjetas. **Suite A-contra-B (AC-FTEN-26):**
+    el digest sigue declarado en `manifiesto.json` con `cruce.tipo="sin_recurso"` — verificado
+    en el test, más las 3 rutas de mutación (`reconocer`/`resolver`/`toques`) que ya llevan
+    `cruce.tipo="recurso"` desde AC-FSEM-04/05 — así que las 4 rutas del módulo entran a
+    `cruce-tenant.spec.ts` sin exención. **Cero CLP:** `review_queue`, `client_metric` y
+    `signal_rule` —las únicas tablas que este módulo lee (migraciones 0002 y 0058)— no tienen
+    NINGUNA columna de dinero (grep-gate contra las dos migraciones), así que ni siquiera
+    `admin_tenant` puede recibir un CLP de este módulo: la RLS de §4.8 no tiene qué esconder
+    porque el dato no existe en el schema, y un segundo grep sobre `route.ts`/`dominio/
+    semaforo.ts` vigila que ninguna respuesta arme un campo de dinero desde otra fuente. El
+    hook `usar-digest-semaforo.ts` pasó de `fetch` directo a `pedir()` (`cliente/aparato.ts`)
+    para viajar con el secreto de sesión persistido, y `refresco-digest.spec.ts` (AC-FSEM-06)
+    quedó actualizado para enrolar una dueña real y pasar su secreto — sin eso, la guardia
+    nueva le habría respondido 404 a esa suite entera.
 - [ ] (P1) Vista e-auto solo-`control`: el render se verifica a nivel de COMPONENTE/VISTA contra fixtures de `control` (sin depender del montaje/autenticación pendientes de la pregunta 2): muestra por tenant estado semafórico + actividad vs media móvil 7d, errores de sync, backlog, versión PWA, latencia p95 y EEVD agregada; el código del plano cross-tenant no abre conexión a ninguna BD `t_<slug>` (regla estática + test de privilegios); centinela 14: inyectar una columna de dinero/tarifa/cliente al payload del exportador ⇒ el test de schema falla en rojo; el e2e navegado con autenticación queda en AC-FSEM-24 — oráculo: CI [AC-FSEM-10]
 - [ ] (P1) Señales cross-tenant con fixtures en `control`: tenant sin eventos un día hábil ⇒ rojo; actividad −30% vs media 7d ⇒ amarillo; errores de sync en 5% exacto ⇒ amarillo (5% cae dentro de la banda seed «1–5%» cualquiera sea su punto y no supera el rojo «>5%» — robusto a la pregunta 5a) y errores >5% sostenidos 15 min ⇒ rojo; >20% dispositivos en PWA vieja ⇒ amarillo; cola de sync >4 h ⇒ rojo; la señal «backlog creciente 2 intervalos» ⇒ amarillo queda CONDICIONADA a la pregunta 3 (sin cadencia del exportador, «intervalo» no tiene semántica cerrada — mismo tratamiento que la señal de ETA en AC-FSEM-19); canario de aislamiento en fallo ⇒ rojo máximo que NO se degrada por histéresis ni por edición de umbral (test que intenta ambas); alarma churn EEVD −30% semana/semana dispara sobre la EEVD agregada — oráculo: CI [AC-FSEM-11]
 - [ ] (P1) AA y estados de pantalla: ningún estado del semáforo comunicado solo por color (texto/ícono siempre, verificable apagando CSS de color); contraste ≥7:1 en indicadores semafóricos y cifra operativa en tema claro Y oscuro (axe/Lighthouse en gate); los 4 estados obligatorios de «Hoy» (vacío accionable con CTA, skeleton <50 ms, error es-CL con recuperación, sin conexión con contador real); snapshot 375px con términos del tenant B al máximo largo sin truncar cifras; la e2e del módulo corre DOS veces (terminología base y extrema) sin cambiar un selector (data-testid/term_key) — oráculo: CI [AC-FSEM-12]
