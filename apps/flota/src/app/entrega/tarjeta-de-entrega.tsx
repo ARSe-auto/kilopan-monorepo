@@ -1,12 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BotonPrimario,
   CifraGrande,
-  EstadoCargando,
-  EstadoError,
-  EstadoVacio,
   SelectorUnToque,
   TecladoNumerico,
 } from "@kilopan/miga/componentes/index.tsx";
@@ -14,8 +11,10 @@ import { tipografia, superficie, grilla, enfasis } from "@kilopan/miga/tokens.ts
 import { semantico } from "@kilopan/miga/estructura.ts";
 import { UNDO } from "../../../../../packages/nucleo-comun/src/constants.ts";
 import { pedir } from "../../cliente/aparato.ts";
-import { textoDelCandado, type EmpresaDeLaEntrega } from "../../dominio/candado-entrega.ts";
+import { replayar } from "../../cliente/outbox.ts";
+import { textoDelCandado, type CandadoDeEntrega } from "../../dominio/candado-entrega.ts";
 import {
+  sacarDeLaCola,
   iniciarRecorrido,
   paradaActual,
   llegar,
@@ -24,12 +23,21 @@ import {
   noEntregar,
   dejarEnPunto,
   exigeEncuadre,
-  deshacer,
+  requisitosPendientes,
   cerrarLaVentana,
   terminado,
+  type EvidenciaCapturada,
   type ParadaDeRuta,
   type Recorrido,
+  type TipoDeEvidencia,
 } from "../../dominio/pod-terreno.ts";
+import { colaAlArrancar, deshacerCaptura, outboxDeRecorrido } from "../../dominio/outbox-undo.ts";
+import { guardarOutbox, leerOutbox, type Identidad } from "../../cliente/outbox-local.ts";
+import { identidadDelAparato } from "../../cliente/identidad.ts";
+import { vaciarOutboxAjeno } from "../../cliente/outbox-multiusuario.ts";
+import { siguienteSecuenciaDispositivo } from "../../cliente/secuencia-dispositivo.ts";
+import { capturarFoto } from "../../cliente/camara.ts";
+import { capturarGps } from "../../cliente/gps.ts";
 
 // La tarjeta de la parada de entrega (F4) [AC-FRUT-22, AC-FPOD-01] — KR-29, §4.2, §5.2 F4,
 // §5.3, §4.7, §7.6.
@@ -60,32 +68,45 @@ import {
 // La única confirmación es la banda de deshacer que se abre por `UNDO.ventana_ms` (§4.7): cero
 // modales (§7.6). No cuesta una acción porque no hay que tocarla para seguir — el chofer ya
 // está caminando a la parada siguiente mientras corre.
-/** Lo que devuelve el endpoint, en la forma en que VIAJA: snake_case, como la BD.
- *
- *  No es `EmpresaDeLaEntrega[]`: ese es el tipo del DOMINIO, en camelCase. Declararlo aquí
- *  hacía que TypeScript diera por buena una traducción que no existía, y el `.map` de abajo
- *  —que sí traduce— quedaba leyendo una propiedad que el tipo juraba tener. La frontera entre
- *  el JSON y el dominio es exactamente este par de tipos: si los unificamos, el día que la
- *  columna cambie de nombre nadie se entera hasta que la pantalla muestre vacío. */
-export type EmpresaEnRespuesta = { id: string; razon_social: string };
-export type RespuestaCandado = { abierta: boolean; empresas_faltantes: EmpresaEnRespuesta[] };
-
 /** Un motivo del catálogo del tenant (§4.5, AC-FRUT-13): el mismo sirve para «no entregado»
  *  (`paradas.motivo_id`) y para `motivo_item` de la variante parcial (§4.5) — no hay un
  *  catálogo separado por variante. */
 export type MotivoDisponible = { id: string; etiqueta: string };
 
-/** Los cuatro modos de la tarjeta en la parada actual [AC-FPOD-02]. `elegir` es el camino
- *  feliz —«Entregado» a un toque— con las tres variantes cerradas como salida secundaria. */
-type ModoDeCierre = "elegir" | "parcial" | "no_entregado" | "dejado_en_punto";
+/** Los modos de la tarjeta en la parada actual [AC-FPOD-02]. `elegir` es el camino feliz
+ *  —«Entregado» a un toque— con el stepper de la parcial a la vista y las otras dos variantes
+ *  cerradas como salida secundaria. La parcial NO tiene modo propio: su stepper vive sobre la
+ *  entrega abierta, y ese toque que no se cobra es lo que la deja en 3 acciones y, con un
+ *  requisito de evidencia encima, en las 4 que el §5.2 F4 fija como techo del operario. */
+type ModoDeCierre = "elegir" | "no_entregado" | "dejado_en_punto";
+
+/** El texto es-CL de cada tipo del enum de evidencia (§4.6), resuelto por el TIPO que la parada
+ *  trae en sus datos. Es un `Record` completo a propósito: agregar un valor al enum sin darle
+ *  etiqueta no compila, en vez de dejarle al chofer un requisito sin nombre. Cero condicionales
+ *  por vertical — acá no se nombra ni un solo vertical (§4.6). */
+const ETIQUETA_DE_EVIDENCIA: Record<TipoDeEvidencia, string> = {
+  firma: "Firmar la recepción",
+  foto: "Sacar la foto",
+  lectura: "Registrar la lectura",
+  indicador_visual: "Mirar el indicador",
+  archivo_logger: "Adjuntar el registro",
+  documento: "Adjuntar el documento",
+  pin_destinatario: "Pedir el PIN al destinatario",
+  escaneo_codigo: "Escanear el código",
+};
 
 export default function TarjetaDeEntrega({
   secuencia,
+  candados,
   indice,
   motivos,
   bultosMaxSinReceptor,
 }: {
   secuencia: ParadaDeRuta[];
+  /** El candado de cada parada, CONGELADO en la primera carga [AC-FPOD-03]: la validación
+   *  bloqueante corre en el cliente contra el snapshot (§4.2), no contra un viaje por parada que
+   *  en el subterráneo no vuelve. */
+  candados: Record<string, CandadoDeEntrega>;
   indice: number;
   motivos: MotivoDisponible[];
   bultosMaxSinReceptor: number | null;
@@ -93,8 +114,6 @@ export default function TarjetaDeEntrega({
   const [recorrido, setRecorrido] = useState<Recorrido>(() =>
     iniciarRecorrido(secuencia, Math.max(indice, 0)),
   );
-  const [datos, setDatos] = useState<RespuestaCandado | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [modo, setModo] = useState<ModoDeCierre>("elegir");
   // Parcial: cantidad tecleada (texto crudo del teclado propio) y motivo por ítem ajustado
   // (§4.5: `motivo_item` es por ítem, no por parada).
@@ -105,19 +124,13 @@ export default function TarjetaDeEntrega({
   // Dejado en punto: si el encuadre ya se capturó (AC-FPOD-17 decide CÓMO se llena este booleano
   // — cámara concedida, denegada y su degradación —; acá solo se lee).
   const [encuadreCapturado, setEncuadreCapturado] = useState(false);
-  // Estado online/offline para mostrar "sin conexión con contador real de cola" [AC-FPOD-22]
-  const [online, setOnline] = useState(typeof navigator !== "undefined" && navigator.onLine);
-
-  useEffect(() => {
-    const handleOnline = () => setOnline(true);
-    const handleOffline = () => setOnline(false);
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
+  // Los `stop_requirement` de esta parada que ya se cumplieron (§4.6).
+  const [evidencias, setEvidencias] = useState<EvidenciaCapturada[]>([]);
+  // GPS denegado [AC-FPOD-12] (§7.6): el aviso visible al operario, y el candado que evita
+  // volver a pedirle el permiso al navegador una vez que ya sabemos que lo negó — el mismo
+  // motivo por el que la ventana de undo no reintenta un guardado que ya sabe que va a fallar.
+  const [gpsDenegado, setGpsDenegado] = useState(false);
+  const gpsPermisoDenegadoRef = useRef(false);
 
   function volverAElegir() {
     setModo("elegir");
@@ -130,21 +143,9 @@ export default function TarjetaDeEntrega({
   const parada = paradaActual(recorrido);
   const paradaId = parada?.id ?? null;
   const enVentana = recorrido.captura?.clientUuid ?? null;
-
-  const cargar = useCallback(async () => {
-    setError(null);
-    setDatos(null);
-    // Terminada la ruta no hay candado que leer, y el de la parada anterior tiene que irse: un
-    // «Llegué» sobreviviente sobre una parada que ya no está sería un toque sin destino.
-    if (paradaId === null) return undefined;
-    const respuesta = await pedir(`/api/paradas/${paradaId}/entrega`).catch(() => null);
-    if (!respuesta?.ok) return setError("No se pudo leer el candado de esta parada. Revisá tu conexión.");
-    setDatos((await respuesta.json()) as RespuestaCandado);
-    return undefined;
-  }, [paradaId]);
+  const enCola = recorrido.cola.length;
 
   useEffect(() => {
-    void cargar();
     // Nueva parada: el modo y lo tecleado de la anterior no le sirven a esta. Sin esto, un
     // «Parcial» a medio llenar sobreviviría al avance automático y quedaría flotando sobre una
     // parada que no es la que lo originó. Los setters de React son estables entre renders, así
@@ -155,7 +156,71 @@ export default function TarjetaDeEntrega({
     setMotivoPorItem({});
     setMotivoNoEntrega(null);
     setEncuadreCapturado(false);
-  }, [cargar]);
+    setEvidencias([]);
+    setGpsDenegado(false);
+  }, [paradaId]);
+
+  // ─── LA LECTURA PUNTUAL DE GPS AL LLEGAR [AC-FPOD-12] (§7.6, §3.E1.15) ────────────
+  //
+  // Una sola lectura por parada, disparada por el mismo toque de «Llegué» — nunca seguimiento
+  // continuo (la minimización del §3.E1.15 es sobre ESO, no sobre una lectura suelta). Si el
+  // operario ya negó el permiso una vez, no se lo vuelve a pedir (el navegador lo negaría
+  // igual) y el aviso se repone directo desde el candado.
+  useEffect(() => {
+    if (!recorrido.llegada || parada === null) return;
+    if (gpsPermisoDenegadoRef.current) {
+      setGpsDenegado(true);
+      return;
+    }
+    let vivo = true;
+    void capturarGps().then((resultado) => {
+      if (!vivo) return;
+      if (resultado.motivo === "permiso_denegado") gpsPermisoDenegadoRef.current = true;
+      setGpsDenegado(resultado.avisar);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [paradaId, recorrido.llegada]);
+
+  // ─── EL REPLAY, SIN QUE EL CHOFER TOQUE NADA [AC-FPOD-03] ────────────────────────
+  //
+  // Dos disparos, que son los que el §4.7 llama camino PRINCIPAL: al montar la pantalla
+  // (replay-on-startup) y cuando el navegador avisa que volvió la señal (replay-on-online). Nada
+  // de Background Sync: Safari no la tiene y el §7.6 prohíbe depender de ella.
+  //
+  // El tercer disparo es que la cola CREZCA: una captura cuya ventana de undo venció con señal
+  // no tiene por qué esperar a que la red se caiga y vuelva para salir.
+  const replayando = useRef(false);
+  useEffect(() => {
+    let vivo = true;
+    async function vaciar() {
+      // Un solo lote a la vez: el `online` del navegador llega repetido y dos replays en vuelo
+      // mandarían la misma captura dos veces. La llave de idempotencia del §0 lo aguanta, pero
+      // gastar dos viajes de radio en el mismo hecho es lo que no aguanta la batería del turno.
+      if (replayando.current || recorrido.cola.length === 0) return;
+      replayando.current = true;
+      try {
+        const confirmadas = await replayar(recorrido.cola, (cuerpo) =>
+          pedir("/api/sync/capturas", { method: "POST", body: cuerpo }),
+        );
+        // Cero rechazo a la vista (§5.7): un lote que no llegó devuelve cero acuses, la cola
+        // queda igual y el chofer sigue viendo su contador. No hay error que mostrarle porque no
+        // hay nada que él pueda decidir.
+        if (vivo && confirmadas.length > 0) setRecorrido((r) => sacarDeLaCola(r, confirmadas));
+      } finally {
+        replayando.current = false;
+      }
+    }
+    void vaciar();
+    window.addEventListener("online", vaciar);
+    return () => {
+      vivo = false;
+      window.removeEventListener("online", vaciar);
+    };
+    // `recorrido.cola` entera y no solo su largo: sacar dos y capturar una deja el largo igual y
+    // la cola distinta, y ese lote nuevo también tiene que salir.
+  }, [recorrido.cola]);
 
   // La ventana de undo: ocho segundos en los que el toque todavía no es un hecho. Vencida, la
   // captura pasa a la cola que el motor de sync replayea (AC-FPOD-03/04). El plazo sale de
@@ -166,24 +231,129 @@ export default function TarjetaDeEntrega({
     return () => window.clearTimeout(temporizador);
   }, [enVentana]);
 
+  // ─── EL OUTBOX DURABLE [AC-FPOD-08] (§4.7) ───────────────────────────────────────
+  //
+  // Al montar —y solo en el navegador: el almacén no existe en el render del servidor— vuelve lo
+  // que la sesión anterior dejó escrito. Una app que murió a los tres segundos del toque
+  // —batería, el sistema que la cierra— reabre con esa captura en la cola, y el efecto de replay
+  // de arriba la manda sin que el chofer toque nada. Lo que quedó en `pending_undo` pasa a
+  // `por_replicar`: la ventana era del gesto, no del archivo.
+  //
+  // En un efecto y no en el inicializador de `useState` porque este componente se renderiza
+  // también en el servidor: leer el disco ahí es un `window` que no existe, y sembrarlo solo en
+  // el cliente desalinearía la hidratación de la sección «por sincronizar».
+  //
+  // ─── LA IDENTIDAD SE RESUELVE ANTES DE TOCAR EL DISCO [AC-FPOD-09] ────────────────
+  //
+  // El outbox vive particionado por (tenant, usuario) —§4.7—: leer o escribir sin saber de QUIÉN
+  // es la partición volvería a la llave única que este AC elimina. `identidadDelAparato()` no
+  // pega a la red (deriva del secreto que ya está en IndexedDB), así que resuelve offline igual
+  // que el resto de este efecto.
+  const [identidad, setIdentidad] = useState<Identidad | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    void identidadDelAparato().then((resuelta) => {
+      if (vivo) setIdentidad(resuelta);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  const [outboxCargado, setOutboxCargado] = useState(false);
+  useEffect(() => {
+    if (identidad === null) return;
+    const guardado = colaAlArrancar(leerOutbox(window.localStorage, identidad));
+    setRecorrido((r) => (guardado.length === 0 ? r : { ...r, cola: [...guardado, ...r.cola] }));
+    setOutboxCargado(true);
+  }, [identidad]);
+
+  // Y se escribe INMEDIATAMENTE, no al vencer la ventana (§4.7). Este efecto corre en el commit
+  // del mismo toque que cerró la parada, así que la captura queda en el aparato con su
+  // `pending_undo` antes de que el chofer levante el dedo. Diferirlo hasta los 8 s es exactamente
+  // el hueco por el que se pierde la entrega cuando el teléfono se apaga a los 3.
+  //
+  // Salvo antes de que el disco se haya leído: guardar la cola vacía del primer render borraría
+  // justo lo que el efecto de arriba está por recuperar. Escribe bajo la llave de LA identidad
+  // resuelta — jamás la de otra que haya usado antes este mismo aparato (§4.7) [AC-FPOD-09].
+  useEffect(() => {
+    if (!outboxCargado || identidad === null) return;
+    guardarOutbox(window.localStorage, identidad, outboxDeRecorrido(recorrido));
+  }, [outboxCargado, identidad, recorrido.captura, recorrido.cola]);
+
+  // ─── LO QUE OTRA IDENTIDAD DEJÓ ESPERANDO EN ESTE MISMO APARATO [AC-FPOD-09] ──────
+  //
+  // Si A capturó offline y después B se autenticó en este teléfono, el outbox de A sigue en el
+  // disco bajo SU partición (`outbox-local.ts` ya lo protege de que B lo pise) — pero nadie más
+  // que este efecto lo va a mandar, porque la cola visible de la pantalla es la de B. Corre en
+  // los mismos dos disparos que el replay de arriba (al montar y al volver la señal) y en
+  // silencio: el operario actual jamás se entera de que el aparato también vació una cola ajena.
+  useEffect(() => {
+    if (identidad === null) return;
+    // Ninguna de las dos llamadas toca `setState`: no hay nada que desmontar en carrera, a
+    // diferencia del replay de la cola visible de arriba.
+    function vaciarAjeno() {
+      void vaciarOutboxAjeno(window.localStorage, identidad, (cuerpo) =>
+        pedir("/api/sync/capturas", { method: "POST", body: cuerpo }),
+      );
+    }
+    vaciarAjeno();
+    window.addEventListener("online", vaciarAjeno);
+    return () => window.removeEventListener("online", vaciarAjeno);
+  }, [identidad]);
+
+  /**
+   * El toque de «Deshacer», con la rama que corresponde al estado REAL de la captura
+   * [AC-FPOD-08] (§4.7): dentro de la ventana se cancela y no sale del aparato; si el
+   * temporizador ganó la carrera y ya está en la cola, la corrección es un supersede con
+   * motivo `undo` —dos filas, la original intacta (§7.4)— que el métrico de gaming del §10
+   * excluye por definición SQL. Sin esta segunda rama, el toque a los 7,9 s se perdía en
+   * silencio y la entrega salía igual.
+   */
+  function deshacerToque() {
+    setRecorrido((r) => deshacerCaptura(r, selloDelAparato()).recorrido);
+  }
+
   function selloDelAparato() {
     return {
       clientUuid: crypto.randomUUID(),
       tsDispositivo: new Date().toISOString(),
       tzOffsetMin: -new Date().getTimezoneOffset(),
+      // La secuencia monotónica del dispositivo [AC-FPOD-10] — §4.7. Se reserva en el mismo
+      // gesto que el resto del sello: dos toques seguidos jamás comparten número.
+      secuenciaDispositivo: siguienteSecuenciaDispositivo(window.localStorage),
     };
   }
 
   function entregado() {
-    setRecorrido((r) => entregar(r, selloDelAparato()));
+    setRecorrido((r) => entregar(r, selloDelAparato(), evidencias));
+  }
+
+  // La evidencia que ESTA parada exige [AC-FPOD-02]: pendientes primero, y hasta que no quede
+  // ninguna las salidas de entrega efectuada no se ofrecen. El flujo se arma por DATOS: lo que
+  // decide qué se pide es la fila de `stop_requirement`, jamás el vertical del tenant (§4.6).
+  const pendientes = parada === null ? [] : requisitosPendientes(parada, evidencias);
+
+  // Cámara denegada ⇒ el requisito `foto` se cumple igual, sin foto y con flag — jamás
+  // bloquea el cierre de la parada [AC-FPOD-12] (§7.6, §3.E1.7). `capturarFoto` nunca lanza:
+  // resuelve el permiso, no el binario (eso es AC-FPOD-19).
+  async function capturarEvidencia(requisitoId: string, tipo: TipoDeEvidencia) {
+    if (tipo === "foto") await capturarFoto();
+    setEvidencias((previas) => [...previas, { requisitoId, tipo }]);
   }
 
   // Variante parcial [AC-FPOD-02]: acción final del stepper — cierra la parada Y avanza, igual
-  // que «Entregado» del camino feliz. Solo entran los ítems con cantidad tecleada Y motivo.
+  // que «Entregado» del camino feliz. Solo entran los ítems con cantidad tecleada Y motivo; los
+  // que el chofer no tocó se entregaron completos.
   function confirmarParcial() {
     if (parada === null) return;
     const ajustes = parada.items
-      .filter((it) => cantidades[it.id] !== undefined && motivoPorItem[it.id] !== undefined)
+      .filter(
+        (it) =>
+          cantidades[it.id] !== undefined &&
+          cantidades[it.id] !== "" &&
+          motivoPorItem[it.id] !== undefined,
+      )
       .map((it) => {
         const entregada = Number(cantidades[it.id]!.replace(",", "."));
         return {
@@ -193,7 +363,7 @@ export default function TarjetaDeEntrega({
           motivoId: motivoPorItem[it.id]!,
         };
       });
-    setRecorrido((r) => entregarParcial(r, ajustes, selloDelAparato()));
+    setRecorrido((r) => entregarParcial(r, ajustes, selloDelAparato(), evidencias));
     volverAElegir();
   }
 
@@ -204,27 +374,28 @@ export default function TarjetaDeEntrega({
     volverAElegir();
   }
 
+  // El encuadre fotográfico de «dejado en punto» [AC-FPOD-17]: intenta la cámara y el paso se
+  // da por cumplido IGUAL sin importar el resultado — mismo criterio que `capturarEvidencia`
+  // para el requisito `foto` (AC-FPOD-12): `capturarFoto` nunca lanza, así que cámara denegada
+  // (o sin hardware) degrada a «sin foto» y jamás bloquea el cierre de la parada (§7.6).
+  async function encuadrar() {
+    await capturarFoto();
+    setEncuadreCapturado(true);
+  }
+
   // Variante dejado en punto [AC-FPOD-02]: entrega EFECTUADA sin receptor (§4.5). El dominio
   // rechaza el cierre si falta el encuadre exigido —acá solo se ofrece o no el paso, el candado
   // real vive en `dejarEnPunto`/`exigeEncuadre`.
   function confirmarDejadoEnPunto() {
     setRecorrido((r) =>
-      dejarEnPunto(r, selloDelAparato(), { encuadreCapturado, bultosMaxSinReceptor }),
+      dejarEnPunto(r, selloDelAparato(), { encuadreCapturado, bultosMaxSinReceptor }, evidencias),
     );
     volverAElegir();
   }
 
-  const candado =
-    datos === null
-      ? null
-      : datos.abierta
-        ? ({ abierta: true } as const)
-        : ({
-            abierta: false,
-            empresasFaltantes: datos.empresas_faltantes.map(
-              (e): EmpresaDeLaEntrega => ({ id: e.id, razonSocial: e.razon_social }),
-            ),
-          } as const);
+  // El candado sale del snapshot que vino con la pantalla, no de un viaje por parada: sin señal
+  // el viaje no vuelve y la tarjeta que el chofer necesita no aparece (§4.2, §3.E1.7).
+  const candado = paradaId === null ? null : (candados[paradaId] ?? null);
 
   return (
     <main data-testid="tarjeta-de-entrega">
@@ -234,22 +405,9 @@ export default function TarjetaDeEntrega({
       {recorrido.captura !== null && (
         <section data-testid="banda-undo" style={banda}>
           <p style={{ ...cuerpo, margin: 0 }}>Entregado. Se guarda en unos segundos.</p>
-          <BotonPrimario testid="deshacer" variante="neutro" onClick={() => setRecorrido(deshacer)}>
+          <BotonPrimario testid="deshacer" variante="neutro" onClick={deshacerToque}>
             Deshacer
           </BotonPrimario>
-        </section>
-      )}
-
-      {!online && recorrido.cola.length > 0 && (
-        <section data-testid="sin-conexion" style={banda}>
-          <p style={{ ...cuerpo, margin: 0 }}>Sin conexión. Se sincronizará cuando tengas señal.</p>
-          <p style={{ ...cuerpo, margin: 0, fontWeight: enfasis.medio }}>Capturadas: {recorrido.cola.length}</p>
-        </section>
-      )}
-
-      {!terminado(recorrido) && parada === null && (
-        <section data-testid="ruta-vacia">
-          <EstadoVacio mensaje="Esta ruta no tiene paradas de entrega. Revisá con tu supervisor." />
         </section>
       )}
 
@@ -274,8 +432,31 @@ export default function TarjetaDeEntrega({
         </section>
       )}
 
-      {parada !== null && error !== null && <EstadoError mensaje={error} alReintentar={() => void cargar()} />}
-      {parada !== null && error === null && candado === null && <EstadoCargando filas={2} />}
+      {/* La cola de salida, con el contador REAL [AC-FPOD-03] (§5.2 F4, §5.7): lo que se muestra
+          es `cola.length`, el largo del arreglo que el replay tiene que vaciar — jamás un cartel
+          fijo de «sincronizando». Cero rechazo a la vista: mientras no haya señal esto es todo
+          lo que el chofer ve de su entrega, y dice que ESTÁ ENTREGADA. */}
+      {enCola > 0 && (
+        <section data-testid="por-sincronizar" style={banda}>
+          <p style={{ ...cuerpo, margin: 0 }}>Entregada — por sincronizar</p>
+          <p style={{ ...pieDim, margin: 0 }}>
+            <span data-testid="contador-cola" style={{ fontVariantNumeric: "tabular-nums" }}>
+              {enCola}
+            </span>{" "}
+            {enCola === 1 ? "entrega esperando señal" : "entregas esperando señal"}
+          </p>
+        </section>
+      )}
+
+      {/* GPS denegado [AC-FPOD-12] (§7.6): aviso visible, cero modal — lo bloqueado es SOLO la
+          coordenada, jamás el cierre de la parada ni su sync. */}
+      {gpsDenegado && (
+        <section data-testid="aviso-gps-denegado" style={banda}>
+          <p style={{ ...cuerpo, margin: 0 }}>
+            Sin ubicación — permiso de GPS denegado. La entrega se sigue guardando igual.
+          </p>
+        </section>
+      )}
 
       {candado !== null && !candado.abierta && (
         <section data-testid="candado-cerrado" style={bloque}>
@@ -293,69 +474,89 @@ export default function TarjetaDeEntrega({
         </section>
       )}
 
-      {candado !== null && candado.abierta && recorrido.llegada && modo === "elegir" && (
+      {candado !== null && candado.abierta && recorrido.llegada && modo === "elegir" && parada !== null && (
         <section data-testid="entrega-en-curso" style={bloque}>
-          <p style={cuerpo}>Entrega abierta.</p>
-          <BotonPrimario testid="entregado" onClick={entregado}>
-            Entregado
-          </BotonPrimario>
-          {/* Las variantes cerradas del §5.2 F4 [AC-FPOD-02], jamás más de 4 acciones: cada
-              botón abre su propio modo — el toque de abrirlo YA es la primera acción. */}
-          <div style={{ display: "flex", gap: grilla.base, flexWrap: "wrap" }}>
-            <BotonPrimario testid="modo-parcial" variante="neutro" onClick={() => setModo("parcial")}>
-              Parcial
-            </BotonPrimario>
-            <BotonPrimario testid="modo-no-entregado" variante="neutro" onClick={() => setModo("no_entregado")}>
-              No pude entregar
-            </BotonPrimario>
-            <BotonPrimario testid="modo-dejado-en-punto" variante="neutro" onClick={() => setModo("dejado_en_punto")}>
-              Dejado en punto
-            </BotonPrimario>
-          </div>
-        </section>
-      )}
-
-      {/* Parcial [AC-FPOD-02]: stepper por ítem + motivo_item (§4.5). Con un solo ítem, el
-          techo del §5.3 es 4 acciones exactas — abrir, la cantidad, el motivo, confirmar. */}
-      {candado !== null && candado.abierta && recorrido.llegada && modo === "parcial" && parada !== null && (
-        <section data-testid="modo-parcial-panel" style={bloque}>
-          {parada.items.map((it) => (
-            <div key={it.id} data-testid={`ajuste-item-${it.id}`} style={bloque}>
-              <p style={{ ...cuerpo, margin: 0, fontWeight: enfasis.medio }}>
-                {it.empresa} — planificado {it.qtyPlanificada}
-              </p>
-              <div data-testid={`cantidad-item-${it.id}`}>
-                <TecladoNumerico
-                  valor={cantidades[it.id] ?? ""}
-                  onCambiar={(v) => setCantidades((prev) => ({ ...prev, [it.id]: v }))}
-                />
-              </div>
-              {cantidades[it.id] !== undefined && cantidades[it.id] !== "" && (
-                <div data-testid={`motivo-item-${it.id}`}>
-                  <SelectorUnToque
-                    opciones={motivos.map((m) => ({ valor: m.id, etiqueta: m.etiqueta }))}
-                    valor={motivoPorItem[it.id] ?? null}
-                    onCambiar={(motivoId) =>
-                      setMotivoPorItem((prev) => ({ ...prev, [it.id]: motivoId }))
-                    }
-                  />
-                </div>
-              )}
+          {/* La evidencia que esta parada exige, ANTES de poder darla por entregada
+              [AC-FPOD-02]. Sin filas en `stop_requirement` —lo normal en E1— esta sección no
+              existe y el camino feliz sigue costando sus dos toques (AC-FPOD-01). */}
+          {pendientes.length > 0 ? (
+            <div data-testid="evidencia-exigida" style={bloque}>
+              <p style={cuerpo}>Esta parada pide evidencia antes de cerrarla.</p>
+              {pendientes.map((req) => (
+                <BotonPrimario
+                  key={req.id}
+                  testid={`requisito-${req.id}`}
+                  onClick={() => capturarEvidencia(req.id, req.tipo)}
+                >
+                  {ETIQUETA_DE_EVIDENCIA[req.tipo]}
+                </BotonPrimario>
+              ))}
             </div>
-          ))}
-          <BotonPrimario testid="volver-a-elegir" variante="neutro" onClick={volverAElegir}>
-            Volver
-          </BotonPrimario>
-          {parada.items.every(
-            (it) =>
-              cantidades[it.id] !== undefined &&
-              cantidades[it.id] !== "" &&
-              motivoPorItem[it.id] !== undefined,
-          ) && (
-            <BotonPrimario testid="confirmar-parcial" onClick={confirmarParcial}>
-              Confirmar
-            </BotonPrimario>
+          ) : (
+            <>
+              <p style={cuerpo}>Entrega abierta.</p>
+              <BotonPrimario testid="entregado" onClick={entregado}>
+                Entregado
+              </BotonPrimario>
+
+              {/* Parcial [AC-FPOD-02]: stepper por ítem + motivo_item (§4.5), a la vista sobre
+                  la entrega abierta y sin toque propio de apertura — con un solo ítem cuesta 3
+                  acciones: la cantidad, el motivo, confirmar. */}
+              <div data-testid="modo-parcial-panel" style={bloque}>
+                {parada.items.map((it) => (
+                  <div key={it.id} data-testid={`ajuste-item-${it.id}`} style={bloque}>
+                    <p style={{ ...cuerpo, margin: 0, fontWeight: enfasis.medio }}>
+                      {it.empresa} — planificado {it.qtyPlanificada}
+                    </p>
+                    <div data-testid={`cantidad-item-${it.id}`}>
+                      <TecladoNumerico
+                        valor={cantidades[it.id] ?? ""}
+                        onCambiar={(v) => setCantidades((prev) => ({ ...prev, [it.id]: v }))}
+                      />
+                    </div>
+                    {cantidades[it.id] !== undefined && cantidades[it.id] !== "" && (
+                      <div data-testid={`motivo-item-${it.id}`}>
+                        <SelectorUnToque
+                          opciones={motivos.map((m) => ({ valor: m.id, etiqueta: m.etiqueta }))}
+                          valor={motivoPorItem[it.id] ?? null}
+                          onCambiar={(motivoId) =>
+                            setMotivoPorItem((prev) => ({ ...prev, [it.id]: motivoId }))
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {/* Basta UN ítem ajustado: los demás se entregaron completos, y cobrarle un
+                    toque por cada uno sería subir el conteo por bultos que sí llegaron. */}
+                {parada.items.some(
+                  (it) =>
+                    cantidades[it.id] !== undefined &&
+                    cantidades[it.id] !== "" &&
+                    motivoPorItem[it.id] !== undefined,
+                ) && (
+                  <BotonPrimario testid="confirmar-parcial" onClick={confirmarParcial}>
+                    Confirmar entrega parcial
+                  </BotonPrimario>
+                )}
+              </div>
+
+              <BotonPrimario
+                testid="modo-dejado-en-punto"
+                variante="neutro"
+                onClick={() => setModo("dejado_en_punto")}
+              >
+                Dejado en punto
+              </BotonPrimario>
+            </>
           )}
+
+          {/* «No pude entregar» se ofrece SIEMPRE, con evidencia pendiente o sin ella: el
+              requisito es evidencia DE LA ENTREGA y una parada fallida no tiene ninguna que
+              dar — el local cerrado no firma (§4.2, §7.6). */}
+          <BotonPrimario testid="modo-no-entregado" variante="neutro" onClick={() => setModo("no_entregado")}>
+            No pude entregar
+          </BotonPrimario>
         </section>
       )}
 
@@ -385,7 +586,7 @@ export default function TarjetaDeEntrega({
       {candado !== null && candado.abierta && recorrido.llegada && modo === "dejado_en_punto" && parada !== null && (
         <section data-testid="modo-dejado-en-punto-panel" style={bloque}>
           {exigeEncuadre(parada, bultosMaxSinReceptor) && !encuadreCapturado && (
-            <BotonPrimario testid="encuadrar-dejado-en-punto" onClick={() => setEncuadreCapturado(true)}>
+            <BotonPrimario testid="encuadrar-dejado-en-punto" onClick={encuadrar}>
               Encuadrar bultos
             </BotonPrimario>
           )}
