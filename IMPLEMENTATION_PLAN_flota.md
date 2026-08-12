@@ -225,7 +225,12 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
   - Probado: `dominio/semaforo-turnos-conductores.test.ts` (7/7). `check.sh --full --app=flota` verde.
 - [x] (P1) Aislamiento y roles del tablero: suite A-contra-B total; manifest solo `admin_tenant` (chofer/responsable/cliente/operador/responsable_tecnico ⇒ 403); cero CLP a roles vetados — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-09]
   - Probado: `e2e/semaforo-roles.spec.ts` (11/11, primer plano) — los 5 roles vetados del enum ⇒ 403/0 filas, `admin_tenant` ⇒ 200, sin sesión ⇒ 404; digest declarado en el manifiesto con cruce real; grep-gate de cero columnas de dinero en `review_queue`/`client_metric`/`signal_rule`. `check.sh --full --app=flota` verde.
-- [ ] (P1) Vista e-auto solo-`control` (componente contra fixtures): agregados técnicos/adopción; cero conexiones a BDs tenant; centinela 14 en rojo ante columna de dinero — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-10]
+- [x] (P1) Vista e-auto solo-`control` (componente contra fixtures): agregados técnicos/adopción; cero conexiones a BDs tenant; centinela 14 en rojo ante columna de dinero — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-10]
+  - Probado: `dominio/plano-eauto.test.ts` (7/7) + centinela 14 a nivel de vista (rebote real
+    contra `monto_clp`/`tarifa`/`cliente`/`rut`/`factura` y contra una columna inventada) +
+    regla estática nueva `plano-eauto-sin-bd-de-tenant` (alcance acotado, `gate-reglas-
+    estaticas.mjs`) con 3 fixtures. Vista `src/plano-eauto/tablero-cross-tenant.tsx` sin montar
+    (AC-FSEM-24 es su e2e autenticado). `check.sh --full --app=flota` verde.
 - [ ] (P1) Señales cross-tenant en `control`: sin eventos un día hábil rojo; −30% amarillo; 5% errores amarillo y >5%/15 min rojo; canario de fuga = rojo máximo NO degradable; churn EEVD — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-11]
 - [ ] (P1) AA y estados del «Hoy»: nada solo-color; 7:1 en claro Y oscuro; 4 estados; snapshot 375px con términos extremos; e2e doble terminología sin cambiar selectores — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-12]
 - [ ] (P1) Contracción sin residuos: feature OFF deja de evaluar al próximo bootstrap; tenant C 5 tarjetas sin CLP; conmutación conserva signal_rule y review_queue (centinela 11) — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-13]

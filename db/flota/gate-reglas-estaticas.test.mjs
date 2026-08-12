@@ -147,6 +147,38 @@ console.log("listo");`,
   assert.equal(problemas.length, 3, JSON.stringify(problemas));
 });
 
+test("[AC-FSEM-10] regla plano-eauto — el Plano B referenciando una BD t_<slug> ⇒ rojo", () => {
+  for (const mal of [
+    `const bd = bdDeTenant(slug);`,
+    `const pool = poolDe("t_alfa");`,
+    `const bd = \`t_\${slug}\`;`,
+    `import { poolDe } from "../servidor/conexion.ts";`,
+  ]) {
+    const { problemas } = conArchivos({ "apps/flota/src/dominio/plano-eauto.ts": mal });
+    assert.equal(problemas.length, 1, `no disparó con: ${mal}`);
+    assert.match(problemas[0], /Plano B lee EXCLUSIVAMENTE/);
+  }
+});
+
+test("[AC-FSEM-10] regla plano-eauto — el mismo texto en OTRO archivo de la app no dispara: es de alcance acotado", () => {
+  // Sin `soloEn`, esta regla sería global y rompería el resto de la app, que SÍ necesita
+  // conectarse a BDs de tenant para operar — sería una regla que nadie podría dejar encendida.
+  const { problemas } = conArchivos({
+    "apps/flota/src/servidor/encargos.ts": `const bd = bdDeTenant(slug);`,
+  });
+  assert.deepEqual(problemas, []);
+});
+
+test("[AC-FSEM-10] regla plano-eauto — un archivo conforme bajo su alcance pasa (el guard no es un no-op)", () => {
+  const { problemas, revisados } = conArchivos({
+    "apps/flota/src/plano-eauto/tablero-cross-tenant.tsx": `export function TableroCrossTenant({ filas }) {
+  return filas.map((f) => f.tenantSlug);
+}`,
+  });
+  assert.deepEqual(problemas, []);
+  assert.equal(revisados.length, 1);
+});
+
 test("[AC-FTEN-16] cada regla del contrato tiene su razón escrita y su id", () => {
   // Un `GATE: ...` sin razón obliga a leer el regex para entender qué se rompió.
   for (const r of REGLAS) {

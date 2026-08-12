@@ -367,7 +367,32 @@ activa SOLO `admin_tenant`: mientras la pregunta 1 esté abierta, `operador` y
     para viajar con el secreto de sesión persistido, y `refresco-digest.spec.ts` (AC-FSEM-06)
     quedó actualizado para enrolar una dueña real y pasar su secreto — sin eso, la guardia
     nueva le habría respondido 404 a esa suite entera.
-- [ ] (P1) Vista e-auto solo-`control`: el render se verifica a nivel de COMPONENTE/VISTA contra fixtures de `control` (sin depender del montaje/autenticación pendientes de la pregunta 2): muestra por tenant estado semafórico + actividad vs media móvil 7d, errores de sync, backlog, versión PWA, latencia p95 y EEVD agregada; el código del plano cross-tenant no abre conexión a ninguna BD `t_<slug>` (regla estática + test de privilegios); centinela 14: inyectar una columna de dinero/tarifa/cliente al payload del exportador ⇒ el test de schema falla en rojo; el e2e navegado con autenticación queda en AC-FSEM-24 — oráculo: CI [AC-FSEM-10]
+- [x] (P1) Vista e-auto solo-`control`: el render se verifica a nivel de COMPONENTE/VISTA contra fixtures de `control` (sin depender del montaje/autenticación pendientes de la pregunta 2): muestra por tenant estado semafórico + actividad vs media móvil 7d, errores de sync, backlog, versión PWA, latencia p95 y EEVD agregada; el código del plano cross-tenant no abre conexión a ninguna BD `t_<slug>` (regla estática + test de privilegios); centinela 14: inyectar una columna de dinero/tarifa/cliente al payload del exportador ⇒ el test de schema falla en rojo; el e2e navegado con autenticación queda en AC-FSEM-24 — oráculo: CI [AC-FSEM-10]
+  - Probado: `apps/flota/src/dominio/plano-eauto.test.ts` (7/7) contra `dominio/plano-eauto.ts` — la
+    forma de dato que este plano consume, sin fetch ni cliente de BD propio. **Centinela 14 a
+    nivel de vista:** `validarSchemaAgregadoControl` copia la MISMA lista de columnas
+    (`CAMPOS_AGREGADO_CONTROL_CRUDO`, subconjunto de `COLUMNAS_DEL_AGREGADO`) y el MISMO
+    vocabulario prohibido que `db/flota/suite-bd/control.test.mjs` (AC-FTEN-04, la autoridad
+    real de BD); el test inyecta de verdad `monto_clp`/`tarifa_promedio`/`cliente_principal`/
+    `rut_titular`/`factura_pendiente` y confirma el rebote, más una clave inventada que no huele
+    a dinero pero tampoco está en el schema fijo (mismo criterio: la BD manda, esta vista no
+    inventa columnas). **Regla estática + test de privilegios:** `db/flota/gate-reglas-
+    estaticas.mjs` suma la regla `plano-eauto-sin-bd-de-tenant`, de alcance ACOTADO (campo nuevo
+    `soloEn`, antes solo existían reglas globales) a `dominio/plano-eauto.ts` y
+    `src/plano-eauto/` — el resto de la app sigue pudiendo conectarse a BDs `t_<slug>` para
+    operar, que es exactamente lo que esta regla no puede tocar. 3 fixtures nuevos en
+    `gate-reglas-estaticas.test.mjs`: dispara con `bdDeTenant(...)`/`poolDe("t_...")`/
+    `` `t_${slug}` ``/import de `servidor/conexion`, NO dispara con el mismo texto fuera de su
+    alcance (así no rompería el resto de la app, que sí necesita esas llamadas), y un archivo
+    conforme pasa limpio. **Fixtures y vista:** `dominio/plano-eauto-fixtures.ts` (3 tenants de
+    referencia, verde/amarillo/rojo, uno con `eevd_semanal` NULL declarado) y el componente
+    presentacional `src/plano-eauto/tablero-cross-tenant.tsx` (sin `"use client"` con fetch: solo
+    recibe `FilaTenantControl[]` ya armadas), no montado bajo ninguna ruta —sin URL, sin caso de
+    cruce que declarar en `manifiesto.json` todavía— porque el montaje autenticado es AC-FSEM-24.
+    «Actividad vs media móvil 7d» y «latencia p95» quedan en NULL declarado en todo el seed: hoy
+    `agregados_tecnicos` no las computa ni las tiene como columna (gap real, no inventado);
+    la vista las degrada como «pendiente», mismo tratamiento que `eevd_semanal` antes de su hito
+    (AC-FTEN-04). `bash packages/metodo/scripts/check.sh --full --app=flota` verde.
 - [ ] (P1) Señales cross-tenant con fixtures en `control`: tenant sin eventos un día hábil ⇒ rojo; actividad −30% vs media 7d ⇒ amarillo; errores de sync en 5% exacto ⇒ amarillo (5% cae dentro de la banda seed «1–5%» cualquiera sea su punto y no supera el rojo «>5%» — robusto a la pregunta 5a) y errores >5% sostenidos 15 min ⇒ rojo; >20% dispositivos en PWA vieja ⇒ amarillo; cola de sync >4 h ⇒ rojo; la señal «backlog creciente 2 intervalos» ⇒ amarillo queda CONDICIONADA a la pregunta 3 (sin cadencia del exportador, «intervalo» no tiene semántica cerrada — mismo tratamiento que la señal de ETA en AC-FSEM-19); canario de aislamiento en fallo ⇒ rojo máximo que NO se degrada por histéresis ni por edición de umbral (test que intenta ambas); alarma churn EEVD −30% semana/semana dispara sobre la EEVD agregada — oráculo: CI [AC-FSEM-11]
 - [ ] (P1) AA y estados de pantalla: ningún estado del semáforo comunicado solo por color (texto/ícono siempre, verificable apagando CSS de color); contraste ≥7:1 en indicadores semafóricos y cifra operativa en tema claro Y oscuro (axe/Lighthouse en gate); los 4 estados obligatorios de «Hoy» (vacío accionable con CTA, skeleton <50 ms, error es-CL con recuperación, sin conexión con contador real); snapshot 375px con términos del tenant B al máximo largo sin truncar cifras; la e2e del módulo corre DOS veces (terminología base y extrema) sin cambiar un selector (data-testid/term_key) — oráculo: CI [AC-FSEM-12]
 - [ ] (P1) Contracción sin residuos: apagar el feature de liquidación ⇒ sus `signal_rule` dejan de evaluar en el próximo bootstrap (el turno abierto termina con su config congelada, `turno.config_version_id`) y no nacen excepciones nuevas de ese origen; e2e tenant C: 5 tarjetas, cero CLP de tarifas visible, semáforo operativo; conmutar `mi_flota→daas→mi_flota` conserva todas las filas de `signal_rule` y `review_queue` (centinela 11 aplicado al módulo); la conducta «dominio sin ninguna señal activa no renderiza tarjeta» NO se asevera aquí — está pendiente de la pregunta 8 y vive en AC-FSEM-21 — oráculo: CI [AC-FSEM-13]

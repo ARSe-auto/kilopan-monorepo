@@ -83,6 +83,18 @@ export const REGLAS = [
       `tenant-scoped (${WRAPPER}): sin el prefijo del tenant, esos cuatro planos se cruzan (§7.2)`,
     exentos: [WRAPPER],
   },
+  {
+    id: "plano-eauto-sin-bd-de-tenant",
+    // Spec 05 §3/§4.1: el Plano B de e-auto lee EXCLUSIVAMENTE de `control`. A diferencia de
+    // las reglas de arriba (§7.2, todo `apps/flota/src`), esta es de ALCANCE ACOTADO: el resto
+    // de la app SÍ tiene que poder conectarse a BDs de tenant (`t_<slug>`) para operar — es la
+    // vista cross-tenant, y solo ella, la que jamás puede [AC-FSEM-10].
+    soloEn: ["apps/flota/src/dominio/plano-eauto.ts", "apps/flota/src/plano-eauto"],
+    patron: /\bbdDeTenant\s*\(|poolDe\s*\(\s*['"`]t_|['"`]t_\$\{|from\s+['"`][^'"`]*servidor\/conexion[^'"`]*['"`]/,
+    razon:
+      "el plano cross-tenant de e-auto referenció una BD t_<slug> o el pool del servidor de " +
+      "tenant: el Plano B lee EXCLUSIVAMENTE de `control` (§3, §4.1)",
+  },
 ];
 
 function archivos(raiz) {
@@ -111,6 +123,11 @@ export function revisar(raiz = RAIZ_REPO, reglas = REGLAS) {
     const texto = readFileSync(ruta, "utf8");
     for (const regla of reglas) {
       if (regla.exentos?.includes(rel)) continue;
+      // `soloEn`: la regla es de alcance ACOTADO a ciertos archivos/directorios (prefijo de
+      // ruta relativa a la raíz), no a los ARBOLES completos. Sin esto, cada regla nueva
+      // tendría que ser global o exentar cada archivo restante uno por uno — al revés de lo
+      // que hace falta acá, donde la excepción es la regla y el resto de la app opera normal.
+      if (regla.soloEn && !regla.soloEn.some((p) => rel === p || rel.startsWith(`${p}/`))) continue;
       const lineas = texto.split("\n");
       for (let i = 0; i < lineas.length; i++) {
         // Los comentarios no son código: una regla que se dispara con su propia explicación
