@@ -976,6 +976,18 @@
       }
     },
     {
+      "ruta": "/hoy",
+      "archivo": "src/app/hoy/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Nivel 0 del tablero «Hoy» [AC-FSEM-01]. NO abre ninguna BD de tenant todavía: el digest real (`signal_rule` contra eventos/paradas) es de AC-FSEM-06/09 y depende de una tabla que esta iteración no crea (esquema de sesión supervisada). Mientras tanto la pantalla renderiza sobre semillas LITERALES embebidas en el código (`?seed=a`/`?seed=c`, default `a`) — ni lee ni recibe ningún identificador de tenant, así que no hay recurso de B que pedirle ni dato de ningún tenant que filtrar: la respuesta es idéntica venga con la cabecera de tenant que venga. El cruce vuelve a pesar de verdad el día que AC-FSEM-06/09 la conecten al digest real."
+      }
+    },
+    {
       "ruta": "/listos",
       "archivo": "src/app/listos/page.tsx",
       "metodos": [
