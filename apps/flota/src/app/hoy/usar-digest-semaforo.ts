@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SEMAFORO } from "../../../../../packages/nucleo-comun/src/constants.ts";
 import type { TarjetaHoy } from "../../dominio/semaforo.ts";
+import { pedir } from "../../cliente/aparato.ts";
 
 // Refresco del digest [AC-FSEM-06] — spec 05 §2.6, §4.
 //
@@ -52,7 +53,10 @@ export function useDigestSemaforo(seed: "a" | "c", tarjetasIniciales: TarjetaHoy
     try {
       const cabeceras: HeadersInit = {};
       if (etagRef.current) cabeceras["If-None-Match"] = etagRef.current;
-      const r = await fetch(`/api/semaforo/digest?seed=${seed}`, { headers: cabeceras, cache: "no-store" });
+      // `pedir()` (`cliente/aparato.ts`) — la sesión ES el aparato [AC-FIDN-09]: el digest exige
+      // `admin_tenant` desde este AC (§2.8) y sin el secreto persistido del dueño no hay con qué
+      // pasar la guardia [AC-FSEM-09].
+      const r = await pedir(`/api/semaforo/digest?seed=${seed}`, { headers: cabeceras, cache: "no-store" });
 
       if (r.status === 304) {
         setEstado((previo) => ({ ...previo, conectado: true, intentosFallidos: 0, ultimoDigestEn: Date.now() }));

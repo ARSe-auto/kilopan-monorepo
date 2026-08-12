@@ -791,7 +791,7 @@
       "params": [],
       "cruce": {
         "tipo": "sin_recurso",
-        "nota": "El digest del Nivel 0 [AC-FSEM-06]. Sin identificador de recurso y todavía sin sesión (la guardia de rol es AC-FSEM-09): la respuesta sale literal de `?seed=a|c`, las mismas semillas del maestro que ya sirve `hoy/page.tsx` (AC-FSEM-01) — no hay dato de ningún tenant real que un Host/cabecera falsificados puedan sacar hoy. El cruce que sí pesa es el genérico —identidad de B por los canales falsificables, respuesta idéntica a la de A, cero 5xx— y vuelve a pesar de verdad el día que este endpoint lea `signal_rule` real (AC-FSEM-07+) y exija sesión (AC-FSEM-09)."
+        "nota": "El digest del Nivel 0 [AC-FSEM-06], ahora tras `guardia()` [AC-FSEM-09]: sin sesión ⇒ 404 pelado, sesión de un rol distinto de `admin_tenant` ⇒ 403, `admin_tenant` ⇒ 200 con la respuesta literal de `?seed=a|c` (las mismas semillas del maestro que ya sirve `hoy/page.tsx`, AC-FSEM-01) — la evaluación real de `signal_rule` sigue pendiente de AC-FSEM-07+. El caso genérico de esta suite va SIN Authorization, así que cae en la rama «sin sesión» (404, sin cuerpo): cero cadena de B posible ahí. El cruce CON sesión real de B —que sí podría filtrar por header falsificado si `guardia()` confiara en `x-flota-tenant-bd` del cliente en vez del que fija `servidor.mjs` por Host— lo prueba `semaforo-roles.spec.ts`, que ejerce las 6 combinaciones de rol reales."
       }
     },
     {

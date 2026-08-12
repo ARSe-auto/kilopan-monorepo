@@ -1,8 +1,11 @@
 import { test, expect } from "@playwright/test";
-import { request as pedir } from "node:http";
+import { request as pedirHttp } from "node:http";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { SEMAFORO } from "../../../packages/nucleo-comun/src/constants.ts";
+import { con, bdDeTenant } from "../../../db/flota/conectar.mjs";
+import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
+import { VALIDOS } from "../../../db/flota/ruts-sinteticos.mjs";
 
 // Refresco degradable del digest [AC-FSEM-06] — spec 05 §2.6, §4.
 //
@@ -21,23 +24,59 @@ import { SEMAFORO } from "../../../packages/nucleo-comun/src/constants.ts";
 //       `context.setOffline`.
 //
 // Más un grep de todo el módulo: cero `WebSocket`/`EventSource` — v1 es polling puro (§5.6).
+//
+// El digest exige sesión `admin_tenant` desde [AC-FSEM-09] (`guardia()`, spec 05 §2.8): las
+// tres mitades corren con el secreto de una dueña REAL enrolada acá — sin él, la guardia
+// respondería 404 pelado y ninguna de las tres probaría lo que dice probar.
 
 const PUERTO = 3311;
 const DOMINIO = "localhost";
-const HOST = `ruteo_activo.${DOMINIO}:${PUERTO}`;
+const SLUG = "ruteo_activo";
+const HOST = `${SLUG}.${DOMINIO}:${PUERTO}`;
+const BD = bdDeTenant(SLUG);
 const INTERVALO_MS = SEMAFORO.polling_segundos.min * 1000;
+
+type Conexion = { sql: <T = Record<string, string>>(t: string, p?: unknown[]) => Promise<T[]> };
+
+// Índice 20: el primero libre en `ruteo_activo` — las suites que comparten ese tenant lo hacen
+// por su TIPO de tenant (activo, primero de la lista), no por RUT indexado (`preparar-tenants.mjs`).
+async function enrolarDuena(): Promise<string> {
+  const secreto = secretoNuevo();
+  const rut = Object.keys(VALIDOS)[20]!;
+  await con(BD, async (c: Conexion) => {
+    const [p] = await c.sql<{ id: string }>(
+      "insert into personas (rut, nombre) values ($1, $2) returning id::text as id",
+      [rut, "Dueña del refresco del digest"],
+    );
+    const [u] = await c.sql<{ id: string }>(
+      "insert into usuarios (persona_id, rol) values ($1, 'admin_tenant') returning id::text as id",
+      [p!.id],
+    );
+    await c.sql(
+      `insert into dispositivos (tipo, persona_id, secreto_hash, enrolado_por, enrolado_en)
+       values ('personal', $1, $2, $3, now())`,
+      [p!.id, hashDeSecreto(secreto), u!.id],
+    );
+  });
+  return secreto;
+}
+
+let SECRETO_DUENA: string;
+test.beforeAll(async () => {
+  SECRETO_DUENA = await enrolarDuena();
+});
 
 type RespuestaDigest = { status: number; cuerpo: string; etag: string | undefined };
 
 function pedirDigest(cabeceras: Record<string, string> = {}): Promise<RespuestaDigest> {
   return new Promise((resolver, rechazar) => {
-    const req = pedir(
+    const req = pedirHttp(
       {
         host: "127.0.0.1",
         port: PUERTO,
         path: "/api/semaforo/digest?seed=a",
         method: "GET",
-        headers: { Host: HOST, ...cabeceras },
+        headers: { Host: HOST, Authorization: `Portador ${SECRETO_DUENA}`, ...cabeceras },
       },
       (res) => {
         let cuerpo = "";
@@ -49,6 +88,26 @@ function pedirDigest(cabeceras: Record<string, string> = {}): Promise<RespuestaD
     req.on("error", rechazar);
     req.end();
   });
+}
+
+/** El navegador necesita el secreto persistido en el MISMO IndexedDB que lee `cliente/aparato.ts`
+ *  (`pedir()`, base `flota-aparato`, almacén `claves`, llave `secreto-de-sesion`) — sin él, el
+ *  hook de polling pega contra la guardia [AC-FSEM-09] y la pantalla queda en «sin conexión»
+ *  desde el primer refresco, aunque la red esté perfecta. */
+async function conSesionDeDuena(page: import("@playwright/test").Page) {
+  await page.addInitScript((secreto) => {
+    const guardar = () =>
+      new Promise<void>((res) => {
+        const r = indexedDB.open("flota-aparato", 1);
+        r.onupgradeneeded = () => r.result.createObjectStore("claves");
+        r.onsuccess = () => {
+          const tx = r.result.transaction("claves", "readwrite").objectStore("claves").put(secreto, "secreto-de-sesion");
+          tx.onsuccess = () => res();
+          tx.onerror = () => res();
+        };
+      });
+    void guardar();
+  }, SECRETO_DUENA);
 }
 
 test.describe("contrato de servidor: ETag/304", () => {
@@ -85,6 +144,7 @@ test.describe("mecánica de refresco en el navegador (Page Visibility simulada)"
       llamadas++;
       await route.continue();
     });
+    await conSesionDeDuena(page);
     await page.clock.install();
     await page.goto("/hoy?seed=a");
     await expect.poll(() => llamadas).toBeGreaterThanOrEqual(1);
@@ -107,6 +167,7 @@ test.describe("mecánica de refresco en el navegador (Page Visibility simulada)"
       Object.defineProperty(document, "visibilityState", { get: () => "hidden", configurable: true });
       Object.defineProperty(document, "hidden", { get: () => true, configurable: true });
     });
+    await conSesionDeDuena(page);
     await page.clock.install();
     await page.goto("/hoy?seed=a");
     await page.clock.fastForward(INTERVALO_MS * 2 + 1000);
@@ -127,6 +188,7 @@ test.describe("offline: cero verde fingido", () => {
     page,
     context,
   }) => {
+    await conSesionDeDuena(page);
     await page.clock.install();
     await page.goto("/hoy?seed=a");
     await expect(page.getByTestId("tarjeta-hoy").first()).toBeVisible();
