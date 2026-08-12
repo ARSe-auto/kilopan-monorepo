@@ -244,14 +244,23 @@ Reglas duras:
   rápido NO corre e2e, y un [x] con e2e rojo lo pilla el gate independiente y pausa
   todo el motor (pasó el 06-ago con AC-DES-06).
 - Si te quedás sin presupuesto a mitad de un AC, comitear lo construido y dejar el AC
-  ABIERTO es lo CORRECTO — no lo escondas y no marques [x]. Pero decilo en una línea
-  final del mensaje de commit, exactamente con esta forma:
-      AC-ABIERTO: AC-XXXX-NN — qué falta (p. ej. el e2e no se corrió, presupuesto agotado)
-  Esa línea es para el supervisor, no decorativa: con ella distingue tu trabajo a medio
-  camino —que NO frena el motor— de un agente afirmando un verde falso, que lo frena
-  entero. Sin ella, tu commit honesto pausaba todo hasta que una persona lo mirara a la
-  mañana siguiente (pasó dos veces el 11-ago-2026). Solo vale con el AC SIN marcar: si
-  marcaste [x] y el gate está rojo, la línea no te salva, y es lo correcto.
+  ABIERTO es lo CORRECTO — no lo escondas y no marques [x]. Pero hay que DECLARARLO, y el
+  DÓNDE importa tanto como el qué. La declaración es la ÚLTIMA LÍNEA DEL CUERPO del
+  mensaje de commit, sola, empezando en la primera columna:
+
+      AC-ABIERTO: ${AC_ID:-AC-XXXX-NN} — qué falta
+
+  Copiá esa línea tal cual y cambiá solo lo de después del guión. Tres lugares donde
+  ponerla NO cuenta, y los tres se vieron el 11-ago-2026 en la misma noche:
+    · en el TÍTULO del commit («docs: AC-FPOD-22 estado AC-ABIERTO en plan») — no cuenta;
+    · como nota en el PLAN o en la spec — no cuenta, el supervisor lee el commit;
+    · mencionada en medio de un párrafo — no cuenta, tiene que empezar la línea.
+  No es burocracia: es lo único que distingue tu trabajo a medio camino —que NO frena el
+  motor— de un agente afirmando un verde falso, que lo frena entero hasta que una persona
+  lo mire a la mañana siguiente. Si la mención valiera en cualquier lado, sería un
+  salvoconducto y ningún rojo volvería a frenar nada.
+  Y ojo: solo vale con el AC SIN marcar. Si marcaste [x] y el gate está rojo, la línea no
+  te salva — estás afirmando un verde que no existe, y eso pausa igual.
 - Si tu AC agrega una RUTA HTTP o una PANTALLA, declará su caso de cruce en
   apps/${APP}/rutas/manifiesto.json ANTES de comitear. Es lo que más veces frenó al motor
   la noche del 10-ago-2026: 'node apps/${APP}/rutas/generar.mjs --escribir' regenera la

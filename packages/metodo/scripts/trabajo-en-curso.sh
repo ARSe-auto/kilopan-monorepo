@@ -53,6 +53,17 @@ done
 # explicación en prosa que MENCIONE «AC-ABIERTO» a mitad de un párrafo no es una declaración.
 AC=$(printf '%s\n' "$MENSAJE" | sed -nE 's/^AC-ABIERTO:[[:space:]]*(AC-[A-Z0-9]+-[0-9]+).*/\1/p' | head -1)
 if [ -z "$AC" ]; then
+  # DIAGNOSTICAR, NO SOLO NEGAR. El 11-ago-2026 el agente escribió «AC-ABIERTO» en el TÍTULO
+  # del commit y la nota en el plan: entendió el mecanismo y erró el lugar dos veces seguidas.
+  # Un rechazo que solo dice «no declara nada» manda a buscar una declaración que SÍ está —
+  # mal puesta— y hace perder el viaje a quien lea el log.
+  if printf '%s\n' "$MENSAJE" | grep -q "AC-ABIERTO"; then
+    echo "trabajo-en-curso: el commit NOMBRA AC-ABIERTO pero no en su lugar. Tiene que ser la" \
+         "última línea del CUERPO, sola y empezando en la primera columna " \
+         "('AC-ABIERTO: AC-XXXX-NN — qué falta'); en el título o en medio de un párrafo no" \
+         "cuenta, porque si contara en cualquier lado sería un salvoconducto."
+    exit 1
+  fi
   echo "trabajo-en-curso: el commit no declara ningún AC abierto — un rojo acá es un verde falso."
   exit 1
 fi

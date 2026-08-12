@@ -384,6 +384,16 @@ bash "$TEC" --app=flota --plan="$PLAN_FIX" \
   && no "una mención en prosa cuenta como declaración: cualquier commit que nombre la línea evade la pausa" \
   || ok "la declaración se ancla al principio de línea (mencionarla en prosa no cuenta)"
 
+# El rechazo DIAGNOSTICA cuando la marca está pero mal puesta. Sin esto, el log decía «no
+# declara nada» sobre un commit que sí la nombraba —en el título— y mandaba a buscar lo que
+# ya estaba escrito. Pasó el 11-ago-2026: el agente erró el LUGAR, no el mecanismo.
+SALIDA_TITULO="$(bash "$TEC" --app=flota --plan="$PLAN_FIX" \
+  --mensaje="$(printf 'docs: %s estado AC-ABIERTO en plan' "$AC_ABIERTO_FIX")" 2>&1 || true)"
+case "$SALIDA_TITULO" in
+  *"no en su lugar"*) ok "si la marca está pero mal puesta, el rechazo lo DICE (no manda a buscar lo que ya está escrito)" ;;
+  *)                  no "el rechazo no distingue «falta la marca» de «la marca está mal puesta»: el log manda a buscar en falso" ;;
+esac
+
 # La otra mitad del contrato: al agente hay que PEDIRLE la línea, o nunca la va a escribir.
 grep -q "AC-ABIERTO:" "$M/loop.sh" \
   && ok "loop.sh le pide al agente la línea canónica al dejar un AC abierto (sin eso, la regla no se ejerce nunca)" \
