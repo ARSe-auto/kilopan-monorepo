@@ -28,6 +28,16 @@ export type ExcepcionCruda = {
   id: string;
   descripcion: string;
   record_time: Date;
+  /** Campos del Peek N1 [AC-FSEM-04] — spec 05 §2.2. Opcionales A PROPÓSITO: el Nivel 0
+   *  (AC-FSEM-01) no los necesita, y su propio test (`semaforo.test.ts`) construye una
+   *  excepción sin ellos para probar que la tarjeta verde los ignora aunque existieran. Una
+   *  fila sin estos campos simplemente no entra al peek (`dominio/peek-n1.ts`). */
+  quien?: string;
+  que?: string;
+  cuanto?: string;
+  playbook?: string;
+  severidad?: "amarillo" | "rojo";
+  estado?: "nueva" | "reconocida";
 };
 
 /** El estado YA evaluado de un dominio, tal como lo entregaría su `signal_rule`. */

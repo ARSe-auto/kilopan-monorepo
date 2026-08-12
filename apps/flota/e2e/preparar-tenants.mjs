@@ -198,6 +198,11 @@ async function sembrarIdentidadDelVecino(slug) {
        values ($1, $2, $2, $3, $3, now(), -240)`,
       [manifiestoDelVecino.id, persona.id, firmaDelVecino.id],
     );
+    // Y una excepción en `review_queue` [AC-FSEM-04]: `/api/semaforo/excepciones/[id]/reconocer`
+    // es de tipo recurso y el caso del centinela 2 saca de acá el id REAL con el que A intenta
+    // reconocer una excepción de B — le robaría el dueño (`asignado_a`) de una fila que su
+    // operación todavía no vio, y la marcaría atendida sin que nadie de su casa lo haya hecho.
+    await sql(`insert into review_queue (origen, severidad) values ('datos_sync', 'rojo')`);
   });
 }
 

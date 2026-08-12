@@ -1,6 +1,7 @@
 import { tipografia } from "@kilopan/miga/tokens.ts";
 import { tarjetasNivelCero } from "../../dominio/semaforo.ts";
 import { seedA, seedC } from "../../dominio/semaforo-fixtures.ts";
+import { filasPeekDeDominio, type FilaPeek } from "../../dominio/peek-n1.ts";
 import { TableroHoy } from "./tablero-de-hoy.tsx";
 
 // «Hoy» — home del dueño del tenant (§5.2-F6), Nivel 0 [AC-FSEM-01].
@@ -17,11 +18,16 @@ export default async function Hoy({ searchParams }: { searchParams: Promise<{ se
   const { seed } = await searchParams;
   const estados = seed === "c" ? seedC() : seedA();
   const tarjetas = tarjetasNivelCero(estados);
+  // Peek N1 [AC-FSEM-04]: plano, no un `Map` — cruza el borde servidor/cliente hacia
+  // `TableroHoy` ("use client") y RSC no serializa un `Map`.
+  const peekPorDominio: Record<string, FilaPeek[]> = Object.fromEntries(
+    estados.map((estado) => [estado.clave, filasPeekDeDominio(estado)]),
+  );
 
   return (
     <main>
       <h1 style={{ fontSize: tipografia.display.tamano, fontWeight: tipografia.display.peso, margin: 0 }}>Hoy</h1>
-      <TableroHoy tarjetas={tarjetas} />
+      <TableroHoy tarjetas={tarjetas} peekPorDominio={peekPorDominio} />
     </main>
   );
 }

@@ -783,6 +783,17 @@
       }
     },
     {
+      "ruta": "/api/semaforo/excepciones/[id]/reconocer",
+      "archivo": "src/app/api/semaforo/excepciones/[id]/reconocer/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": null
+    },
+    {
       "ruta": "/api/sesion",
       "archivo": "src/app/api/sesion/route.ts",
       "metodos": [
