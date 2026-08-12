@@ -593,6 +593,24 @@
       }
     },
     {
+      "ruta": "/api/paradas/[id]/evidencia",
+      "archivo": "src/app/api/paradas/[id]/evidencia/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "paradas",
+          "columna": "id"
+        },
+        "nota": "El binario de una evidencia de POD de una parada de B desde una sesión de A [AC-FPOD-19]: sin eventos de esa parada en la BD de A (bases separadas por tenant, §4.1) no hay promesa de sha256 que calce, así que responde 404 y la BD de B queda sin cambios. Escribe `evidence` APPEND-ONLY colgada de la parada, con un sha256 write-once — un binario ajeno pegado a la entrega del vecino quedaría como constancia de una evidencia que nunca capturó y no se podría borrar."
+      }
+    },
+    {
       "ruta": "/api/paradas/[id]/manifiesto",
       "archivo": "src/app/api/paradas/[id]/manifiesto/route.ts",
       "metodos": [

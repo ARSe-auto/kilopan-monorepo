@@ -150,6 +150,10 @@ export const EVENTOS_OPERACION = {
   // [AC-FPOD-10] — §4.7: evicción del outbox o manipulación, jamás pérdida silenciosa. La
   // captura entra igual (centinela 4: rechazos = 0); esto solo deja dicho que hay que revisarla.
   entrega_secuencia_hueco: "entrega.secuencia_hueco",
+  // El binario de una evidencia del POD no re-hasheó como el sha256 que viajó ANTES en la
+  // mutación [AC-FPOD-19] — §4.6. Mismo criterio que `custodia.sha256_mismatch`: la evidencia
+  // entra igual, con el hash REAL, jamás rebota (la foto es mejora progresiva, §7.6).
+  entrega_sha256_mismatch: "entrega.sha256_mismatch",
 } as const;
 
 /** Todo código que `registrarEvento` acepta tiene que estar sembrado en `evento_tipo`: si los

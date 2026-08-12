@@ -43,6 +43,15 @@ import { clasificar as clasificarRevocacion, revisionDe as revisionDeRevocacion 
 // (mismo principio que el drift de reloj de arriba: dos copias del mismo corte se separan el
 // día que alguien mueve el umbral). Lo único nuevo acá es traducir su `ClaseDeCaptura` a un flag
 // más del catálogo de esta captura.
+//
+// ─── El contrato de transporte del binario [AC-FPOD-19] — §4.6 ─────────────────────
+//
+// El §4.6 lo fija literal: «el sha256 viaja en la mutación ANTES del binario; mismatch al
+// re-hashear ⇒ flag, no rebote». Mismo criterio que `dominio/custodia.ts` ya cerró para la foto
+// del manifiesto (AC-FRUT-10) — acá se reúsa, no se reinventa: sin promesa no hay mismatch (una
+// evidencia sin binario, como una firma, no tiene nada que comparar) y sin binario tampoco (el
+// hash viaja ANTES, así que entre la mutación y la subida hay un rato en que solo existe la
+// promesa, y eso es lo normal).
 
 export const FLAGS_DE_CAPTURA_POD = [
   "modulo_apagado",
@@ -50,6 +59,7 @@ export const FLAGS_DE_CAPTURA_POD = [
   "post_revocacion",
   "post_revocacion_tardia",
   "secuencia_hueco",
+  "sha256_mismatch",
 ] as const;
 export type FlagDeCapturaPod = (typeof FLAGS_DE_CAPTURA_POD)[number];
 
@@ -73,6 +83,12 @@ export type CapturaPod = {
    *  `esHuecoDeSecuencia` contra `dispositivos.secuencia_maxima`: este módulo no toca la BD, solo
    *  traduce el veredicto a un flag más del mismo catálogo. */
   secuenciaHueco: boolean;
+  /** El sha256 (hex) que viajó en la mutación de la captura, y el del binario re-hasheado por el
+   *  servidor al recibirlo [AC-FPOD-19] — §4.6. Opcionales y `undefined`/`null` en la clasificación
+   *  de la captura misma —que nunca lleva binario—; solo se completan cuando `servidor/capturas.ts`
+   *  clasifica la SUBIDA del binario de una evidencia. */
+  shaPrometido?: string | null;
+  shaRecalculado?: string | null;
 };
 
 /** Milisegundos de desfase tolerado entre el reloj del aparato y el del servidor (§0). */
@@ -106,6 +122,17 @@ export function clasificarCapturaPod(captura: CapturaPod): FlagDeCapturaPod[] {
   // El hueco de secuencia [AC-FPOD-10] — §4.7: evicción del outbox o manipulación, nunca
   // pérdida silenciosa. La captura aterriza igual (centinela 4: rechazos = 0).
   if (captura.secuenciaHueco) flags.push("secuencia_hueco");
+
+  // El contrato de transporte del binario [AC-FPOD-19] — §4.6: sin promesa no hay mismatch (la
+  // mayoría de las evidencias no llevan binario) y sin binario tampoco (el hash viaja ANTES, así
+  // que hay un rato normal en que solo existe la promesa).
+  if (
+    captura.shaPrometido != null &&
+    captura.shaRecalculado != null &&
+    captura.shaPrometido.toLowerCase() !== captura.shaRecalculado.toLowerCase()
+  ) {
+    flags.push("sha256_mismatch");
+  }
 
   return flags;
 }

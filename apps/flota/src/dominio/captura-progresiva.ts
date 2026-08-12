@@ -26,9 +26,10 @@ export type PermisoDeCaptor = "concedido" | "denegado";
 export type FlagDeFoto = "camara_denegada";
 
 export type ResultadoDeFoto = {
-  /** Si de verdad se abrió la cámara y quedó un binario que capturar. `false` no bloquea nada
-   *  — el requisito de evidencia se marca cumplido igual (§7.6). El binario y su sha256 —cómo
-   *  VIAJA la evidencia— son AC-FPOD-19; acá solo se resuelve el PERMISO. */
+  /** Si de verdad se abrió la cámara. `false` no bloquea nada — el requisito de evidencia se
+   *  marca cumplido igual (§7.6). Esta función solo resuelve el PERMISO; capturar un frame real
+   *  y su sha256 —cómo VIAJA la evidencia una vez que hay binario, AC-FPOD-19— es del lado de
+   *  `cliente/camara.ts`. */
   hayFoto: boolean;
   flag: FlagDeFoto | null;
 };

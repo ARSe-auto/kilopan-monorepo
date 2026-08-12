@@ -1,4 +1,5 @@
 import type { Pool, PoolClient } from "pg";
+import { createHash } from "node:crypto";
 import { enActo, registrarEvento, EVENTOS_OPERACION, esUuid } from "./gobierno.ts";
 import type { Sesion } from "./sesion.ts";
 import { versionVigente, estadoDeFeature, FEATURES } from "./config.ts";
@@ -10,6 +11,7 @@ import {
   maximaConSecuencia,
   type FlagDeCapturaPod,
 } from "../dominio/pod-sync.ts";
+import type { TipoDeEvidencia } from "../dominio/pod-terreno.ts";
 
 // El aterrizaje de las capturas del POD que trae el replay del outbox [AC-FPOD-03] — §4.2
 // (regla de oro), §4.6 (eventos append-only, doble reloj, `client_uuid`), §5.2 F4, §3.E1.7.
@@ -141,6 +143,8 @@ const EVENTO_DE_FLAG: Record<
   post_revocacion_tardia: EVENTOS_OPERACION.entrega_post_revocacion_tardia,
   // El hueco de la secuencia monotónica del dispositivo [AC-FPOD-10] — §4.7.
   secuencia_hueco: EVENTOS_OPERACION.entrega_secuencia_hueco,
+  // El binario de una evidencia no re-hasheó como el sha256 prometido [AC-FPOD-19] — §4.6.
+  sha256_mismatch: EVENTOS_OPERACION.entrega_sha256_mismatch,
 };
 
 /**
@@ -393,6 +397,143 @@ export async function aterrizarCapturas(
       }
 
       return acuses;
+    },
+    sesion,
+  );
+}
+
+// ─── El binario de una evidencia: el hash viaja ANTES, el binario después [AC-FPOD-19] ────────
+// §4.6, §7.6, §4.2.
+//
+// El §4.6 lo fija literal: «el sha256 viaja en la mutación ANTES del binario; mismatch al
+// re-hashear ⇒ flag, no rebote». Mismo contrato que `registrarFotoDeManifiesto` (AC-FRUT-10)
+// ya cierra para la foto de custodia — acá es el mismo transporte para `evidencias` de una
+// parada de POD, que puede traer más de una (firma Y foto en la misma entrega, §4.6).
+//
+// La promesa no viaja suelta: vive en el payload del evento `entrega.pod_capturada` (o su
+// corrección `entrega.pod_deshecha`) que `aterrizarCapturas` ya escribió — eventos es append-only
+// y ORDEN AUTORITATIVO (§4.6), así que nadie pudo moverla después para que calzara con lo que
+// subió. Se lee la más reciente para esa parada: un supersede puede declarar una promesa nueva.
+
+const TIPOS_DE_EVIDENCIA = [
+  "firma",
+  "foto",
+  "lectura",
+  "indicador_visual",
+  "archivo_logger",
+  "documento",
+  "pin_destinatario",
+  "escaneo_codigo",
+] as const;
+function esTipoDeEvidencia(valor: unknown): valor is TipoDeEvidencia {
+  return typeof valor === "string" && (TIPOS_DE_EVIDENCIA as readonly string[]).includes(valor);
+}
+
+const SHA256_HEX = /^[0-9a-f]{64}$/i;
+
+export type BinarioDeEvidenciaRegistrado =
+  | { tipo: "ok"; evidence_id: string; repetida: boolean; flags: FlagDeCapturaPod[] }
+  | { tipo: "requisito_no_encontrado" };
+
+/**
+ * Recibe el binario de una evidencia de POD y lo contrasta con el sha256 que ya viajó en la
+ * mutación de la captura.
+ *
+ * NUNCA rebota por el contenido: sin promesa, con promesa que no calza o con el módulo apagado,
+ * la evidencia entra igual — es mejora progresiva, jamás dependencia (§7.6). Lo único que
+ * contesta «no existe» es un `requisito_id` que esta parada nunca declaró: no es degradar una
+ * captura, es no tener a qué colgarla.
+ */
+export async function registrarBinarioDeEvidencia(
+  pool: Pool,
+  sesion: Sesion,
+  slug: string,
+  datos: {
+    paradaId: string;
+    requisitoId: string;
+    contenidoB64: string;
+    clientUuid: string | null;
+    tsDispositivo: string;
+    tzOffsetMin: number;
+    turnoId: string | null;
+  },
+): Promise<BinarioDeEvidenciaRegistrado> {
+  return enActo(
+    pool,
+    async (c) => {
+      const { rows: evento } = await c.query<{ evidencias: unknown }>(
+        `select e.payload -> 'evidencias' as evidencias
+           from eventos e join evento_tipo t on t.id = e.tipo_id
+          where e.objeto_tabla = 'paradas' and e.objeto_id = $1
+            and t.codigo in ('entrega.pod_capturada', 'entrega.pod_deshecha')
+          order by e.id desc limit 1`,
+        [datos.paradaId],
+      );
+      const evidencias = Array.isArray(evento[0]?.evidencias)
+        ? (evento[0]!.evidencias as Record<string, unknown>[])
+        : [];
+      const prometida = evidencias.find((e) => e.requisitoId === datos.requisitoId);
+      if (!prometida || !esTipoDeEvidencia(prometida.tipo)) {
+        return { tipo: "requisito_no_encontrado" };
+      }
+      const shaPrometido =
+        typeof prometida.sha256 === "string" && SHA256_HEX.test(prometida.sha256)
+          ? prometida.sha256
+          : null;
+
+      const binario = Buffer.from(datos.contenidoB64, "base64");
+      const shaRecalculado = createHash("sha256").update(binario).digest("hex");
+
+      const { moduloEncendido } = await configDeLaCaptura(c, slug, datos.turnoId);
+
+      const flags = clasificarCapturaPod({
+        tsDispositivo: new Date(datos.tsDispositivo),
+        recibidaEn: new Date(),
+        moduloEncendido,
+        revocadoEn: null,
+        secuenciaHueco: false,
+        shaPrometido,
+        shaRecalculado,
+      });
+
+      // Se guarda el hash REAL. Guardar el prometido dejaría una fila que dice que el archivo es
+      // otro del que tenemos, y entonces el sha256 write-once del §4.6 no probaría nada.
+      const { rows } = await c.query<{ id: string }>(
+        `insert into evidence (tipo, objeto_tabla, objeto_id, sha256, capturada_en, tz_offset_min, client_uuid)
+         values ($1, 'paradas', $2, decode($3, 'hex'), $4, $5, $6)
+           on conflict (tenant_id, client_uuid) do nothing
+         returning id::text as id`,
+        [
+          prometida.tipo,
+          datos.paradaId,
+          shaRecalculado,
+          datos.tsDispositivo,
+          datos.tzOffsetMin,
+          datos.clientUuid,
+        ],
+      );
+
+      if (!rows[0]) {
+        // Replay del outbox: la evidencia ya estaba. No se degrada de nuevo — repetir el aviso
+        // contaría dos veces un binario que se subió una vez (§9.3.1).
+        const { rows: previa } = await c.query<{ id: string }>(
+          "select id::text as id from evidence where client_uuid = $1",
+          [datos.clientUuid],
+        );
+        return { tipo: "ok", evidence_id: previa[0]!.id, repetida: true, flags };
+      }
+
+      const flagsConRastro = flags.filter(dejaRastro);
+      if (flagsConRastro.length > 0) {
+        await dejarDichoQueDegrado(c, {
+          flags: flagsConRastro,
+          paradaId: datos.paradaId,
+          sesion,
+          nota: `Evidencia (${prometida.tipo}) de la parada ${datos.paradaId}, requisito ${datos.requisitoId}.`,
+        });
+      }
+
+      return { tipo: "ok", evidence_id: rows[0].id, repetida: false, flags };
     },
     sesion,
   );

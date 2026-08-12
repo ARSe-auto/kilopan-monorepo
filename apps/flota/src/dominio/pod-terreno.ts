@@ -112,9 +112,10 @@ export type RequisitoDeEvidencia = {
   orden: number;
 };
 
-/** Un requisito ya satisfecho en terreno. El binario y su sha256 —cómo VIAJA la evidencia— son
- *  AC-FPOD-19; acá se registra QUÉ requisito quedó cumplido, que es lo que abre el cierre. */
-export type EvidenciaCapturada = { requisitoId: string; tipo: TipoDeEvidencia };
+/** Un requisito ya satisfecho en terreno. `sha256` es la promesa del binario [AC-FPOD-19] — §4.6:
+ *  «el sha256 viaja en la mutación ANTES del binario» — `null`/ausente en toda evidencia sin
+ *  binario (firma, pin_destinatario) y en toda evidencia que todavía no tiene uno que hashear. */
+export type EvidenciaCapturada = { requisitoId: string; tipo: TipoDeEvidencia; sha256?: string | null };
 
 /** Una parada de entrega de la ruta, tal como la tarjeta la muestra (§5.2 F4). */
 export type ParadaDeRuta = {

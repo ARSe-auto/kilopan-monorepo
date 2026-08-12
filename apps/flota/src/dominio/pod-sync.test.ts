@@ -224,3 +224,50 @@ test("maximaConSecuencia: crece con lo más alto visto, y un hueco no descarta l
   assert.equal(maximaConSecuencia(5, 7), 7, "saltó el 6, pero el 7 sí aterrizó y ahora es la máxima");
   assert.equal(maximaConSecuencia(5, 3), 5, "una llegada retrasada no baja la máxima ya vista");
 });
+
+// ─── El contrato de transporte del binario [AC-FPOD-19] — §4.6, centinela 4 §9.3 ────
+
+test("sin promesa de sha256 no hay mismatch, aunque llegue un binario", () => {
+  assert.deepEqual(clasificarCapturaPod({ ...base, shaRecalculado: "b".repeat(64) }), []);
+});
+
+test("promesa SIN binario todavía no es un mismatch — es la ventana normal entre la mutación y la subida", () => {
+  assert.deepEqual(clasificarCapturaPod({ ...base, shaPrometido: "a".repeat(64) }), []);
+});
+
+test("el binario que no re-hashea como lo prometido degrada, y no rechaza", () => {
+  const flags = clasificarCapturaPod({
+    ...base,
+    shaPrometido: "a".repeat(64),
+    shaRecalculado: "b".repeat(64),
+  });
+  assert.deepEqual(flags, ["sha256_mismatch"]);
+  assert.equal(rechaza(flags), false);
+});
+
+test("el binario que SÍ re-hashea igual no degrada — mayúsculas incluidas (hex case-insensitive)", () => {
+  assert.deepEqual(
+    clasificarCapturaPod({ ...base, shaPrometido: "a".repeat(64), shaRecalculado: "A".repeat(64) }),
+    [],
+  );
+});
+
+test("mismatch de sha256 y reloj corrido se marcan los DOS, y ninguno de más", () => {
+  const desfasada: CapturaPod = {
+    tsDispositivo: AHORA,
+    recibidaEn: enMinutos(AHORA, RELOJ.drift_max_minutos + 1),
+    moduloEncendido: true,
+    revocadoEn: null,
+    secuenciaHueco: false,
+    shaPrometido: "a".repeat(64),
+    shaRecalculado: "b".repeat(64),
+  };
+  const flags = clasificarCapturaPod(desfasada);
+  assert.deepEqual(flags, ["reloj_desfasado", "sha256_mismatch"]);
+  assert.equal(rechaza(flags), false);
+});
+
+test("sha256_mismatch deja rastro y entra con la severidad de siempre", () => {
+  assert.equal(dejaRastro("sha256_mismatch"), true);
+  assert.equal(severidadDeFlag("sha256_mismatch"), SEVERIDAD_DE_CAPTURA_POD);
+});
