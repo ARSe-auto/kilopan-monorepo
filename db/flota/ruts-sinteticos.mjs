@@ -54,6 +54,16 @@ export const VALIDOS = {
   "17.345.678-6": "el chofer del gate AA axe de la pantalla de parada (AC-FPOD-23), propio y no prestado: mismo motivo que el de AC-FPOD-22 — un dispositivo personal ACTIVO por operario (§4.3) — y esta suite necesita la pantalla real en dos estados (candado abierto, entrega en curso) sin que otra suite le pise el aparato",
   "18.456.789-K": "el chofer del paseo por accesibilidad de las 5 variantes de F4 (AC-FPOD-24), propio y no prestado: mismo motivo que AC-FPOD-22/23 — un dispositivo personal ACTIVO por operario (§4.3) — y esta suite navega la pantalla real de principio a fin SOLO por rol/nombre accesible en 5 flujos distintos, sin que otra suite le pise el aparato",
   "3.141.592-6": "la dueña del refresco del digest (AC-FSEM-06), propia y no prestada: compartía el índice 20 con pod-foto-gps-degradado y pod-evidencia-sha256, y como refresco-digest usa el MISMO tenant que una de ellas, la segunda en correr moría con duplicate key sobre personas_tenant_id_rut_key — pasaba sola y fallaba dentro de la suite, que es la forma más cara de fallar",
+  // Los seis de abajo (índices 31..36) nacieron el 12-ago-2026 en el fix de los choques de
+  // fixture y entraron por error en INVALIDOS_A_PROPOSITO: los seis pasan el módulo 11, así que
+  // `ruts.test.mjs` los pasaba por `rut_valido()` esperando un rechazo que la base no da, y las
+  // cuatro suites que los pedían por índice morían en `rutDeFixture` contra una lista de 31.
+  "3.141.593-4": "el chofer de la ventana de undo de F4 (AC-FPOD-08), propio y no prestado: compartía el índice 11 con idempotencia-outbox.spec.ts — los seis choques de índice los encontró `gate-fixtures-exclusivos.mjs` el 12-ago-2026: dos suites contra el mismo tenant y la segunda moría con duplicate key en su beforeAll, con el rojo apareciendo a tres pasos de la causa",
+  "2.718.283-6": "la panadería de la ventana de undo (AC-FPOD-08), propia y no prestada: compartía el índice 12 con pod-reloj-desfasado.spec.ts — mismo hallazgo del 12-ago-2026 que el de arriba",
+  "1.618.034-3": "la dueña del Peek N1 del «Hoy» (AC-FSEM-04), propia y no prestada: compartía el índice 13 con pod-modulo-apagado.spec.ts — mismo hallazgo del 12-ago-2026 que los de arriba",
+  "4.142.136-3": "el chofer del Peek N1 del «Hoy» (AC-FSEM-04), propio y no prestado: compartía el índice 14 con pod-dispositivo-revocado.spec.ts — mismo hallazgo del 12-ago-2026 que los de arriba",
+  "5.772.157-K": "la dueña del Detalle N2 del «Hoy» (AC-FSEM-05), propia y no prestada: compartía el índice 18 con pod-secuencia-hueco.spec.ts — mismo hallazgo del 12-ago-2026 que los de arriba",
+  "6.180.340-8": "el chofer de la foto y el GPS degradados de F4 (AC-FPOD-12), propio y no prestado: compartía el índice 20 con pod-evidencia-sha256.spec.ts — mismo hallazgo del 12-ago-2026 que los de arriba",
 };
 
 /**
@@ -86,12 +96,6 @@ export function rutDeFixture(indice) {
 export const INVALIDOS_A_PROPOSITO = {
   "12.345.678-9": "el canónico con el dígito verificador cambiado: el caso que prueba que el módulo 11 se corre de verdad",
   "9.999.999-9": "dígito verificador repetido del cuerpo; se ve plausible y el módulo 11 dice 3",
-  "3.141.593-4": "el chofer de la ventana de undo de F4 (AC-FPOD-08), propio y no prestado: compartía el índice 11 con idempotencia-outbox.spec.ts — los seis choques de índice los encontró `gate-fixtures-exclusivos.mjs` el 12-ago-2026: dos suites contra el mismo tenant y la segunda moría con duplicate key en su beforeAll, con el rojo apareciendo a tres pasos de la causa",
-  "2.718.283-6": "la panadería de la ventana de undo (AC-FPOD-08), propia y no prestada: compartía el índice 12 con pod-reloj-desfasado.spec.ts — los seis choques de índice los encontró `gate-fixtures-exclusivos.mjs` el 12-ago-2026: dos suites contra el mismo tenant y la segunda moría con duplicate key en su beforeAll, con el rojo apareciendo a tres pasos de la causa",
-  "1.618.034-3": "la dueña del Peek N1 del «Hoy» (AC-FSEM-04), propia y no prestada: compartía el índice 13 con pod-modulo-apagado.spec.ts — los seis choques de índice los encontró `gate-fixtures-exclusivos.mjs` el 12-ago-2026: dos suites contra el mismo tenant y la segunda moría con duplicate key en su beforeAll, con el rojo apareciendo a tres pasos de la causa",
-  "4.142.136-3": "el chofer del Peek N1 del «Hoy» (AC-FSEM-04), propio y no prestado: compartía el índice 14 con pod-dispositivo-revocado.spec.ts — los seis choques de índice los encontró `gate-fixtures-exclusivos.mjs` el 12-ago-2026: dos suites contra el mismo tenant y la segunda moría con duplicate key en su beforeAll, con el rojo apareciendo a tres pasos de la causa",
-  "5.772.157-K": "la dueña del Detalle N2 del «Hoy» (AC-FSEM-05), propia y no prestada: compartía el índice 18 con pod-secuencia-hueco.spec.ts — los seis choques de índice los encontró `gate-fixtures-exclusivos.mjs` el 12-ago-2026: dos suites contra el mismo tenant y la segunda moría con duplicate key en su beforeAll, con el rojo apareciendo a tres pasos de la causa",
-  "6.180.340-8": "el chofer de la foto y el GPS degradados de F4 (AC-FPOD-12), propio y no prestado: compartía el índice 20 con pod-evidencia-sha256.spec.ts — los seis choques de índice los encontró `gate-fixtures-exclusivos.mjs` el 12-ago-2026: dos suites contra el mismo tenant y la segunda moría con duplicate key en su beforeAll, con el rojo apareciendo a tres pasos de la causa",
 };
 
 /** Normaliza para comparar: el dígito verificador K se escribe en las dos cajas. */
