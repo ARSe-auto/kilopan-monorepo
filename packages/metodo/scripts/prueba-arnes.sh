@@ -140,6 +140,22 @@ case "$SALIDA_TZ" in
 esac
 
 echo
+echo "== 2c-ter. Todo cliente PGlite fija la zona horaria de la app (11-ago-2026) =="
+# El 2c de arriba cubre `db/migrar.mjs`. Pero el e2e abre su PROPIO PGlite en
+# `apps/kilopan/e2e/preparar-base.mjs` para sembrar las rutas del día, y ése no fijaba nada:
+# heredaba la del host. En este Mac el host ya es Chile y no se nota; en el runner (UTC)
+# sembraba «hoy» con la fecha de MAÑANA, la app no encontraba la ruta, y
+# pod-rechazo-parcial.spec.ts se caía TRES veces seguidas cada noche entre las 20:00 y las
+# 24:00 de Chile — con su correo de «run failed» cada vez, hasta que alguien miraba.
+# La regla es estática y no cuesta nada: quien abre un PGlite fija la zona en el mismo archivo.
+SIN_TZ=""
+for f in $(grep -rl "new PGlite(" "$RAIZ/apps" "$RAIZ/db" --include=*.ts --include=*.mjs 2>/dev/null | grep -v node_modules); do
+  grep -q "set timezone = 'America/Santiago'" "$f" || SIN_TZ="$SIN_TZ ${f#"$RAIZ/"}"
+done
+[ -z "$SIN_TZ" ] \
+  && ok "todo archivo que abre un PGlite fija America/Santiago ahi mismo (la fecha no depende del host)" \
+  || no "abren PGlite sin fijar la zona de la app, asi que current_date sale en la del host:$SIN_TZ"
+
 echo "== 3. Lock de un solo builder (casilla 15) =="
 bash "$M/lock.sh" soltar prueba-arnes >/dev/null 2>&1
 bash "$M/lock.sh" tomar prueba-arnes >/dev/null 2>&1 && ok "toma el lock cuando está libre" || no "no pudo tomar un lock libre"
