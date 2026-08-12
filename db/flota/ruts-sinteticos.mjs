@@ -47,6 +47,8 @@ export const VALIDOS = {
   "6.789.012-4": "el chofer del outbox generalizado a la recarga (AC-FPOD-13), propio y no prestado: undécima suite de F4, undécimo operario — mismo motivo que las diez de arriba",
   "5.555.555-9": "el chofer del encuadre degradado por cámara denegada (AC-FPOD-17), propio y no prestado: duodécima suite de F4, duodécimo operario — mismo motivo que las once de arriba",
   "9.234.561-0": "el chofer del covering array 2-way de la pantalla de parada (AC-FPOD-18), propio y no prestado: decimotercera suite de F4, decimotercer operario — mismo motivo que las doce de arriba",
+  "10.234.567-3": "el operario A del centinela 9 del ANDÉN (AC-FIDN-07): el que captura 3 entregas sin señal en el aparato compartido y rota fuera antes de que vuelva la red — no comparte persona con el A del teléfono personal (AC-FPOD-09) porque acá el aparato es UNO SOLO por índice de dispositivos y las dos suites corren en paralelo",
+  "13.579.246-2": "el operario B del centinela 9 del ANDÉN (AC-FIDN-07): rota por PIN en el MISMO aparato que A mientras A sigue sin red — la segunda identidad cuyo `guardarSecreto` nunca ocurre, porque en el andén el secreto es del aparato y lo que rota es la huella",
 };
 
 /**

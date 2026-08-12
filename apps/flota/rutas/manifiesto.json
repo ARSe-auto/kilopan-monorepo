@@ -51,6 +51,18 @@
       }
     },
     {
+      "ruta": "/api/anden/identidad",
+      "archivo": "src/app/api/anden/identidad/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La rotación por PIN del andén [AC-FIDN-07]. No hay parámetro de ruta: el aparato sale del secreto que trae la sesión y el `pool` sale de `x-flota-tenant-bd`. Contra el vecino, ese `pool` apunta a la BD de B y el secreto de A no calza con ningún hash ahí — la ruta nunca llega a mirar un RUT ajeno y responde 404 pelado antes de tocar `sesiones_anden`. El daño que ese candado evita: sin él, un aparato de andén enrolado en A podría rotar la sesión de un operario CUALQUIERA de B con solo adivinarle el RUT (RUT y PIN responden idéntico a propósito), cerrándole el turno y firmando capturas del vecino a nombre de otro. MUTA (crea/actualiza `sesiones_anden`): el comparador de huella de la BD de B verifica que ninguna fila se mueva."
+      }
+    },
+    {
       "ruta": "/api/chequeos",
       "archivo": "src/app/api/chequeos/route.ts",
       "metodos": [
@@ -265,12 +277,13 @@
       "ruta": "/api/gobierno/dispositivos",
       "archivo": "src/app/api/gobierno/dispositivos/route.ts",
       "metodos": [
-        "GET"
+        "GET",
+        "POST"
       ],
       "params": [],
       "cruce": {
         "tipo": "sin_recurso",
-        "nota": "Inventario de solo lectura con nombre de persona y estado de cada aparato. Mismo cruce genérico que el resto de las colecciones del panel: identidad de B por los canales falsificables, y ni una cadena de B en la respuesta."
+        "nota": "Inventario de solo lectura con nombre de persona y estado de cada aparato. Mismo cruce genérico que el resto de las colecciones del panel: identidad de B por los canales falsificables, y ni una cadena de B en la respuesta. El POST enrola el dispositivo de ANDÉN como activo del TENANT, sin parámetro de ruta [AC-FIDN-07] (§4.3, §5.4 F-D) — MUTA y enciende el comparador de huella de la BD de B: contra el vecino, insertaría un aparato compartido en SU inventario y le devolvería a A el secreto en claro de un aparato ajeno que después queda apoyado en la mesa del andén de B, capturando a nombre de sus operarios."
       }
     },
     {
