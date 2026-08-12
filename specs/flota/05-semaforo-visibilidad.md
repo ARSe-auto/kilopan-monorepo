@@ -445,7 +445,26 @@ activa SOLO `admin_tenant`: mientras la pregunta 1 esté abierta, `operador` y
     dejar pasar ese primer poll automático (mismo patrón que `refresco-digest.spec.ts`), no
     tocando ninguna línea de la implementación. `bash packages/metodo/scripts/check.sh --full
     --app=flota` verde.
-- [ ] (P1) Contracción sin residuos: apagar el feature de liquidación ⇒ sus `signal_rule` dejan de evaluar en el próximo bootstrap (el turno abierto termina con su config congelada, `turno.config_version_id`) y no nacen excepciones nuevas de ese origen; e2e tenant C: 5 tarjetas, cero CLP de tarifas visible, semáforo operativo; conmutar `mi_flota→daas→mi_flota` conserva todas las filas de `signal_rule` y `review_queue` (centinela 11 aplicado al módulo); la conducta «dominio sin ninguna señal activa no renderiza tarjeta» NO se asevera aquí — está pendiente de la pregunta 8 y vive en AC-FSEM-21 — oráculo: CI [AC-FSEM-13]
+- [x] (P1) Contracción sin residuos: apagar el feature de liquidación ⇒ sus `signal_rule` dejan de evaluar en el próximo bootstrap (el turno abierto termina con su config congelada, `turno.config_version_id`) y no nacen excepciones nuevas de ese origen; e2e tenant C: 5 tarjetas, cero CLP de tarifas visible, semáforo operativo; conmutar `mi_flota→daas→mi_flota` conserva todas las filas de `signal_rule` y `review_queue` (centinela 11 aplicado al módulo); la conducta «dominio sin ninguna señal activa no renderiza tarjeta» NO se asevera aquí — está pendiente de la pregunta 8 y vive en AC-FSEM-21 — oráculo: CI [AC-FSEM-13]
+  - Probado: `dominio_semaforo_activo`/`signal_rule_activas` (tenant/0060) contra pgTAP
+    `0025_contraccion_signal_rule.sql` (canario): la fila sembrada de `caja_custodia_liquidacion`
+    (AC-FSEM-03) sigue existiendo CRUDA en `signal_rule` con la config congelada en ON, en OFF y
+    en «nunca configurada» — el filtro vive en la LECTURA (`signal_rule_activas`), jamás en un
+    DELETE (centinela 11); dos versiones de `config_version` conviven sin que sellar la nueva
+    reescriba la vieja («el turno abierto termina con su config congelada»); los otros 5 dominios
+    del Anexo B jamás se contraen por esta feature. Espejo TS puro `dominioSemaforoActivo`
+    (`dominio/semaforo.ts`) con las mismas 4 aserciones sobre `semaforo.test.ts` (ON/OFF/sin
+    configurar/los-otros-5-no-se-contraen), sin config congelada de verdad porque el evaluador de
+    dominio que la llamaría (AC-FSEM-16..19) todavía no existe. `e2e/hoy-nivel-0.spec.ts` (seed C,
+    `mi_flota`): 5 tarjetas, la tarjeta de custodia sigue viva (contracción es de la SEÑAL, no de
+    la tarjeta — custodia es operativa, no comercial) y CERO cifra en CLP ni "CLP" en el texto
+    visible de toda la página, tablero sin `error-hoy`. `e2e/semaforo-contraccion.spec.ts`
+    (centinela 11 de punta a punta): conmutar `mi_flota→daas→mi_flota` sobre el cluster real no
+    pierde ni una fila de `signal_rule` (mismos ids, no recreadas) ni de `review_queue`, con una
+    excepción propia de `caja_custodia_liquidacion` sembrada para probar que sobrevive — mismo
+    patrón que AC-FRUT-14 en `modo.spec.ts`. `bash packages/metodo/scripts/check.sh --full
+    --app=flota` verde; `npx playwright test e2e/hoy-nivel-0.spec.ts e2e/semaforo-contraccion.spec.ts`
+    en primer plano, 8/8 verde.
 - [ ] (P2) Telemetría del módulo en producción con el piloto: digest del semáforo emitido a telemetría de producto; métrica de cola al cierre del día tendiendo a cero visible en el panel §10 (la medición de minutos del dueño vive en AC-FSEM-23, condicionada a la pregunta 6 — este AC queda completable con el piloto) — oráculo: producción [AC-FSEM-14]
 - [ ] (P2) Validación en vivo del hito: revisión adversarial del hito (e) sin hallazgos críticos sobre el semáforo (datos malformados, doble-tap en ack/resolve, red cortada a mitad de drill-down, tenant A contra B); Alexis valida con capturas el camino dorado: tarjeta SLA demostrable con la farmacia del seed A, tablero del tenant B con terminología extrema, semáforo del tenant C en `mi_flota` — oráculo: humano [AC-FSEM-15]
 - [ ] (P1) Dominio Flota/energía EV (partición de AC-FSEM-08 por §9.2) consumiendo las proyecciones del módulo 02 (fórmula única del §0 — este módulo no la re-especifica): SOC proyectado al fin del bloque < reserva+5 pp ⇒ amarillo; SOC actual < consumo estimado del tramo restante ⇒ rojo (fixture: SOC 20% con consumo restante proyectado equivalente a 30%); retorno proyectado <15% ⇒ rojo (fixture: retorno proyectado 10%); «no quedó enchufado» a la hora límite ⇒ rojo — el fixture fija la fila de `parametros` de la hora límite explícitamente; su default seed sigue en la pregunta 5c — oráculo: CI [AC-FSEM-16]
