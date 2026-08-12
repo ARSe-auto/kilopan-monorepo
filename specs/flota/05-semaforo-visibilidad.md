@@ -517,7 +517,25 @@ activa SOLO `admin_tenant`: mientras la pregunta 1 esté abierta, `operador` y
     contaminación de datos entre specs de la suite existente, ajena a este AC y a cualquier
     código de DaaS/SLA — mismo patrón que el hallazgo de `prueba-arnes`/lsof documentado en
     AC-FSEM-17.
-- [ ] (P1) Dominio Entregas vs plan (partición de AC-FSEM-08; dependencia 03) sobre `paradas`: ruta con 10% exacto de no-entregas ⇒ amarillo (10% cae en la banda seed «5–10%» cualquiera sea su punto y no supera el rojo «>10%» — robusto a la pregunta 5a) y ruta con 12% ⇒ rojo; compromiso vencido sin entrega ⇒ rojo, computado de `promesa_original` CONGELADA (§4.5) con ventana vencida y parada sin entrega — NO depende del ETA vivo; la señal amarilla «ETA proyectada + tolerancia (mín. 15 min) excede ventana» sigue condicionada a la pregunta 4 — oráculo: CI [AC-FSEM-19]
+- [x] (P1) Dominio Entregas vs plan (partición de AC-FSEM-08; dependencia 03) sobre `paradas`: ruta con 10% exacto de no-entregas ⇒ amarillo (10% cae en la banda seed «5–10%» cualquiera sea su punto y no supera el rojo «>10%» — robusto a la pregunta 5a) y ruta con 12% ⇒ rojo; compromiso vencido sin entrega ⇒ rojo, computado de `promesa_original` CONGELADA (§4.5) con ventana vencida y parada sin entrega — NO depende del ETA vivo; la señal amarilla «ETA proyectada + tolerancia (mín. 15 min) excede ventana» sigue condicionada a la pregunta 4 — oráculo: CI [AC-FSEM-19]
+  - Probado: `semaforo-entregas-vs-plan.test.ts` (8/8) contra `dominio/semaforo-entregas-vs-plan.ts`,
+    función pura `evaluarEntregasVsPlan` — sin migración nueva: la fila `signal_rule` sembrada
+    `no_entregas_pct_ruta` (amarillo 5% / rojo 10% / recuperación 3%) ya la siembra la migración
+    0059 (AC-FSEM-03), mismo criterio que AC-FSEM-07/08/16-18. El % de no-entregas pasa por
+    `colorNoEntregasPct`, una variante de `transicionColor` con disparo a rojo ESTRICTO (`>`, no
+    `>=`): el AC exige que el 10% exacto se quede amarillo («no supera el rojo `>10%`»), mismo
+    ajuste que `colorErroresSync` en AC-FSEM-11 sobre «errores de sync en 5% exacto». El
+    compromiso vencido sin entrega es binario y siempre rojo, computado por el módulo dueño (03)
+    de `promesa_original` congelada contra la ventana — un hecho ya resuelto que esta función solo
+    proyecta, mismo criterio que `cierresDescuadradosSinEvidencia` en AC-FSEM-17; el fixture
+    dedicado prueba que el color de la tarjeta es el peor entre ambas señales y que la histéresis
+    (rojo→zona intermedia→amarillo, no directo a verde) se sostiene igual que en el resto de
+    dominios con banda. La señal amarilla de ETA vivo sigue CONDICIONADA a la pregunta 4 —
+    `HechosEntregasVsPlan` no trae ningún campo de ETA a propósito, con un test que confirma las
+    claves exactas del tipo, mismo tratamiento que «liquidación observada» en AC-FSEM-17. Wiring
+    del endpoint real (`/api/semaforo/digest` contra `paradas` reales) queda para un AC posterior,
+    mismo criterio que AC-FSEM-07/08/16-18: no está en el texto de este AC ni su oráculo lo exige
+    (CI, no e2e). `bash packages/metodo/scripts/check.sh --full --app=flota` verde.
 - [ ] (P1) Reasignar y llamar en N2: reasignar transfiere `asignado_a` a otro usuario del tenant con `audit_trail` por trigger (PLANIFICACIÓN §4.2: valida online y rebota); reasignar sobre una excepción resuelta ⇒ 422 tipado y 0 filas cambiadas; reasignar con id de otro tenant ⇒ 404 (§0-HTTP); el detalle N2 renderiza la acción «llamar» (§5.6-N2; aserción de presencia en el e2e) — oráculo: CI [AC-FSEM-20]
 - [ ] (P1) Tarjeta de dominio sin señales activas — CONDICIONADO a la pregunta 8: si el dueño confirma la derivación (§5.5 + precedente SLA-NULL §4.5), un dominio cuyas señales quedan todas apagadas no renderiza tarjeta, sin huecos ni candados fuera del panel admin (e2e con fixture de entitlements); si resuelve otra conducta (p. ej. tarjeta informativa), este AC se reescribe ANTES de implementarse — el gate no congela la conducta mientras la pregunta esté abierta — oráculo: CI [AC-FSEM-21]
 - [ ] (P1) Panel interno SaaS (§10) a nivel de componente/vista contra fixtures de `control` (sin depender de la pregunta 2): EEVD agregada y POR TENANT con tendencia 4 semanas (4 valores semanales por tenant empujados por el exportador desde `eevd_semanal`); embudo de activación p50/p90 alta→primera entrega (métricas 1 y 2 del §2); tenants activos y % de vehículos con turno; calidad de la norte — % paradas sin evidencia y % PODs supersedidos EXCLUYENDO motivo=`undo` (fixture: un supersede con motivo=`undo` NO cuenta, §4.7); los agregados nuevos viajan en el schema fijo del exportador y el centinela 14 sigue verde (cero columnas de dinero/tarifas/clientes); el contador de exenciones de la suite se renderiza con tendencia — su ingesta desde el gate CI (§9.2) queda condicionada a la pregunta 10 — oráculo: CI [AC-FSEM-22]
