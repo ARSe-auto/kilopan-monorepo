@@ -464,6 +464,36 @@ esac
 wait "$PID_LISTENER" 2>/dev/null || true
 
 echo
+echo "== 3b-d4. Los guardianes se prueban bajo el PATH DEL MOTOR, no el de la terminal (12-ago-2026) =="
+# DOS BUGS DEL MISMO MOLDE EN VEINTICUATRO HORAS, los dos vistos recién en producción:
+#   · `watchdog.sh` se frenaba por no resolver `claude` antes de llegar al guard que la prueba
+#     quería medir — verde en el Mac, rojo en el runner de GitHub;
+#   · `puerto-e2e-tomado.sh` se declaraba «no hay lsof en esta máquina» bajo el motor, porque
+#     en macOS `lsof` vive en /usr/sbin y el PATH que el arrancador le fija a sus hijos no lo
+#     incluye. En la terminal andaba perfecto; bajo el motor no verificaba NADA, y sus cuatro
+#     casos de texto caían por falta de sujeto: prueba-arnes rojo ⇒ gate rojo ⇒ motor pausado,
+#     con el rojo apuntando al arnés y no a su causa.
+#
+# Una prueba que corre con el PATH del usuario no prueba lo que el motor ejecuta: prueba la
+# terminal de quien la escribió. El PATH se LEE del arrancador —no se clava acá— porque dos
+# copias del mismo PATH envejecen separadas y la de este archivo envejecería en silencio.
+PATH_MOTOR="$(grep -oE '^PATH="[^"]+"' "$M/arrancar-motor-flota.sh" 2>/dev/null | head -1 | sed 's/^PATH="//; s/"$//')"
+if [ -z "$PATH_MOTOR" ]; then
+  no "no pude leer el PATH que el arrancador le fija al motor: esta sección no probó nada"
+else
+  ok "el PATH del motor se lee del arrancador (una copia clavada acá envejecería sola)"
+  PATH_MOTOR_EXPANDIDO="$(HOME="$HOME" eval echo "$PATH_MOTOR")"
+  PUERTO_PM=$(node -e 'const n=require("net").createServer();n.listen(0,()=>{console.log(n.address().port);n.close();});')
+  SALIDA_PM="$(env -i HOME="$HOME" PATH="$PATH_MOTOR_EXPANDIDO" bash "$M/puerto-e2e-tomado.sh" "--puerto=$PUERTO_PM" 2>&1 || true)"
+  case "$SALIDA_PM" in
+    *"no hay lsof"*|*"NO se verificó"*)
+      no "bajo el PATH del motor el guardián del puerto NO puede mirar: en producción no verifica nada y sus casos de texto caen en cascada" ;;
+    *)
+      ok "bajo el PATH del motor el guardián del puerto SÍ verifica (no se degrada a «no puedo mirar»)" ;;
+  esac
+fi
+
+echo
 echo "== 3b-e. Un AC atascado no pausa el motor entero (3-ago-2026) =="
 # BUG REAL: KILOPAN_MAX_FALLOS_AC y MAX_SIN_AVANCE valen 3 los dos, y siguiente_ac()
 # reelige el MISMO AC hasta que queda atascado — sus 3 fallos consecutivos eran SIEMPRE
