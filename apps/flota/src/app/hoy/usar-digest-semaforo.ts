@@ -50,6 +50,13 @@ export type EstadoRefrescoDigest = {
 
 export function useDigestSemaforo(seed: "a" | "c", tarjetasIniciales: TarjetaHoy[]) {
   const etagRef = useRef<string | null>(null);
+  /** NÚMERO DE LA PETICIÓN EN CURSO, para que una respuesta VIEJA no pise a una nueva.
+   *  Sin esto, dos polls en vuelo se pisan por orden de llegada: el que salió antes puede
+   *  contestar después y dejar `conectado: true` DESPUÉS de que el más nuevo ya supo que no
+   *  hay red. Eso es un verde fingido con datos viejos, justo lo que el §2.6 prohíbe, y no
+   *  es teórico: hacía fallar de forma intermitente al e2e de AC-FSEM-06 —el banner aparecía
+   *  y desaparecía entre dos aserciones— y con eso pausaba al motor sin causa aparente. */
+  const peticionRef = useRef(0);
   const [estado, setEstado] = useState<EstadoRefrescoDigest>({
     tarjetas: tarjetasIniciales,
     conectado: true,
@@ -62,6 +69,9 @@ export function useDigestSemaforo(seed: "a" | "c", tarjetasIniciales: TarjetaHoy
   const refrescar = useCallback(
     async (opciones: { manual?: boolean } = {}) => {
       if (opciones.manual) setEstado((previo) => ({ ...previo, cargando: true, errorManual: null }));
+      const mia = ++peticionRef.current;
+      /** ¿Sigo siendo la petición más nueva? Si no, mi respuesta ya no dice nada del presente. */
+      const vigente = () => mia === peticionRef.current;
       try {
         const cabeceras: HeadersInit = {};
         if (etagRef.current) cabeceras["If-None-Match"] = etagRef.current;
@@ -70,6 +80,7 @@ export function useDigestSemaforo(seed: "a" | "c", tarjetasIniciales: TarjetaHoy
         // pasar la guardia [AC-FSEM-09].
         const r = await pedir(`/api/semaforo/digest?seed=${seed}`, { headers: cabeceras, cache: "no-store" });
 
+        if (!vigente()) return;
         if (r.status === 304) {
           setEstado((previo) => ({
             ...previo,
@@ -86,6 +97,7 @@ export function useDigestSemaforo(seed: "a" | "c", tarjetasIniciales: TarjetaHoy
         const nuevoEtag = r.headers.get("etag");
         if (nuevoEtag) etagRef.current = nuevoEtag;
         const cuerpo = (await r.json()) as { tarjetas: TarjetaHoy[] };
+        if (!vigente()) return;
         setEstado({
           tarjetas: cuerpo.tarjetas.map(revivirFechas),
           conectado: true,
@@ -107,6 +119,7 @@ export function useDigestSemaforo(seed: "a" | "c", tarjetasIniciales: TarjetaHoy
         // cortada: regresión real de AC-FSEM-06 el 12-ago-2026, atrapada por su propio e2e.
         // `navigator.onLine === false` no puede confundirse con un 404/500 del servidor vivo,
         // que es justo lo que este clasificador vino a separar.
+        if (!vigente()) return;
         const esRedCaida = e instanceof TypeError || navigator.onLine === false;
         setEstado((previo) => ({
           ...previo,
