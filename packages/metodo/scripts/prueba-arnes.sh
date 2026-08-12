@@ -9,6 +9,24 @@
 # Cada prueba ejerce el guard contra el caso REAL que debe atrapar y exige que falle.
 # Un guard que pasa esta suite en verde por no dispararse nunca, no existe.
 #
+# ─── UN GUARDIÁN INFORMA; QUIEN LEE DECIDE (12-ago-2026) ─────────────────────────
+#
+# Vale para todo aviso de acá que sugiera algo IRREVERSIBLE —matar un proceso, borrar,
+# revertir—. Ese día un aviso nuevo afirmaba «es un servidor de una corrida anterior» y
+# cerraba con «kill <pids>». La afirmación venía de leer `ps -o etime` «01:06» como una
+# hora seis cuando eran un minuto seis: el proceso estaba VIVO, sirviendo la corrida de
+# otra sesión, y seguir el consejo del aviso le habría matado el trabajo.
+#
+# El error de lectura es perdonable —ese formato muerde a cualquiera—. Lo que lo volvió
+# peligroso fue que el guardián DECIDIÓ por quien lo leía: convirtió una lectura dudosa en
+# un comando destructivo. Un guardián no tiene el contexto para saber de quién es un
+# proceso, y no puede pretenderlo.
+#
+# La forma correcta: dar el HECHO en su forma menos ambigua (una hora absoluta, no una
+# edad relativa), nombrar las dos lecturas posibles («si arrancó recién, es una corrida
+# viva: esperá»), y dejar la acción a quien sabe. Un guardián que afirma más de lo que
+# sabe es peor que no tenerlo.
+#
 # Uso: bash packages/metodo/scripts/prueba-arnes.sh
 # Exit: 0 todo verde · 1 algún guard no protege lo que dice proteger.
 set -uo pipefail

@@ -121,6 +121,12 @@ fi
 run_step "lock al día: ningún package.json pide algo que pnpm-lock.yaml no conoce" \
   node packages/metodo/scripts/gate-lock-al-dia.mjs
 
+# Los fixtures que se declaran exclusivos, ANTES del e2e: dos suites con la misma persona
+# hacen morir un `beforeAll` con `duplicate key` y el rojo aparece a tres pasos, en un
+# archivo sano. Acá el diagnóstico llega con el índice y los dos archivos en la mano.
+run_step "fixtures exclusivos: dos suites no comparten un RUT declarado propio" \
+  node packages/metodo/scripts/gate-fixtures-exclusivos.mjs
+
 # Gancho genérico: una app puede traer su propio gate (contrato, esquema, invariantes) en
 # `db/<app>/gate.sh`. Corre acá, junto al resto del contrato y antes del código, y decide
 # por sí mismo qué salta sin --full. KiloPan no tiene uno; FLOTA sí.
@@ -148,6 +154,8 @@ run_step "unit (packages/metodo/scripts): mutantes de verifica-es-cl.mjs" \
 # Un gate sin suite es una opinión: la de abajo reproduce el caso real de ea5b9b1.
 run_step "unit (packages/metodo/scripts): el gate del lock atrapa el caso que lo trajo" \
   node --test packages/metodo/scripts/gate-lock-al-dia.test.mjs
+run_step "unit (packages/metodo/scripts): el gate de fixtures no muerde lo que se comparte a propósito" \
+  node --test packages/metodo/scripts/gate-fixtures-exclusivos.test.mjs
 
 run_step "lint (workspace)" pnpm -r --if-present run lint
 run_step "typecheck (workspace)" pnpm -r --if-present run typecheck
