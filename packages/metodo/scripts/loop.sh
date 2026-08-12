@@ -228,6 +228,16 @@ Reglas duras:
   lleva su estado. Leé la spec dueña del AC y la sección del maestro que cita su línea
   'Fuente: §N' (docs/PROMPT_MAESTRO*.md) ANTES de escribir código.
 - Un AC = un commit, con su test naciendo en el mismo commit.
+- Al comitear, LIMITÁ EL COMMIT A TUS RUTAS: 'git commit -F <archivo> -- ruta1 ruta2'.
+  Agregar por ruta explícita NO alcanza, y creer que sí es la trampa: 'git add ruta' suma
+  al índice, pero 'git commit' a secas comitea el índice ENTERO — todo lo que haya quedado
+  preparado ahí por una iteración anterior que murió a mitad, o por otra sesión trabajando
+  en el mismo árbol, viaja adentro de tu commit sin que lo veas. Pasó el 12-ago-2026: un
+  commit que arreglaba el selector de modelo se llevó puesto el revert de otra sesión
+  —una suite de 267 líneas borrada— y el mensaje no explicaba nada de eso. El daño no fue
+  el contenido (era correcto); fue que quedó un commit que dentro de un mes nadie va a
+  poder leer. Antes de comitear, mirá 'git diff --cached --name-only': si aparece algo que
+  no escribiste vos, limitá el commit a lo tuyo.
 - Corré 'bash packages/metodo/scripts/check.sh --full --app=${APP}' y NO hagas commit si
   no queda verde (arreglar lo que encuentres es parte del AC).
 - CITÁ el id del AC (${AC_ID}) en un comentario del código o del test que lo implementa.
