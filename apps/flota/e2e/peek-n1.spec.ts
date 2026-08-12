@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { request as pedir } from "node:http";
 import { con, bdDeTenant } from "../../../db/flota/conectar.mjs";
 import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
-import { VALIDOS } from "../../../db/flota/ruts-sinteticos.mjs";
+import { rutDeFixture } from "../../../db/flota/ruts-sinteticos.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
 import { TACTIL } from "../../../packages/nucleo-comun/src/constants.ts";
 
@@ -91,8 +91,8 @@ test.beforeAll(async () => {
   // RUTs [13]/[14]: los índices 0-12 de la lista congelada ya los usan otras suites que
   // comparten el tenant `hechos` (apertura, chequeos, carga, entrega, pod-*, recargas) —
   // reusar uno chocaría con la unicidad de `personas.rut`.
-  duena = await enrolar(Object.keys(VALIDOS)[13]!, "Dueña del peek", "admin_tenant");
-  chofer = await enrolar(Object.keys(VALIDOS)[14]!, "Chofer del peek", "chofer");
+  duena = await enrolar(rutDeFixture(33), "Dueña del peek", "admin_tenant");
+  chofer = await enrolar(rutDeFixture(34), "Chofer del peek", "chofer");
 });
 
 test.describe("contrato de servidor: reconocer contra review_queue real", () => {

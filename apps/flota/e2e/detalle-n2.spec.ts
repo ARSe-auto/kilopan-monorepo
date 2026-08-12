@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { request as pedir } from "node:http";
 import { con, bdDeTenant } from "../../../db/flota/conectar.mjs";
 import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
-import { VALIDOS } from "../../../db/flota/ruts-sinteticos.mjs";
+import { VALIDOS, rutDeFixture } from "../../../db/flota/ruts-sinteticos.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
 
 // Detalle N2 [AC-FSEM-05] — spec 05 §2.3, §2.4, §2.8.
@@ -105,7 +105,7 @@ test.beforeAll(async () => {
   // RUTs [18]/[19]: 15/16/17 se ven libres a primera vista pero 16 y 17 ya los usa
   // `pod-outbox-multiusuario.spec.ts` (AC-FPOD-09) contra el mismo tenant `hechos` — reusar
   // cualquiera de los índices ya tomados choca con la unicidad de `personas.rut`.
-  duena = await enrolar(Object.keys(VALIDOS)[18]!, "Dueña del detalle N2", "admin_tenant");
+  duena = await enrolar(rutDeFixture(35), "Dueña del detalle N2", "admin_tenant");
   chofer = await enrolar(Object.keys(VALIDOS)[19]!, "Chofer del detalle N2", "chofer");
 });
 

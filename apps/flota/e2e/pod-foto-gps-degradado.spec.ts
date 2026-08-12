@@ -28,7 +28,7 @@ type Conexion = { sql: <T = Record<string, string>>(t: string, p?: unknown[]) =>
 const SECRETO = secretoNuevo();
 /** Propio y no prestado (§4.3: un dispositivo personal ACTIVO por operario) — mismo motivo que
  *  cada suite hermana de F4. */
-const RUT_CHOFER = rutDeFixture(20);
+const RUT_CHOFER = rutDeFixture(36);
 const RUT_PANADERIA = rutDeFixture(6);
 
 test.beforeAll(async () => {
