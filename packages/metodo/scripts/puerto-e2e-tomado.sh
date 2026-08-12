@@ -47,7 +47,18 @@ if [ -z "$PUERTO" ]; then
   exit 0
 fi
 
-if ! command -v lsof >/dev/null 2>&1; then
+# EN macOS `lsof` VIVE EN /usr/sbin, QUE NO ESTÁ EN EL PATH DEL MOTOR (12-ago-2026). El
+# `arrancar-motor-flota.sh` fija PATH=…/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin —
+# sin /usr/sbin—, así que bajo el motor este guion se declaraba «sin lsof» y no verificaba
+# NADA; en una terminal, con el PATH del usuario, funcionaba. Los cuatro casos de
+# prueba-arnes que revisan el TEXTO del aviso quedaban en rojo porque no había aviso, y el
+# gate entero se caía por eso. Se busca por ruta absoluta antes de rendirse.
+LSOF=""
+if command -v lsof >/dev/null 2>&1; then LSOF="$(command -v lsof)"
+elif [ -x /usr/sbin/lsof ]; then LSOF=/usr/sbin/lsof
+elif [ -x /usr/bin/lsof ]; then LSOF=/usr/bin/lsof
+fi
+if [ -z "$LSOF" ]; then
   # Declarado en voz alta: un verde por no haber podido mirar no es un verde.
   echo "puerto-e2e-tomado: no hay lsof en esta máquina — NO se verificó el puerto $PUERTO."
   exit 0
@@ -58,7 +69,7 @@ fi
 # línea. O sea: un puerto LIBRE se reportaba como tomado, y el aviso —que existe para
 # decir «no es el AC»— habría gritado en cada corrida hasta que nadie lo mirara. Lo
 # encontró su propia prueba, ejerciendo el caso aburrido.
-PIDS="$( { lsof -ti ":$PUERTO" 2>/dev/null || true; } | tr '\n' ' ' | sed 's/ *$//')"
+PIDS="$( { "$LSOF" -ti ":$PUERTO" 2>/dev/null || true; } | tr '\n' ' ' | sed 's/ *$//')"
 if [ -z "$PIDS" ]; then
   echo "puerto-e2e-tomado: el puerto $PUERTO está libre."
   exit 0
