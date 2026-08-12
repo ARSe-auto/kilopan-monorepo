@@ -70,6 +70,11 @@ paso "ganchos §4.9: DDL-only sin pantalla y una sola implementación de telemet
 paso "seeds: nadie siembra el gancho pin_destinatario, y sigue vivo en el DDL (§4.9)" \
   node db/flota/gate-seeds-pin-destinatario.mjs
 
+# Mismo criterio que el de arriba, gancho hermano del mismo enum: `escaneo_codigo` es DDL desde
+# E1 y su UI es de E3 (§3.E3); ningún seed E1 lo pone. [AC-FPOD-17]
+paso "seeds: nadie siembra el gancho escaneo_codigo, y sigue vivo en el DDL (§4.9, §3.E3)" \
+  node db/flota/gate-seeds-escaneo-codigo.mjs
+
 # La app REFERENCIA documentos de terceros y JAMÁS los emite (§7.3). No es preferencia de
 # arquitectura: emitir algo con apariencia de DTE sin ser emisor autorizado es el art. 97 N°4 del
 # Código Tributario. El gate no busca la palabra «emitir» —nadie la va a escribir— sino las

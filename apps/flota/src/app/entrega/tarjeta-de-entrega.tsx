@@ -374,6 +374,15 @@ export default function TarjetaDeEntrega({
     volverAElegir();
   }
 
+  // El encuadre fotográfico de «dejado en punto» [AC-FPOD-17]: intenta la cámara y el paso se
+  // da por cumplido IGUAL sin importar el resultado — mismo criterio que `capturarEvidencia`
+  // para el requisito `foto` (AC-FPOD-12): `capturarFoto` nunca lanza, así que cámara denegada
+  // (o sin hardware) degrada a «sin foto» y jamás bloquea el cierre de la parada (§7.6).
+  async function encuadrar() {
+    await capturarFoto();
+    setEncuadreCapturado(true);
+  }
+
   // Variante dejado en punto [AC-FPOD-02]: entrega EFECTUADA sin receptor (§4.5). El dominio
   // rechaza el cierre si falta el encuadre exigido —acá solo se ofrece o no el paso, el candado
   // real vive en `dejarEnPunto`/`exigeEncuadre`.
@@ -577,7 +586,7 @@ export default function TarjetaDeEntrega({
       {candado !== null && candado.abierta && recorrido.llegada && modo === "dejado_en_punto" && parada !== null && (
         <section data-testid="modo-dejado-en-punto-panel" style={bloque}>
           {exigeEncuadre(parada, bultosMaxSinReceptor) && !encuadreCapturado && (
-            <BotonPrimario testid="encuadrar-dejado-en-punto" onClick={() => setEncuadreCapturado(true)}>
+            <BotonPrimario testid="encuadrar-dejado-en-punto" onClick={encuadrar}>
               Encuadrar bultos
             </BotonPrimario>
           )}
