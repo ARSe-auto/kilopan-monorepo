@@ -819,6 +819,24 @@
       }
     },
     {
+      "ruta": "/api/semaforo/excepciones/[id]/toques",
+      "archivo": "src/app/api/semaforo/excepciones/[id]/toques/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "review_queue",
+          "columna": "id"
+        },
+        "nota": "Registrar toques de drill-down sobre la excepción de B desde una sesión de A [AC-FSEM-05]. Es una escritura en `client_metric`, no en `review_queue`, así que no muta la cola del vecino ni su estado — pero SÍ inserta una fila de telemetría a nombre de la operación de B (tenant_id = B por RLS), atribuyéndole a su tablero interno un toque de drill-down que su gente nunca hizo. Contrato 404 y huella de B intacta salvo la fila propia que el mismo test inserta y compara (§10 lee de acá; una métrica contaminada por A es una métrica que miente). El fixture del vecino siembra una fila real en `review_queue` — contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin probar nada."
+      }
+    },
+    {
       "ruta": "/api/sesion",
       "archivo": "src/app/api/sesion/route.ts",
       "metodos": [

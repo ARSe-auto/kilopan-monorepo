@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
-import { enActo } from "./gobierno.ts";
+import { randomUUID } from "node:crypto";
+import { enActo, offsetChileMin } from "./gobierno.ts";
 import type { Sesion } from "./sesion.ts";
 
 // La transición `nueva → reconocida` del Peek N1 [AC-FSEM-04] — spec 05 §2.2, §2.4, §4.
@@ -91,6 +92,48 @@ export async function resolverExcepcion(
       );
       if (!existente[0]) return { tipo: "no_existe" };
       return { tipo: "transicion_ilegal", estadoActual: existente[0].estado };
+    },
+    sesion,
+  );
+}
+
+// El conteo de toques del drill-down [AC-FSEM-05] — spec 05 §2.3 («rojo→detalle ≤2 toques
+// desde «Hoy»») y §5 («toques del drill-down a `client_metric` tipo `toques_flujo`», §5.3,
+// §4.6). El camino natural desde `hoy/tablero-de-hoy.tsx` es EXACTAMENTE 2: tocar la tarjeta
+// abre el peek (N1) y «Ver detalle» navega a acá (N2) — no hay un tercer toque que contar.
+//
+// `client_metric` es CAPTURA, ingerida en lote por `/api/sync/capturas` según el comentario
+// de su propia migración (0002) — pero `servidor/entorno.ts` (`declararEntorno`,
+// `persist_denegado`) ya sienta el precedente de un segundo camino: una métrica puntual, del
+// tamaño de un evento, que no tiene sentido esperar hasta el próximo lote del outbox. El
+// conteo de toques es el mismo caso: se sabe apenas se llega a N2, y esperar al sync
+// convertiría «cuántos toques» en «cuántos toques, con horas de atraso».
+//
+// `client_uuid` es la llave de idempotencia de la tabla (`unique(tenant_id, client_uuid)`):
+// una nueva por llamada, porque cada llegada a N2 es una medición propia — a diferencia de
+// `persist_denegado`, que dedupe por APARATO, acá lo que se cuenta es el EVENTO de drill-down.
+export async function registrarToquesDrillDown(
+  pool: Pool,
+  sesion: Sesion,
+  excepcionId: string,
+  toques: number,
+): Promise<"ok" | "no_existe"> {
+  return enActo(
+    pool,
+    async (c) => {
+      const { rows } = await c.query(
+        "select 1 from review_queue where id = $1 and tenant_id = tenant_actual()",
+        [excepcionId],
+      );
+      if (!rows[0]) return "no_existe";
+
+      const ahora = new Date();
+      await c.query(
+        `insert into client_metric (tipo, flujo, valor_int, ts, tz_offset_min, client_uuid)
+         values ('toques_flujo', 'semaforo_n2', $1, $2, $3, $4::uuid)`,
+        [toques, ahora, offsetChileMin(ahora), randomUUID()],
+      );
+      return "ok";
     },
     sesion,
   );

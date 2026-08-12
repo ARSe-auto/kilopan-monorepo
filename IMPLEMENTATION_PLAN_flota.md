@@ -212,7 +212,12 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
   - Probado: migración `tenant/0059_seed_anexo_b_semaforo.sql` + pgTAP `db/flota/pgtap/0024_seed_anexo_b_semaforo.sql` (8/8 contra `t_canary`). Detalle y hallazgo adversarial (audit_trail append-only bloqueaba la adopción de tenants nuevos) en la spec. `check.sh --full --app=flota` verde.
 - [x] (P1) Peek N1: bottom-sheet sin navegar; orden severidad × antigüedad; swipe/botón reconoce (`nueva→reconocida`); re-reconocer ⇒ 422 — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-04]
   - Probado: unit `dominio/peek-n1.test.ts` (orden severidad × antigüedad, filtrado de filas incompletas) + `e2e/peek-n1.spec.ts` (11/11: contrato de servidor `POST /api/semaforo/excepciones/[id]/reconocer` contra `review_queue` real —200/422/404/403— y mecánica de UI del bottom-sheet sobre `/hoy?seed=a`). `npx playwright test e2e/peek-n1.spec.ts` en primer plano y `check.sh --full --app=flota` verdes.
-- [ ] (P1) Detalle N2 deep-linkeable: timeline + evidencia degradando sin huecos; resolver exige nota; N1 no ofrece resolver a rojas (regla dura de servidor pendiente pregunta 9) — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-05]
+- [x] (P1) Detalle N2 deep-linkeable: timeline + evidencia degradando sin huecos; resolver exige nota; N1 no ofrece resolver a rojas (regla dura de servidor pendiente pregunta 9); rojo→detalle ≤2 toques con `toques_flujo` real en `client_metric` — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-05]
+  - Probado: `e2e/detalle-n2.spec.ts` (16/16) — contrato de servidor de resolver y de
+    `POST /api/semaforo/excepciones/[id]/toques` (nuevo, `servidor/review-queue.ts` ·
+    `registrarToquesDrillDown`) contra filas reales; mecánica de UI del detalle N2 y del
+    conteo de 2 toques desde «Hoy»; `e2e/cruce-tenant.spec.ts` cubre la ruta nueva
+    (declarada `recurso` en `rutas/manifiesto.json`). `check.sh --full --app=flota` verde.
 - [ ] (P1) Refresco: polling 15–30 s SOLO pestaña visible + ETag/304; grep cero WebSocket/EventSource; offline con digest viejo marcado — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-06]
 - [ ] (P1) Dominio Datos/sync: pendientes 65 min ⇒ amarillo; sin sync >4 h ⇒ rojo; done sin evidence ⇒ rojo; hueco de secuencia ⇒ rojo; severidad alta se proyecta ROJA — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-07]
 - [ ] (P1) Dominio Turnos/conductores según Anexo B sobre proyecciones append-only (65 min sin eventos amarillo; >2 h rojo; medianoche rojo) — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-08]

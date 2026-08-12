@@ -92,6 +92,12 @@ async function estadoDe(id: string) {
   return fila!;
 }
 
+async function metricasDeToques() {
+  return sql<{ flujo: string | null; valor_int: string }>(
+    "select flujo, valor_int::text as valor_int from client_metric where tipo = 'toques_flujo' order by record_time desc",
+  );
+}
+
 let duena: { personaId: string; usuarioId: string; secreto: string };
 let chofer: { personaId: string; usuarioId: string; secreto: string };
 
@@ -176,6 +182,55 @@ test.describe("contrato de servidor: resolver contra review_queue real", () => {
   });
 });
 
+test.describe("contrato de servidor: toques del drill-down contra client_metric real", () => {
+  // Telemetría de producto (§5, §5.3, §4.6) [AC-FSEM-05]: «toques del drill-down a
+  // client_metric tipo toques_flujo». El camino de UI (peek → «Ver detalle») es fixture-only
+  // mientras el digest real no exista (AC-FSEM-06/09, mismo criterio que el resto del
+  // módulo) — acá se prueba el contrato de SERVIDOR contra una fila real, igual que reconocer
+  // y resolver arriba.
+  test("[AC-FSEM-05] registrar 2 toques sobre una excepción rojo inserta una fila real en client_metric", async () => {
+    const antes = await metricasDeToques();
+    const id = await nuevaExcepcion("datos_sync", "rojo");
+    const r = await pedirA(`/api/semaforo/excepciones/${id}/toques`, "POST", duena.secreto, { toques: 2 });
+    expect(r.status).toBe(200);
+    expect(r.json).toEqual({ id, registrado: true, toques: 2 });
+
+    const despues = await metricasDeToques();
+    expect(despues.length).toBe(antes.length + 1);
+    expect(despues[0]!.flujo).toBe("semaforo_n2");
+    expect(despues[0]!.valor_int).toBe("2");
+  });
+
+  test("[AC-FSEM-05] toques inválido (0) ⇒ 422 tipado y ninguna fila nueva en client_metric", async () => {
+    const antes = await metricasDeToques();
+    const id = await nuevaExcepcion();
+    const r = await pedirA(`/api/semaforo/excepciones/${id}/toques`, "POST", duena.secreto, { toques: 0 });
+    expect(r.status).toBe(422);
+    expect(r.json.error).toBe("toques_invalidos");
+    expect((await metricasDeToques()).length).toBe(antes.length);
+  });
+
+  test("[AC-FSEM-05] toques sobre una excepción que no existe ⇒ 404 y ninguna fila nueva", async () => {
+    const antes = await metricasDeToques();
+    const r = await pedirA(
+      "/api/semaforo/excepciones/00000000-0000-4000-8000-000000000000/toques",
+      "POST",
+      duena.secreto,
+      { toques: 2 },
+    );
+    expect(r.status).toBe(404);
+    expect((await metricasDeToques()).length).toBe(antes.length);
+  });
+
+  test("[AC-FSEM-05] rol distinto de admin_tenant ⇒ 403 y ninguna fila nueva en client_metric", async () => {
+    const antes = await metricasDeToques();
+    const id = await nuevaExcepcion();
+    const r = await pedirA(`/api/semaforo/excepciones/${id}/toques`, "POST", chofer.secreto, { toques: 2 });
+    expect(r.status).toBe(403);
+    expect((await metricasDeToques()).length).toBe(antes.length);
+  });
+});
+
 test.describe("mecánica de UI: detalle N2 sobre las semillas del Nivel 0", () => {
   test("[AC-FSEM-05] abrir la URL del detalle directo (deep-link) rinde el mismo contenido que llegando desde el peek", async ({
     page,
@@ -226,6 +281,30 @@ test.describe("mecánica de UI: detalle N2 sobre las semillas del Nivel 0", () =
     await page.getByTestId("detalle-resolver-enviar").click();
     await expect(page.getByTestId("detalle-estado-texto")).toContainText("resuelta");
     await expect(page.getByTestId("detalle-nota-resuelta")).toContainText("Se confirmó el reenvío con el conductor.");
+  });
+
+  test("[AC-FSEM-05] rojo→detalle en 2 toques desde «Hoy»: tocar la tarjeta y «Ver detalle», nada más", async ({ page }) => {
+    // §2.3: «rojo→detalle ≤2 toques desde Hoy». La tarjeta `datos_sync` de la semilla A es
+    // roja (AC-FSEM-01/07) y su primera fila de peek trae la excepción `exc-sync-1`.
+    await page.goto("/hoy?seed=a");
+    await expect(page.locator('[data-testid="tarjeta-hoy"][data-dominio="datos_sync"]')).toHaveAttribute(
+      "data-color",
+      "rojo",
+    );
+
+    let toques = 0;
+    await page.locator('[data-testid="tarjeta-hoy"][data-dominio="datos_sync"]').click(); // toque 1: abre el peek
+    toques += 1;
+    await expect(page.getByTestId("peek-n1")).toBeVisible();
+
+    const primeraFila = page.getByTestId("fila-peek").first();
+    await expect(primeraFila).toHaveAttribute("data-severidad", "rojo");
+    await primeraFila.getByTestId("ver-detalle").click(); // toque 2: navega al detalle
+    toques += 1;
+
+    await expect(page.getByTestId("detalle-n2")).toBeVisible();
+    await expect(page.locator('[data-testid="detalle-cabecera"][data-severidad="rojo"]')).toBeVisible();
+    expect(toques).toBeLessThanOrEqual(2);
   });
 
   test("[AC-FSEM-05] el bottom-sheet N1 NUNCA renderiza «Resolver» — ni para la fila roja ni para la amarilla", async ({ page }) => {
