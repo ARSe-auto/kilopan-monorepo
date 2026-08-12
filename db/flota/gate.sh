@@ -75,6 +75,12 @@ paso "seeds: nadie siembra el gancho pin_destinatario, y sigue vivo en el DDL (�
 paso "seeds: nadie siembra el gancho escaneo_codigo, y sigue vivo en el DDL (§4.9, §3.E3)" \
   node db/flota/gate-seeds-escaneo-codigo.mjs
 
+# «Archivo PICT versionado; agregar un flag sin regenerarlo ⇒ gate rojo» (§9.2): recalcula el
+# covering array 2-way desde covering-array-parada.pict y lo compara contra el .json comiteado
+# que el e2e de la pantalla de parada ejerce. [AC-FPOD-18]
+paso "covering array 2-way de la pantalla de parada: .pict y .generado.json sincronizados" \
+  node db/flota/gate-covering-array-parada.mjs
+
 # La app REFERENCIA documentos de terceros y JAMÁS los emite (§7.3). No es preferencia de
 # arquitectura: emitir algo con apariencia de DTE sin ser emisor autorizado es el art. 97 N°4 del
 # Código Tributario. El gate no busca la palabra «emitir» —nadie la va a escribir— sino las

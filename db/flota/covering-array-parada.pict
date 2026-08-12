@@ -1,26 +1,45 @@
 # Covering array 2-way para la pantalla de parada de entrega [AC-FPOD-18]
-# Flags visibles al operario (§9.2): cada factor toma UN valor por test.
-# Archivo PICT versionado; regenerar si se agrega un flag sin actualizar este archivo.
-# Versión: 1.0 (11-ago-2026, línea base)
+# Flags visibles al operario (§9.2, apps/flota/src/app/entrega/tarjeta-de-entrega.tsx):
+# cada factor toma UN valor por fila generada.
+#
+# Archivo VERSIONADO: agregar/quitar un factor o una restricción sin correr
+# `node db/flota/generar-covering-array.mjs` dejar el archivo `.generado.json` desincronizado
+# es lo que `db/flota/gate-covering-array-parada.mjs` pone en ROJO (AC-FPOD-18).
+#
+# Versión: 2.0 (11-ago-2026) — corrige la v1.0: esa versión dejaba `modo` sin NINGÚN valor
+# posible cuando llegada="no" (3 restricciones que excluían las 3 opciones a la vez, una
+# combinación irrealizable) y prohibía enVentana="si" junto con terminado="si" cuando
+# `dominio/pod-terreno.ts::cerrarParada` los deja VERDADEROS a los dos a la vez: cerrar la
+# ÚLTIMA parada abre la ventana de undo Y dispara `terminado()` en el mismo toque.
 
 # Factores principales: los condicionables que afectan la UI visible del operario
 
-enVentana: si, no
 terminado: si, no
-enCola_gt0: si, no
-gpsDenegado: si, no
-candadoCerrado: si, no
 llegada: si, no
 modo: elegir, no_entregado, dejado_en_punto
+candadoCerrado: si, no
 evidenciaPendiente: si, no
+enVentana: si, no
+enCola_gt0: si, no
+gpsDenegado: si, no
 
-# Restricciones: algunas combinaciones no son posibles
+# Restricciones: solo combinaciones alcanzables de verdad desde tarjeta-de-entrega.tsx /
+# dominio/pod-terreno.ts / dominio/candado-entrega.ts. Cada una cita la línea que la hace cierta.
 
-if [enVentana] = "si" then [terminado] <> "si";
-if [terminado] = "si" then [llegada] <> "si";
-if [terminado] = "si" then [enVentana] <> "si";
-if [llegada] = "no" then [modo] <> "elegir";
-if [llegada] = "no" then [modo] <> "no_entregado";
-if [llegada] = "no" then [modo] <> "dejado_en_punto";
-if [llegada] = "si" and [modo] = "elegir" and [evidenciaPendiente] = "si" then [candadoCerrado] <> "si";
-if [candadoCerrado] = "si" then [llegada] <> "si";
+# Sin parada actual no hay «Llegué» que tocar (paradaActual(r) === null).
+if [terminado] = "si" then [llegada] = "no";
+# Sin parada actual no hay candado que evaluar (candado = null cuando paradaId === null).
+if [terminado] = "si" then [candadoCerrado] = "no";
+# El botón «Llegué» solo se ofrece con candado.abierta (tarjeta-de-entrega.tsx: sección
+# candado-abierto): no se puede haber llegado con el candado todavía cerrado.
+if [llegada] = "si" then [candadoCerrado] = "no";
+# El modo solo cambia con un toque que la tarjeta ofrece DESPUÉS de «Llegué»; antes de llegar
+# el estado de React sigue en su valor inicial/reseteado, "elegir".
+if [llegada] = "no" then [modo] = "elegir";
+# El panel de evidencia pendiente solo existe con la parada actual y con «Llegué» ya tocado.
+if [llegada] = "no" then [evidenciaPendiente] = "no";
+# El efecto que pide GPS solo se dispara con recorrido.llegada === true.
+if [llegada] = "no" then [gpsDenegado] = "no";
+# El botón «Dejado en punto» vive en la rama `pendientes.length === 0` (else de
+# entrega-en-curso): con evidencia pendiente ese botón no se ofrece.
+if [modo] = "dejado_en_punto" then [evidenciaPendiente] = "no";

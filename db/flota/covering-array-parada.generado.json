@@ -1,0 +1,128 @@
+{
+  "version": 2,
+  "shaPict": "26911b76633d809fe8fce09bddef54285c6e6ba97a18a4184336943af24f54c2",
+  "factores": [
+    "terminado",
+    "llegada",
+    "modo",
+    "candadoCerrado",
+    "evidenciaPendiente",
+    "enVentana",
+    "enCola_gt0",
+    "gpsDenegado"
+  ],
+  "totalParesRequeridos": 110,
+  "totalFilasValidas": 52,
+  "filas": [
+    {
+      "terminado": "si",
+      "llegada": "no",
+      "modo": "elegir",
+      "candadoCerrado": "no",
+      "evidenciaPendiente": "no",
+      "enVentana": "si",
+      "enCola_gt0": "si",
+      "gpsDenegado": "no"
+    },
+    {
+      "terminado": "no",
+      "llegada": "si",
+      "modo": "no_entregado",
+      "candadoCerrado": "no",
+      "evidenciaPendiente": "si",
+      "enVentana": "no",
+      "enCola_gt0": "no",
+      "gpsDenegado": "si"
+    },
+    {
+      "terminado": "no",
+      "llegada": "no",
+      "modo": "elegir",
+      "candadoCerrado": "si",
+      "evidenciaPendiente": "no",
+      "enVentana": "no",
+      "enCola_gt0": "no",
+      "gpsDenegado": "no"
+    },
+    {
+      "terminado": "no",
+      "llegada": "si",
+      "modo": "dejado_en_punto",
+      "candadoCerrado": "no",
+      "evidenciaPendiente": "no",
+      "enVentana": "si",
+      "enCola_gt0": "si",
+      "gpsDenegado": "si"
+    },
+    {
+      "terminado": "no",
+      "llegada": "si",
+      "modo": "no_entregado",
+      "candadoCerrado": "no",
+      "evidenciaPendiente": "si",
+      "enVentana": "si",
+      "enCola_gt0": "si",
+      "gpsDenegado": "no"
+    },
+    {
+      "terminado": "no",
+      "llegada": "si",
+      "modo": "elegir",
+      "candadoCerrado": "no",
+      "evidenciaPendiente": "si",
+      "enVentana": "si",
+      "enCola_gt0": "no",
+      "gpsDenegado": "si"
+    },
+    {
+      "terminado": "no",
+      "llegada": "si",
+      "modo": "dejado_en_punto",
+      "candadoCerrado": "no",
+      "evidenciaPendiente": "no",
+      "enVentana": "no",
+      "enCola_gt0": "si",
+      "gpsDenegado": "no"
+    },
+    {
+      "terminado": "si",
+      "llegada": "no",
+      "modo": "elegir",
+      "candadoCerrado": "no",
+      "evidenciaPendiente": "no",
+      "enVentana": "no",
+      "enCola_gt0": "no",
+      "gpsDenegado": "no"
+    },
+    {
+      "terminado": "no",
+      "llegada": "no",
+      "modo": "elegir",
+      "candadoCerrado": "si",
+      "evidenciaPendiente": "no",
+      "enVentana": "si",
+      "enCola_gt0": "si",
+      "gpsDenegado": "no"
+    },
+    {
+      "terminado": "no",
+      "llegada": "si",
+      "modo": "no_entregado",
+      "candadoCerrado": "no",
+      "evidenciaPendiente": "no",
+      "enVentana": "si",
+      "enCola_gt0": "si",
+      "gpsDenegado": "si"
+    },
+    {
+      "terminado": "no",
+      "llegada": "si",
+      "modo": "dejado_en_punto",
+      "candadoCerrado": "no",
+      "evidenciaPendiente": "no",
+      "enVentana": "si",
+      "enCola_gt0": "no",
+      "gpsDenegado": "si"
+    }
+  ]
+}
