@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { superficie, tipografia, grilla, enfasis, semantico as colores } from "@kilopan/miga/tokens.ts";
 import { semantico as layout, componente } from "@kilopan/miga/estructura.ts";
 import type { FilaPeek } from "../../dominio/peek-n1.ts";
@@ -8,14 +9,20 @@ import { fechaEsCl, horaEsCl } from "../../../../../packages/nucleo-comun/src/fe
 // Peek N1 [AC-FSEM-04] — spec 05 §2.2.
 //
 // Bottom-sheet SIN NAVEGACIÓN: es estado local del componente (`abiertoDominio` en
-// `tablero-de-hoy.tsx`), jamás un `router.push` ni un `<Link>` — así la pila de navegación
-// del §5.1 no crece con el peek, que es justo lo que lo distingue de ser "un nivel más".
+// `tablero-de-hoy.tsx`), jamás un `router.push` — así la pila de navegación del §5.1 no crece
+// con el peek, que es justo lo que lo distingue de ser "un nivel más".
 //
 // El botón «Reconocer» transiciona ESTE demo localmente (fixtures de `semaforo-fixtures.ts`,
 // mismo alcance declarado por AC-FSEM-01 mientras el digest real no exista). La transición
 // de verdad —`nueva → reconocida` contra `review_queue`, con el 422 tipado de re-reconocer—
 // vive en `POST /api/semaforo/excepciones/[id]/reconocer` (`servidor/review-queue.ts`) y se
 // prueba contra una fila real en `e2e/peek-n1.spec.ts`.
+//
+// El «Ver detalle» de cada fila SÍ es un `<Link>` [AC-FSEM-05] — a propósito, y no una
+// contradicción con el párrafo de arriba: ese es el «1 toque más» al Nivel 2 (§2.3), un nivel
+// de navegación real y distinto del peek, no el peek creciendo. Y por lo mismo el peek NUNCA
+// ofrece «Resolver» acá —ni para rojas ni para amarillas—: resolver es acción de N2 (§2.3,
+// «el rojo lo exige»); ver `e2e/detalle-n2.spec.ts`.
 
 const ETIQUETA_SEVERIDAD: Record<FilaPeek["severidad"], string> = { rojo: "Rojo", amarillo: "Amarillo" };
 const COLOR_SEVERIDAD: Record<FilaPeek["severidad"], string> = { rojo: colores.error, amarillo: colores.alerta };
@@ -23,11 +30,13 @@ const COLOR_SEVERIDAD: Record<FilaPeek["severidad"], string> = { rojo: colores.e
 export function PeekN1({
   titulo,
   filas,
+  seed,
   onCerrar,
   onReconocer,
 }: {
   titulo: string;
   filas: FilaPeek[];
+  seed: string;
   onCerrar: () => void;
   onReconocer: (id: string) => void;
 }) {
@@ -84,7 +93,7 @@ export function PeekN1({
 
         <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: layout.espacio.entreTarjetas }}>
           {filas.map((fila) => (
-            <FilaDelPeek key={fila.id} fila={fila} onReconocer={onReconocer} />
+            <FilaDelPeek key={fila.id} fila={fila} seed={seed} onReconocer={onReconocer} />
           ))}
         </ul>
       </div>
@@ -92,7 +101,15 @@ export function PeekN1({
   );
 }
 
-function FilaDelPeek({ fila, onReconocer }: { fila: FilaPeek; onReconocer: (id: string) => void }) {
+function FilaDelPeek({
+  fila,
+  seed,
+  onReconocer,
+}: {
+  fila: FilaPeek;
+  seed: string;
+  onReconocer: (id: string) => void;
+}) {
   return (
     <li
       data-testid="fila-peek"
@@ -127,6 +144,21 @@ function FilaDelPeek({ fila, onReconocer }: { fila: FilaPeek; onReconocer: (id: 
       <p data-testid="playbook" style={{ margin: 0, fontSize: tipografia.cuerpo.tamano, color: superficie.textoDim, fontStyle: "italic" }}>
         {fila.playbook}
       </p>
+
+      {/* Nivel 2 [AC-FSEM-05]: 1 toque más desde acá, y NUNCA un botón «Resolver» en esta
+          fila — resolver es solo de N2, para cualquier severidad, incluida la roja. */}
+      <Link
+        href={`/hoy/excepciones?id=${encodeURIComponent(fila.id)}&seed=${encodeURIComponent(seed)}`}
+        data-testid="ver-detalle"
+        style={{
+          fontSize: tipografia.pie.tamano,
+          fontWeight: enfasis.medio,
+          color: superficie.textoDim,
+          textDecoration: "underline",
+        }}
+      >
+        Ver detalle
+      </Link>
 
       {fila.estado === "nueva" ? (
         <button

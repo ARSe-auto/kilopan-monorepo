@@ -29,7 +29,15 @@ const FONDO_COLOR: Record<ColorSemaforo, string> = {
   rojo: colores.error,
 };
 
-export function TableroHoy({ tarjetas, peekPorDominio }: { tarjetas: TarjetaHoy[]; peekPorDominio: Record<string, FilaPeek[]> }) {
+export function TableroHoy({
+  tarjetas,
+  peekPorDominio,
+  seed,
+}: {
+  tarjetas: TarjetaHoy[];
+  peekPorDominio: Record<string, FilaPeek[]>;
+  seed: string;
+}) {
   const [abiertoDominio, setAbiertoDominio] = useState<string | null>(null);
   // Overrides LOCALES del demo (§ arriba): `id de fila -> nueva estado tras tocar «Reconocer»`.
   // La transición de verdad vive en el servidor; acá solo refleja el toque en la pantalla.
@@ -59,6 +67,7 @@ export function TableroHoy({ tarjetas, peekPorDominio }: { tarjetas: TarjetaHoy[
         <PeekN1
           titulo={tarjetaAbierta.titulo}
           filas={filasConOverride}
+          seed={seed}
           onCerrar={() => setAbiertoDominio(null)}
           onReconocer={(id) => setReconocidasLocal((previo) => new Set(previo).add(id))}
         />

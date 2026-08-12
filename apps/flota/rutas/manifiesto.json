@@ -801,6 +801,24 @@
       }
     },
     {
+      "ruta": "/api/semaforo/excepciones/[id]/resolver",
+      "archivo": "src/app/api/semaforo/excepciones/[id]/resolver/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "review_queue",
+          "columna": "id"
+        },
+        "nota": "Resolver la excepción de B desde una sesión de A [AC-FSEM-05]. MUTA la cola «Por revisar» del vecino tanto como reconocer (AC-FSEM-04) y además: la deja `resuelta` con una NOTA de A escrita a nombre de su operación — el rojo que exigía revisión queda cerrado sin que nadie de B lo haya visto ni escrito esa nota, y `reconocida_en`/`resuelta_en` quedan mintiendo sobre quién actuó. Contrato 404 y huella de B intacta (0 filas cambiadas). El fixture del vecino siembra una fila real en `review_queue` — contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin probar nada."
+      }
+    },
+    {
       "ruta": "/api/sesion",
       "archivo": "src/app/api/sesion/route.ts",
       "metodos": [
@@ -1003,6 +1021,18 @@
       "cruce": {
         "tipo": "sin_recurso",
         "nota": "Nivel 0 del tablero «Hoy» [AC-FSEM-01]. NO abre ninguna BD de tenant todavía: el digest real (`signal_rule` contra eventos/paradas) es de AC-FSEM-06/09 y depende de una tabla que esta iteración no crea (esquema de sesión supervisada). Mientras tanto la pantalla renderiza sobre semillas LITERALES embebidas en el código (`?seed=a`/`?seed=c`, default `a`) — ni lee ni recibe ningún identificador de tenant, así que no hay recurso de B que pedirle ni dato de ningún tenant que filtrar: la respuesta es idéntica venga con la cabecera de tenant que venga. El cruce vuelve a pesar de verdad el día que AC-FSEM-06/09 la conecten al digest real."
+      }
+    },
+    {
+      "ruta": "/hoy/excepciones",
+      "archivo": "src/app/hoy/excepciones/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Detalle N2 [AC-FSEM-05]. El `id` viaja como parámetro de CONSULTA (`?id=`), no de ruta — mismo criterio que `/api/agenda` (AC-FVEH-07) — porque mientras el digest real de AC-FSEM-06/09 no exista, ese `id` es literal de las semillas de `semaforo-fixtures.ts` y no un identificador de fila de ningún tenant: la pantalla no abre ninguna BD de tenant para resolverlo. El cruce que sí aplica es el genérico de una pantalla sin recurso — identidad de B por los canales falsificables, respuesta idéntica a la de A— y vuelve a pesar de verdad el día que esta pantalla lea `review_queue` real."
       }
     },
     {

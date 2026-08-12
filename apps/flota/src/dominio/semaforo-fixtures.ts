@@ -1,4 +1,5 @@
 import type { EstadoDominio } from "./semaforo.ts";
+import type { EventoTimelineN2, TipoEvidenciaN2 } from "./detalle-n2.ts";
 
 // Fixtures de seed A y seed C para el Nivel 0 del «Hoy» [AC-FSEM-01].
 //
@@ -187,3 +188,39 @@ export function seedC(): EstadoDominio[] {
     // Sin fila `daas_sla`: seed C no tiene ninguna empresa cliente con `otd_comprometido_pct`.
   ];
 }
+
+/** Timeline + evidencia del Detalle N2 [AC-FSEM-05], por id de excepción de las semillas de
+ *  arriba. Solo las excepciones que el e2e del módulo ejerce llevan datos acá — el resto
+ *  degrada igual (`construirDetalleN2` de `dominio/detalle-n2.ts` no exige que exista una
+ *  entrada) porque una excepción sin este extra ES el caso «cero evidencia, cero eventos». */
+export const detalleExtraDeExcepcion: Record<
+  string,
+  { timeline: EventoTimelineN2[]; evidencia: Partial<Record<TipoEvidenciaN2, string>> }
+> = {
+  // Hueco de secuencia: el registro de sync SÍ existe (es lo que detectó el hueco), pero no
+  // hay foto/GPS/SOC — no son evidencia de un hueco de secuencia, así que degradan las tres.
+  "exc-sync-1": {
+    timeline: [
+      { id: "t1", texto: "Secuencia 4120 registrada por el dispositivo del despacho 3", cuando: horasAntes(9.2) },
+      { id: "t2", texto: "Hueco detectado: falta la secuencia 4121 en el orden autoritativo", cuando: horasAntes(9) },
+    ],
+    evidencia: { sync: "3 reintentos automáticos fallidos — el último hace 9 h" },
+  },
+  // «Entrega sin evidencia»: acá la degradación es TOTAL a propósito — es exactamente el caso
+  // que la excepción reporta, y el detalle tiene que mostrarlo sin hueco ni error.
+  "exc-sync-3": {
+    timeline: [
+      { id: "t1", texto: "Parada 214 marcada como entregada por el conductor", cuando: horasAntes(3.1) },
+      { id: "t2", texto: "Sync del dispositivo completado sin ninguna evidencia adjunta", cuando: horasAntes(3) },
+    ],
+    evidencia: {},
+  },
+  // SOC bajo el estimado: la curva SOC existe; foto/GPS/sync no aplican a esta señal.
+  "exc-ev-1": {
+    timeline: [
+      { id: "t1", texto: "Lectura de SOC 20% registrada — furgón AADD12", cuando: horasAntes(1.2) },
+      { id: "t2", texto: "Proyección de consumo del tramo restante calculada", cuando: horasAntes(1) },
+    ],
+    evidencia: { soc: "82 % → 20 % en 4 tramos del turno" },
+  },
+};

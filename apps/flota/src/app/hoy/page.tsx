@@ -16,7 +16,8 @@ import { TableroHoy } from "./tablero-de-hoy.tsx";
 // plano cross-tenant de e-auto.
 export default async function Hoy({ searchParams }: { searchParams: Promise<{ seed?: string }> }) {
   const { seed } = await searchParams;
-  const estados = seed === "c" ? seedC() : seedA();
+  const seedUsada = seed === "c" ? "c" : "a";
+  const estados = seedUsada === "c" ? seedC() : seedA();
   const tarjetas = tarjetasNivelCero(estados);
   // Peek N1 [AC-FSEM-04]: plano, no un `Map` — cruza el borde servidor/cliente hacia
   // `TableroHoy` ("use client") y RSC no serializa un `Map`.
@@ -27,7 +28,7 @@ export default async function Hoy({ searchParams }: { searchParams: Promise<{ se
   return (
     <main>
       <h1 style={{ fontSize: tipografia.display.tamano, fontWeight: tipografia.display.peso, margin: 0 }}>Hoy</h1>
-      <TableroHoy tarjetas={tarjetas} peekPorDominio={peekPorDominio} />
+      <TableroHoy tarjetas={tarjetas} peekPorDominio={peekPorDominio} seed={seedUsada} />
     </main>
   );
 }
