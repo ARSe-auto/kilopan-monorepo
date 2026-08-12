@@ -4,10 +4,10 @@ import { transicionColor, type UmbralesHisteresis } from "./semaforo-histeresis.
 
 // Histéresis por señal [AC-FSEM-02] — spec 05 §2.4: secuencia disparo→zona intermedia
 // (sigue en el color de alarma)→recuperación (verde), y la misma mecánica para rojo→amarillo.
-// El CHECK de `signal_rule.umbral_recuperacion` DISTINTO del de disparo es DDL sobre una
-// tabla que el módulo 00 todavía no siembra (AGENTS.md: el motor no toca `db/migraciones/`)
-// — ese oráculo queda pendiente de sesión supervisada; este archivo prueba solo la mecánica
-// de transición, que sí es construible hoy.
+// La otra mitad del AC —el CHECK de `signal_rule.umbral_recuperacion` DISTINTO del de disparo,
+// «INSERT con umbral igual ⇒ rebota»— es de la BD y se prueba donde vive: el pgTAP
+// `db/flota/pgtap/0023_histeresis_de_senales.sql` contra el canario. Este archivo prueba la
+// mecánica de transición, que es lógica pura y no necesita base.
 
 const umbrales: UmbralesHisteresis = { umbral_amarillo: 30, umbral_rojo: 60, umbral_recuperacion: 20 };
 

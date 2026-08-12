@@ -1,12 +1,12 @@
 import type { ColorSemaforo } from "./semaforo.ts";
 
 // Histéresis por señal [AC-FSEM-02] — spec 05 §2.4: `signal_rule` guarda umbral_amarillo,
-// umbral_rojo y umbral_recuperacion, este último DISTINTO del de disparo (el CHECK de BD
-// que lo exige es DDL sobre `signal_rule`, tabla que siembra el módulo 00 — todavía no
-// existe ninguna migración de flota en `db/migraciones/`, y AGENTS.md prohíbe al motor
-// crearlas: esquema = sesión supervisada. Esa mitad del AC queda declarada abierta).
+// umbral_rojo y umbral_recuperacion, este último DISTINTO del de disparo. Que sea distinto lo
+// exige la BD y no esta función: el CHECK `signal_rule_histeresis` de la migración
+// `db/migraciones-flota/tenant/0058_signal_rule_con_histeresis.sql`, ejercido por el pgTAP
+// `db/flota/pgtap/0023_histeresis_de_senales.sql`. Acá se asume la fila ya válida.
 //
-// Lo que ESTA función sí puede construir hoy, sin BD: la TRANSICIÓN de color dada la
+// Lo que ESTA función construye, sin BD: la TRANSICIÓN de color dada la
 // métrica actual y el color previo. Sin histéresis, una señal justo en el borde del umbral
 // de disparo prendería y apagaría en cada poll (§0, comentario de `SEMAFORO.umbrales_por_senal`
 // en constants.ts). La evaluación real contra `eventos`/`paradas`/`client_metric` es de los
