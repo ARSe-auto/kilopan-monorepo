@@ -273,6 +273,12 @@ Reglas duras:
   (pasó el 06-ago: gate lanzado en background, sesión terminada «esperando», cero
   commit con el trabajo listo). Corré 'bash packages/metodo/scripts/check.sh' en
   PRIMER PLANO, esperá su exit code en el mismo turno, y actuá: verde ⇒ commit AHORA.
+  Y ojo con la trampa exacta que te va a tentar: NO EXISTE ninguna notificación que te
+  despierte cuando termine una tarea de fondo. Si pensás «el gate me avisa al terminar,
+  freno acá y espero el aviso», estás a punto de matar la iteración — pasó el 11-ago-2026
+  tres veces seguidas con AC-FPOD-13, con esas palabras casi textuales, y las tres veces
+  el trabajo quedó sin comitear. Ese aviso llega a una sesión interactiva; vos no sos una.
+  Tu turno termina cuando dejás de llamar herramientas, y ahí nadie te vuelve a llamar.
 - ANTES de escribir nada: corré 'git stash list'. Si hay stashes 'motor-wip' recientes,
   alguno puede traer TU PROPIO avance de este mismo AC, de una iteración que murió por
   presupuesto (el arnés guarda el trabajo, no lo bota). Miralo con
@@ -409,6 +415,53 @@ if [ "$AVANCE_DEL_AC" -eq 1 ]; then
   rm -f "$CONT_AC"
   exit 0
 else
+  # ─────────────────────────────────────────────────────────────────────────────────
+  # EL TRABAJO A MEDIO CAMINO SE COMITEA DECLARADO, NO SE MANDA AL STASH (bug real,
+  # 11-ago-2026 — tres iteraciones seguidas, unos 10 USD, cero líneas conservadas).
+  #
+  # CÓMO SE VEÍA. El agente construyó AC-FPOD-13 casi entero —nueve archivos, pantalla,
+  # dominio, servidor y su test—, no llegó a comitear, y terminó el turno. La vuelta
+  # siguiente encontró el árbol sucio, lo mandó al stash y arrancó DE CERO sobre el mismo
+  # AC. Otra vez. Y otra. Tres vueltas, tres stashes con el mismo trabajo enterrado, ningún
+  # commit, y el watchdog pausó por «3 iteraciones sin avance» — que era cierto en el
+  # contador y falso en los hechos: hubo muchísimo avance, se tiraba al empezar.
+  #
+  # El stash NO pierde los bytes; lo que se pierde es la CONTINUIDAD. Nadie lo saca nunca,
+  # así que cada vuelta paga otra vez el mismo trabajo. Comitearlo, en cambio, lo deja en
+  # el árbol: la vuelta siguiente arranca ENCIMA y termina lo que falta.
+  #
+  # Se comitea DECLARADO ABIERTO, con la línea canónica que watchdog.sh sabe leer
+  # (trabajo-en-curso.sh): un HEAD rojo que declara su AC abierto y sin marcar NO pausa el
+  # motor, y no se publica nada hasta que esté verde porque los publicadores exigen
+  # `last-green.sha == HEAD`. Esto NO afloja la regla de «no comitear sin verde»: esa regla
+  # prohíbe AFIRMAR que un AC está listo, y acá se afirma exactamente lo contrario.
+  SUCIO_FINAL="$(git status --porcelain -- "${EXCLUIR_SUCIO[@]}" 2>/dev/null)"
+  if [ -n "$SUCIO_FINAL" ] && [ -n "${AC_ID:-}" ]; then
+    echo "loop: el agente dejó trabajo sin comitear para ${AC_ID}. Se comitea DECLARADO ABIERTO"
+    echo "loop: en vez de mandarlo al stash, para que la próxima vuelta lo continúe en vez de rehacerlo."
+    # Por ruta explícita y con las mismas exclusiones del arranque: `git add -A` barrería
+    # los artefactos del panel que el propio motor reescribe en cada corrida.
+    if git add -- . ':!packages/metodo/panel' ':!apps/kilopan/next-env.d.ts' >/dev/null 2>&1 &&
+       git commit -q -F - <<COMMITEOF
+wip(${APP}): trabajo a medio camino de ${AC_ID}, comiteado para no rehacerlo [${AC_ID}]
+
+Lo dejó una iteración del motor que no llegó a comitear. NO afirma que el AC esté
+listo: afirma lo contrario, y por eso lleva la línea de abajo. El gate puede estar
+rojo sobre este HEAD y es lo esperado — nada se publica hasta que una vuelta lo
+termine y lo ponga verde (los publicadores exigen last-green.sha == HEAD).
+
+Se comitea en vez de stashearlo porque el stash nunca lo saca nadie: la vuelta
+siguiente arrancaba de cero sobre el mismo AC y pagaba otra vez el mismo trabajo.
+
+AC-ABIERTO: ${AC_ID} — falta terminarlo y ponerlo verde
+COMMITEOF
+    then
+      echo "loop: comiteado como trabajo en curso declarado ($(git rev-parse --short HEAD))."
+    else
+      echo "loop: no pude comitear el trabajo a medio camino; queda sucio y la próxima vuelta lo stashea."
+    fi
+  fi
+  # ─────────────────────────────────────────────────────────────────────────────────
   # BLOQUEO POR PERMISOS (bug real, 2-ago-2026). `--permission-mode acceptEdits` auto-aprueba
   # ediciones de archivo pero NO comandos Bash: el agente escribía el test del AC y después
   # no podía correr check.sh —«This command requires approval»— y, corriendo no interactivo,
