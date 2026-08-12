@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { SEMAFORO } from "../../../packages/nucleo-comun/src/constants.ts";
 import { con, bdDeTenant } from "../../../db/flota/conectar.mjs";
 import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
-import { VALIDOS } from "../../../db/flota/ruts-sinteticos.mjs";
+import { rutDeFixture } from "../../../db/flota/ruts-sinteticos.mjs";
 
 // Refresco degradable del digest [AC-FSEM-06] — spec 05 §2.6, §4.
 //
@@ -42,7 +42,7 @@ type Conexion = { sql: <T = Record<string, string>>(t: string, p?: unknown[]) =>
 // por su TIPO de tenant (activo, primero de la lista), no por RUT indexado (`preparar-tenants.mjs`).
 async function enrolarDuena(): Promise<string> {
   const secreto = secretoNuevo();
-  const rut = Object.keys(VALIDOS)[20]!;
+  const rut = rutDeFixture(30);
   await con(BD, async (c: Conexion) => {
     const [p] = await c.sql<{ id: string }>(
       "insert into personas (rut, nombre) values ($1, $2) returning id::text as id",

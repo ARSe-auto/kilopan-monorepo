@@ -53,6 +53,7 @@ export const VALIDOS = {
   "16.273.849-6": "el chofer de los 4 estados obligatorios de la pantalla de parada (AC-FPOD-22), propio y no prestado: comparte el patrón de las suites de F4 de arriba — un dispositivo personal ACTIVO por operario (§4.3) — y esta suite además fuerza fallos de IndexedDB del aparato, así que necesita el suyo para no ensuciar el aparato de ninguna otra",
   "17.345.678-6": "el chofer del gate AA axe de la pantalla de parada (AC-FPOD-23), propio y no prestado: mismo motivo que el de AC-FPOD-22 — un dispositivo personal ACTIVO por operario (§4.3) — y esta suite necesita la pantalla real en dos estados (candado abierto, entrega en curso) sin que otra suite le pise el aparato",
   "18.456.789-K": "el chofer del paseo por accesibilidad de las 5 variantes de F4 (AC-FPOD-24), propio y no prestado: mismo motivo que AC-FPOD-22/23 — un dispositivo personal ACTIVO por operario (§4.3) — y esta suite navega la pantalla real de principio a fin SOLO por rol/nombre accesible en 5 flujos distintos, sin que otra suite le pise el aparato",
+  "3.141.592-6": "la dueña del refresco del digest (AC-FSEM-06), propia y no prestada: compartía el índice 20 con pod-foto-gps-degradado y pod-evidencia-sha256, y como refresco-digest usa el MISMO tenant que una de ellas, la segunda en correr moría con duplicate key sobre personas_tenant_id_rut_key — pasaba sola y fallaba dentro de la suite, que es la forma más cara de fallar",
 };
 
 /**
