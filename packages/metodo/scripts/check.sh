@@ -113,6 +113,14 @@ else
     node packages/metodo/scripts/verify-refs.mjs "--app=$APP"
 fi
 
+# EL LOCK, ANTES QUE EL CÓDIGO. Va acá —entre el contrato y el build— porque un lock
+# desfasado no rompe nada de lo que corre a continuación en esta máquina: el install local
+# no es `--frozen-lockfile`. Rompe en CI, ANTES de la primera prueba, y el aviso le llega a
+# una persona por correo en vez de a un gate. Pasó el 12-ago-2026 con `@axe-core/playwright`
+# (ea5b9b1): package.json comiteado, lock afuera, verde acá y rojo allá.
+run_step "lock al día: ningún package.json pide algo que pnpm-lock.yaml no conoce" \
+  node packages/metodo/scripts/gate-lock-al-dia.mjs
+
 # Gancho genérico: una app puede traer su propio gate (contrato, esquema, invariantes) en
 # `db/<app>/gate.sh`. Corre acá, junto al resto del contrato y antes del código, y decide
 # por sí mismo qué salta sin --full. KiloPan no tiene uno; FLOTA sí.
@@ -137,6 +145,9 @@ fi
 # ejecutado, que es precisamente el defecto de AC-H0-05 que este gate existe para evitar.
 run_step "unit (packages/metodo/scripts): mutantes de verifica-es-cl.mjs" \
   node --test packages/metodo/scripts/verifica-es-cl.test.mjs
+# Un gate sin suite es una opinión: la de abajo reproduce el caso real de ea5b9b1.
+run_step "unit (packages/metodo/scripts): el gate del lock atrapa el caso que lo trajo" \
+  node --test packages/metodo/scripts/gate-lock-al-dia.test.mjs
 
 run_step "lint (workspace)" pnpm -r --if-present run lint
 run_step "typecheck (workspace)" pnpm -r --if-present run typecheck
