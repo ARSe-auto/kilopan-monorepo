@@ -1,9 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
   BotonPrimario,
   CifraGrande,
+  EstadoCargando,
+  EstadoError,
+  EstadoVacio,
   SelectorUnToque,
   TecladoNumerico,
 } from "@kilopan/miga/componentes/index.tsx";
@@ -249,16 +253,46 @@ export default function TarjetaDeEntrega({
   // es la partición volvería a la llave única que este AC elimina. `identidadDelAparato()` no
   // pega a la red (deriva del secreto que ya está en IndexedDB), así que resuelve offline igual
   // que el resto de este efecto.
+  //
+  // ─── EL ESTADO DE ERROR, CON RECUPERACIÓN [AC-FPOD-22] (§5.7) ─────────────────────
+  //
+  // Antes esta promesa no tenía `.catch()`: un IndexedDB bloqueado (privado, cuota agotada) la
+  // dejaba rechazada en silencio, `identidad` en `null` para siempre y el botón «Llegué» sin
+  // aparecer nunca —el chofer se quedaba mirando una pantalla muda sin saber por qué. Este NO es
+  // el caso que el §5.7 excluye del estado de error («las capturas jamás muestran rechazo»): acá
+  // no hay ninguna captura que el servidor haya rechazado, es el APARATO el que no pudo
+  // prepararse para capturar, y de eso sí hay que avisar con una salida real.
   const [identidad, setIdentidad] = useState<Identidad | null>(null);
+  const [errorAparato, setErrorAparato] = useState(false);
+  const [intentoAparato, setIntentoAparato] = useState(0);
   useEffect(() => {
     let vivo = true;
-    void identidadDelAparato().then((resuelta) => {
-      if (vivo) setIdentidad(resuelta);
-    });
+    setErrorAparato(false);
+    void identidadDelAparato()
+      .then((resuelta) => {
+        if (vivo) setIdentidad(resuelta);
+      })
+      .catch(() => {
+        if (vivo) setErrorAparato(true);
+      });
     return () => {
       vivo = false;
     };
-  }, []);
+  }, [intentoAparato]);
+
+  // Todavía preparando el aparato: sin identidad Y sin error. `EstadoCargando` es el skeleton
+  // instantáneo del §5.7; el aviso de abajo es la ESCALADA a partir de los 400 ms que el AC pide
+  // —la resolución normal (IndexedDB local, sin red) no llega a mostrarlo nunca.
+  const cargandoAparato = identidad === null && !errorAparato;
+  const [demoraAparato, setDemoraAparato] = useState(false);
+  useEffect(() => {
+    if (!cargandoAparato) {
+      setDemoraAparato(false);
+      return undefined;
+    }
+    const temporizador = window.setTimeout(() => setDemoraAparato(true), 400);
+    return () => window.clearTimeout(temporizador);
+  }, [cargandoAparato]);
 
   const [outboxCargado, setOutboxCargado] = useState(false);
   useEffect(() => {
@@ -401,23 +435,52 @@ export default function TarjetaDeEntrega({
     <main data-testid="tarjeta-de-entrega">
       <h1 style={titulo}>Parada de entrega</h1>
 
-      {/* Cero modales (§7.6): la banda no tapa la pantalla ni pide un toque para seguir. */}
-      {recorrido.captura !== null && (
-        <section data-testid="banda-undo" style={banda}>
-          <p style={{ ...cuerpo, margin: 0 }}>Entregado. Se guarda en unos segundos.</p>
-          <BotonPrimario testid="deshacer" variante="neutro" onClick={deshacerToque}>
-            Deshacer
-          </BotonPrimario>
-        </section>
-      )}
+      {/* Los 4 estados obligatorios de la pantalla de parada [AC-FPOD-22] (§5.7): error CON
+          recuperación → skeleton instantáneo (con la escalada a los 400 ms) → el contenido real,
+          que trae adentro el «vacío accionable» (ruta terminada) y el «sin conexión con contador
+          real de cola» (por-sincronizar) que ya existían. Ninguno de los tres reemplaza al de
+          arriba: «las capturas jamás muestran rechazo» sigue siendo cierto porque este gate es
+          sobre PREPARAR el aparato, no sobre el resultado de una captura — esas nunca rebotan. */}
+      {errorAparato ? (
+        <div data-testid="error-aparato">
+          <EstadoError
+            mensaje="No se pudo preparar el aparato para capturar. Volvé a intentar."
+            alReintentar={() => setIntentoAparato((n) => n + 1)}
+          />
+        </div>
+      ) : cargandoAparato ? (
+        <div data-testid="cargando-aparato">
+          <EstadoCargando filas={2} />
+          {demoraAparato && (
+            <p role="status" data-testid="aviso-demora-aparato" style={{ ...pieDim, marginTop: semantico.espacio.entreControles }}>
+              Sigue cargando…
+            </p>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* Cero modales (§7.6): la banda no tapa la pantalla ni pide un toque para seguir. */}
+          {recorrido.captura !== null && (
+            <section data-testid="banda-undo" style={banda}>
+              <p style={{ ...cuerpo, margin: 0 }}>Entregado. Se guarda en unos segundos.</p>
+              <BotonPrimario testid="deshacer" variante="neutro" onClick={deshacerToque}>
+                Deshacer
+              </BotonPrimario>
+            </section>
+          )}
 
-      {terminado(recorrido) && (
-        <section data-testid="ruta-terminada" style={bloque}>
-          <p style={cuerpo}>
-            Terminaste las entregas de esta ruta. Capturadas: {recorrido.cola.length}.
-          </p>
-        </section>
-      )}
+          {terminado(recorrido) && (
+            <section data-testid="ruta-terminada" style={bloque}>
+              <EstadoVacio
+                mensaje={`Terminaste las entregas de esta ruta. Capturadas: ${recorrido.cola.length}.`}
+                accion={
+                  <Link href="/" data-testid="volver-inicio" style={enlace}>
+                    Volver al inicio
+                  </Link>
+                }
+              />
+            </section>
+          )}
 
       {parada !== null && (
         <section data-testid="parada-actual" style={bloque}>
@@ -600,6 +663,8 @@ export default function TarjetaDeEntrega({
           )}
         </section>
       )}
+        </>
+      )}
     </main>
   );
 }
@@ -614,4 +679,9 @@ const banda = {
   borderRadius: grilla.radio,
   background: superficie.tarjeta,
   border: `1px solid ${superficie.hairline}`,
+};
+const enlace = {
+  fontSize: tipografia.cuerpo.tamano,
+  fontWeight: enfasis.medio,
+  color: superficie.texto,
 };
