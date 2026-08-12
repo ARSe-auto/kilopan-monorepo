@@ -6,6 +6,7 @@ import {
   capturaDeRecargaBienFormada,
   type RecargaCapturaEntrante,
 } from "../../../../servidor/recarga-sync.ts";
+import { exigirClaseCaptura } from "../../../../servidor/clasificacion-tablas.ts";
 
 // El endpoint de sync de capturas del POD [AC-FPOD-03] — §4.2, §0 (fila HTTP), §4.6, §5.2 F4.
 //
@@ -76,6 +77,23 @@ export async function POST(peticion: Request) {
   // que trae de ANTES de la revocación no rebota, se clasifica por `g.acto.revocadoEn`.
   const g = await sesionParaSincronizarCapturas(await headers());
   if (g.tipo === "rebote") return g.respuesta;
+
+  // La frontera de clases del MOTOR [AC-FPOD-20] — §4.2: `eventos` es el aterrizaje universal de
+  // TODA captura de este endpoint (POD y recarga, §4.6); si algún día dejara de estar clasificada
+  // CAPTURA — migración rota, tabla equivocada — el 2xx-siempre NO se aplica, y el endpoint
+  // rebota 422 tipado antes de tocar el cuerpo de la petición, con 0 filas escritas.
+  const veredictoClase = await exigirClaseCaptura(g.acto.pool, "eventos");
+  if (veredictoClase.tipo === "fuera_de_clase") {
+    return Response.json(
+      {
+        error: "mutacion_fuera_de_clase",
+        mensaje:
+          `La tabla "${veredictoClase.tabla}" no es de clase CAPTURA — el 2xx-siempre del camino ` +
+          "de sync rige solo para esa clase (§4.2).",
+      },
+      { status: 422 },
+    );
+  }
 
   let cuerpo: Record<string, unknown>;
   try {
