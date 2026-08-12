@@ -1,4 +1,5 @@
 import type { CapturaDeEntrega } from "../dominio/pod-terreno.ts";
+import type { CapturaDeRecarga } from "../dominio/recarga-terreno.ts";
 
 // El replay del outbox hacia el motor de sync [AC-FPOD-03] — §4.7 (replay-on-startup y
 // replay-on-online son el camino PRINCIPAL), §4.2, §5.2 F4, §5.7, §3.E1.7.
@@ -72,6 +73,49 @@ export async function replayar(
   const cuerpo = (await respuesta.json().catch(() => null)) as { acuses?: AcuseCrudo[] } | null;
   if (!cuerpo || !Array.isArray(cuerpo.acuses)) return [];
   return cuerpo.acuses
+    .filter((a) => a.aceptada === true && typeof a.client_uuid === "string")
+    .map((a) => a.client_uuid as string);
+}
+
+// ─── EL MISMO REPLAY, PARA LA COLA DE RECARGA [AC-FPOD-13] — §4.7, §4.2 ───────────
+//
+// `replayarRecargas` es el gemelo de `replayar`: mismo algoritmo (nada sale de la cola salvo lo
+// que el servidor ACUSÓ), mismo `Enviar` inyectable, mismo endpoint — `POST /api/sync/capturas`
+// acepta un `recargas` junto al `capturas` existente, y es ese único endpoint el que hace
+// literal la frase «el cierre de recarga viaja por el MISMO outbox».
+
+/** Una recarga en el cuerpo del §0/§4.6: snake_case, sin `costo_clp` — el flujo del chofer no lo
+ *  tiene (§4.8, centinela 10). */
+function paraElCableRecarga(c: CapturaDeRecarga) {
+  return {
+    client_uuid: c.clientUuid,
+    vehiculo_id: c.vehiculoId,
+    turno_id: c.turnoId,
+    wh: c.wh,
+    soc_inicial: c.socInicial,
+    soc_final: c.socFinal,
+    ts_dispositivo: c.tsDispositivo,
+    tz_offset_min: c.tzOffsetMin,
+  };
+}
+
+/** Manda la cola de recarga y devuelve los `client_uuid` que el servidor CONFIRMÓ [AC-FPOD-13].
+ *  Mismo criterio que `replayar`: un lote que no llegó no vacía nada, y no hay rama de error
+ *  hacia afuera — el chofer no tiene nada que decidir sobre un reintento que es trabajo del
+ *  aparato. */
+export async function replayarRecargas(
+  cola: readonly CapturaDeRecarga[],
+  enviar: Enviar,
+): Promise<string[]> {
+  if (cola.length === 0) return [];
+  const respuesta = await enviar(JSON.stringify({ recargas: cola.map(paraElCableRecarga) })).catch(
+    () => null,
+  );
+  if (!respuesta || !respuesta.ok) return [];
+
+  const cuerpo = (await respuesta.json().catch(() => null)) as { acuses_recarga?: AcuseCrudo[] } | null;
+  if (!cuerpo || !Array.isArray(cuerpo.acuses_recarga)) return [];
+  return cuerpo.acuses_recarga
     .filter((a) => a.aceptada === true && typeof a.client_uuid === "string")
     .map((a) => a.client_uuid as string);
 }

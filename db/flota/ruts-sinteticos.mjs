@@ -44,6 +44,7 @@ export const VALIDOS = {
   "9.123.456-4": "el chofer de la secuencia monotónica por dispositivo (AC-FPOD-10), propio y no prestado: novena suite de F4, noveno operario — mismo motivo que las ocho de arriba",
   "8.642.097-K": "el segundo operario de AC-FPOD-10, el que ejerce el replay-on-online con Background Sync inexistente: la misma suite necesita su propio aparato aparte del que deja el hueco de secuencia",
   "7.777.777-6": "el chofer de foto y GPS como mejoras progresivas (AC-FPOD-12), propio y no prestado: décima suite de F4, décimo operario — mismo motivo que las nueve de arriba",
+  "6.789.012-4": "el chofer del outbox generalizado a la recarga (AC-FPOD-13), propio y no prestado: undécima suite de F4, undécimo operario — mismo motivo que las diez de arriba",
 };
 
 /**

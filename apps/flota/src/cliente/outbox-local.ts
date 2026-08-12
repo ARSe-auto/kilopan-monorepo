@@ -1,4 +1,5 @@
 import type { CapturaDeEntrega } from "../dominio/pod-terreno.ts";
+import type { CapturaDeRecarga } from "../dominio/recarga-terreno.ts";
 
 // El outbox DURABLE del aparato [AC-FPOD-08], particionado por (tenant, usuario) [AC-FPOD-09] —
 // §4.7.
@@ -151,5 +152,69 @@ export function guardarOutbox(
     almacen.setItem(llaveOutboxPod(identidad), JSON.stringify(outbox));
   } catch {
     /* `persist()` denegado o cuota llena: es telemetría de AC-FPOD-14, jamás un rebote acá. */
+  }
+}
+
+// ─── EL OUTBOX GENERALIZADO A LA RECARGA [AC-FPOD-13] — §4.7, §4.2, §4.8 ──────────
+//
+// «El cierre de recarga viaja por el MISMO outbox» es literal: misma partición por
+// (tenant, usuario), mismo índice de identidades (`registrarIdentidad`/`listarIdentidadesCon
+// Outbox`, arriba), la misma disciplina de «un almacén lleno o negado no tumba la captura en
+// curso». Lo único nuevo es la LLAVE —una partición propia dentro del mismo esquema, para que
+// una captura de recarga jamás se lea como si fuera una de POD, ni al revés— y el tipo que
+// guarda.
+
+/** La llave del outbox de RECARGA para una identidad — el mismo esquema que `llaveOutboxPod`
+ *  (§4.7), en su propia partición [AC-FPOD-13]. */
+export function llaveOutboxRecarga(identidad: Identidad): string {
+  return `flota.outbox.recarga.${identidad.tenant}.${identidad.usuario}`;
+}
+
+function esCapturaDeRecarga(x: unknown): x is CapturaDeRecarga {
+  if (typeof x !== "object" || x === null) return false;
+  const c = x as Partial<CapturaDeRecarga>;
+  return (
+    typeof c.clientUuid === "string" &&
+    typeof c.vehiculoId === "string" &&
+    (c.turnoId === null || typeof c.turnoId === "string") &&
+    Number.isInteger(c.wh) &&
+    (c.socFinal === null || typeof c.socFinal === "number") &&
+    typeof c.tsDispositivo === "string" &&
+    typeof c.tzOffsetMin === "number" &&
+    c.estado === "por_replicar"
+  );
+}
+
+/** Lo mismo que `leerOutbox`, para la cola de recarga: un dato ilegible vuelve lista vacía antes
+ *  que una captura a medio armar, porque sin `clientUuid` no hay llave de idempotencia (§0)
+ *  [AC-FPOD-13]. */
+export function leerOutboxRecarga(almacen: AlmacenLocal, identidad: Identidad): CapturaDeRecarga[] {
+  let crudo: string | null;
+  try {
+    crudo = almacen.getItem(llaveOutboxRecarga(identidad));
+  } catch {
+    return [];
+  }
+  if (crudo === null) return [];
+  let leido: unknown;
+  try {
+    leido = JSON.parse(crudo);
+  } catch {
+    return [];
+  }
+  return Array.isArray(leido) ? leido.filter(esCapturaDeRecarga) : [];
+}
+
+/** Lo mismo que `guardarOutbox`, para la cola de recarga [AC-FPOD-13]. */
+export function guardarOutboxRecarga(
+  almacen: AlmacenLocal,
+  identidad: Identidad,
+  outbox: readonly CapturaDeRecarga[],
+): void {
+  registrarIdentidad(almacen, identidad);
+  try {
+    almacen.setItem(llaveOutboxRecarga(identidad), JSON.stringify(outbox));
+  } catch {
+    /* mismo criterio que `guardarOutbox`: persist() denegado o cuota llena no rebota. */
   }
 }

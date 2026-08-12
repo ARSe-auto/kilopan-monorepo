@@ -981,6 +981,18 @@
       }
     },
     {
+      "ruta": "/recarga",
+      "archivo": "src/app/recarga/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La tarjeta de la parada de recarga (§5.2 F4, §4.7) [AC-FPOD-13]. Mismo patrón que `/entrega`: NO recibe el identificador como segmento de la URL — el App Router serializa el árbol de segmentos, con el valor concreto, dentro del HTML que sirve, incluso en el 404. La parada viaja en la consulta (`?parada=`) y el tenant sale del ruteo por host; sin una parada de tipo `recarga` que exista en la base de la casa, la pantalla contesta 404 antes de pintar un título — un `?parada=` de B contra la sesión de A no revela ni el vehículo ni el turno del vecino. La mitad «recurso» del centinela la ejerce el MISMO motor de sync (`/api/sync/capturas`), que es por donde sale el cierre real y donde el `vehiculo_id` sí viaja, confinado por la sesión del chofer."
+      }
+    },
+    {
       "ruta": "/ruta/cerrar",
       "archivo": "src/app/ruta/cerrar/page.tsx",
       "metodos": [

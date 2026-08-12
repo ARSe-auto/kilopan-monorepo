@@ -1,6 +1,11 @@
 import { headers } from "next/headers";
 import { sesionParaSincronizarCapturas, esUuid } from "../../../../servidor/gobierno.ts";
 import { aterrizarCapturas, capturaBienFormada, type CapturaEntrante } from "../../../../servidor/capturas.ts";
+import {
+  aterrizarRecargas,
+  capturaDeRecargaBienFormada,
+  type RecargaCapturaEntrante,
+} from "../../../../servidor/recarga-sync.ts";
 
 // El endpoint de sync de capturas del POD [AC-FPOD-03] — §4.2, §0 (fila HTTP), §4.6, §5.2 F4.
 //
@@ -50,6 +55,22 @@ function secuenciaLegible(valor: unknown): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
+/** El cierre de recarga que trae el `recargas` del cuerpo [AC-FPOD-13] — el gemelo de `leer`
+ *  para la cola de recarga, sin `costo_clp`: el flujo del chofer no lo tiene (§4.8). */
+function leerRecarga(cruda: CapturaCruda): Partial<RecargaCapturaEntrante> {
+  const ts = cruda.ts_dispositivo === undefined ? null : new Date(String(cruda.ts_dispositivo));
+  return {
+    clientUuid: cruda.client_uuid === undefined ? undefined : String(cruda.client_uuid),
+    vehiculoId: cruda.vehiculo_id === undefined ? undefined : String(cruda.vehiculo_id),
+    turnoId: cruda.turno_id === undefined || cruda.turno_id === null ? null : String(cruda.turno_id),
+    wh: cruda.wh === undefined ? undefined : Number(cruda.wh),
+    socInicial: cruda.soc_inicial === undefined || cruda.soc_inicial === null ? null : Number(cruda.soc_inicial),
+    socFinal: cruda.soc_final === undefined || cruda.soc_final === null ? null : Number(cruda.soc_final),
+    tsDispositivo: ts ?? undefined,
+    tzOffsetMin: cruda.tz_offset_min === undefined ? undefined : Number(cruda.tz_offset_min),
+  };
+}
+
 export async function POST(peticion: Request) {
   // La única guardia que deja pasar un aparato revocado [AC-FPOD-07] — §4.3, §4.2: la captura
   // que trae de ANTES de la revocación no rebota, se clasifica por `g.acto.revocadoEn`.
@@ -63,17 +84,35 @@ export async function POST(peticion: Request) {
     cuerpo = {};
   }
 
-  const crudas = Array.isArray(cuerpo.capturas) ? (cuerpo.capturas as CapturaCruda[]) : null;
-  if (crudas === null) {
+  // `capturas` (POD) y `recargas` [AC-FPOD-13] viajan en el MISMO cuerpo, y basta con que UNA de
+  // las dos venga: un lote que solo vacía la cola de recarga no tiene por qué mandar `capturas`
+  // vacío para no rebotar.
+  const capturasProvistas = cuerpo.capturas !== undefined;
+  const recargasProvistas = cuerpo.recargas !== undefined;
+  if (!capturasProvistas && !recargasProvistas) {
     return Response.json(
       {
         error: "lote_invalido",
-        mensaje: "El replay manda la cola entera en `capturas` (§4.7): una lista, aunque tenga una sola.",
+        mensaje:
+          "El replay manda la cola en `capturas` y/o `recargas` (§4.7): una lista, aunque tenga una sola.",
       },
       { status: 422 },
     );
   }
+  if (capturasProvistas && !Array.isArray(cuerpo.capturas)) {
+    return Response.json(
+      { error: "lote_invalido", mensaje: "`capturas` viaja como lista (§4.7)." },
+      { status: 422 },
+    );
+  }
+  if (recargasProvistas && !Array.isArray(cuerpo.recargas)) {
+    return Response.json(
+      { error: "lote_invalido", mensaje: "`recargas` viaja como lista (§4.7)." },
+      { status: 422 },
+    );
+  }
 
+  const crudas = Array.isArray(cuerpo.capturas) ? (cuerpo.capturas as CapturaCruda[]) : [];
   const leidas = crudas.map(leer);
   if (!leidas.every(capturaBienFormada)) {
     return Response.json(
@@ -81,6 +120,18 @@ export async function POST(peticion: Request) {
         error: "captura_mal_formada",
         mensaje:
           "Toda captura viaja con `client_uuid`, la parada, el doble reloj y su resultado (§0, §4.6).",
+      },
+      { status: 422 },
+    );
+  }
+
+  const recargasCrudas = Array.isArray(cuerpo.recargas) ? (cuerpo.recargas as CapturaCruda[]) : [];
+  const recargasLeidas = recargasCrudas.map(leerRecarga);
+  if (!recargasLeidas.every(capturaDeRecargaBienFormada)) {
+    return Response.json(
+      {
+        error: "recarga_mal_formada",
+        mensaje: "Todo cierre de recarga viaja con `client_uuid`, `vehiculo_id`, `wh` y el doble reloj (§0, §4.6).",
       },
       { status: 422 },
     );
@@ -100,5 +151,14 @@ export async function POST(peticion: Request) {
     g.acto.revocadoEn,
     enrolamiento,
   );
-  return Response.json({ acuses }, { status: 200 });
+
+  // El cierre de recarga [AC-FPOD-13]: mismo endpoint, mismo POST, acuse aparte porque su forma
+  // es otra (sin `config_version_id` ni `flags` — la regla de oro del §4.2 para esta captura es
+  // más simple: 2xx siempre, idempotente, cero monto).
+  const acusesRecarga =
+    recargasLeidas.length === 0
+      ? []
+      : await aterrizarRecargas(g.acto.pool, g.acto.sesion, recargasLeidas as RecargaCapturaEntrante[]);
+
+  return Response.json({ acuses, acuses_recarga: acusesRecarga }, { status: 200 });
 }
