@@ -2,6 +2,11 @@ import type { Pool } from "pg";
 import { enLectura } from "./gobierno.ts";
 import type { Sesion } from "./sesion.ts";
 import { evaluarCandadoDeEntrega, type CandadoDeEntrega } from "../dominio/candado-entrega.ts";
+import {
+  proyectarEstadoDeParada,
+  type EstadoVisibleDeParada,
+  type EventoDeParada,
+} from "../dominio/proyeccion-parada.ts";
 
 // El candado entrega←manifiesto [AC-FRUT-22] — KR-29, §4.2, §3.E1.5.
 //
@@ -52,5 +57,39 @@ export async function candadoDeLaEntrega(
     });
 
     return { tipo: "entrega" as const, ...candado };
+  });
+}
+
+// ─── El estado visible: proyección de `eventos`, jamás un contador mutable [AC-FPOD-21] ────────
+// §4.6, §2.
+//
+// `paradas.estado`/`resultado` (0037) nacen `pending` y esta función NUNCA los toca: leerlos
+// directo sería exactamente el «contador mutable» que el AC prohíbe — una columna que alguien
+// tiene que acordarse de actualizar, y que puede quedar desfasada de lo que `eventos` dice de
+// verdad. En su lugar, cada lectura recalcula desde los hechos, ordenados por `secuencia` — el
+// orden AUTORITATIVO del servidor (asignado al aterrizar, nunca por `event_time` del aparato) —
+// con `dominio/proyeccion-parada.ts::proyectarEstadoDeParada`, la función PURA que decide cuál
+// hecho manda. `gate-sin-contadores-mutables.mjs` vigila que ningún `UPDATE paradas SET estado`/
+// `resultado` se cuele por otro archivo.
+export async function estadoVisibleDeParada(
+  pool: Pool,
+  sesion: Sesion,
+  paradaId: string,
+): Promise<EstadoVisibleDeParada | null> {
+  return enLectura(pool, sesion, async (c) => {
+    const { rows: existe } = await c.query("select 1 from paradas where id = $1", [paradaId]);
+    if (!existe[0]) return null;
+
+    const { rows } = await c.query<{ secuencia: string; payload: EventoDeParada["payload"] }>(
+      `select e.secuencia::text as secuencia, e.payload
+         from eventos e join evento_tipo t on t.id = e.tipo_id
+        where e.objeto_tabla = 'paradas' and e.objeto_id = $1
+          and t.codigo in ('entrega.pod_capturada', 'entrega.pod_deshecha')`,
+      [paradaId],
+    );
+
+    return proyectarEstadoDeParada(
+      rows.map((r) => ({ secuencia: Number(r.secuencia), payload: r.payload })),
+    );
   });
 }

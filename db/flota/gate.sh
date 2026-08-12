@@ -81,6 +81,12 @@ paso "seeds: nadie siembra el gancho escaneo_codigo, y sigue vivo en el DDL (§4
 paso "covering array 2-way de la pantalla de parada: .pict y .generado.json sincronizados" \
   node db/flota/gate-covering-array-parada.mjs
 
+# «El estado visible es proyección, jamás contadores mutables» (§4.6, §2): cero UPDATE de
+# paradas.estado/resultado en el servidor o sus rutas HTTP — se lee con
+# `estadoVisibleDeParada`, recalculado desde `eventos` en cada lectura. [AC-FPOD-21]
+paso "sin contadores mutables: paradas.{estado,resultado} nunca se actualizan a mano" \
+  node db/flota/gate-sin-contadores-mutables.mjs
+
 # La app REFERENCIA documentos de terceros y JAMÁS los emite (§7.3). No es preferencia de
 # arquitectura: emitir algo con apariencia de DTE sin ser emisor autorizado es el art. 97 N°4 del
 # Código Tributario. El gate no busca la palabra «emitir» —nadie la va a escribir— sino las
