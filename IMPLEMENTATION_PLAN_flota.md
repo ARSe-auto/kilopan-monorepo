@@ -247,7 +247,8 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 - [x] (P1) Dominio Caja/custodia/liquidación: discrepancia pendiente amarillo; descuadre sin evidencia rojo; línea disputada rojo («observada» condicionada a pregunta 11); OFF no evalúa — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-17]
 - [x] (P1) Dominio DaaS/SLA (seed A farmacia OTD 95): −2 pp proyectado amarillo; incumplido rojo; empresa con NULL no evalúa ni muestra tarjeta — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-18]
 - [x] (P1) Dominio Entregas vs plan: 10% no-entregas amarillo y 12% rojo; compromiso vencido sin entrega rojo desde `promesa_original` (señal de ETA condicionada a pregunta 4) — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-19]
-- [ ] (P1) Reasignar/llamar en N2: reasignación audita y rebota sobre resueltas (422) y cross-tenant (404); acción «llamar» presente — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-20]
+- [x] (P1) Reasignar/llamar en N2: reasignación audita y rebota sobre resueltas (422) y cross-tenant (404); acción «llamar» presente — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-20]
+  - Probado: `e2e/detalle-n2.spec.ts` 22/22 (reasignar contra `review_queue` real + presencia de «Llamar»). Detalle en la spec.
 - [ ] (P1) Dominio sin señales activas no renderiza tarjeta, sin huecos (CONDICIONADO a pregunta 8; el AC se reescribe si el dueño fija otra conducta) — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-21]
 - [ ] (P1) Panel interno SaaS contra fixtures de `control`: EEVD por tenant con tendencia 4 semanas, embudo p50/p90, % vehículos con turno, calidad de la norte sin `undo`, exenciones con tendencia (ingesta pendiente pregunta 10) — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-22]
 - [ ] (P2) Minutos del dueño en el panel ≤5/día — CONDICIONADO a pregunta 6; se mide con el piloto (oráculo producción) — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-23]

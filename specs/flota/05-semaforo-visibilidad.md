@@ -536,7 +536,36 @@ activa SOLO `admin_tenant`: mientras la pregunta 1 esté abierta, `operador` y
     del endpoint real (`/api/semaforo/digest` contra `paradas` reales) queda para un AC posterior,
     mismo criterio que AC-FSEM-07/08/16-18: no está en el texto de este AC ni su oráculo lo exige
     (CI, no e2e). `bash packages/metodo/scripts/check.sh --full --app=flota` verde.
-- [ ] (P1) Reasignar y llamar en N2: reasignar transfiere `asignado_a` a otro usuario del tenant con `audit_trail` por trigger (PLANIFICACIÓN §4.2: valida online y rebota); reasignar sobre una excepción resuelta ⇒ 422 tipado y 0 filas cambiadas; reasignar con id de otro tenant ⇒ 404 (§0-HTTP); el detalle N2 renderiza la acción «llamar» (§5.6-N2; aserción de presencia en el e2e) — oráculo: CI [AC-FSEM-20]
+- [x] (P1) Reasignar y llamar en N2: reasignar transfiere `asignado_a` a otro usuario del tenant con `audit_trail` por trigger (PLANIFICACIÓN §4.2: valida online y rebota); reasignar sobre una excepción resuelta ⇒ 422 tipado y 0 filas cambiadas; reasignar con id de otro tenant ⇒ 404 (§0-HTTP); el detalle N2 renderiza la acción «llamar» (§5.6-N2; aserción de presencia en el e2e) — oráculo: CI [AC-FSEM-20]
+  - Probado: `npx playwright test e2e/detalle-n2.spec.ts` (22/22, corrido en primer plano). **Servidor:**
+    `reasignarExcepcion` (`servidor/review-queue.ts`) transfiere `asignado_a` con un UPDATE que
+    NO toca `estado` (reasignar es cambio de dueño, no transición de ciclo de vida, §4.6) y
+    valida online en el mismo acto (§4.2): el `usuarioId` destino tiene que existir, ser
+    `activo` y de ESTE tenant (`tenant_id = tenant_actual()`), o rebota 422 `usuario_invalido`;
+    el WHERE del UPDATE lleva `estado <> 'resuelta'`, así que reasignar una ya resuelta rebota
+    422 `transicion_ilegal` con 0 filas cambiadas (probado contra una fila real: nota y
+    `resuelta_en` intactos); una excepción que no existe —o es de otro tenant, 404 por
+    construcción igual que reconocer/resolver— rebota 404 ANTES que cualquier validación del
+    cuerpo, para no filtrar por el body si el recurso no está. `audit_trail` lo escribe el
+    trigger `review_queue_auditada` (migración 0002) solo, sin código nuevo. `POST
+    /api/semaforo/excepciones/[id]/reasignar` (nuevo) pasa por la misma `guardia()` que
+    reconocer/resolver/toques: rol distinto de `admin_tenant` ⇒ 403 y 0 filas cambiadas.
+    Declarada en `rutas/manifiesto.json` (`recurso` sobre `review_queue`, mismo criterio que
+    reconocer/resolver) y cubierta por la suite A-contra-B autogenerada. **UI:** «Llamar»
+    [AC-FSEM-20] se agrega a `hoy/excepciones/detalle-n2-vista.tsx` como acción SIEMPRE
+    presente en N2 (`data-testid="detalle-llamar"`, cualquier estado/severidad) — el AC solo
+    exige su presencia (aserción en el e2e); el `tel:` queda vacío a propósito porque ni
+    `FilaPeek` ni `DetalleN2` traen un campo de teléfono todavía (ninguna tabla del dominio lo
+    tiene hoy) — mejora progresiva declarada en el código, no un botón fantasma: el target
+    táctil y el texto están, la marcación real llega con el campo de contacto. Reasignar no se
+    wireó a la UI (mismo criterio que resolver/toques: la pantalla sigue sobre el demo local de
+    `semaforo-fixtures.ts` mientras el digest real no exista, AC-FSEM-06/09; acá se prueba el
+    contrato de SERVIDOR contra `review_queue` real). `check.sh --full --app=flota`: gate.sh,
+    lint, types, unit, build, audit y presupuesto verdes; el único rojo de la corrida completa
+    es `e2e/pod-outbox-multiusuario.spec.ts` (AC-FPOD-09, dominio POD/outbox — ajeno a este AC),
+    que corrido solo da 2/2 verde (`npx playwright test e2e/pod-outbox-multiusuario.spec.ts`):
+    misma contaminación de fixtures entre specs al correr la suite completa en orden que ya
+    documentaron AC-FSEM-18/19, reproducible sin ningún cambio de este AC.
 - [ ] (P1) Tarjeta de dominio sin señales activas — CONDICIONADO a la pregunta 8: si el dueño confirma la derivación (§5.5 + precedente SLA-NULL §4.5), un dominio cuyas señales quedan todas apagadas no renderiza tarjeta, sin huecos ni candados fuera del panel admin (e2e con fixture de entitlements); si resuelve otra conducta (p. ej. tarjeta informativa), este AC se reescribe ANTES de implementarse — el gate no congela la conducta mientras la pregunta esté abierta — oráculo: CI [AC-FSEM-21]
 - [ ] (P1) Panel interno SaaS (§10) a nivel de componente/vista contra fixtures de `control` (sin depender de la pregunta 2): EEVD agregada y POR TENANT con tendencia 4 semanas (4 valores semanales por tenant empujados por el exportador desde `eevd_semanal`); embudo de activación p50/p90 alta→primera entrega (métricas 1 y 2 del §2); tenants activos y % de vehículos con turno; calidad de la norte — % paradas sin evidencia y % PODs supersedidos EXCLUYENDO motivo=`undo` (fixture: un supersede con motivo=`undo` NO cuenta, §4.7); los agregados nuevos viajan en el schema fijo del exportador y el centinela 14 sigue verde (cero columnas de dinero/tarifas/clientes); el contador de exenciones de la suite se renderiza con tendencia — su ingesta desde el gate CI (§9.2) queda condicionada a la pregunta 10 — oráculo: CI [AC-FSEM-22]
 - [ ] (P2) Minutos del dueño en el panel ≤5/día (§10) — CONDICIONADO a la pregunta 6: el enum cerrado de `client_metric` (§4.6) no trae tipo de tiempo-en-panel; el AC se activa con el mecanismo que fije la respuesta y se mide con el piloto — oráculo: producción [AC-FSEM-23]

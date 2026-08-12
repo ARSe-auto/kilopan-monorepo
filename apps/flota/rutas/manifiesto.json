@@ -795,6 +795,24 @@
       }
     },
     {
+      "ruta": "/api/semaforo/excepciones/[id]/reasignar",
+      "archivo": "src/app/api/semaforo/excepciones/[id]/reasignar/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "review_queue",
+          "columna": "id"
+        },
+        "nota": "Reasignar la excepción de B desde una sesión de A [AC-FSEM-20]. MUTA `asignado_a` de la cola «Por revisar» del vecino: le cambia el dueño de la excepción a un usuario elegido por A —que ni siquiera es de B—, así que la fila queda con un responsable que la operación de B no reconoce y que nunca la va a atender. Contrato 404 y huella de B intacta (0 filas cambiadas). El fixture del vecino siembra una fila real en `review_queue` — contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin probar nada."
+      }
+    },
+    {
       "ruta": "/api/semaforo/excepciones/[id]/reconocer",
       "archivo": "src/app/api/semaforo/excepciones/[id]/reconocer/route.ts",
       "metodos": [

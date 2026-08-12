@@ -231,6 +231,70 @@ test.describe("contrato de servidor: toques del drill-down contra client_metric 
   });
 });
 
+test.describe("contrato de servidor: reasignar contra review_queue real", () => {
+  // [AC-FSEM-20] — spec 05 §2.3: reasignar transfiere `asignado_a` a otro usuario del
+  // tenant, valida online y rebota (PLANIFICACIÓN §4.2). Mismas tres ramas de rebote que
+  // reconocer/resolver arriba, más la validación propia de esta acción (usuario inexistente).
+  test("[AC-FSEM-20] reasignar una excepción nueva a otro usuario del tenant: 200 y asignado_a actualizado", async () => {
+    const id = await nuevaExcepcion();
+    const r = await pedirA(`/api/semaforo/excepciones/${id}/reasignar`, "POST", duena.secreto, {
+      usuarioId: chofer.usuarioId,
+    });
+    expect(r.status).toBe(200);
+    expect(r.json).toEqual({ id, asignadoA: chofer.usuarioId });
+
+    const [fila] = await sql<{ asignado_a: string }>("select asignado_a::text as asignado_a from review_queue where id = $1", [id]);
+    expect(fila!.asignado_a).toBe(chofer.usuarioId);
+  });
+
+  test("[AC-FSEM-20] reasignar sobre una excepción resuelta ⇒ 422 tipado y 0 filas cambiadas", async () => {
+    const id = await nuevaExcepcion();
+    await reconocer(id);
+    const resuelta = await pedirA(`/api/semaforo/excepciones/${id}/resolver`, "POST", duena.secreto, { nota: "Cerrada." });
+    expect(resuelta.status).toBe(200);
+    const antes = await estadoDe(id);
+
+    const r = await pedirA(`/api/semaforo/excepciones/${id}/reasignar`, "POST", duena.secreto, {
+      usuarioId: chofer.usuarioId,
+    });
+    expect(r.status).toBe(422);
+    expect(r.json.error).toBe("transicion_ilegal");
+    expect(r.json.estadoActual).toBe("resuelta");
+    expect(await estadoDe(id)).toEqual(antes);
+  });
+
+  test("[AC-FSEM-20] reasignar una excepción que no existe ⇒ 404", async () => {
+    const r = await pedirA(
+      "/api/semaforo/excepciones/00000000-0000-4000-8000-000000000000/reasignar",
+      "POST",
+      duena.secreto,
+      { usuarioId: chofer.usuarioId },
+    );
+    expect(r.status).toBe(404);
+  });
+
+  test("[AC-FSEM-20] reasignar a un usuario que no existe ⇒ 422 tipado y 0 filas cambiadas", async () => {
+    const id = await nuevaExcepcion();
+    const antes = await estadoDe(id);
+    const r = await pedirA(`/api/semaforo/excepciones/${id}/reasignar`, "POST", duena.secreto, {
+      usuarioId: "00000000-0000-4000-8000-000000000000",
+    });
+    expect(r.status).toBe(422);
+    expect(r.json.error).toBe("usuario_invalido");
+    expect(await estadoDe(id)).toEqual(antes);
+  });
+
+  test("[AC-FSEM-20] rol distinto de admin_tenant ⇒ 403, y la excepción sigue sin reasignar", async () => {
+    const id = await nuevaExcepcion();
+    const r = await pedirA(`/api/semaforo/excepciones/${id}/reasignar`, "POST", chofer.secreto, {
+      usuarioId: chofer.usuarioId,
+    });
+    expect(r.status).toBe(403);
+    const [fila] = await sql<{ asignado_a: string | null }>("select asignado_a::text as asignado_a from review_queue where id = $1", [id]);
+    expect(fila!.asignado_a).toBeNull();
+  });
+});
+
 test.describe("mecánica de UI: detalle N2 sobre las semillas del Nivel 0", () => {
   test("[AC-FSEM-05] abrir la URL del detalle directo (deep-link) rinde el mismo contenido que llegando desde el peek", async ({
     page,
@@ -305,6 +369,12 @@ test.describe("mecánica de UI: detalle N2 sobre las semillas del Nivel 0", () =
     await expect(page.getByTestId("detalle-n2")).toBeVisible();
     await expect(page.locator('[data-testid="detalle-cabecera"][data-severidad="rojo"]')).toBeVisible();
     expect(toques).toBeLessThanOrEqual(2);
+  });
+
+  test("[AC-FSEM-20] el detalle N2 renderiza la acción «llamar» — aserción de presencia", async ({ page }) => {
+    await page.goto("/hoy/excepciones?id=exc-sync-1&seed=a");
+    await expect(page.getByTestId("detalle-llamar")).toBeVisible();
+    await expect(page.getByTestId("detalle-llamar")).toHaveText("Llamar");
   });
 
   test("[AC-FSEM-05] el bottom-sheet N1 NUNCA renderiza «Resolver» — ni para la fila roja ni para la amarilla", async ({ page }) => {

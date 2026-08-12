@@ -97,6 +97,67 @@ export async function resolverExcepcion(
   );
 }
 
+// Reasignar en el Detalle N2 [AC-FSEM-20] — spec 05 §2.3: «reasignar transfiere `asignado_a`
+// a otro usuario del tenant» (PLANIFICACIÓN §4.2: valida online y rebota).
+//
+// Dos cosas pueden estar mal, y el orden de los rebotes importa: si la excepción no existe
+// (o es de otro tenant — 404 por construcción, `tenant_id = tenant_actual()` en el WHERE), eso
+// manda SIEMPRE, incluso si el `usuarioId` tampoco es válido — el 404 no debe filtrar si el
+// cuerpo del request estaba bien formado. Solo con la excepción presente se distingue
+// `usuario_invalido` de `transicion_ilegal`.
+//
+// El UPDATE no toca `estado`: reasignar es un cambio de DUEÑO, no una transición de ciclo de
+// vida (§4.6). El WHERE lleva `estado <> 'resuelta'` — una excepción cerrada ya no tiene a
+// quién asignarle nada, mismo criterio que «el rojo lo exige» en `resolverExcepcion`: no hay
+// atajo de vuelta a una fila que ya terminó su ciclo.
+//
+// `audit_trail` lo escribe el trigger `review_queue_auditada` (migración 0002) por sí solo —
+// no hace falta un `registrarEvento` acá, mismo criterio que `reconocerExcepcion`.
+export type ResultadoReasignar =
+  | { tipo: "ok"; id: string; asignadoA: string }
+  | { tipo: "no_existe" }
+  | { tipo: "transicion_ilegal"; estadoActual: string }
+  | { tipo: "usuario_invalido" };
+
+export async function reasignarExcepcion(
+  pool: Pool,
+  sesion: Sesion,
+  id: string,
+  usuarioId: string,
+): Promise<ResultadoReasignar> {
+  return enActo(
+    pool,
+    async (c) => {
+      const { rows: usuario } = await c.query(
+        "select 1 from usuarios where id = $1 and tenant_id = tenant_actual() and activo",
+        [usuarioId],
+      );
+      const usuarioValido = usuario.length > 0;
+
+      if (usuarioValido) {
+        const { rows } = await c.query<{ id: string; asignado_a: string }>(
+          `update review_queue
+              set asignado_a = $2
+            where id = $1 and tenant_id = tenant_actual() and estado <> 'resuelta'
+            returning id::text as id, asignado_a::text as asignado_a`,
+          [id, usuarioId],
+        );
+        const fila = rows[0];
+        if (fila) return { tipo: "ok", id: fila.id, asignadoA: fila.asignado_a };
+      }
+
+      const { rows: existente } = await c.query<{ estado: string }>(
+        "select estado::text as estado from review_queue where id = $1 and tenant_id = tenant_actual()",
+        [id],
+      );
+      if (!existente[0]) return { tipo: "no_existe" };
+      if (!usuarioValido) return { tipo: "usuario_invalido" };
+      return { tipo: "transicion_ilegal", estadoActual: existente[0].estado };
+    },
+    sesion,
+  );
+}
+
 // El conteo de toques del drill-down [AC-FSEM-05] — spec 05 §2.3 («rojo→detalle ≤2 toques
 // desde «Hoy»») y §5 («toques del drill-down a `client_metric` tipo `toques_flujo`», §5.3,
 // §4.6). El camino natural desde `hoy/tablero-de-hoy.tsx` es EXACTAMENTE 2: tocar la tarjeta

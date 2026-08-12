@@ -108,6 +108,33 @@ export function DetalleN2Vista({ detalle }: { detalle: DetalleN2 }) {
       </section>
 
       <section data-testid="detalle-acciones" style={{ display: "grid", gap: layout.espacio.entreControles }}>
+        {/* «Llamar» [AC-FSEM-20] — spec 05 §2.3: acción siempre presente en N2, para
+            cualquier estado y severidad — este AC solo exige su PRESENCIA (aserción en el
+            e2e); a diferencia de reconocer/resolver/reasignar, no hay número de teléfono en
+            el modelo de dominio todavía (`FilaPeek`/`DetalleN2` no traen uno: ni personas ni
+            dispositivos exponen un campo de contacto hoy), así que el `tel:` queda vacío a
+            propósito — mejora progresiva (§7.6), no un botón fantasma: el texto y el target
+            táctil están, la marcación real llega con el campo de teléfono. */}
+        <a
+          data-testid="detalle-llamar"
+          href="tel:"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: componente.objetivoTactil.altoMinPx,
+            minWidth: componente.objetivoTactil.anchoMinPx,
+            borderRadius: layout.esquina.control,
+            border: `1px solid ${superficie.hairline}`,
+            color: superficie.texto,
+            textDecoration: "none",
+            fontSize: tipografia.cuerpo.tamano,
+            fontWeight: enfasis.medio,
+          }}
+        >
+          Llamar
+        </a>
+
         {estado === "nueva" ? (
           <button
             type="button"
