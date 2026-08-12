@@ -464,12 +464,24 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       mutante, porque `ruteo` contiene «rut» y el `console.error("ruteo: …")` de `servidor.mjs`
       es sano: un gate que lo marcara sería un gate apagado a la semana — oráculo: CI
       [AC-FIDN-06]
-- [ ] (P1) Dispositivo de andén: enrolado por el admin como activo del tenant (tipo
+- [x] (P1) Dispositivo de andén: enrolado por el admin como activo del tenant (tipo
       `anden`, sin persona dueña); los operarios rotan por PIN; al autenticarse otra
       identidad se purga SOLO el snapshot (re-descargable) y el outbox del usuario
       anterior persiste firmado por el enrolamiento y se replayea al volver la red —
       test centinela 9: A captura 3 mutaciones offline, B se autentica, vuelve la red,
-      count=3 filas de A (§4.3, §4.7, §5.4, §9.3) — oráculo: CI [AC-FIDN-07]
+      count=3 filas de A (§4.3, §4.7, §5.4, §9.3) — oráculo: CI. Evidencia: migración
+      `db/migraciones-flota/tenant/0057_sesiones_de_anden.sql` (tabla `sesiones_anden`,
+      catálogo de gobierno a 20 eventos), la ruta `POST /api/anden/identidad`, la rama de
+      andén en `apps/flota/src/servidor/aprobacion.ts` y
+      `apps/flota/e2e/anden-centinela-9.spec.ts`, verde en aislamiento y dentro de
+      `check.sh --full --app=flota`. El verde completo estaba bloqueado por una colisión
+      ajena a este AC: `entrega-candado-servidor.spec.ts` (AC-FRUT-23) tomaba
+      `Object.keys(VALIDOS)[10]` directo en vez de `rutDeFixture`, el mismo índice que
+      `pod-offline.spec.ts` (AC-FPOD-03) ya tenía asignado — las dos comparten la base
+      `hechos` y ninguna limpia su fixture, así que una corrida completa donde la primera
+      corriera antes rebotaba «duplicate key» en la segunda. Se le dio a
+      `entrega-candado-servidor.spec.ts` su propio RUT (`rutDeFixture(26)`,
+      `15.973.428-5` en la lista congelada), sin tocar el alcance de AC-FRUT-23 [AC-FIDN-07]
 - [x] (P1) Re-enrolamiento como flujo normal: «Ya tengo cuenta» → RUT+PIN → solicitud
       de enrolamiento del teléfono nuevo; la aprobación del dueño revoca el dispositivo
       anterior EN EL MISMO ACTO (transacción única: nuevo activo + anterior con

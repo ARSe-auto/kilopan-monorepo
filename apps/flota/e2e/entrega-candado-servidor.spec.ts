@@ -2,7 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { con, bdDeTenant } from "../../../db/flota/conectar.mjs";
 import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
-import { VALIDOS } from "../../../db/flota/ruts-sinteticos.mjs";
+import { VALIDOS, rutDeFixture } from "../../../db/flota/ruts-sinteticos.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
 
 // El candado del SERVIDOR y el camino feliz completo [AC-FRUT-23] — KR-29 (decisión del dueño
@@ -34,7 +34,7 @@ test.beforeAll(async () => {
   await con(BD_A, async (c: Conexion) => {
     const [p] = await c.sql<{ id: string }>(
       "insert into personas (rut, nombre) values ($1, 'Quien cierra la parada') returning id::text as id",
-      [Object.keys(VALIDOS)[10]!],
+      [rutDeFixture(26)],
     );
     const [u] = await c.sql<{ id: string }>(
       "insert into usuarios (persona_id, rol) values ($1, 'operador') returning id::text as id",
