@@ -59,3 +59,33 @@ test("el color nunca es la única señal: la palabra viaja siempre, no solo el p
   const rotulo = page.locator('[data-testid="tarjeta-hoy"][data-dominio="datos_sync"]').getByTestId("color-tarjeta");
   await expect(rotulo).toContainText("Rojo");
 });
+
+// ─── Contracción sin residuos, tenant C en `mi_flota` [AC-FSEM-13] — spec 05 §2.7 ──────────
+//
+// El AC pide, con estas palabras, «e2e tenant C: 5 tarjetas, cero CLP de tarifas visible,
+// semáforo operativo». Las 5 tarjetas ya las cubre AC-FSEM-01 arriba; lo que suma este test es
+// la parte de la contracción: aunque la tarjeta Caja/custodia/liquidación sigue viva en
+// `mi_flota` (custodia es operativa, no comercial — §2.7 «custodia sigue viva»), CERO cifra en
+// CLP llega a la pantalla — ni de esa tarjeta ni de ninguna otra, porque el módulo entero no
+// tiene una sola columna de dinero (grep-gate de AC-FSEM-09) — y el tablero renderiza operativo
+// de punta a punta, no un estado de error o degradado.
+test("seed C (mi_flota): cero CLP de tarifas visible y el tablero queda operativo [AC-FSEM-13]", async ({ page }) => {
+  await page.goto("/hoy?seed=c");
+
+  const tarjetas = page.getByTestId("tarjeta-hoy");
+  await expect(tarjetas).toHaveCount(5);
+
+  // La tarjeta del dominio contraíble por `liquidacion_por_cliente` sigue renderizando —la
+  // contracción es de LA SEÑAL, no de la tarjeta entera (custodia sigue viva, §2.7)— pero
+  // ningún signo de peso ni cifra CLP aparece en el texto visible de la página entera.
+  const cajaCustodia = page.locator('[data-testid="tarjeta-hoy"][data-dominio="caja_custodia_liquidacion"]');
+  await expect(cajaCustodia).toBeVisible();
+
+  const textoDeLaPagina = await page.locator("body").innerText();
+  expect(textoDeLaPagina, "ninguna cifra en CLP debe llegar a la pantalla del semáforo").not.toMatch(/\$\s?\d/);
+  expect(textoDeLaPagina.toUpperCase()).not.toContain("CLP");
+
+  // «Semáforo operativo»: sin banner de error ni estado degradado — el tablero real, no una
+  // pantalla de falla disfrazada de vacío.
+  await expect(page.getByTestId("error-hoy")).toHaveCount(0);
+});

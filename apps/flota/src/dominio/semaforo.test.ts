@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { tarjetasNivelCero, DOMINIOS_FIJOS, TARJETA_SLA, type EstadoDominio } from "./semaforo.ts";
+import {
+  tarjetasNivelCero,
+  dominioSemaforoActivo,
+  DOMINIOS_FIJOS,
+  TARJETA_SLA,
+  type EstadoDominio,
+} from "./semaforo.ts";
 import { SEMAFORO } from "../../../../packages/nucleo-comun/src/constants.ts";
 import { seedA, seedC } from "./semaforo-fixtures.ts";
 
@@ -92,4 +98,36 @@ test("seed C: la tarjeta Flota/energía EV en rojo cuenta su única excepción",
 test("el orden de las tarjetas sigue SIEMPRE el orden canónico del Anexo B, con la SLA al final", () => {
   const claves = tarjetasNivelCero(seedA()).map((t) => t.clave);
   assert.deepEqual(claves, [...DOMINIOS_FIJOS.map((d) => d.clave), TARJETA_SLA.clave]);
+});
+
+// ─── Contracción por feature (§2.7) [AC-FSEM-13] ─────────────────────────────────────────
+
+test("caja_custodia_liquidacion evalúa cuando la config congelada trae liquidacion_por_cliente=true", () => {
+  assert.equal(
+    dominioSemaforoActivo("caja_custodia_liquidacion", { liquidacion_por_cliente: true }),
+    true,
+  );
+});
+
+test("caja_custodia_liquidacion deja de evaluar cuando la config congelada apaga liquidacion_por_cliente", () => {
+  assert.equal(
+    dominioSemaforoActivo("caja_custodia_liquidacion", { liquidacion_por_cliente: false }),
+    false,
+  );
+});
+
+test("sin la feature en el snapshot, caja_custodia_liquidacion cuenta como apagada — no encendida por defecto", () => {
+  assert.equal(dominioSemaforoActivo("caja_custodia_liquidacion", {}), false);
+});
+
+test("los otros 5 dominios del Anexo B jamás se contraen por esta feature, con cualquier snapshot", () => {
+  for (const { clave } of DOMINIOS_FIJOS) {
+    if (clave === "caja_custodia_liquidacion") continue;
+    assert.equal(
+      dominioSemaforoActivo(clave, { liquidacion_por_cliente: false }),
+      true,
+      `${clave} no debe contraerse por liquidacion_por_cliente`,
+    );
+  }
+  assert.equal(dominioSemaforoActivo(TARJETA_SLA.clave, { liquidacion_por_cliente: false }), true);
 });

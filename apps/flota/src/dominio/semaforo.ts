@@ -110,3 +110,38 @@ export function tarjetasNivelCero(estados: EstadoDominio[]): TarjetaHoy[] {
   }
   return tarjetas;
 }
+
+// ─── Contracción por feature (§2.7) [AC-FSEM-13] ─────────────────────────────────────────
+//
+// «Apagar el feature de liquidación ⇒ sus `signal_rule` dejan de evaluar en el próximo
+// bootstrap». Esta mitad TS espeja `dominio_semaforo_activo` (tenant/0060): un evaluador de
+// dominio (AC-FSEM-16..19, todavía sin construir) llamaría a esta función ANTES de leer sus
+// `signal_rule`, con el snapshot de entitlements YA CONGELADO del turno — jamás una lectura en
+// caliente de `control` (§4.4 Pregunta 4) — así que apagar el feature a mitad de turno no
+// cambia nada hasta el próximo bootstrap: el snapshot que trae este argumento es el mismo con
+// el que arrancó el turno.
+
+/** El feature (Anexo A) que gatea la evaluación de cada dominio contraíble. Un dominio sin
+ *  entrada acá jamás se contrae por feature — la SLA se contrae por su propia regla de NULL
+ *  en `otd_comprometido_pct` (§4.5), no por esta tabla. El único del Anexo B con esta gatilla
+ *  en E1 es Caja/custodia/liquidación. */
+export const FEATURE_QUE_CONTRAE_DOMINIO: Partial<Record<ClaveDominio, string>> = {
+  caja_custodia_liquidacion: "liquidacion_por_cliente",
+};
+
+/**
+ * ¿Este dominio evalúa, dada la config CONGELADA del turno?
+ *
+ * `entitlements` es el snapshot YA sellado (`config_version.snapshot.entitlements`), nunca una
+ * lectura en caliente. Sin entrada para el feature (`undefined`) cuenta como APAGADA — mismo
+ * criterio que `entitlementVigente` (servidor/config.ts): encender por defecto algo que nadie
+ * decidió es el rebote equivocado, no la lectura segura.
+ */
+export function dominioSemaforoActivo(
+  clave: ClaveDominio,
+  entitlements: Readonly<Record<string, boolean>>,
+): boolean {
+  const feature = FEATURE_QUE_CONTRAE_DOMINIO[clave];
+  if (!feature) return true;
+  return entitlements[feature] === true;
+}
