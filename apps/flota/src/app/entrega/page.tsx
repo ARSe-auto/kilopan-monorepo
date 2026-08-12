@@ -14,7 +14,7 @@ import {
   type CandadoDeEntrega,
   type EmpresaDeLaEntrega,
 } from "../../dominio/candado-entrega.ts";
-import TarjetaDeEntrega from "./tarjeta-de-entrega.tsx";
+import Estados4Parada from "./estados-4-parada.tsx";
 
 // La envoltura de servidor de la tarjeta de entrega [AC-FRUT-22, AC-FPOD-01] — §0 (contrato
 // HTTP), §5.2 F4, §7.2, §9.3.2 (centinela 2).
@@ -206,7 +206,7 @@ export default async function Page({
   }));
 
   return (
-    <TarjetaDeEntrega
+    <Estados4Parada
       candados={candados}
       secuencia={secuencia}
       indice={secuencia.findIndex((p) => p.id === pedida)}
