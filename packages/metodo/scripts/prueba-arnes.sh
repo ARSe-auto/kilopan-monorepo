@@ -400,6 +400,38 @@ grep -q "AC-ABIERTO:" "$M/loop.sh" \
   || no "loop.sh no le pide la declaración: el watchdog espera una línea que nadie escribe y todo sigue pausando"
 
 echo
+echo "== 3b-d3. Un servidor zombi en el puerto NO es un AC roto (12-ago-2026) =="
+# BUG REAL: una corrida anterior murió sin bajar su servidor y dejó el 3311 tomado.
+# Playwright aborta con «is already used» y eso llega al resumen como un rojo pelado de
+# «e2e móvil», indistinguible de una prueba que falla. El motor pausó sobre AC-FSEM-16 y el
+# diagnóstico apuntaba al AC, que estaba bien. Se ejerce con un socket DE VERDAD: creerle a
+# un grep sobre check.sh sería probar que el texto existe, no que la detección funciona.
+PET="$M/puerto-e2e-tomado.sh"
+PUERTO_LIBRE=$(node -e 'const n=require("net").createServer();n.listen(0,()=>{console.log(n.address().port);n.close();});')
+bash "$PET" "--puerto=$PUERTO_LIBRE" >/dev/null 2>&1 \
+  && ok "un puerto libre se reporta libre (no es un alarmista que grita siempre)" \
+  || no "reporta tomado un puerto que nadie usa: el aviso perdería todo su valor"
+
+# Se abre el puerto y se comprueba que lo VEA. El listener se baja al terminar.
+node -e '
+  const net = require("net");
+  const s = net.createServer();
+  s.listen(Number(process.argv[1]), () => setTimeout(() => s.close(), 8000));
+' "$PUERTO_LIBRE" &
+PID_LISTENER=$!
+sleep 1
+SALIDA_PET="$(bash "$PET" "--puerto=$PUERTO_LIBRE" 2>&1 || true)"
+case "$SALIDA_PET" in
+  *"YA ESTÁ TOMADO"*) ok "con el puerto ocupado lo DETECTA y lo dice (el rojo deja de parecer del AC)" ;;
+  *)                  no "no detecta un puerto ocupado: el zombi seguiría disfrazado de prueba rota" ;;
+esac
+case "$SALIDA_PET" in
+  *"NO es el AC"*) ok "el aviso nombra la conclusión que importa: no es el AC, es el puerto" ;;
+  *)               no "el aviso no dice que el AC está sano: quien lo lea va a revisar el lugar equivocado" ;;
+esac
+wait "$PID_LISTENER" 2>/dev/null || true
+
+echo
 echo "== 3b-e. Un AC atascado no pausa el motor entero (3-ago-2026) =="
 # BUG REAL: KILOPAN_MAX_FALLOS_AC y MAX_SIN_AVANCE valen 3 los dos, y siguiente_ac()
 # reelige el MISMO AC hasta que queda atascado — sus 3 fallos consecutivos eran SIEMPRE

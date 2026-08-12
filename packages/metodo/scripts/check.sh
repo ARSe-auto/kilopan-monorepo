@@ -207,6 +207,17 @@ if [ "$FULL" -eq 1 ]; then
       echo "  esperando el puerto 3301 (otro gate lo tiene)…"
       sleep 15
     done
+    # UN SERVIDOR ZOMBI NO ES UN AC ROTO (bug real, 12-ago-2026). Una corrida anterior que
+    # muere sin bajar su servidor deja el puerto tomado, y Playwright —que no usa
+    # `reuseExistingServer`— aborta con «is already used». Eso llega acá como un rojo pelado
+    # de «e2e móvil», indistinguible de una prueba que falla: el motor pausó por esto sobre
+    # AC-FSEM-16, y el diagnóstico apuntaba al AC en vez de al puerto. Mientras el zombi
+    # viva, TODO gate completo sale rojo, así que el arreglo no es reintentar: es decirlo.
+    # No se mata solo a propósito — matar procesos que este gate no arrancó es exactamente
+    # como se pierde el trabajo de una sesión vecina (§ una sesión, un proyecto).
+    # El veredicto vive en su propio guion para que prueba-arnes.sh lo ejerza abriendo un
+    # socket de verdad, en vez de creerle a un grep sobre este archivo.
+    bash packages/metodo/scripts/puerto-e2e-tomado.sh "--app=$APP" 2>&1 | sed 's/^/  /' || true
     run_step "e2e móvil 390x844" pnpm --filter "$APP" run e2e
     [ "$lock_e2e" = "si" ] && bash packages/metodo/scripts/lock.sh soltar "e2e-$APP" $$ >/dev/null 2>&1
   else
