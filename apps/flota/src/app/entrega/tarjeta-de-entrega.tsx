@@ -195,6 +195,10 @@ export default function TarjetaDeEntrega({
   //
   // El tercer disparo es que la cola CREZCA: una captura cuya ventana de undo venció con señal
   // no tiene por qué esperar a que la red se caiga y vuelva para salir.
+  /** La identidad DUEÑA de la cola en memoria: se resuelve una vez y con ella se lee, se
+   *  escribe y ahora también se FIRMA la partición. Declarada acá arriba —y no junto al
+   *  efecto que la resuelve— porque el replay de abajo la necesita [AC-FPOD-09]. */
+  const [identidad, setIdentidad] = useState<Identidad | null>(null);
   const replayando = useRef(false);
   useEffect(() => {
     let vivo = true;
@@ -205,8 +209,23 @@ export default function TarjetaDeEntrega({
       if (replayando.current || recorrido.cola.length === 0) return;
       replayando.current = true;
       try {
-        const confirmadas = await replayar(recorrido.cola, (cuerpo) =>
-          pedir("/api/sync/capturas", { method: "POST", body: cuerpo }),
+        // LA COLA VIAJA FIRMADA POR SU DUEÑA, SIEMPRE [AC-FPOD-09] — §4.7, centinela 9.
+        //
+        // Antes acá iba `null`, apoyado en que «quien transmite es quien capturó». Esa suposición
+        // es falsa exactamente en el caso que el centinela 9 protege: si otra identidad se
+        // autentica en este aparato mientras esta pantalla vive, la cola EN MEMORIA sigue siendo
+        // de la anterior —se cargó con `identidad`, la de la línea de arriba— pero la sesión HTTP
+        // ya es de la nueva. Con `null`, el servidor firma con la sesión que transmite y las
+        // entregas de A terminan en la planilla de B.
+        //
+        // Se manda la huella de la identidad DUEÑA DE ESTA COLA, no la activa del aparato: mandar
+        // la activa sería el mismo error al revés. En el camino normal las dos coinciden y el
+        // servidor resuelve al mismo dispositivo, así que no cambia nada; en el caso de la
+        // rotación, es lo único que devuelve cada hecho a quien lo hizo.
+        const confirmadas = await replayar(
+          recorrido.cola,
+          (cuerpo) => pedir("/api/sync/capturas", { method: "POST", body: cuerpo }),
+          identidad?.usuario ?? null,
         );
         // Cero rechazo a la vista (§5.7): un lote que no llegó devuelve cero acuses, la cola
         // queda igual y el chofer sigue viendo su contador. No hay error que mostrarle porque no
@@ -223,8 +242,9 @@ export default function TarjetaDeEntrega({
       window.removeEventListener("online", vaciar);
     };
     // `recorrido.cola` entera y no solo su largo: sacar dos y capturar una deja el largo igual y
-    // la cola distinta, y ese lote nuevo también tiene que salir.
-  }, [recorrido.cola]);
+    // la cola distinta, y ese lote nuevo también tiene que salir. Y `identidad`, porque es la
+    // firma con la que sale el lote: un replay disparado antes de resolverla iría sin ella.
+  }, [recorrido.cola, identidad]);
 
   // La ventana de undo: ocho segundos en los que el toque todavía no es un hecho. Vencida, la
   // captura pasa a la cola que el motor de sync replayea (AC-FPOD-03/04). El plazo sale de
@@ -262,7 +282,6 @@ export default function TarjetaDeEntrega({
   // el caso que el §5.7 excluye del estado de error («las capturas jamás muestran rechazo»): acá
   // no hay ninguna captura que el servidor haya rechazado, es el APARATO el que no pudo
   // prepararse para capturar, y de eso sí hay que avisar con una salida real.
-  const [identidad, setIdentidad] = useState<Identidad | null>(null);
   const [errorAparato, setErrorAparato] = useState(false);
   const [intentoAparato, setIntentoAparato] = useState(0);
   useEffect(() => {
