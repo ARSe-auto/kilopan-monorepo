@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
-import { guardia, inventarioDeDispositivos } from "../../../../servidor/gobierno.ts";
+import { guardia, enActo, inventarioDeDispositivos } from "../../../../servidor/gobierno.ts";
+import { enrolarAnden } from "../../../../servidor/anden.ts";
 
 // Inventario VIVO de dispositivos [AC-FIDN-12] — §5.4.
 //
@@ -18,4 +19,25 @@ export async function GET() {
   const g = await guardia(await headers());
   if (g.tipo === "rebote") return g.respuesta;
   return Response.json({ dispositivos: await inventarioDeDispositivos(g.acto.pool) });
+}
+
+// Enrolar el dispositivo de ANDÉN [AC-FIDN-07] — §4.3, §5.4 F-D.
+//
+// Es del dueño y de nadie más: el aparato compartido queda enrolado como activo del tenant, sin
+// persona dueña, y por él van a pasar todos los operarios del turno. Va en la misma ruta que el
+// inventario porque es la misma pantalla del §5.4 —el dueño lo instala y lo ve aparecer en la
+// lista— y porque su cruce de tenant ya está declarado ahí.
+//
+// EL SECRETO SE DEVUELVE UNA VEZ Y NO SE PUEDE VOLVER A PEDIR: en la base queda solo su hash
+// (§4.3). El dueño tiene el aparato delante mientras lo instala, que es el único momento en que
+// hay dónde ponerlo.
+export async function POST() {
+  const g = await guardia(await headers());
+  if (g.tipo === "rebote") return g.respuesta;
+  const enrolado = await enActo(
+    g.acto.pool,
+    (c) => enrolarAnden(c, { sesion: g.acto.sesion }),
+    g.acto.sesion,
+  );
+  return Response.json(enrolado, { status: 201 });
 }

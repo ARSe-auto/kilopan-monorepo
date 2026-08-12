@@ -150,6 +150,32 @@ export async function leerSecreto(): Promise<string | null> {
   return guardado ?? null;
 }
 
+// ─── La identidad rotatoria del ANDÉN [AC-FIDN-07] — §5.4 F-D, §4.7 ───────────────────
+//
+// En el teléfono personal la partición del outbox sale del secreto (`cliente/identidad.ts`):
+// autenticarse otra identidad es un `guardarSecreto` nuevo, así que la llave cambia sola. En el
+// ANDÉN no: el secreto es del APARATO y no se mueve cuando los operarios rotan por PIN. Sin esta
+// huella, las capturas de A y las de B compartirían llave —y el §4.7 dice lo contrario con todas
+// las letras—, así que al volver la red las tres entregas de A saldrían a nombre de B.
+//
+// La emite el servidor al rotar (`/api/anden/identidad`) y NO es una credencial: con ella no se
+// entra a ningún lado; el request se sigue autenticando con el secreto del aparato. Por eso puede
+// vivir acá al lado sin ser un segundo secreto que proteger.
+
+const IDENTIDAD_ANDEN = "identidad-de-anden";
+
+export async function guardarIdentidadAnden(huella: string): Promise<void> {
+  await transaccion("readwrite", (almacen) => almacen.put(huella, IDENTIDAD_ANDEN));
+}
+
+/** La huella del operario activo en este andén, o null si el aparato es personal (o nadie rotó). */
+export async function leerIdentidadAnden(): Promise<string | null> {
+  const guardada = await transaccion<string | undefined>("readonly", (almacen) =>
+    almacen.get(IDENTIDAD_ANDEN),
+  );
+  return guardada ?? null;
+}
+
 /**
  * `fetch` con la credencial del aparato. La sesión ES el aparato (AC-FIDN-09), así que esto es
  * todo lo que hay: sin cookie, sin refresh, sin nada que renovar.

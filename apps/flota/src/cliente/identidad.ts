@@ -1,4 +1,4 @@
-import { leerSecreto } from "./aparato.ts";
+import { leerSecreto, leerIdentidadAnden } from "./aparato.ts";
 import type { Identidad } from "./outbox-local.ts";
 
 export type { Identidad } from "./outbox-local.ts";
@@ -48,6 +48,16 @@ async function huellaDeSecreto(secreto: string): Promise<string> {
  *  a la misma partición, y un secreto distinto —la marca de que «otra identidad se autenticó en
  *  el mismo dispositivo» del §4.7— siempre hashea a otra. */
 export async function identidadDelAparato(): Promise<Identidad | null> {
+  // EL ANDÉN MANDA CUANDO ESTÁ [AC-FIDN-07] — §5.4 F-D, §4.7. Su secreto es del APARATO y no se
+  // mueve cuando los operarios rotan por PIN, así que hashearlo daría UNA sola partición para
+  // todos los que pasen por esa mesa: las tres capturas de A y la de B bajo la misma llave, y al
+  // sincronizar todas a nombre de quien esté autenticado. La huella que el servidor emite al
+  // rotar es por PAREJA (aparato, operario), y es lo que hace que rotar purgue el snapshot y NADA
+  // más. Se lee sin red, igual que la otra: la partición tiene que existir en el mismo gesto en
+  // que se guarda una captura en un galpón sin señal.
+  const anden = await leerIdentidadAnden();
+  if (anden !== null) return { tenant: tenantDelOrigen(), usuario: anden };
+
   const secreto = await leerSecreto();
   if (secreto === null) return null;
   return { tenant: tenantDelOrigen(), usuario: await huellaDeSecreto(secreto) };

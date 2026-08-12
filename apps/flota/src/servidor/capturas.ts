@@ -217,7 +217,13 @@ async function firmaDelEnrolamiento(
     [enrolamiento],
   );
   const firma = rows[0];
-  if (!firma) return sesion;
+  // NINGÚN aparato personal tiene ese secreto: puede ser la huella de un operario en un
+  // dispositivo de ANDÉN [AC-FIDN-07] — §4.7, centinela 9. Ahí la partición del outbox no puede
+  // ser el hash del secreto, porque el secreto es del aparato y no cambia cuando los operarios
+  // rotan por PIN: las tres entregas de A y la de B compartirían llave y quedarían todas a
+  // nombre de quien estuviera autenticado al sincronizar. `sesiones_anden.huella` es la llave
+  // por PAREJA (aparato, operario), y es lo que devuelve a A su entrega.
+  if (!firma) return await firmaDeAnden(c, enrolamiento, sesion);
   return {
     ...sesion,
     dispositivoId: firma.dispositivo_id,
@@ -225,6 +231,25 @@ async function firmaDelEnrolamiento(
     // actor sigue siendo quien lo sincronizó, que es la única identidad humana que hubo.
     usuarioId: firma.usuario_id ?? sesion.usuarioId,
   };
+}
+
+/**
+ * La otra clase de huella: la de un operario en un dispositivo de andén [AC-FIDN-07] — §5.4 F-D.
+ *
+ * Resuelve a la PAREJA (aparato, operario) aunque esa identidad ya esté cerrada —el operario se
+ * fue del andén hace horas y su outbox recién sale ahora—, que es el caso entero del centinela 9.
+ * Igual que la otra: no autentica nada, y una huella que esta base no conoce cae a la sesión que
+ * transmite en vez de rebotar (§4.2).
+ */
+async function firmaDeAnden(c: PoolClient, huella: string, sesion: Sesion): Promise<Sesion> {
+  const { rows } = await c.query<{ dispositivo_id: string; usuario_id: string }>(
+    `select s.dispositivo_id::text as dispositivo_id, s.usuario_id::text as usuario_id
+       from sesiones_anden s where s.huella = $1`,
+    [huella],
+  );
+  const firma = rows[0];
+  if (!firma) return sesion;
+  return { ...sesion, dispositivoId: firma.dispositivo_id, usuarioId: firma.usuario_id };
 }
 
 /** Deja dicho que la captura entró degradada: un evento y una fila de «Por revisar» POR FLAG

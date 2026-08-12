@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
 import { hashDeSecreto } from "../dominio/secretos.ts";
+import { vencioPorInactividad } from "../dominio/anden.ts";
 
 // La sesión de FLOTA [AC-FIDN-09] — §4.3, §5.4, y la respuesta del dueño a la pregunta 1
 // (09-ago-2026): en el teléfono personal la sesión dura mientras el dispositivo siga enrolado
@@ -50,7 +51,11 @@ export type VeredictoSesion =
       sesion: Sesion;
       revocadoEn: Date;
     }
-  | { tipo: "invalida"; motivo: "sin_credencial" | "desconocida" | "usuario_inactivo" };
+  // El aparato de andén existe y está sano, pero nadie tipeó su PIN todavía —o la identidad
+  // anterior se venció por inactividad (§0 `SESION.anden_inactividad_minutos`) [AC-FIDN-07]. Es
+  // un motivo propio y no un "desconocida" porque acá SÍ hay a quién decírselo: la pantalla del
+  // andén pide el PIN, que es exactamente la salida (§5.4 F-D).
+  | { tipo: "invalida"; motivo: "sin_credencial" | "desconocida" | "usuario_inactivo" | "anden_sin_identidad" };
 
 /** `Authorization: Portador <secreto>` → el secreto, o null. */
 export function secretoDe(cabecera: string | null | undefined): string | null {
@@ -70,6 +75,7 @@ export async function resolverSesion(pool: Pool, cabecera: string | null): Promi
 
   const { rows } = await pool.query<{
     dispositivo_id: string;
+    tipo: string;
     persona_id: string;
     usuario_id: string | null;
     rol: string | null;
@@ -80,6 +86,7 @@ export async function resolverSesion(pool: Pool, cabecera: string | null): Promi
     empresa_cliente_id: string | null;
   }>(
     `select d.id::text  as dispositivo_id,
+            d.tipo::text as tipo,
             d.persona_id::text as persona_id,
             u.id::text  as usuario_id,
             u.rol::text as rol,
@@ -120,6 +127,28 @@ export async function resolverSesion(pool: Pool, cabecera: string | null): Promi
       },
     };
   }
+  // EL ANDÉN [AC-FIDN-07] — §4.3, §5.4 F-D. Su secreto identifica al APARATO y a nadie más: es
+  // un activo del tenant y `dispositivos.persona_id` es null por CHECK, así que el join de
+  // arriba no encuentra usuario y sin esta rama el andén no tendría sesión posible. Quién
+  // trabaja ahí ahora sale de `sesiones_anden`, que es lo que el PIN establece y lo que la
+  // inactividad cierra.
+  if (fila.tipo === "anden") {
+    const identidad = await identidadDeAnden(pool, fila.dispositivo_id);
+    if (!identidad) return { tipo: "invalida", motivo: "anden_sin_identidad" };
+    return {
+      tipo: "valida",
+      sesion: {
+        dispositivoId: fila.dispositivo_id,
+        personaId: identidad.personaId,
+        usuarioId: identidad.usuarioId,
+        rol: identidad.rol,
+        isStandalone: fila.is_standalone,
+        storagePersisted: fila.storage_persisted,
+        empresaClienteId: identidad.empresaClienteId,
+      },
+    };
+  }
+
   // La anonimización de la 21.719 desactiva al usuario (AC-FIDN-19); un aparato que sobreviva
   // a eso no puede seguir teniendo sesión.
   if (!fila.usuario_id || fila.activo !== true) return { tipo: "invalida", motivo: "usuario_inactivo" };
@@ -135,6 +164,66 @@ export async function resolverSesion(pool: Pool, cabecera: string | null): Promi
       storagePersisted: fila.storage_persisted,
       empresaClienteId: fila.empresa_cliente_id,
     },
+  };
+}
+
+export type IdentidadDeAnden = {
+  usuarioId: string;
+  personaId: string;
+  rol: string;
+  empresaClienteId: string | null;
+};
+
+/**
+ * Quién está trabajando ahora en este aparato de andén [AC-FIDN-07] — §5.4 F-D, §0 (`SESION`).
+ *
+ * Vive acá y no en `servidor/anden.ts` porque es parte de responder «¿hay sesión?», la pregunta
+ * que cada request se hace; aquel archivo importa `gobierno.ts`, que importa este, y traerlo
+ * cerraría un ciclo por nada.
+ *
+ * LA INACTIVIDAD SE EVALÚA EN EL SERVIDOR Y CON LA CONSTANTE DEL §0, no con un intervalo escrito
+ * en el SQL: el número es canónico y una segunda copia es lo que el gate de constantes impide.
+ * La vencida se CIERRA, no se ignora — la auditoría del §3.E1.15 tiene que poder decir cuándo
+ * terminó el turno de cada quien en el aparato compartido.
+ *
+ * Y `ultimo_uso_en` se mueve en cada request: un andén que pregunta está en uso. Sin eso, los
+ * tres minutos del §0 se contarían desde que la persona tipeó el PIN y no desde que dejó de
+ * trabajar, y el aparato la echaría a mitad de la carga.
+ */
+export async function identidadDeAnden(
+  pool: Pool,
+  dispositivoId: string,
+  ahora: Date = new Date(),
+): Promise<IdentidadDeAnden | null> {
+  const { rows } = await pool.query<{
+    id: string;
+    usuario_id: string;
+    persona_id: string;
+    rol: string;
+    empresa_cliente_id: string | null;
+    ultimo_uso_en: Date;
+  }>(
+    `select s.id::text as id, s.usuario_id::text as usuario_id, u.persona_id::text as persona_id,
+            u.rol::text as rol, u.empresa_cliente_id::text as empresa_cliente_id, s.ultimo_uso_en
+       from sesiones_anden s
+       join usuarios u on u.id = s.usuario_id and u.activo
+      where s.dispositivo_id = $1 and s.cerrada_en is null`,
+    [dispositivoId],
+  );
+  const abierta = rows[0];
+  if (!abierta) return null;
+
+  if (vencioPorInactividad(abierta.ultimo_uso_en, ahora)) {
+    await pool.query("update sesiones_anden set cerrada_en = now() where id = $1", [abierta.id]);
+    return null;
+  }
+
+  await pool.query("update sesiones_anden set ultimo_uso_en = now() where id = $1", [abierta.id]);
+  return {
+    usuarioId: abierta.usuario_id,
+    personaId: abierta.persona_id,
+    rol: abierta.rol,
+    empresaClienteId: abierta.empresa_cliente_id,
   };
 }
 

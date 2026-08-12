@@ -53,6 +53,9 @@ export const EVENTOS = {
   solicitud_aprobada: "gobierno.solicitud_aprobada",
   solicitud_rechazada: "gobierno.solicitud_rechazada",
   dispositivo_revocado: "gobierno.dispositivo_revocado",
+  /** El andén se enrola sin persona dueña y es un activo del TENANT (§5.4 F-D) [AC-FIDN-07]:
+   *  darlo de alta es un acto del dueño y por eso su evento es `gobierno.*`. */
+  anden_enrolado: "gobierno.anden_enrolado",
   puente_emitido: "gobierno.puente_emitido",
   pin_definido: "gobierno.pin_definido",
   usuario_desbloqueado: "gobierno.usuario_desbloqueado",
@@ -77,6 +80,10 @@ export const EVENTOS = {
  *  de accesos del §3.E1.15 filtra por ese prefijo, y un turno por vehículo y por día ahogaría
  *  los actos del dueño bajo el ruido de la operación. */
 export const EVENTOS_OPERACION = {
+  /** La rotación del andén es del TERRENO y no del dueño [AC-FIDN-07]: pasa varias veces por
+   *  turno y con el prefijo `gobierno.` ahogaría los actos del dueño en la auditoría del
+   *  §3.E1.15, que es exactamente lo que el comentario de arriba evita. */
+  anden_identidad_rotada: "anden.identidad_rotada",
   turno_abierto: "turno.abierto",
   lectura_registrada: "lectura.registrada",
   lectura_soc_fuera_de_rango: "lectura.soc_fuera_de_rango",
