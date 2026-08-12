@@ -393,7 +393,27 @@ activa SOLO `admin_tenant`: mientras la pregunta 1 esté abierta, `operador` y
     `agregados_tecnicos` no las computa ni las tiene como columna (gap real, no inventado);
     la vista las degrada como «pendiente», mismo tratamiento que `eevd_semanal` antes de su hito
     (AC-FTEN-04). `bash packages/metodo/scripts/check.sh --full --app=flota` verde.
-- [ ] (P1) Señales cross-tenant con fixtures en `control`: tenant sin eventos un día hábil ⇒ rojo; actividad −30% vs media 7d ⇒ amarillo; errores de sync en 5% exacto ⇒ amarillo (5% cae dentro de la banda seed «1–5%» cualquiera sea su punto y no supera el rojo «>5%» — robusto a la pregunta 5a) y errores >5% sostenidos 15 min ⇒ rojo; >20% dispositivos en PWA vieja ⇒ amarillo; cola de sync >4 h ⇒ rojo; la señal «backlog creciente 2 intervalos» ⇒ amarillo queda CONDICIONADA a la pregunta 3 (sin cadencia del exportador, «intervalo» no tiene semántica cerrada — mismo tratamiento que la señal de ETA en AC-FSEM-19); canario de aislamiento en fallo ⇒ rojo máximo que NO se degrada por histéresis ni por edición de umbral (test que intenta ambas); alarma churn EEVD −30% semana/semana dispara sobre la EEVD agregada — oráculo: CI [AC-FSEM-11]
+- [x] (P1) Señales cross-tenant con fixtures en `control`: tenant sin eventos un día hábil ⇒ rojo; actividad −30% vs media 7d ⇒ amarillo; errores de sync en 5% exacto ⇒ amarillo (5% cae dentro de la banda seed «1–5%» cualquiera sea su punto y no supera el rojo «>5%» — robusto a la pregunta 5a) y errores >5% sostenidos 15 min ⇒ rojo; >20% dispositivos en PWA vieja ⇒ amarillo; cola de sync >4 h ⇒ rojo; la señal «backlog creciente 2 intervalos» ⇒ amarillo queda CONDICIONADA a la pregunta 3 (sin cadencia del exportador, «intervalo» no tiene semántica cerrada — mismo tratamiento que la señal de ETA en AC-FSEM-19); canario de aislamiento en fallo ⇒ rojo máximo que NO se degrada por histéresis ni por edición de umbral (test que intenta ambas); alarma churn EEVD −30% semana/semana dispara sobre la EEVD agregada — oráculo: CI [AC-FSEM-11]
+  - Probado: `dominio/semaforo-cross-tenant.test.ts` (18/18) contra `dominio/semaforo-cross-tenant.ts`,
+    función pura `evaluarSenalesCrossTenant` — sin migración nueva ni conexión a `control`, mismo
+    criterio que AC-FSEM-07/08 (el wiring del job exportador/endpoint real queda para un AC
+    posterior). Las cinco binarias del Anexo B (sin eventos, actividad −30%, PWA vieja >20%,
+    cola de sync >4 h, churn EEVD −30%) son umbral simple, sin banda vecina, mismo tratamiento
+    que «turno cruzando medianoche» en AC-FSEM-08; los fixtures de banda usan valores robustos a
+    la pregunta 5a (35% de caída de actividad, 6,2% de errores, 260 min de cola), igual criterio
+    que AC-FSEM-07/08/19. Errores de sync es la única señal con histéresis real
+    (`colorErroresSync`, zona intermedia sticky igual que `transicionColor` de AC-FSEM-02), y el
+    AC exige además que el 5% exacto NO escale sola: el rojo exige `pct > umbral_rojo` **y**
+    `sostenido15Min` a la vez (hecho aparte que ya llega resuelto, no una serie temporal que esta
+    función calcule) — probado con 5% exacto (queda amarillo), 6,2% sin sostener (queda
+    amarillo) y 6,2% sostenido (rojo). El canario de aislamiento (`evaluarCanarioAislamiento`) es
+    la excepción a toda la mecánica: no recibe `colorPrevio` ni `UmbralesCrossTenant` — no hay
+    parámetro que un caller pudiera manipular para apagarlo — y dos tests lo prueban en fallo
+    combinado con hechos en verde y con umbrales artificialmente permisivos (100.000), ambos
+    rojo. «Backlog creciente 2 intervalos» no se implementa (CONDICIONADA a la pregunta 3,
+    documentado en el comentario de cabecera del archivo y en un test que confirma que el campo
+    no existe en `HechosCrossTenant`). `bash packages/metodo/scripts/check.sh --full --app=flota`
+    verde.
 - [ ] (P1) AA y estados de pantalla: ningún estado del semáforo comunicado solo por color (texto/ícono siempre, verificable apagando CSS de color); contraste ≥7:1 en indicadores semafóricos y cifra operativa en tema claro Y oscuro (axe/Lighthouse en gate); los 4 estados obligatorios de «Hoy» (vacío accionable con CTA, skeleton <50 ms, error es-CL con recuperación, sin conexión con contador real); snapshot 375px con términos del tenant B al máximo largo sin truncar cifras; la e2e del módulo corre DOS veces (terminología base y extrema) sin cambiar un selector (data-testid/term_key) — oráculo: CI [AC-FSEM-12]
 - [ ] (P1) Contracción sin residuos: apagar el feature de liquidación ⇒ sus `signal_rule` dejan de evaluar en el próximo bootstrap (el turno abierto termina con su config congelada, `turno.config_version_id`) y no nacen excepciones nuevas de ese origen; e2e tenant C: 5 tarjetas, cero CLP de tarifas visible, semáforo operativo; conmutar `mi_flota→daas→mi_flota` conserva todas las filas de `signal_rule` y `review_queue` (centinela 11 aplicado al módulo); la conducta «dominio sin ninguna señal activa no renderiza tarjeta» NO se asevera aquí — está pendiente de la pregunta 8 y vive en AC-FSEM-21 — oráculo: CI [AC-FSEM-13]
 - [ ] (P2) Telemetría del módulo en producción con el piloto: digest del semáforo emitido a telemetría de producto; métrica de cola al cierre del día tendiendo a cero visible en el panel §10 (la medición de minutos del dueño vive en AC-FSEM-23, condicionada a la pregunta 6 — este AC queda completable con el piloto) — oráculo: producción [AC-FSEM-14]

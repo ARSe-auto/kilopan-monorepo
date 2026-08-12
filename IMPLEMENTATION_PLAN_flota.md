@@ -231,7 +231,14 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
     regla estática nueva `plano-eauto-sin-bd-de-tenant` (alcance acotado, `gate-reglas-
     estaticas.mjs`) con 3 fixtures. Vista `src/plano-eauto/tablero-cross-tenant.tsx` sin montar
     (AC-FSEM-24 es su e2e autenticado). `check.sh --full --app=flota` verde.
-- [ ] (P1) Señales cross-tenant en `control`: sin eventos un día hábil rojo; −30% amarillo; 5% errores amarillo y >5%/15 min rojo; canario de fuga = rojo máximo NO degradable; churn EEVD — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-11]
+- [x] (P1) Señales cross-tenant en `control`: sin eventos un día hábil rojo; −30% amarillo; 5% errores amarillo y >5%/15 min rojo; canario de fuga = rojo máximo NO degradable; churn EEVD — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-11]
+  - Probado: `dominio/semaforo-cross-tenant.test.ts` (18/18) — función pura `evaluarSenalesCrossTenant`,
+    sin migración ni conexión a `control`. Errores de sync con histéresis real (5% exacto no
+    escala sola, exige además `sostenido15Min`); el resto de binarias del Anexo B, umbral simple.
+    Canario de aislamiento (`evaluarCanarioAislamiento`) no toma `colorPrevio` ni umbrales — dos
+    tests confirman que ni verde previo ni umbrales de 100.000 lo frenan. «Backlog creciente 2
+    intervalos» queda sin implementar (condicionada a la pregunta 3). `check.sh --full --app=flota`
+    verde.
 - [ ] (P1) AA y estados del «Hoy»: nada solo-color; 7:1 en claro Y oscuro; 4 estados; snapshot 375px con términos extremos; e2e doble terminología sin cambiar selectores — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-12]
 - [ ] (P1) Contracción sin residuos: feature OFF deja de evaluar al próximo bootstrap; tenant C 5 tarjetas sin CLP; conmutación conserva signal_rule y review_queue (centinela 11) — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-13]
 - [ ] (P2) Telemetría del módulo con el piloto: digest emitido y cola-a-cero visible en el panel (oráculo producción — DONE-adopción) — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-14]
