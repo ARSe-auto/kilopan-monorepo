@@ -414,7 +414,37 @@ activa SOLO `admin_tenant`: mientras la pregunta 1 esté abierta, `operador` y
     documentado en el comentario de cabecera del archivo y en un test que confirma que el campo
     no existe en `HechosCrossTenant`). `bash packages/metodo/scripts/check.sh --full --app=flota`
     verde.
-- [ ] (P1) AA y estados de pantalla: ningún estado del semáforo comunicado solo por color (texto/ícono siempre, verificable apagando CSS de color); contraste ≥7:1 en indicadores semafóricos y cifra operativa en tema claro Y oscuro (axe/Lighthouse en gate); los 4 estados obligatorios de «Hoy» (vacío accionable con CTA, skeleton <50 ms, error es-CL con recuperación, sin conexión con contador real); snapshot 375px con términos del tenant B al máximo largo sin truncar cifras; la e2e del módulo corre DOS veces (terminología base y extrema) sin cambiar un selector (data-testid/term_key) — oráculo: CI [AC-FSEM-12]
+- [x] (P1) AA y estados de pantalla: ningún estado del semáforo comunicado solo por color (texto/ícono siempre, verificable apagando CSS de color); contraste ≥7:1 en indicadores semafóricos y cifra operativa en tema claro Y oscuro (axe/Lighthouse en gate); los 4 estados obligatorios de «Hoy» (vacío accionable con CTA, skeleton <50 ms, error es-CL con recuperación, sin conexión con contador real); snapshot 375px con términos del tenant B al máximo largo sin truncar cifras; la e2e del módulo corre DOS veces (terminología base y extrema) sin cambiar un selector (data-testid/term_key) — oráculo: CI [AC-FSEM-12]
+  - Probado: `e2e/hoy-aa-estados.spec.ts` (12/12, corrido en primer plano) contra `hoy/tablero-de-hoy.tsx`
+    (dejado a medio camino por una vuelta anterior del motor, commit `90aab86`) y
+    `dominio/hoy-terminologia.ts`. **Color no es la única señal:** con el CSS de color apagado
+    (`grayscale`/`#000 sobre #fff`) y el punto decorativo oculto, la etiqueta de estado sigue
+    diciendo «Rojo»/«Amarillo»/«Verde» por TEXTO. **Contraste 7:1:** `CONTRASTE.cifra_operativa_
+    y_semaforos` (constants.ts) verificado en claro Y oscuro con la fórmula de luminancia relativa
+    WCAG 2.x (mismo cálculo que `pod-a11y-gate.spec.ts`, AC-FPOD-23) sobre el indicador de color y
+    la cifra operativa, más `axe` (`@axe-core/playwright`, ya en `package.json`/`pnpm-lock.yaml`)
+    con tag `wcag2aa` sin violaciones `color-contrast` ni `aria-label` vacíos, las dos en ambos
+    temas — el par claro/oscuro es PROPIO de esta pantalla (`HOY_TEMA_CSS`), documentado en el
+    código: el token general `semantico.ok/alerta/error` de Miga es de otras pantallas (~5:1,
+    solo-claro) y este AC no lo toca. **4 estados:** vacío accionable (`?seed=vacio`, CTA
+    «Actualizar» visible y habilitado), skeleton instantáneo en refresco manual con el aviso de
+    demora recién pasados los 400 ms (el poll de fondo silencioso nunca lo enciende), error es-CL
+    con `role="alert"` y «Reintentar» que de verdad recupera, y «sin conexión» con el contador REAL
+    de intentos fallidos (`page.context().setOffline(true)`). **Snapshot 375px:** con
+    `?terminologia=extremo` (tenant B, `TERMINOLOGIA_EXTREMA_TENANT_B` al `LABELS.largo_max` de su
+    tipo — un test en el propio `hoy-terminologia.ts` revienta si algún día excediera ese límite)
+    ninguna cifra queda recortada por un ancestro `overflow:hidden`. **Doble terminología, mismo
+    selector:** `ejercerTablero(page, "base"|"extremo")` corre el MISMO recorrido de aserciones dos
+    veces sobre los mismos `data-testid`, cambiando solo el parámetro de URL — la etiqueta de color
+    cambia de texto («Rojo» → «Muy urgente!») sin que un solo selector se toque.
+    Hallazgo real durante la construcción: el test de «error con recuperación» fallaba de forma
+    reproducible — `usar-digest-semaforo.ts` dispara un poll AUTOMÁTICO al montar, y ese request
+    (no manual) llegaba a la ruta mockeada ANTES que el click de «Actualizar», consumiendo la
+    bandera de falla del mock; el click quedaba respondido en verde y `error-hoy` nunca aparecía.
+    El test se corrigió instalando el mock antes de `goto` y armando la falla recién después de
+    dejar pasar ese primer poll automático (mismo patrón que `refresco-digest.spec.ts`), no
+    tocando ninguna línea de la implementación. `bash packages/metodo/scripts/check.sh --full
+    --app=flota` verde.
 - [ ] (P1) Contracción sin residuos: apagar el feature de liquidación ⇒ sus `signal_rule` dejan de evaluar en el próximo bootstrap (el turno abierto termina con su config congelada, `turno.config_version_id`) y no nacen excepciones nuevas de ese origen; e2e tenant C: 5 tarjetas, cero CLP de tarifas visible, semáforo operativo; conmutar `mi_flota→daas→mi_flota` conserva todas las filas de `signal_rule` y `review_queue` (centinela 11 aplicado al módulo); la conducta «dominio sin ninguna señal activa no renderiza tarjeta» NO se asevera aquí — está pendiente de la pregunta 8 y vive en AC-FSEM-21 — oráculo: CI [AC-FSEM-13]
 - [ ] (P2) Telemetría del módulo en producción con el piloto: digest del semáforo emitido a telemetría de producto; métrica de cola al cierre del día tendiendo a cero visible en el panel §10 (la medición de minutos del dueño vive en AC-FSEM-23, condicionada a la pregunta 6 — este AC queda completable con el piloto) — oráculo: producción [AC-FSEM-14]
 - [ ] (P2) Validación en vivo del hito: revisión adversarial del hito (e) sin hallazgos críticos sobre el semáforo (datos malformados, doble-tap en ack/resolve, red cortada a mitad de drill-down, tenant A contra B); Alexis valida con capturas el camino dorado: tarjeta SLA demostrable con la farmacia del seed A, tablero del tenant B con terminología extrema, semáforo del tenant C en `mi_flota` — oráculo: humano [AC-FSEM-15]

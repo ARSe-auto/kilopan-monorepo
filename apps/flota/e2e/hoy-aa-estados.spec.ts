@@ -190,11 +190,16 @@ test.describe("[AC-FSEM-12] los 4 estados obligatorios de «Hoy»", () => {
   test("error es-CL con recuperación: el servidor que responde mal lo dice, y «Reintentar» recupera de verdad", async ({
     page,
   }) => {
-    await page.goto("/hoy?seed=a");
-    await expect(page.getByTestId("tablero-hoy")).toBeVisible();
-
-    let falla = true;
+    // El hook dispara un poll AUTOMÁTICO al montar (`iniciar()` en `usar-digest-semaforo.ts`),
+    // antes de que este test llegue a instalar el mock — si `falla` se arma antes de ese primer
+    // poll, es ESE request silencioso el que la consume (no toca `errorManual`, por no ser
+    // manual) y el click de abajo cae en la rama 200 sin fallar nunca: el error jamás aparece.
+    // Se instala el mock ANTES de `goto` (mismo patrón que `refresco-digest.spec.ts`), se deja
+    // pasar el primer poll automático en verde, y recién ahí se arma `falla` para el click.
+    let llamadas = 0;
+    let falla = false;
     await page.route("**/api/semaforo/digest**", async (route) => {
+      llamadas++;
       if (falla) {
         falla = false;
         await route.fulfill({ status: 500, contentType: "application/json", body: "{}" });
@@ -203,6 +208,11 @@ test.describe("[AC-FSEM-12] los 4 estados obligatorios de «Hoy»", () => {
       await route.fulfill({ status: 200, contentType: "application/json", body: CUERPO_DIGEST_A });
     });
 
+    await page.goto("/hoy?seed=a");
+    await expect(page.getByTestId("tablero-hoy")).toBeVisible();
+    await expect.poll(() => llamadas).toBeGreaterThanOrEqual(1);
+
+    falla = true;
     await page.getByTestId("refrescar-ahora").click();
     const error = page.getByTestId("error-hoy");
     await expect(error).toBeVisible();

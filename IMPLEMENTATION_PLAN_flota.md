@@ -239,7 +239,7 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
     tests confirman que ni verde previo ni umbrales de 100.000 lo frenan. «Backlog creciente 2
     intervalos» queda sin implementar (condicionada a la pregunta 3). `check.sh --full --app=flota`
     verde.
-- [ ] (P1) AA y estados del «Hoy»: nada solo-color; 7:1 en claro Y oscuro; 4 estados; snapshot 375px con términos extremos; e2e doble terminología sin cambiar selectores — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-12]
+- [x] (P1) AA y estados del «Hoy»: nada solo-color; 7:1 en claro Y oscuro; 4 estados; snapshot 375px con términos extremos; e2e doble terminología sin cambiar selectores — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-12]
 - [ ] (P1) Contracción sin residuos: feature OFF deja de evaluar al próximo bootstrap; tenant C 5 tarjetas sin CLP; conmutación conserva signal_rule y review_queue (centinela 11) — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-13]
 - [ ] (P2) Telemetría del módulo con el piloto: digest emitido y cola-a-cero visible en el panel (oráculo producción — DONE-adopción) — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-14]
 - [ ] (P2) Revisión adversarial del hito (e) sin hallazgos críticos + validación de Alexis del camino dorado con capturas (oráculo humano — no bloquea) — spec: specs/flota/05-semaforo-visibilidad.md [AC-FSEM-15]
