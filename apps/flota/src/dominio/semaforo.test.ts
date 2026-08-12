@@ -109,7 +109,7 @@ test("caja_custodia_liquidacion evalúa cuando la config congelada trae liquidac
   );
 });
 
-test("caja_custodia_liquidacion deja de evaluar cuando la config congelada apaga liquidacion_por_cliente", () => {
+test("caja_custodia_liquidacion deja de evaluar cuando la config congelada apaga liquidacion_por_cliente [AC-FSEM-17: OFF no evalúa]", () => {
   assert.equal(
     dominioSemaforoActivo("caja_custodia_liquidacion", { liquidacion_por_cliente: false }),
     false,
