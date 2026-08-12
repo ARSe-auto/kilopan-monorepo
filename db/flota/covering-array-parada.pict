@@ -1,0 +1,26 @@
+# Covering array 2-way para la pantalla de parada de entrega [AC-FPOD-18]
+# Flags visibles al operario (§9.2): cada factor toma UN valor por test.
+# Archivo PICT versionado; regenerar si se agrega un flag sin actualizar este archivo.
+# Versión: 1.0 (11-ago-2026, línea base)
+
+# Factores principales: los condicionables que afectan la UI visible del operario
+
+enVentana: si, no
+terminado: si, no
+enCola_gt0: si, no
+gpsDenegado: si, no
+candadoCerrado: si, no
+llegada: si, no
+modo: elegir, no_entregado, dejado_en_punto
+evidenciaPendiente: si, no
+
+# Restricciones: algunas combinaciones no son posibles
+
+if [enVentana] = "si" then [terminado] <> "si";
+if [terminado] = "si" then [llegada] <> "si";
+if [terminado] = "si" then [enVentana] <> "si";
+if [llegada] = "no" then [modo] <> "elegir";
+if [llegada] = "no" then [modo] <> "no_entregado";
+if [llegada] = "no" then [modo] <> "dejado_en_punto";
+if [llegada] = "si" and [modo] = "elegir" and [evidenciaPendiente] = "si" then [candadoCerrado] <> "si";
+if [candadoCerrado] = "si" then [llegada] <> "si";
