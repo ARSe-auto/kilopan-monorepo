@@ -896,8 +896,20 @@ probar_ruteo () { # $1 = linea de ítem · $2 = modelo esperado · $3 = descripc
 }
 probar_ruteo '- [ ] (P0-SEC) bloqueo por PIN errado [${FXS}-99]'        "$OPUS"   "ítem -SEC"
 probar_ruteo '- [ ] (P1) migración que agrega un trigger [${FX}-99]'    "$OPUS"   "ítem que toca migración"
-probar_ruteo '- [ ] (P1) chip con el nombre del operador [${FX}-98]'    "$HAIKU"  "ítem de UI"
+probar_ruteo '- [ ] (P1-HIG) chip con el nombre del operador [${FX}-98]' "$HAIKU"  "ítem de UI ETIQUETADO -HIG"
 probar_ruteo '- [ ] (P1) cola con reintento automático [${FX}-97]'      "$SONNET" "ítem estándar"
+# LA PROSA NO ES LA ETIQUETA (bug real, 11/12-ago-2026 — costó la noche entera). El ruteo
+# por palabras mandaba a Haiku cualquier ítem cuyo TEXTO mencionara `pantalla|skeleton|
+# contraste|chip|botón|mapa`. En un plan bien escrito casi todo AC de terreno nombra la
+# pantalla donde ocurre, así que clasificaba la redacción, no el trabajo. Los dos ítems de
+# abajo son los dos que cayeron: el primero falló TRES veces, rompió cuatro ACs ya cerrados
+# y terminó atascado; el segundo era un gate de accesibilidad con axe y Lighthouse
+# —infraestructura, no pulido— y se marcó [x] con el gate rojo. Los dos DECÍAN palabras de
+# pulido táctil; ninguno lo era.
+probar_ruteo '- [ ] (P1) los 4 estados de la pantalla de parada: vacío, skeleton, error [${FX}-96]' \
+  "$SONNET" "ítem que sólo NOMBRA una pantalla (sin etiqueta) NO baja a Haiku"
+probar_ruteo '- [ ] (P1) gate AA de accesibilidad: contraste, targets, aria-labels [${FX}-95]' \
+  "$SONNET" "ítem que nombra contraste pero es un gate NO baja a Haiku"
 # Escalación de dos strikes sobre un ítem NO-duro
 mkdir -p .ralph; echo 2 > .ralph/build-fails
 probar_ruteo '- [ ] (P1) cola con reintento automático [${FX}-96]'      "$OPUS"   "2 strikes escala a"

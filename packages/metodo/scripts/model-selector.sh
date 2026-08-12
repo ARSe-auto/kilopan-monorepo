@@ -114,8 +114,32 @@ fallos="${fallos:-0}"
 [ "$fallos" -ge 1 ] && { echo "$SONNET"; exit 0; }   # un fallo ⇒ piso Sonnet, no re-bajar
 
 # (3) RUTEO POR VELOCIDAD (primer intento, ítem no-duro).
-#     UI/pulido táctil ⇒ Haiku; si falla, la escalación lo sube solo.
+#     UI/pulido táctil ⇒ Haiku, y SOLO si alguien lo etiquetó así a propósito.
+#
+# LA HEURÍSTICA POR PALABRAS SE QUITÓ (bug real, 11/12-ago-2026 — costó la noche entera).
+# Decía: si el texto del ítem menciona `pantalla|skeleton|contraste|botón|mapa…`, es pulido
+# de UI ⇒ Haiku. Pero eso no clasifica el TRABAJO, clasifica la PROSA — y en un plan bien
+# escrito casi todo AC de terreno menciona la pantalla donde ocurre. Los dos ACs que
+# quemaron la noche cayeron ahí, los dos por una palabra suelta:
+#
+#   · AC-FPOD-22 («…de la pantalla de parada … skeleton …») ⇒ Haiku. Falló TRES veces,
+#     rompió cuatro ACs ya cerrados, se marcó [x] a sí mismo con el gate ROJO, y Opus tuvo
+#     que revertirlo dos veces. Terminó en `acs-atascados.txt`.
+#   · AC-FPOD-23 («…contraste, targets, aria-labels…») ⇒ Haiku. Era un GATE de
+#     accesibilidad con axe y Lighthouse —infraestructura, no pulido—, se marcó [x] con el
+#     gate rojo y dejó `pnpm-lock.yaml` sin comitear.
+#
+# Ninguno de los dos era pulido táctil. Los dos DECÍAN palabras de pulido táctil.
+#
+# El propio archivo ya enunciaba el principio veinte líneas más arriba, para la regla dura:
+# «Nada de substrings comunes ("foto", "sesión", "cliente") que sobre-rutearían medio plan».
+# La advertencia vale en las dos direcciones y acá nadie la aplicó: sobre-rutear hacia
+# ARRIBA cuesta ventana de presupuesto; sobre-rutear hacia ABAJO cuesta reverts, ACs sanos
+# marcados como atascados y horas de una persona. Lo segundo salió mucho más caro.
+#
+# Queda SOLO la etiqueta explícita. Etiquetar es un acto deliberado que alguien escribe y
+# que se ve en el diff; que el texto mencione una pantalla es un accidente de redacción.
+# Si un AC de verdad es pulido, se le pone `[HIG]` y baja a Haiku — con la escalación de
+# dos strikes lista para subirlo si se equivoca.
 printf '%s' "$item" | grep -qE '\[HIG\]|\(P[0-9]-HIG\)' && { echo "$HAIKU"; exit 0; }
-printf '%s' "$item" | grep -qiE 'pantalla|chip|selector en el dashboard|boton|botón|UI de |mapa |skeleton|contraste' \
-  && { echo "$HAIKU"; exit 0; }
 echo "$SONNET"
