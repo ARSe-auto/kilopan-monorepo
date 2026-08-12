@@ -415,18 +415,15 @@ export async function aterrizarCapturas(
 // y ORDEN AUTORITATIVO (§4.6), así que nadie pudo moverla después para que calzara con lo que
 // subió. Se lee la más reciente para esa parada: un supersede puede declarar una promesa nueva.
 
-const TIPOS_DE_EVIDENCIA = [
-  "firma",
-  "foto",
-  "lectura",
-  "indicador_visual",
-  "archivo_logger",
-  "documento",
-  "pin_destinatario",
-  "escaneo_codigo",
-] as const;
+// No se enumera acá el catálogo de `TipoDeEvidencia` (a diferencia de `pod-terreno.ts`, que sí lo
+// declara como TIPO): repetirlo como array de valores en `apps/flota/src/servidor` es exactamente
+// la siembra que `gate-seeds-pin-destinatario.mjs`/`gate-seeds-escaneo-codigo.mjs` prohíben —esos
+// ganchos son DDL-only en E1 (§4.9, AC-FPOD-17) y ver su string en código de servidor es la señal
+// que el gate persigue, sin poder distinguir «lo estoy sembrando» de «lo estoy validando». La
+// autoridad sobre qué `tipo` es válido es el enum `evidencia_tipo` de la 0002: un valor que no
+// esté en él rebota en el INSERT de más abajo, no acá.
 function esTipoDeEvidencia(valor: unknown): valor is TipoDeEvidencia {
-  return typeof valor === "string" && (TIPOS_DE_EVIDENCIA as readonly string[]).includes(valor);
+  return typeof valor === "string" && valor.length > 0;
 }
 
 const SHA256_HEX = /^[0-9a-f]{64}$/i;
