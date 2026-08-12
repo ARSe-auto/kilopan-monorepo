@@ -791,7 +791,14 @@
       "params": [
         "id"
       ],
-      "cruce": null
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "review_queue",
+          "columna": "id"
+        },
+        "nota": "Reconocer la excepción de B desde una sesión de A [AC-FSEM-04]. MUTA la cola «Por revisar» del vecino: le asigna el dueño de A como responsable y le apaga la excepción de su tablero sin que su operación la haya visto — el rojo que debía llamarle la atención queda silenciado a nombre de un extraño. Contrato 404 y huella de B intacta (0 filas cambiadas). El fixture del vecino siembra una fila real en `review_queue`, así que el id existe — contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin probar nada."
+      }
     },
     {
       "ruta": "/api/sesion",

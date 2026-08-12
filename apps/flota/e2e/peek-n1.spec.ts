@@ -11,7 +11,7 @@ import { TACTIL } from "../../../packages/nucleo-comun/src/constants.ts";
 // DOS mitades, porque el peek tiene DOS conductas de naturaleza distinta:
 //
 //   (1) El MECANISMO de UI —bottom-sheet sin navegar, orden severidad × antigüedad, playbook
-//       por fila, botón ≥48px— se prueba sobre `/hoy?seed=a` (mismas semillas de AC-FSEM-01,
+//       por fila, botón ≥TACTIL.operativo_min— se prueba sobre `/hoy?seed=a` (mismas semillas de AC-FSEM-01,
 //       que sigue siendo la pantalla mientras el digest real no exista, AC-FSEM-06/09).
 //   (2) La TRANSICIÓN `nueva → reconocida` y el 422 de re-reconocer son un contrato de
 //       SERVIDOR contra `review_queue` REAL — la tabla ya existe (migración 0002, módulo 00)
