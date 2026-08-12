@@ -53,6 +53,10 @@ select is(
 select is(
   (select array_agg(codigo order by codigo) from evento_tipo where codigo like 'gobierno.%'),
   array[
+    -- El dispositivo de andén es un activo del tenant que el dueño enrola SIN persona dueña
+    -- (§4.3, §5.4 F-D) [AC-FIDN-07]: el alta la hace él, así que es un acto de gobierno como el
+    -- alta de un vehículo.
+    'gobierno.anden_enrolado',
     'gobierno.dispositivo_revocado',
     -- Los documentos con vencimiento también son del panel del dueño (§5.4, «edición de
     -- capacidades/DOCUMENTOS») [AC-FVEH-03]. El orden es alfabético porque el `array_agg` de
@@ -82,7 +86,7 @@ select is(
     'gobierno.vehiculo_editado',
     'gobierno.vehiculo_reactivado'
   ],
-  'catálogo de eventos de gobierno: los diecinueve actos, sin uno de menos'
+  'catálogo de eventos de gobierno: los veinte actos, sin uno de menos'
 );
 
 -- Y cada uno con su descripción escrita: un catálogo de códigos sin texto es un panel de
@@ -90,7 +94,7 @@ select is(
 select is(
   (select count(*)::int from evento_tipo
     where codigo like 'gobierno.%' and length(btrim(descripcion)) > 0),
-  19, 'cada tipo de evento de gobierno trae su descripción en es-CL'
+  20, 'cada tipo de evento de gobierno trae su descripción en es-CL'
 );
 
 select finish();

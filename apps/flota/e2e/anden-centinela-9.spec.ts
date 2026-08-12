@@ -203,10 +203,50 @@ async function guardarSecretoDelAparato(page: Page, secreto: string) {
   }, secreto);
 }
 
+/** La huella con la que el aparato ABRE, escrita ANTES de la primera navegación — lo que
+ *  `guardarIdentidadAnden` deja en el disco cuando la pantalla «¿quién eres?» del andén recibe la
+ *  respuesta de `POST /api/anden/identidad` y RECIÉN AHÍ navega a `/entrega`. Es el mismo patrón
+ *  que `guardarSecretoDelAparato`, y por la MISMA razón: `identidadDelAparato()` (`cliente/
+ *  identidad.ts`) se lee en el montaje, y si la huella llegara al disco DESPUÉS de esa primera
+ *  lectura, la partición del outbox se abriría con el respaldo por secreto del aparato —la de un
+ *  teléfono personal, nunca la de un andén— y esa partición fantasma, vacía, quedaría
+ *  conviviendo con la real para siempre [AC-FIDN-07] (§4.7: la partición JAMÁS se purga). En
+ *  producción esto no puede pasar —la pantalla de rotación nunca navega antes de guardar la
+ *  huella—, así que sembrarla con `addInitScript` (y no con `page.evaluate` tras el `goto`, como
+ *  hace `rotarEnElDisco` para B) es lo que reproduce el orden real en vez de inventar uno que el
+ *  producto nunca ejerce.
+ *
+ *  GUARDADA SOLO SI EL DISCO TODAVÍA NO TIENE NADA — igual que `guardarSecretoDelAparato`, y por
+ *  una razón que no es cosmética: `addInitScript` no es un gesto de una vez, es un script que
+ *  Playwright vuelve a correr en CADA navegación futura de esta `page`, incluida la del `goto` de
+ *  B más abajo. Sin el guardia, ese segundo `goto` pisaría otra vez la huella de A justo antes de
+ *  que la app de B monte —deshaciendo el `rotarEnElDisco(page, rotacionB.huella)` anterior— y B
+ *  abriría con la identidad de A todavía puesta. */
+async function sembrarIdentidadAlAbrir(page: Page, huella: string) {
+  await page.addInitScript((h) => {
+    void new Promise<void>((res) => {
+      const r = indexedDB.open("flota-aparato", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("claves");
+      r.onsuccess = () => {
+        const claves = r.result.transaction("claves", "readwrite").objectStore("claves");
+        const leer = claves.get("identidad-de-anden");
+        leer.onsuccess = () => {
+          if (leer.result !== undefined) return res();
+          const guardar = claves.put(h, "identidad-de-anden");
+          guardar.onsuccess = () => res();
+          guardar.onerror = () => res();
+        };
+        leer.onerror = () => res();
+      };
+    });
+  }, huella);
+}
+
 /** Escribe en el disco la huella que el endpoint de rotación devolvió — lo que
  *  `guardarIdentidadAnden` (`cliente/aparato.ts`) hace al recibir la respuesta de
  *  `POST /api/anden/identidad`. Sin tocar la red: es la otra mitad de «B rota por fuera de la
- *  página», la escritura local que el aparato haría al recibir esa respuesta. */
+ *  página», la escritura local que el aparato haría al recibir esa respuesta. Se usa para la
+ *  rotación de B, que sí ocurre CON la página ya abierta y offline (§4.7, centinela 9). */
 async function rotarEnElDisco(page: Page, huella: string) {
   await page.evaluate(
     (h) =>
@@ -246,12 +286,13 @@ test("[AC-FIDN-07] centinela 9 en el andén: A captura 3 sin señal, B rota por 
   const idsDeA: string[] = deA.entregas.map((e: { id: string }) => e.id);
   const idsDeB: string[] = deB.entregas.map((e: { id: string }) => e.id);
 
-  // ── El aparato guarda su secreto y A rota por PIN — CON red ────────────────────────
+  // ── El aparato guarda su secreto y A rota por PIN — CON red, ANTES de abrir /entrega ──
+  // (la pantalla «¿quién eres?» real guarda la huella y RECIÉN AHÍ navega: `sembrarIdentidadAlAbrir`
+  // reproduce ese orden con `addInitScript` en vez de escribir la huella con la página ya abierta).
   await guardarSecretoDelAparato(page, SECRETO_APARATO);
   const rotacionA = await rotarPorApi(RUT_OPERARIO_A, PIN_A);
+  await sembrarIdentidadAlAbrir(page, rotacionA.huella);
   await page.goto(`${EN_A}/entrega?parada=${deA.entregas[0]!.id}`);
-  await rotarEnElDisco(page, rotacionA.huella);
-  await page.reload();
   await expect(page.getByTestId("parada-actual")).toContainText(deA.entregas[0]!.destino);
   await page.context().setOffline(true);
 

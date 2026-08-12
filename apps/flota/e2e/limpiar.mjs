@@ -37,6 +37,11 @@ export const TABLAS_DE_IDENTIDAD = [
   "codigos_puente",
   "solicitudes_acceso",
   "invitaciones",
+  // Quién está autenticado en cada dispositivo de andén (0057, AC-FIDN-07): PLANIFICACIÓN, no
+  // append-only, y con FK a `dispositivos` y a `usuarios` sin cascada — va antes de las dos o su
+  // borrado rebota "violates foreign key constraint" en cualquier suite ajena a este AC que
+  // limpie su fixture después de que un dispositivo de andén haya rotado identidad.
+  "sesiones_anden",
   "dispositivos",
   "usuarios",
   "personas",
@@ -151,10 +156,22 @@ export async function limpiarOperacion(sql) {
   //
   // Las que tienen una parada con manifiesto se QUEDAN: `manifiestos` es append-only (§7.4) y esa
   // carga se firmó. Es la misma regla que deja en pie un turno con chequeos.
+  //
+  // Y desde AC-FRUT-23 tampoco las que ya tienen un POD aterrizado: `entregas_pod` es el mismo
+  // hecho write-once del §4.5, append-only por el mismo §7.4, y su FK sostiene la parada igual
+  // que la del manifiesto. `limpiarBandeja` ya excluye esto para la bandeja; a esta función —que
+  // es la que corre `limpiarFixture` en CADA suite, incluidas las que no tocan la bandeja— le
+  // faltaba el mismo guardia, y sin él el POD confirmado de una suite (p. ej. el centinela 9 del
+  // andén, AC-FIDN-07) deja rutas que la limpieza de la SIGUIENTE suite intenta borrar igual,
+  // rebota con «violates foreign key constraint» y aborta antes de llegar a `personas`/
+  // `dispositivos» — la fila que colisiona con el RUT sintético de la suite siguiente.
   await sql(
     `delete from rutas r
       where not exists (
         select 1 from paradas p join manifiestos m on m.parada_id = p.id where p.ruta_id = r.id
+      )
+        and not exists (
+        select 1 from paradas p join entregas_pod ep on ep.parada_id = p.id where p.ruta_id = r.id
       )`,
   );
   await sql("delete from defectos");
