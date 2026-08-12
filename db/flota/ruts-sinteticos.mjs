@@ -51,6 +51,7 @@ export const VALIDOS = {
   "13.579.246-2": "el operario B del centinela 9 del ANDÉN (AC-FIDN-07): rota por PIN en el MISMO aparato que A mientras A sigue sin red — la segunda identidad cuyo `guardarSecreto` nunca ocurre, porque en el andén el secreto es del aparato y lo que rota es la huella",
   "15.973.428-5": "el operador del candado del servidor sobre el POD que llega por sync (AC-FRUT-23), propio y no prestado: nació tomando `Object.keys(VALIDOS)[10]` directo en vez de `rutDeFixture`, que ya era de `pod-offline.spec.ts` (AC-FPOD-03) — las dos suites comparten la base `hechos` y ninguna limpia su fixture, así que cualquier corrida completa donde entrega-candado-servidor corriera antes chocaba con «duplicate key» en `personas_tenant_id_rut_key` sin que el texto del error dijera cuál de las dos suites era la intrusa",
   "16.273.849-6": "el chofer de los 4 estados obligatorios de la pantalla de parada (AC-FPOD-22), propio y no prestado: comparte el patrón de las suites de F4 de arriba — un dispositivo personal ACTIVO por operario (§4.3) — y esta suite además fuerza fallos de IndexedDB del aparato, así que necesita el suyo para no ensuciar el aparato de ninguna otra",
+  "17.345.678-6": "el chofer del gate AA axe de la pantalla de parada (AC-FPOD-23), propio y no prestado: mismo motivo que el de AC-FPOD-22 — un dispositivo personal ACTIVO por operario (§4.3) — y esta suite necesita la pantalla real en dos estados (candado abierto, entrega en curso) sin que otra suite le pise el aparato",
 };
 
 /**
