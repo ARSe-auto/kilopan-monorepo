@@ -128,6 +128,14 @@ export function seedA(): EstadoDominio[] {
   ];
 }
 
+/** Seed «vacío»: tenant sin ningún dominio evaluado todavía (recién provisionado, cero
+ *  `signal_rule` con datos que evaluar). Ejercita el estado «vacío accionable» del §5.7
+ *  [AC-FSEM-12] — `tarjetasNivelCero([])` ya devuelve `[]` sin cambio de código en
+ *  `dominio/semaforo.ts`, así que este fixture es la única pieza que faltaba para probarlo. */
+export function seedVacio(): EstadoDominio[] {
+  return [];
+}
+
 /** Seed C: tenant `mi_flota` — sin empresas clientes, sin fila de SLA. */
 export function seedC(): EstadoDominio[] {
   return [

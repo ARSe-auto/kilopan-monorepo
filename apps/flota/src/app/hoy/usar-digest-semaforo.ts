@@ -38,6 +38,14 @@ export type EstadoRefrescoDigest = {
   /** epoch ms del último digest recibido con éxito (200 con body nuevo, o 304 confirmando que
    *  el que ya había seguía vigente) — la antigüedad que se le marca al usuario en offline. */
   ultimoDigestEn: number;
+  /** Estado «skeleton <50 ms» del §5.7 [AC-FSEM-12] — SOLO durante un refresco MANUAL (el poll
+   *  de fondo jamás lo enciende: no hay «cargando» que anunciar por un refresco silencioso). */
+  cargando: boolean;
+  /** Estado «error es-CL con recuperación» del §5.7 [AC-FSEM-12], DISTINTO de «sin conexión»: el
+   *  servidor respondió y respondió mal (`!r.ok`, no una falla de red) — solo se enciende cuando
+   *  quien pidió el refresco fue una persona tocando «Actualizar», así el poll de fondo silencioso
+   *  jamás le muestra un error transitorio a nadie que no lo pidió. `null` = sin error vigente. */
+  errorManual: string | null;
 };
 
 export function useDigestSemaforo(seed: "a" | "c", tarjetasIniciales: TarjetaHoy[]) {
@@ -47,33 +55,66 @@ export function useDigestSemaforo(seed: "a" | "c", tarjetasIniciales: TarjetaHoy
     conectado: true,
     intentosFallidos: 0,
     ultimoDigestEn: Date.now(),
+    cargando: false,
+    errorManual: null,
   });
 
-  const refrescar = useCallback(async () => {
-    try {
-      const cabeceras: HeadersInit = {};
-      if (etagRef.current) cabeceras["If-None-Match"] = etagRef.current;
-      // `pedir()` (`cliente/aparato.ts`) — la sesión ES el aparato [AC-FIDN-09]: el digest exige
-      // `admin_tenant` desde este AC (§2.8) y sin el secreto persistido del dueño no hay con qué
-      // pasar la guardia [AC-FSEM-09].
-      const r = await pedir(`/api/semaforo/digest?seed=${seed}`, { headers: cabeceras, cache: "no-store" });
+  const refrescar = useCallback(
+    async (opciones: { manual?: boolean } = {}) => {
+      if (opciones.manual) setEstado((previo) => ({ ...previo, cargando: true, errorManual: null }));
+      try {
+        const cabeceras: HeadersInit = {};
+        if (etagRef.current) cabeceras["If-None-Match"] = etagRef.current;
+        // `pedir()` (`cliente/aparato.ts`) — la sesión ES el aparato [AC-FIDN-09]: el digest exige
+        // `admin_tenant` desde este AC (§2.8) y sin el secreto persistido del dueño no hay con qué
+        // pasar la guardia [AC-FSEM-09].
+        const r = await pedir(`/api/semaforo/digest?seed=${seed}`, { headers: cabeceras, cache: "no-store" });
 
-      if (r.status === 304) {
-        setEstado((previo) => ({ ...previo, conectado: true, intentosFallidos: 0, ultimoDigestEn: Date.now() }));
-        return;
+        if (r.status === 304) {
+          setEstado((previo) => ({
+            ...previo,
+            conectado: true,
+            intentosFallidos: 0,
+            ultimoDigestEn: Date.now(),
+            cargando: false,
+            errorManual: null,
+          }));
+          return;
+        }
+        if (!r.ok) throw new Error(`digest respondió ${r.status}`);
+
+        const nuevoEtag = r.headers.get("etag");
+        if (nuevoEtag) etagRef.current = nuevoEtag;
+        const cuerpo = (await r.json()) as { tarjetas: TarjetaHoy[] };
+        setEstado({
+          tarjetas: cuerpo.tarjetas.map(revivirFechas),
+          conectado: true,
+          intentosFallidos: 0,
+          ultimoDigestEn: Date.now(),
+          cargando: false,
+          errorManual: null,
+        });
+      } catch (e) {
+        // `fetch` tira `TypeError` cuando ni siquiera pudo alcanzar la red (offline real, DNS,
+        // conexión rechazada) — eso SÍ es «sin conexión» (§2.6). Un `!r.ok` de arriba es un Error
+        // normal: el servidor respondió y respondió mal, un hecho DISTINTO que no toca `conectado`
+        // (si tocara, un 404/500 pasajero encendería el banner de «sin conexión» sin que la red
+        // tuviera nada que ver — el mismo defecto que el AC pide separar).
+        const esRedCaida = e instanceof TypeError;
+        setEstado((previo) => ({
+          ...previo,
+          // Sin red (offline real) o el servidor cayó a mitad del poll: se queda con el ÚLTIMO
+          // digest bueno — jamás un verde fingido con datos viejos sin decirlo (§2.6).
+          conectado: esRedCaida ? false : previo.conectado,
+          intentosFallidos: esRedCaida ? previo.intentosFallidos + 1 : previo.intentosFallidos,
+          cargando: false,
+          errorManual:
+            opciones.manual && !esRedCaida ? "No se pudo actualizar «Hoy». Intenta de nuevo." : previo.errorManual,
+        }));
       }
-      if (!r.ok) throw new Error(`digest respondió ${r.status}`);
-
-      const nuevoEtag = r.headers.get("etag");
-      if (nuevoEtag) etagRef.current = nuevoEtag;
-      const cuerpo = (await r.json()) as { tarjetas: TarjetaHoy[] };
-      setEstado({ tarjetas: cuerpo.tarjetas.map(revivirFechas), conectado: true, intentosFallidos: 0, ultimoDigestEn: Date.now() });
-    } catch {
-      // Sin red (offline real) o el servidor cayó a mitad del poll: se queda con el ÚLTIMO
-      // digest bueno — jamás un verde fingido con datos viejos sin decirlo (§2.6).
-      setEstado((previo) => ({ ...previo, conectado: false, intentosFallidos: previo.intentosFallidos + 1 }));
-    }
-  }, [seed]);
+    },
+    [seed],
+  );
 
   useEffect(() => {
     let temporizador: ReturnType<typeof setInterval> | null = null;
@@ -102,5 +143,7 @@ export function useDigestSemaforo(seed: "a" | "c", tarjetasIniciales: TarjetaHoy
     };
   }, [refrescar]);
 
-  return { ...estado, refrescarAhora: refrescar };
+  const refrescarAhora = useCallback(() => refrescar({ manual: true }), [refrescar]);
+
+  return { ...estado, refrescarAhora };
 }
