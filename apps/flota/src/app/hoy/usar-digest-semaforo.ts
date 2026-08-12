@@ -100,7 +100,14 @@ export function useDigestSemaforo(seed: "a" | "c", tarjetasIniciales: TarjetaHoy
         // normal: el servidor respondió y respondió mal, un hecho DISTINTO que no toca `conectado`
         // (si tocara, un 404/500 pasajero encendería el banner de «sin conexión» sin que la red
         // tuviera nada que ver — el mismo defecto que el AC pide separar).
-        const esRedCaida = e instanceof TypeError;
+        // Y el OTRO lado del mismo hecho: si el aparato sabe que no hay red, cualquier fallo del
+        // poll es «sin conexión», aunque el error no llegue como TypeError. Sin esta mitad,
+        // bastaba con que algo devolviera un Error normal —un service worker contestando un
+        // error sintético, por ejemplo— para que el banner no apareciera nunca con la red
+        // cortada: regresión real de AC-FSEM-06 el 12-ago-2026, atrapada por su propio e2e.
+        // `navigator.onLine === false` no puede confundirse con un 404/500 del servidor vivo,
+        // que es justo lo que este clasificador vino a separar.
+        const esRedCaida = e instanceof TypeError || navigator.onLine === false;
         setEstado((previo) => ({
           ...previo,
           // Sin red (offline real) o el servidor cayó a mitad del poll: se queda con el ÚLTIMO
