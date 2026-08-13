@@ -105,9 +105,12 @@ select is(
 );
 
 -- Corregir un concepto YA activo (vigencia nueva, AC-FTAR-02) no gasta cupo: no es un concepto
--- nuevo, es una fila nueva del mismo concepto.
-insert into tarifas (empresa_cliente_id, concepto, precio_clp)
-  select empresa, 'por_entrega', 3800 from e_id;
+-- nuevo, es una fila nueva del mismo concepto. `vigente_desde` explícito y adelantado: dentro
+-- de esta transacción única de pgTAP, dos DEFAULT `clock_timestamp()` sucesivos alcanzan a
+-- quedar demasiado cerca para que el guardarraíl de vigencia solapada de AC-FTAR-02
+-- (`db/migraciones-flota/tenant/0062_tarifas_vigencia_append_only.sql`) los distinga con certeza.
+insert into tarifas (empresa_cliente_id, concepto, precio_clp, vigente_desde)
+  select empresa, 'por_entrega', 3800, clock_timestamp() + interval '1 minute' from e_id;
 select is(
   (select count(*)::int from tarifas
     where empresa_cliente_id = (select empresa from e_id) and concepto = 'por_entrega'),

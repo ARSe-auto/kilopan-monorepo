@@ -258,7 +258,7 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 ## Hito (f) — Tarifas, liquidación línea=evidencia y portal del contratante `[datos]`
 
 - [x] (P1) Tarifas por empresa: catálogo cerrado de 5 con CHECK; máx 4 activos (5º ⇒ 422); zonas ≤5 por comunas y recargo horario SOLO modificadores; cero recargo indexado — spec: specs/flota/06-tarifas-liquidacion-facturacion.md [AC-FTAR-01]
-- [ ] (P1) Vigencia append-only: UPDATE de precio ⇒ RAISE; tarifa solapada ⇒ 422 (centinela 5); COMMENT de clase + linter verdes — spec: specs/flota/06-tarifas-liquidacion-facturacion.md [AC-FTAR-02]
+- [x] (P1) Vigencia append-only: UPDATE de precio ⇒ RAISE; tarifa solapada ⇒ 422 (centinela 5); COMMENT de clase + linter verdes — spec: specs/flota/06-tarifas-liquidacion-facturacion.md [AC-FTAR-02]
 - [ ] (P1) Devengo único en BD: solo la función SECURITY DEFINER crea líneas (INSERT directo ⇒ 42501); tarifa con mayor vigente_desde ≤ event_time; sin zona ⇒ precio base sin error; grep cero float — spec: specs/flota/06-tarifas-liquidacion-facturacion.md [AC-FTAR-03]
 - [ ] (P1) Línea=evidencia: UNIQUE(tenant, tipo, id); solo evidencia VIGENTE; supersedida después ⇒ línea bloqueada + review_queue (pregunta 11); huérfanas = 0; sin endpoint manual; excursión bloquea jamás crea/borra (centinela 7) — spec: specs/flota/06-tarifas-liquidacion-facturacion.md [AC-FTAR-04]
 - [ ] (P1) Máquina abierta→cerrada→pagada solo hacia adelante y de a una; salto/retroceso ⇒ 422; cada transición emite evento + audit — spec: specs/flota/06-tarifas-liquidacion-facturacion.md [AC-FTAR-05]
