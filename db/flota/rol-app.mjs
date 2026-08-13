@@ -116,6 +116,22 @@ export async function acotarConexion(slug) {
     for (const { relname } of apendOnly) {
       await sql(`revoke update, delete on ${ident(relname)} from ${ident(rol)}`);
     }
+
+    // Y se le quita el INSERT en las tablas cuyas filas SOLO puede crear una función
+    // `SECURITY DEFINER` (§7.5: el devengo de `liquidacion_lineas`). Misma técnica que arriba
+    // y por el mismo motivo: cuáles son se pregunta al catálogo, no se lista acá. El trigger
+    // que las marca rebota también al migrador —lo que un REVOKE no puede hacer, porque el
+    // dueño no se revoca a sí mismo—, y este REVOKE cierra la mitad que el trigger no cubre:
+    // el rol de app no inserta una línea ni declarándose en curso de devengo. [AC-FTAR-03]
+    const soloPorFuncion = await sql(
+      `select distinct c.relname from pg_trigger t
+         join pg_class c on c.oid = t.tgrelid
+         join pg_proc  p on p.oid = t.tgfoid
+        where p.proname = 'solo_el_devengo_crea_lineas' and not t.tgisinternal`,
+    );
+    for (const { relname } of soloPorFuncion) {
+      await sql(`revoke insert on ${ident(relname)} from ${ident(rol)}`);
+    }
   });
 
   return { bd, rol };

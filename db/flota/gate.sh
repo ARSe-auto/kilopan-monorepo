@@ -115,6 +115,13 @@ paso "consentimiento: ninguna pantalla de enrolamiento se lo pide al trabajador 
 paso "RUTs sembrados: solo los de la lista congelada de fixtures (§7.8, §10)" \
   node db/flota/gate-ruts.mjs
 
+# La otra mitad del §4.8: el linter y la suite pgTAP del catálogo vigilan que el dinero sea
+# `bigint` en la base; este vigila que no se CALCULE afuera. Una suma de pesos en TypeScript
+# compila, pasa los tipos y da un número plausible — hasta que hay dos totales que no coinciden
+# delante de un cliente que está reclamando. [AC-FTAR-03]
+paso "dinero: cero aritmética monetaria fuera de la BD (§4.8, §7.5)" \
+  node db/flota/gate-dinero-en-la-bd.mjs
+
 paso "linter de migraciones: las cinco exigencias de toda tabla de dominio (§4.2, §9.2)" \
   node db/flota/lint-migraciones.mjs
 
