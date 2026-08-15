@@ -3,6 +3,7 @@ import { tarjetasNivelCero } from "../../dominio/semaforo.ts";
 import { seedA, seedC, seedVacio } from "../../dominio/semaforo-fixtures.ts";
 import { filasPeekDeDominio, type FilaPeek } from "../../dominio/peek-n1.ts";
 import { resolverTerminologia } from "../../dominio/hoy-terminologia.ts";
+import { modulosNavegables, entitlementsDeModo } from "../../dominio/manifest.ts";
 import { TableroHoy } from "./tablero-de-hoy.tsx";
 
 // «Hoy» — home del dueño del tenant (§5.2-F6), Nivel 0 [AC-FSEM-01].
@@ -17,6 +18,12 @@ import { TableroHoy } from "./tablero-de-hoy.tsx";
 // resuelve la variante «tenant B» de `dominio/hoy-terminologia.ts` sobre las MISMAS tarjetas,
 // sin tocar un solo `data-testid`. El e2e autenticado contra el digest real queda pendiente,
 // mismo patrón que AC-FSEM-24 para el plano cross-tenant de e-auto.
+//
+// El manifest de módulos [AC-FPOR-03] cuelga de la MISMA semilla: seed `c` es el tenant C del
+// maestro (`mi_flota`), seed `a`/`vacio` son `daas`. Se resuelve ACÁ, en el Server Component, y
+// se pasa ya filtrado — nunca un fetch en el cliente que muestre el grupo DaaS un instante y lo
+// retire después. Sin ese fetch, no hay parpadeo posible: el e2e (`manifest-contraccion.spec.ts`)
+// lo verifica de forma mecánica igual, con un `MutationObserver` instalado antes de navegar.
 export default async function Hoy({
   searchParams,
 }: {
@@ -31,10 +38,19 @@ export default async function Hoy({
   const peekPorDominio: Record<string, FilaPeek[]> = Object.fromEntries(
     estados.map((estado) => [estado.clave, filasPeekDeDominio(estado)]),
   );
+  const modo = seedUsada === "c" ? "mi_flota" : "daas";
+  const modulos = modulosNavegables(entitlementsDeModo(modo));
 
   return (
     <main>
       <h1 style={{ fontSize: tipografia.display.tamano, fontWeight: tipografia.display.peso, margin: 0 }}>Hoy</h1>
+      <nav data-testid="manifest-modulos" aria-label="Módulos">
+        {modulos.map((m) => (
+          <a key={m.clave} data-testid="modulo-nav" data-modulo={m.clave} href={m.ruta}>
+            {m.titulo}
+          </a>
+        ))}
+      </nav>
       <TableroHoy
         tarjetas={tarjetas}
         peekPorDominio={peekPorDominio}

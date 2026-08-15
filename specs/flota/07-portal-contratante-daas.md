@@ -114,14 +114,32 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
       count(antes) en cada tabla, la empresa implícita es la MISMA fila y la contratante
       dada de alta en daas sobrevive la vuelta — gate propio de flota en verde
       (`pnpm check:full --app=flota`).
-- [ ] (P1) Contracción mi_flota (manifest + e2e; el trigger de la empresa implícita se
+- [x] (P1) Contracción mi_flota (manifest + e2e; el trigger de la empresa implícita se
       aserta aparte en AC-FPOR-17): el manifest server-side (entitlements × rol) no
       incluye tarifas, liquidación por cliente, portal ni facturación (sin huecos ni
       candados; locked-states solo en panel admin); «sin parpadeo» con aserción
       mecánica: los nodos DOM de los módulos contraídos no existen en NINGÚN frame
       entre el bootstrap y el render estable del e2e; el semáforo no ofrece tarjeta
       SLA; e2e del tenant C del seed: UI contraída y cero CLP de tarifas visibles (§3,
-      §5.5, §3.E1.11, §10) — oráculo: CI [AC-FPOR-03]
+      §5.5, §3.E1.11, §10) — oráculo: CI [AC-FPOR-03]. Probado:
+      `apps/flota/src/dominio/manifest.ts` espeja 1:1 las 4 filas de `modo_recorte`
+      (db/migraciones-flota/control/0003_modo_como_preset.sql) — tarifas, liquidación
+      por cliente, portal del contratante y facturación — y las omite del arreglo
+      (sin hueco, sin candado) cuando su entitlement no está encendido, mismo criterio
+      «sin entrada = apagada» que `dominioSemaforoActivo`; `hoy/page.tsx` lo resuelve en
+      el Server Component (nunca un fetch en el cliente, así que no hay parpadeo
+      estructuralmente posible) y lo renderiza en `<nav data-testid="manifest-modulos">`.
+      `apps/flota/e2e/manifest-contraccion.spec.ts` prueba, sobre el tenant C del seed
+      (`?seed=c`, mi_flota): (a) el grupo DaaS no aparece y lo operativo sigue completo;
+      (b) el grupo SÍ aparece completo con seed A (daas); (c) «sin parpadeo» con
+      aserción MECÁNICA — un `MutationObserver` instalado con `page.addInitScript` ANTES
+      de que el documento navegado parsee un solo nodo, que capta la construcción del
+      DOM entera y no un muestreo de frames; (d) el combo que el AC pide en un solo e2e
+      del tenant C: manifest contraído + semáforo sin tarjeta SLA + cero CLP visible
+      (reafirmando AC-FSEM-01/13 sobre la misma corrida). `manifest.test.ts` cubre el
+      dominio puro (10 casos). Gate en verde:
+      `bash packages/metodo/scripts/check.sh --full --app=flota` (18 OK, 0 rojos) y
+      `pnpm --filter flota e2e` (502/502, incluidos los 4 tests nuevos) en PRIMER PLANO.
 - [ ] (P1) Módulo apagado en HTTP: con el portal OFF (mi_flota u override), TODA ruta
       `/cliente/*` (lectura y planificación) responde 403; el namespace no expone ningún
       endpoint de captura (auditoría del manifiesto de rutas: nada de `/cliente/*` en el
