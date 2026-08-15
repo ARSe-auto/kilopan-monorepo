@@ -94,12 +94,25 @@ export async function duenoDe(bd) {
 
 async function crearBase(sql, bd, plantilla) {
   if (plantilla) {
-    const abiertas = await conexionesA(sql, plantilla);
+    // ESPERAR, NO RENDIRSE AL PRIMER CONTEO (15-ago-2026). Los pools de `pg` retienen la
+    // conexión OCIOSA hasta 10 s después del release (`idleTimeoutMillis` por defecto): la
+    // suite anterior ya terminó, su conexión a la plantilla sigue viva unos segundos, y esta
+    // provisión llegaba dentro de esa ventana y abortaba — en serie y sin que nadie tuviera
+    // la plantilla abierta de verdad. Se vio provisionando el cluster del TERCER motor: la
+    // misma suite pasaba sola y fallaba dentro del gate, según la suerte del reloj.
+    // Se espera hasta ~12 s (cubre ese timeout) y recién entonces se rinde con el mensaje
+    // humano de siempre. NO se usa pg_terminate_backend a propósito: matar la conexión de un
+    // psql ajeno es decidir por quien lo tiene abierto, y este mensaje existe para avisarle.
+    let abiertas = await conexionesA(sql, plantilla);
+    for (let intento = 0; abiertas > 0 && intento < 24; intento++) {
+      await new Promise((r) => setTimeout(r, 500));
+      abiertas = await conexionesA(sql, plantilla);
+    }
     if (abiertas > 0) {
       throw new Error(
-        `no puedo crear ${bd}: hay ${abiertas} conexión(es) abierta(s) contra ${plantilla}. ` +
-          "PostgreSQL exige que nadie esté conectado a la plantilla mientras se la copia " +
-          "(cerrá el psql que la esté mirando).",
+        `no puedo crear ${bd}: hay ${abiertas} conexión(es) abierta(s) contra ${plantilla} ` +
+          "(esperé 12 s por si era una conexión ociosa de un pool). PostgreSQL exige que nadie " +
+          "esté conectado a la plantilla mientras se la copia (cerrá el psql que la esté mirando).",
       );
     }
   }
