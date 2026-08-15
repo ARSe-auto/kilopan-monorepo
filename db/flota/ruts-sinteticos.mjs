@@ -65,6 +65,7 @@ export const VALIDOS = {
   "5.772.157-K": "la dueña del Detalle N2 del «Hoy» (AC-FSEM-05), propia y no prestada: compartía el índice 18 con pod-secuencia-hueco.spec.ts — mismo hallazgo del 12-ago-2026 que los de arriba",
   "6.180.340-8": "el chofer de la foto y el GPS degradados de F4 (AC-FPOD-12), propio y no prestado: compartía el índice 20 con pod-evidencia-sha256.spec.ts — mismo hallazgo del 12-ago-2026 que los de arriba",
   "76.543.219-7": "la empresa cliente del drill-down línea→evidencia (AC-FTAR-07): rango 76.xxx de persona jurídica, propia y no prestada — la suite necesita SU propia empresa contratante para sembrar tarifa y encargo sin pisar la de otro módulo",
+  "76.222.333-3": "la empresa cliente de la contracción sin pérdida de filas del módulo de tarifas (AC-FTAR-12): rango 76.xxx de persona jurídica, propia y no prestada — la suite necesita SU propia empresa para sembrar tarifa+zona+recargo+liquidación+línea sin pisar la de AC-FTAR-07 ni de AC-FTAR-10",
 };
 
 /**
