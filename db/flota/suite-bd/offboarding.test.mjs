@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { volcarTenant, restaurarEn, volcadoIncluye } from "../offboarding.mjs";
 import { migrar } from "../migrar.mjs";
-import { provisionar } from "../provisionar.mjs";
+import { provisionar, desalta } from "../provisionar.mjs";
 import { borrarRolDeApp } from "../rol-app.mjs";
 import { con, conectar, ROL_MIGRADOR, bdDeTenant } from "../conectar.mjs";
 

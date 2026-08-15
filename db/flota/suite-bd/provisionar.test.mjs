@@ -20,7 +20,7 @@ import {
   basesDeTenant,
   UUID_CENTINELA_PLANTILLA,
 } from "../provisionar.mjs";
-import { con, conectar, BD_PLANTILLA, bdDeTenant } from "../conectar.mjs";
+import { con, conectar, BD_CONTROL, BD_PLANTILLA, bdDeTenant } from "../conectar.mjs";
 import { versionEsperada } from "../aplicar.mjs";
 
 const RAIZ = new URL("../../..", import.meta.url).pathname.replace(/\/$/, "");
@@ -105,6 +105,80 @@ test("[AC-FTEN-02] provisiona DOS BD de tenant desde la plantilla, cada una con 
 
   const vivas = await basesDeTenant();
   assert.ok(vivas.includes("t_gate_a") && vivas.includes("t_gate_b"));
+});
+
+// --- Alta persistida en `control.tenants` [AC-FPOR-01] -----------------------------------
+// `control.tenants` es la AUTORIDAD que lee el ruteo y de la que se resuelve el preset de
+// entitlements (§4.4) — hasta acá la provisión creaba la BD del tenant y dejaba esa fila
+// sin escribir (deuda documentada en `tenantIdEnControl`, `apps/flota/src/servidor/gobierno.ts`).
+// El wizard de AC-FMIG-14 va a invocar `provisionar()` como su servicio de alta: esto prueba
+// que el modo que ese botón elija efectivamente queda persistido.
+
+test("[AC-FPOR-01] el alta persiste el modo elegido en `control.tenants`", async () => {
+  const t = await provisionar("gate_modo_daas", { recrear: true, modo: "daas" });
+  try {
+    const [fila] = await con(BD_CONTROL, ({ sql }) =>
+      sql("select slug, bd, modo::text as modo from tenants where slug = $1", [t.slug]),
+    );
+    assert.deepEqual(fila, { slug: "gate_modo_daas", bd: "t_gate_modo_daas", modo: "daas" });
+    assert.equal(t.modo, "daas", "provisionar() debe devolver el modo con el que dio de alta");
+  } finally {
+    await con(BD_CONTROL, ({ sql }) => sql("delete from tenants where slug = $1", [t.slug]));
+    await borrar("gate_modo_daas");
+  }
+});
+
+test("[AC-FPOR-01] sin modo explícito, el alta persiste el default `mi_flota`", async () => {
+  const t = await provisionar("gate_modo_default", { recrear: true });
+  try {
+    const [{ modo }] = await con(BD_CONTROL, ({ sql }) =>
+      sql("select modo::text as modo from tenants where slug = $1", [t.slug]),
+    );
+    assert.equal(modo, "mi_flota");
+    assert.equal(t.modo, "mi_flota");
+  } finally {
+    await con(BD_CONTROL, ({ sql }) => sql("delete from tenants where slug = $1", [t.slug]));
+    await borrar("gate_modo_default");
+  }
+});
+
+test("[AC-FPOR-01] recrear el mismo tenant conserva el `id` de `control.tenants` (los grants no quedan huérfanos)", async () => {
+  const primero = await provisionar("gate_modo_recrear", { recrear: true, modo: "mi_flota" });
+  try {
+    const [antes] = await con(BD_CONTROL, ({ sql }) =>
+      sql("select id::text as id from tenants where slug = $1", [primero.slug]),
+    );
+    const segundo = await provisionar("gate_modo_recrear", { recrear: true, modo: "daas" });
+    const [despues] = await con(BD_CONTROL, ({ sql }) =>
+      sql("select id::text as id, modo::text as modo from tenants where slug = $1", [
+        segundo.slug,
+      ]),
+    );
+    assert.equal(despues.id, antes.id, "recrear no puede volarle el id a control.tenants");
+    assert.equal(despues.modo, "daas", "la segunda alta debe pisar el modo con el nuevo valor");
+
+    const filas = await con(BD_CONTROL, ({ sql }) =>
+      sql("select count(*)::int as n from tenants where slug = $1", [primero.slug]),
+    );
+    assert.equal(filas[0].n, 1, "recrear no puede dejar dos filas del mismo slug en control");
+  } finally {
+    await con(BD_CONTROL, ({ sql }) => sql("delete from tenants where slug = $1", ["gate_modo_recrear"]));
+    await borrar("gate_modo_recrear");
+  }
+});
+
+test("[AC-FPOR-01] `control.tenants.modo` fuera del dominio mi_flota|daas rebota en la BD (CHECK del enum), 0 filas", async () => {
+  await assert.rejects(
+    () =>
+      con(BD_CONTROL, ({ sql }) =>
+        sql("insert into tenants (slug, bd, modo) values ('gate_modo_enum', 't_gate_modo_enum', 'premium')"),
+      ),
+    { code: "22P02" }, // invalid input value for enum tenant_modo
+  );
+  const filas = await con(BD_CONTROL, ({ sql }) =>
+    sql("select count(*)::int as n from tenants where slug = 'gate_modo_enum'"),
+  );
+  assert.equal(filas[0].n, 0, "el rebote del enum no puede dejar la fila a medias");
 });
 
 test("[AC-FTEN-02] `tenant_info` es fila única: una segunda identidad rebota en la BD", async () => {

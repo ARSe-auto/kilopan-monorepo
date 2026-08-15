@@ -20,6 +20,7 @@ import { con, BD_CONTROL, BD_PLANTILLA, ROL_MIGRADOR, bdDeTenant, slugDeBd } fro
 import { aplicar, aplicadasEn, migracionesDe, DIR_MIGRACIONES } from "./aplicar.mjs";
 import { provisionarRolDeApp } from "./rol-app.mjs";
 import { CONTRASTE } from "../../packages/nucleo-comun/src/constants.ts";
+import { MODOS, esModo } from "../../apps/flota/src/servidor/modo.ts";
 
 /** El uuid que `tenant_actual()` devuelve en la plantilla: la plantilla no es un tenant. */
 export const UUID_CENTINELA_PLANTILLA = "00000000-0000-7000-8000-000000000000";
@@ -163,12 +164,60 @@ export async function refrescarPlantilla({ dir = DIR_MIGRACIONES, usuario = ROL_
 }
 
 /**
- * Crea `t_<slug>` desde la plantilla y siembra su identidad. Devuelve `{ slug, bd, id }`.
+ * El alta en `control.tenants`: registra slug, bd y el modo elegido [AC-FPOR-01].
+ *
+ * Hasta acá la provisión solo creaba la BD del tenant; `control.tenants` —la AUTORIDAD que
+ * lee el ruteo y de la que se resuelve el preset de entitlements (§4.4)— se quedaba sin fila
+ * (deuda documentada en `tenantIdEnControl`, `apps/flota/src/servidor/gobierno.ts`). El
+ * wizard de AC-FMIG-14 va a invocar `provisionar()` como su servicio de alta; esta es la
+ * mitad que persiste el modo que el botón del wizard elija.
+ *
+ * `on conflict (slug)` en vez de un INSERT liso: con `recrear` la BD física se dropea y se
+ * rehace, pero el registro de `control` no tiene por qué perder su `id` —y con él, los
+ * `grants_soporte` que ya lo referencian— solo porque el gate volvió a provisionar el mismo
+ * tenant de prueba.
+ */
+async function altaEnControl(slug, bd, modo) {
+  await con(BD_CONTROL, ({ sql }) =>
+    sql(
+      `insert into tenants (slug, bd, modo) values ($1, $2, $3::tenant_modo)
+         on conflict (slug) do update set bd = excluded.bd, modo = excluded.modo`,
+      [slug, bd, modo],
+    ),
+  );
+}
+
+/**
+ * El complemento del alta: retira el registro de `control.tenants` [AC-FPOR-01].
+ *
+ * Los fixtures del gate dropean la BD física del tenant de prueba al terminar, pero desde que
+ * `provisionar()` también da de alta en `control` esa fila sobrevive al DROP DATABASE si nadie
+ * la borra — y el job exportador (AC-FTEN-20) la reporta como «registrado en control pero su
+ * base no existe» en cada corrida siguiente. `on delete cascade` no alcanza para todo: úsese
+ * junto con el DROP DATABASE del fixture, no en su reemplazo.
+ */
+export async function desalta(slug) {
+  await con(BD_CONTROL, ({ sql }) => sql("delete from tenants where slug = $1", [slug]));
+}
+
+/**
+ * Crea `t_<slug>` desde la plantilla, siembra su identidad y da de alta el tenant en
+ * `control.tenants` con el modo elegido. Devuelve `{ slug, bd, id, modo, rol, clave }`.
  *
  * `recrear` existe para el gate: la suite provisiona los mismos dos tenants en CADA corrida
  * (lo exige el AC) y una corrida no puede depender de que la anterior haya limpiado.
+ *
+ * `modo` es SOLO `mi_flota|daas` (§3, §4.4): el dominio cerrado se rechaza ACÁ, antes de
+ * tocar la base, para que un valor fuera de dominio quede en 0 filas — jamás una CREATE
+ * DATABASE a medio camino por un typo en el modo. `esModo`/`MODOS` son los mismos que valida
+ * la conmutación (`servidor/modo.ts`, AC-FRUT-14): una sola definición del dominio.
  */
-export async function provisionar(slug, { recrear = false } = {}) {
+export async function provisionar(slug, { recrear = false, modo = "mi_flota" } = {}) {
+  if (!esModo(modo)) {
+    throw new Error(
+      `modo inválido: «${modo}». control.tenants.modo acepta SOLO ${MODOS.join("|")} (AC-FPOR-01).`,
+    );
+  }
   const bd = bdDeTenant(slug);
   await asegurarRolMigrador();
 
@@ -259,12 +308,13 @@ export async function provisionar(slug, { recrear = false } = {}) {
     // primero que la necesitara la abriría con el rol equivocado (§4.1). [AC-FTEN-03]
     ({ rol, clave } = await provisionarRolDeApp(slug));
     await asegurarConstantesDePlataforma(bd);
+    await altaEnControl(slug, bd, modo);
   } catch (e) {
     await con("postgres", ({ sql }) => sql(`drop database if exists ${ident(bd)} with (force)`));
     throw new Error(`el alta de ${slug} falló y se deshizo (${bd} borrada): ${e.message}`);
   }
 
-  return { slug, bd, id, rol, clave };
+  return { slug, bd, id, modo, rol, clave };
 }
 
 /**
@@ -381,6 +431,7 @@ export async function auditarPlantilla({ dir = DIR_MIGRACIONES } = {}) {
 async function principal(argv) {
   const [orden, ...resto] = argv;
   const recrear = resto.includes("--recrear");
+  const modoArg = resto.find((a) => a.startsWith("--modo="))?.slice("--modo=".length);
   const libres = resto.filter((a) => !a.startsWith("--"));
 
   if (orden === "plantilla") {
@@ -394,12 +445,14 @@ async function principal(argv) {
 
   if (orden === "tenant") {
     if (libres.length === 0) {
-      console.error("provisionar: falta el slug (uso: provisionar.mjs tenant <slug> [--recrear])");
+      console.error(
+        "provisionar: falta el slug (uso: provisionar.mjs tenant <slug> [--recrear] [--modo=mi_flota|daas])",
+      );
       return 2;
     }
     for (const slug of libres) {
-      const t = await provisionar(slug, { recrear });
-      console.log(`provisionar: ${t.bd} lista · tenant_info.id = ${t.id}`);
+      const t = await provisionar(slug, modoArg ? { recrear, modo: modoArg } : { recrear });
+      console.log(`provisionar: ${t.bd} lista · tenant_info.id = ${t.id} · modo = ${t.modo}`);
     }
     return 0;
   }

@@ -13,7 +13,7 @@
 // nunca el 2xx-siempre que la regla de oro reserva para CAPTURA.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { provisionar } from "../provisionar.mjs";
+import { provisionar, desalta } from "../provisionar.mjs";
 import { con, conectar, bdDeTenant } from "../conectar.mjs";
 import { exigirClaseCaptura } from "../../../apps/flota/src/servidor/clasificacion-tablas.ts";
 
@@ -22,6 +22,9 @@ let tenant;
 let app;
 
 async function limpiar() {
+  // Complemento del alta en `control.tenants` [AC-FPOR-01]: sin esto, la fila sobrevive al
+  // DROP DATABASE y el job exportador la reporta huérfana en la corrida siguiente.
+  await desalta(SLUG);
   await con("postgres", ({ sql }) => sql(`drop database if exists ${bdDeTenant(SLUG)} with (force)`));
 }
 

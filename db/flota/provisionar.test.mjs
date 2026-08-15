@@ -8,7 +8,7 @@
 // `--full`; acá se prueba que la regla misma no sea decorativa.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { rezagosDeLaPlantilla, UUID_CENTINELA_PLANTILLA } from "./provisionar.mjs";
+import { rezagosDeLaPlantilla, UUID_CENTINELA_PLANTILLA, provisionar } from "./provisionar.mjs";
 
 test("[AC-FTEN-02] plantilla al día con el disco y con los tenants: cero rezagos", () => {
   const motivos = rezagosDeLaPlantilla({
@@ -93,4 +93,21 @@ test("[AC-FTEN-02] el centinela de la plantilla es un UUIDv7 con su nibble de ve
   // de versión 7») tendría un contraejemplo sembrado por nosotros mismos.
   assert.equal(UUID_CENTINELA_PLANTILLA[14], "7");
   assert.match(UUID_CENTINELA_PLANTILLA, /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/);
+});
+
+// --- Dominio de `control.tenants.modo` [AC-FPOR-01] -------------------------------------
+// El rebote sobre un modo fuera de dominio se prueba SIN cluster: `provisionar()` valida
+// ANTES de la primera llamada a la base, así que un `modo` inválido nunca llega a tocar red
+// ni deja una CREATE DATABASE a medio camino — es 0 filas por construcción, no por suerte.
+
+test("[AC-FPOR-01] modo fuera del dominio mi_flota|daas rebota SIN tocar el cluster", async () => {
+  await assert.rejects(
+    () => provisionar("gate_modo_invalido", { modo: "premium" }),
+    /modo inválido.*premium.*mi_flota\|daas/s,
+  );
+});
+
+test("[AC-FPOR-01] modo vacío o de otro tipo también rebota: el dominio es CERRADO", async () => {
+  await assert.rejects(() => provisionar("gate_modo_vacio", { modo: "" }), /modo inválido/);
+  await assert.rejects(() => provisionar("gate_modo_mayus", { modo: "DAAS" }), /modo inválido/);
 });
