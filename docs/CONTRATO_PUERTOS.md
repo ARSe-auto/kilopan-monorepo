@@ -33,7 +33,9 @@ CWD real del proceso. Ya no es un riesgo.)
 | **3300** | **KiloPan** | `apps/kilopan` (`dev`/`start`) |
 | **3301** | **KiloPan** | **e2e de `apps/kilopan`** — `playwright.config.ts` lo fija para TODOS los worktrees |
 | **3310** | **FLOTA** | `apps/flota` (`dev`/`start`) — fijo en su `package.json` |
-| **3311** | **FLOTA** | e2e de `apps/flota` — fijo en su `playwright.config.ts` |
+| **3311** | **FLOTA** | e2e de `apps/flota` — por omisión en su `playwright.config.ts` |
+| **3312** | **FLOTA (motor 2)** | e2e del SEGUNDO worktree — `FLOTA_E2E_PUERTO=3312` |
+| **54332** | **FLOTA (motor 2)** | su cluster Postgres — `FLOTA_PG_PUERTO=54332`, PGDATA `~/.flota-pg-2` |
 | **8778** | **KiloPan** | panel, si algún día se sirve |
 | 8100 · 8200 | **eauto** | pdf-svc / mail-worker |
 | 8777 | **eauto** | panel del motor |

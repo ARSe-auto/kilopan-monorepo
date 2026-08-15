@@ -5,7 +5,10 @@ import { defineConfig, devices } from "@playwright/test";
 // compartido entre worktrees. Un esqueleto de esta app ya nació pineado al 3301 una vez
 // (08-ago-2026) y dejó a otro agente esperando un puerto que nunca se iba a liberar; un
 // gate perdido por colisión de infraestructura le suma un strike a un AC sano.
-const PUERTO = 3311;
+// 3311 por omisión —el del contrato— y `FLOTA_E2E_PUERTO` para el SEGUNDO motor: dos
+// worktrees construyendo a la vez necesitan un puerto cada uno o el webServer del segundo
+// aborta con «is already used» y el rojo parece de la prueba (docs/CONTRATO_PUERTOS.md).
+const PUERTO = Number(process.env.FLOTA_E2E_PUERTO ?? 3311);
 // distDir propio: así el build del e2e no pisa el `.next` que `check.sh --full` ya usó
 // para el chequeo standalone y para el presupuesto de performance, ambos ANTES de este
 // paso. `next dev` reescribiría ese directorio en modo desarrollo y clavaría el gate en

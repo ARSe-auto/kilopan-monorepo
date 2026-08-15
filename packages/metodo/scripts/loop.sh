@@ -84,6 +84,12 @@ siguiente_ac() {
     while IFS= read -r linea; do
       [ -n "$linea" ] || continue
       id=$(echo "$linea" | grep -oE '\[AC-[A-Z0-9-]+\]' | tr -d '[]')
+      # FAMILIAS DE ESTE MOTOR. Con dos motores en dos worktrees, ambos leen el MISMO plan y sin
+      # esto elegirían el mismo AC: dos agentes construyendo lo mismo, dos ramas que se pisan al
+      # unir. Cada motor declara qué familias le tocan (`KILOPAN_FAMILIAS`, un regex sobre el id)
+      # y la partición queda explícita en su arranque, no en la suerte del orden del plan.
+      # Sin la variable no filtra nada: un solo motor sigue tomando todo, como hasta hoy.
+      if [ -n "${KILOPAN_FAMILIAS:-}" ] && ! echo "$id" | grep -qE "$KILOPAN_FAMILIAS"; then continue; fi
       esta_atascado "$id" && continue
       # Un AC bloqueado por una decisión del dueño no se intenta: gastaría el presupuesto entero
       # de la iteración en algo que ninguna cantidad de trabajo cierra.
