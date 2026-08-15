@@ -57,6 +57,14 @@ export const TENANTS = [
   // resellado a mitad de esa corrida cambiara qué versión congela el PRÓXIMO turno que abra
   // cualquiera de ellas. Va al final por la misma razón que `gobierno` y `hechos`.
   { slug: "config_congelada", estado: "activo" },
+  // Base PROPIA para la pantalla «Funciones» [AC-FMIG-08]: cada toggle escribe una
+  // `tenant_feature_overrides` en `control` (compartida entre TODAS las bases) Y sella una
+  // `config_version` nueva del lado del tenant. Compartir `ruteo_activo` arriesgaría el mismo
+  // problema que `config_congelada` documenta arriba —una versión resellada a mitad de otra
+  // suite— y encima ensuciaría `tenant_feature_overrides` de A para `documentos.spec.ts`
+  // (AC-FVEH-03), que también usa ese tenant y esa tabla. Va al final por la misma razón que
+  // el resto de las bases dedicadas.
+  { slug: "funciones", estado: "activo" },
 ];
 
 /** Subdominio que jamás se registra. Nombrarlo acá evita que el test lo invente distinto. */

@@ -305,6 +305,19 @@
       }
     },
     {
+      "ruta": "/api/gobierno/funciones",
+      "archivo": "src/app/api/gobierno/funciones/route.ts",
+      "metodos": [
+        "GET",
+        "PATCH"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La pantalla «Funciones» del panel admin [AC-FMIG-08], plano de control exclusivo del dueño (§5.4, §5.5). Sin parámetro de ruta: la función se nombra por `lookup_key` en el cuerpo del PATCH, no por id. El GET expone qué módulos tiene comprados y encendidos el vecino —su plan comercial en una respuesta—; el PATCH MUTA `tenant_feature_overrides` en `control` (compartida entre TODOS los tenants) y sella una `config_version` nueva en la base del tenant, así que enciende el comparador de huella de LAS DOS bases: escribirle un override al vecino le prende o le apaga un módulo entero de su operación sin que su dueño lo haya tocado. El caso genérico va sin credencial y la guardia contesta 404 pelado antes de mirar el cuerpo; el barrido de AC-FIDN-12 prueba el 403 con rol distinto de `admin_tenant` sobre esta misma ruta, y `e2e/funciones.spec.ts` prueba además el 422 de «fuera de plan» con CERO filas en `control.tenant_feature_overrides`."
+      }
+    },
+    {
       "ruta": "/api/gobierno/grants",
       "archivo": "src/app/api/gobierno/grants/route.ts",
       "metodos": [
@@ -1203,6 +1216,18 @@
       "cruce": {
         "tipo": "sin_recurso",
         "nota": "Pantalla del dueño (F-A y F-C del §5.4). No recibe identificador por URL: todo lo que hace pasa por /api/gobierno/**, que ya tiene sus propios casos declarados, y el tenant sale del ruteo. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y acá pesa porque el HTML servido no puede traer ni el slug ni la base del vecino antes siquiera de que haya sesión: sin credencial la pantalla no pinta datos de nadie."
+      }
+    },
+    {
+      "ruta": "/panel/funciones",
+      "archivo": "src/app/panel/funciones/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de solo lectura sobre el shell [AC-FMIG-08]: no recibe identificador por URL, y todo lo que muta pasa por `PATCH /api/gobierno/funciones`, que ya tiene su propio caso declarado y su propia guardia de rol. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y el HTML servido no puede traer un `lookup_key` ni un estado de plan del vecino antes de que el GET del endpoint resuelva contra la base correcta."
       }
     },
     {
