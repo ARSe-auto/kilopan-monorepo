@@ -472,6 +472,42 @@
       }
     },
     {
+      "ruta": "/api/liquidacion-lineas/[id]/evidencia",
+      "archivo": "src/app/api/liquidacion-lineas/[id]/evidencia/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "liquidacion_lineas",
+          "columna": "id"
+        },
+        "nota": "El drill-down línea→evidencia del §3.E1.9 [AC-FTAR-07]. Una línea de B trae el resultado, el motivo y las capturas de SU POD — foto, firma — que son evidencia de una entrega real de la empresa cliente del vecino. Verla desde A no es un contador que sube: es leer con quién firmó la recepción y qué pasó en la puerta de un cliente ajeno. Contrato 404 y BD de B sin cambios (es lectura, pero la huella se compara igual por si un día esta ruta deja de serlo)."
+      }
+    },
+    {
+      "ruta": "/api/liquidaciones/[id]",
+      "archivo": "src/app/api/liquidaciones/[id]/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "liquidaciones",
+          "columna": "id"
+        },
+        "nota": "La liquidación con sus líneas [AC-FTAR-07]. Trae la razón social y el RUT de la empresa cliente de B, el período y cada monto CLP de sus líneas — exactamente la economía interna que el §8 protege del rol `cliente` de OTRA empresa, ahora cruzando además el límite de tenant. Contrato 404 y BD de B sin cambios."
+      }
+    },
+    {
       "ruta": "/api/maestras",
       "archivo": "src/app/api/maestras/route.ts",
       "metodos": [
@@ -1081,6 +1117,18 @@
       "cruce": {
         "tipo": "sin_recurso",
         "nota": "Detalle N2 [AC-FSEM-05]. El `id` viaja como parámetro de CONSULTA (`?id=`), no de ruta — mismo criterio que `/api/agenda` (AC-FVEH-07) — porque mientras el digest real de AC-FSEM-06/09 no exista, ese `id` es literal de las semillas de `semaforo-fixtures.ts` y no un identificador de fila de ningún tenant: la pantalla no abre ninguna BD de tenant para resolverlo. El cruce que sí aplica es el genérico de una pantalla sin recurso — identidad de B por los canales falsificables, respuesta idéntica a la de A— y vuelve a pesar de verdad el día que esta pantalla lea `review_queue` real."
+      }
+    },
+    {
+      "ruta": "/liquidaciones",
+      "archivo": "src/app/liquidaciones/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "El drill-down línea→evidencia del operador/admin [AC-FTAR-07]. El `id` viaja como parámetro de CONSULTA (`?id=`), no de ruta — mismo criterio que `/hoy/excepciones` (AC-FSEM-05): esta pantalla no abre ninguna BD de tenant por su cuenta, solo llama `pedir()`, así que el confinamiento por tenant y por rol vive ENTERO en `/api/liquidaciones/[id]` y `/api/liquidacion-lineas/[id]/evidencia`, que sí son recurso de ruta con su propio caso de cruce. El caso genérico que sí aplica acá es identidad de B por los canales falsificables ⇒ respuesta idéntica a la de A."
       }
     },
     {
