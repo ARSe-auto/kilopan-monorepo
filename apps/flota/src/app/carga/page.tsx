@@ -12,6 +12,7 @@ import { tipografia, superficie, grilla, enfasis, semantico as colorSemantico } 
 import { semantico, componente } from "@kilopan/miga/estructura.ts";
 import { UNDO } from "../../../../../packages/nucleo-comun/src/constants.ts";
 import { pedir } from "../../cliente/aparato.ts";
+import { useContadorDeToques, enviarToquesFlujo } from "../../cliente/toques-flujo.ts";
 
 // La recepción de carga en el andén (F2) [AC-FRUT-07] — §5.2 F2, §5.3, §0, §4.7, §7.6.
 //
@@ -64,6 +65,7 @@ export default function RecepcionDeCarga() {
   const [confirmadas, setConfirmadas] = useState<Record<string, "enviando" | "listo">>({});
   const [porDeshacer, setPorDeshacer] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const contadorPin = useContadorDeToques();
 
   const cargar = useCallback(async () => {
     const respuesta = await pedir("/api/vehiculos").catch(() => null);
@@ -159,9 +161,16 @@ export default function RecepcionDeCarga() {
               pie en el andén con las manos ocupadas (§5.7, §0). */}
           <CifraGrande valor={pin === "" ? "—" : "•".repeat(pin.length)} />
           <div data-testid="teclado-pin">
-            <TecladoNumerico valor={pin} onCambiar={setPin} />
+            <TecladoNumerico valor={pin} onCambiar={setPin} onToque={contadorPin.contar} />
           </div>
-          <BotonPrimario testid="continuar-pin" disabled={pin.length < 4} onClick={() => setPaso("vehiculo")}>
+          <BotonPrimario
+            testid="continuar-pin"
+            disabled={pin.length < 4}
+            onClick={() => {
+              enviarToquesFlujo("carga_pin", contadorPin.leerYReiniciar());
+              setPaso("vehiculo");
+            }}
+          >
             Continuar
           </BotonPrimario>
         </section>

@@ -16,6 +16,7 @@ import { semantico } from "@kilopan/miga/estructura.ts";
 import { UNDO } from "../../../../../packages/nucleo-comun/src/constants.ts";
 import { pedir } from "../../cliente/aparato.ts";
 import { replayar } from "../../cliente/outbox.ts";
+import { enviarToquesFlujo } from "../../cliente/toques-flujo.ts";
 import { textoDelCandado, type CandadoDeEntrega } from "../../dominio/candado-entrega.ts";
 import {
   sacarDeLaCola,
@@ -122,6 +123,9 @@ export default function TarjetaDeEntrega({
   // Parcial: cantidad tecleada (texto crudo del teclado propio) y motivo por ítem ajustado
   // (§4.5: `motivo_item` es por ítem, no por parada).
   const [cantidades, setCantidades] = useState<Record<string, string>>({});
+  // AC-FMIG-03: toques reales por ítem, uno por cada `TecladoNumerico` del stepper parcial —
+  // un ref y no state porque no dibuja nada, solo viaja a `client_metric` al confirmar.
+  const toquesPorItem = useRef<Record<string, number>>({});
   const [motivoPorItem, setMotivoPorItem] = useState<Record<string, string>>({});
   // No entregado: un solo motivo, de `paradas.motivo_id`.
   const [motivoNoEntrega, setMotivoNoEntrega] = useState<string | null>(null);
@@ -416,6 +420,11 @@ export default function TarjetaDeEntrega({
           motivoId: motivoPorItem[it.id]!,
         };
       });
+    for (const ajuste of ajustes) {
+      const toques = toquesPorItem.current[ajuste.itemId] ?? 0;
+      if (toques > 0) enviarToquesFlujo("entrega_cantidad_parcial", toques);
+      delete toquesPorItem.current[ajuste.itemId];
+    }
     setRecorrido((r) => entregarParcial(r, ajustes, selloDelAparato(), evidencias));
     volverAElegir();
   }
@@ -594,6 +603,9 @@ export default function TarjetaDeEntrega({
                       <TecladoNumerico
                         valor={cantidades[it.id] ?? ""}
                         onCambiar={(v) => setCantidades((prev) => ({ ...prev, [it.id]: v }))}
+                        onToque={() => {
+                          toquesPorItem.current[it.id] = (toquesPorItem.current[it.id] ?? 0) + 1;
+                        }}
                       />
                     </div>
                     {cantidades[it.id] !== undefined && cantidades[it.id] !== "" && (

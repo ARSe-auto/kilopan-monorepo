@@ -11,6 +11,7 @@ import {
 import { tipografia, superficie, grilla, semantico as colorSemantico, enfasis } from "@kilopan/miga/tokens.ts";
 import { semantico, componente } from "@kilopan/miga/estructura.ts";
 import { pedir } from "../../../cliente/aparato.ts";
+import { useContadorDeToques, enviarToquesFlujo } from "../../../cliente/toques-flujo.ts";
 import { semaforoDeSalida, type Semaforo } from "../../../../../../packages/nucleo-comun/src/energia.ts";
 
 // La apertura del turno (F3) [AC-FVEH-10] — §5.2-F3, §5.3, §5.7, §7.6, §0.
@@ -74,6 +75,8 @@ export default function AbrirTurno() {
   const [abierto, setAbierto] = useState(false);
   /** Lo que le dejó dicho quien manejó antes ESTE vehículo (§5.2-F5 → §5.2-F3). */
   const [nota, setNota] = useState<string | null>(null);
+  const contadorOdometro = useContadorDeToques();
+  const contadorCarga = useContadorDeToques();
 
   const cargar = useCallback(async () => {
     const respuesta = await pedir("/api/vehiculos").catch(() => null);
@@ -249,9 +252,16 @@ export default function AbrirTurno() {
           <h2 style={subtitulo}>Kilómetros del tablero</h2>
           <CifraGrande valor={odometro === "" ? "—" : odometro} unidad="km" />
           <div data-testid="teclado-odometro">
-            <TecladoNumerico valor={odometro} onCambiar={setOdometro} />
+            <TecladoNumerico valor={odometro} onCambiar={setOdometro} onToque={contadorOdometro.contar} />
           </div>
-          <BotonPrimario testid="continuar-odometro" disabled={odometro === ""} onClick={() => setPaso("carga")}>
+          <BotonPrimario
+            testid="continuar-odometro"
+            disabled={odometro === ""}
+            onClick={() => {
+              enviarToquesFlujo("turno_abrir_odometro", contadorOdometro.leerYReiniciar());
+              setPaso("carga");
+            }}
+          >
             Continuar
           </BotonPrimario>
         </section>
@@ -262,9 +272,16 @@ export default function AbrirTurno() {
           <h2 style={subtitulo}>Carga de la batería</h2>
           <CifraGrande valor={carga === "" ? "—" : carga} unidad="%" />
           <div data-testid="teclado-carga">
-            <TecladoNumerico valor={carga} onCambiar={setCarga} />
+            <TecladoNumerico valor={carga} onCambiar={setCarga} onToque={contadorCarga.contar} />
           </div>
-          <BotonPrimario testid="continuar-carga" disabled={carga === ""} onClick={() => setPaso("semaforo")}>
+          <BotonPrimario
+            testid="continuar-carga"
+            disabled={carga === ""}
+            onClick={() => {
+              enviarToquesFlujo("turno_abrir_soc", contadorCarga.leerYReiniciar());
+              setPaso("semaforo");
+            }}
+          >
             Continuar
           </BotonPrimario>
         </section>

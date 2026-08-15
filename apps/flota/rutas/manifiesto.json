@@ -593,6 +593,18 @@
       }
     },
     {
+      "ruta": "/api/metricas/toques-flujo",
+      "archivo": "src/app/api/metricas/toques-flujo/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "AC-FMIG-03: no recibe identificador por URL — el cuerpo trae flujo (whitelist cerrada) y toques (entero). No hay fila de otro tenant que leer ni mutar por id; el cruce que aplica es el genérico de sesión (`sesionDelTenant`, igual que el resto de las rutas de terreno): cabecera de tenant falsificada contra el host propio de A tiene que seguir resolviendo la sesión de A, y una sesión de B contra el host de A tiene que rebotar 404. El daño de un cruce logrado sería insertar `client_metric` en la base equivocada — ruido de telemetría, cero dato de negocio."
+      }
+    },
+    {
       "ruta": "/api/motivos",
       "archivo": "src/app/api/motivos/route.ts",
       "metodos": [
