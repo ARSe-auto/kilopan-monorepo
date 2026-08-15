@@ -56,6 +56,14 @@ export const TENANTS = [
   // primer activo, la versión que otra suite ya selló seguiría siendo la vigente y esta suite
   // no podría demostrar el ON después del OFF dentro de la MISMA base.
   { slug: "portal_cliente", estado: "activo" },
+  // Base PROPIA para la suite de aislamiento intra-tenant del portal [AC-FPOR-06].
+  //
+  // Necesita, igual que `portal_cliente`, sellar `config_version` DIRECTO con
+  // `crear_config_version()` para encender `portal_contratante` — y por la misma razón NO
+  // puede compartir la base de `portal_cliente`: esa suite deja el entitlement en su último
+  // `sellarEntitlement(true)` de OFF→ON, pero conviene que cada suite controle su propio
+  // sellado en vez de depender del orden en que Playwright corra los archivos.
+  { slug: "portal_aislamiento", estado: "activo" },
 ];
 
 /** Subdominio que jamás se registra. Nombrarlo acá evita que el test lo invente distinto. */
@@ -235,6 +243,14 @@ async function sembrarIdentidadDelVecino(slug) {
       [empresaDelVecino.id],
     );
     await sql("select devengar_entrega($1, $2)", [podDelVecino.id, liquidacionDelVecino.id]);
+    // Y una EVIDENCIA colgada de esa misma parada [AC-FPOR-06]: `/cliente/api/evidencias/[id]`
+    // es de tipo recurso y el caso del centinela 2 saca de acá el id REAL con el que A intenta
+    // leer una foto o firma del vecino desde su propio portal.
+    await sql(
+      `insert into evidence (tipo, objeto_tabla, objeto_id, capturada_en, tz_offset_min)
+       values ('foto', 'paradas', $1, now(), -240)`,
+      [paradaDelVecino.id],
+    );
   });
 }
 

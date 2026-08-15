@@ -1096,6 +1096,78 @@
       }
     },
     {
+      "ruta": "/cliente/api/encargos/[id]",
+      "archivo": "src/app/cliente/api/encargos/[id]/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "encargos",
+          "columna": "id"
+        },
+        "nota": "El encargo del contratante, ahora leído desde el namespace del portal [AC-FPOR-06]. RLS de `encargos` (0040) confina por `empresa_cliente_id`; contra un tenant vecino el id de B ni siquiera está en esta base (§4.1). Contrato 404 y BD de B sin cambios."
+      }
+    },
+    {
+      "ruta": "/cliente/api/evidencias/[id]",
+      "archivo": "src/app/cliente/api/evidencias/[id]/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "evidence",
+          "columna": "id"
+        },
+        "nota": "Una evidencia (`evidence`, §4.6) del contratante [AC-FPOR-06]. Sin columna de empresa propia, se confina por JOIN contra `paradas` (RLS de 0040, por sus ítems) — el join es la garantía, no un `where` que se pueda olvidar. Contra un tenant vecino el id de B ni siquiera está en esta base. Contrato 404 y BD de B sin cambios."
+      }
+    },
+    {
+      "ruta": "/cliente/api/liquidacion-lineas/[id]",
+      "archivo": "src/app/cliente/api/liquidacion-lineas/[id]/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "liquidacion_lineas",
+          "columna": "id"
+        },
+        "nota": "Una línea de liquidación del contratante, leída vía `liquidacion_lineas_cliente` (0067) [AC-FPOR-06]. RLS de `liquidacion_lineas` (0063) confina por `empresa_cliente_id`; trae cada monto CLP de la línea — exactamente lo que el §3.E1.10 reserva a SU empresa, cruzando además el límite de tenant. Contrato 404 y BD de B sin cambios."
+      }
+    },
+    {
+      "ruta": "/cliente/api/liquidaciones/[id]",
+      "archivo": "src/app/cliente/api/liquidaciones/[id]/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "liquidaciones",
+          "columna": "id"
+        },
+        "nota": "La liquidación del contratante con sus líneas, leída vía `liquidacion_cliente`/`liquidacion_lineas_cliente` (0067) [AC-FPOR-06]. RLS de `liquidaciones` (0063) confina por `empresa_cliente_id`; trae el período y cada monto CLP de sus líneas, cruzando además el límite de tenant. Contrato 404 y BD de B sin cambios."
+      }
+    },
+    {
       "ruta": "/entrega",
       "archivo": "src/app/entrega/page.tsx",
       "metodos": [
