@@ -178,7 +178,8 @@ export default function Liquidaciones() {
               RUT {formatearRut(liquidacion.empresa_rut)}
             </p>
             <p style={{ ...pie, margin: 0, color: superficie.textoDim }}>
-              {fechaEsCl(new Date(liquidacion.periodo_inicio))} a {fechaEsCl(new Date(liquidacion.periodo_fin))}
+              {fechaEsCl(new Date(`${liquidacion.periodo_inicio}T12:00:00`))} a{" "}
+              {fechaEsCl(new Date(`${liquidacion.periodo_fin}T12:00:00`))}
             </p>
             <p data-testid="estado-liquidacion" style={{ ...pie, margin: 0, fontWeight: enfasis.medio }}>
               {ETIQUETA_ESTADO[liquidacion.estado] ?? liquidacion.estado}

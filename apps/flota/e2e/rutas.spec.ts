@@ -37,7 +37,16 @@ let vehiculoId = "";
  */
 test.beforeEach(async () => {
   await con(BD_A, async (c: Conexion) => {
-    await c.sql("delete from rutas");
+    // Las que ya tienen un POD aterrizado se QUEDAN (§4.5, §7.4 — mismo guardia que
+    // `limpiarOperacion`, AC-FRUT-23): `entregas_pod` es el hecho write-once cuya FK sostiene la
+    // parada, y desde AC-FTAR-07 el tenant A siempre tiene al menos una ruta así — un `delete`
+    // sin este guardia rebota «violates foreign key constraint» en el primer caso de la suite.
+    await c.sql(
+      `delete from rutas r
+        where not exists (
+          select 1 from paradas p join entregas_pod ep on ep.parada_id = p.id where p.ruta_id = r.id
+        )`,
+    );
     await c.sql("delete from bloques_agenda");
   });
 });

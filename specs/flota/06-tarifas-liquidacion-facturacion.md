@@ -149,7 +149,30 @@ Rate card en estado **borrador** + volúmenes hipotéticos ⇒ total simulado en
   la línea de OTRA empresa es invisible — 0 filas sin excepción, la derivación exacta del
   §9.3.3 —, y un cliente sin empresa declarada tampoco disputa nada. `check.sh --full --app=flota`
   en verde. [AC-FTAR-06]
-- [ ] (P1) Drill-down línea→evidencia a 1 clic + es-CL (§3.E1.9, §0, §9.2): e2e con selectores `data-testid` (cero getByText sobre renombrables) que desde una línea de la liquidación abre la evidencia completa (POD con foto/firma/motivo) en UNA interacción; montos `$12.500` (CLP entero, miles con punto), fechas `dd-mm-aaaa`, RUT `12.345.678-5`; grep: cero strings visibles en inglés en el módulo — oráculo: CI [AC-FTAR-07]
+- [x] (P1) Drill-down línea→evidencia a 1 clic + es-CL (§3.E1.9, §0, §9.2): e2e con selectores `data-testid` (cero getByText sobre renombrables) que desde una línea de la liquidación abre la evidencia completa (POD con foto/firma/motivo) en UNA interacción; montos `$12.500` (CLP entero, miles con punto), fechas `dd-mm-aaaa`, RUT `12.345.678-5`; grep: cero strings visibles en inglés en el módulo — oráculo: CI. Probado:
+  `apps/flota/src/servidor/liquidaciones.ts` (`liquidacionConLineas`, `evidenciaDeLinea`, SOLO
+  LECTURA vía `enLectura` — el devengo, la máquina de estados y la disputa ya existen en la BD
+  desde AC-FTAR-03/05/06) + rutas `GET /api/liquidaciones/[id]` y
+  `GET /api/liquidacion-lineas/[id]/evidencia` (guardia `admin_tenant`/`operador`, 404 pelado
+  cross-tenant, 403 con un rol sin panel) + pantalla `/liquidaciones?id=` con bottom-sheet local
+  (mismo patrón que `hoy/peek-n1.tsx`: la evidencia es estado de la MISMA pantalla, jamás una
+  ruta nueva) que abre foto/firma/motivo de la línea en el mismo clic que la selecciona, con
+  `dineroEsCl`/`fechaEsCl`/`formatearRut` (cero string en inglés) + `apps/flota/e2e/
+  liquidacion-drill-down.spec.ts`, NUEVO en este AC (sembrando con `devengar_entrega()` real,
+  la misma función SECURITY DEFINER que usa la app). Dos hallazgos reales de la corrida completa,
+  arreglados en este mismo commit: (1) `periodo_inicio`/`periodo_fin` son `date` sin huso —
+  `fechaEsCl(new Date(...))` les aplicaba el huso de Chile y corría la fecha un día hacia atrás
+  (`06-04-2026` se leía `05-04-2026`); se ancla a mediodía (`T12:00:00`), mismo patrón que
+  `bandeja/page.tsx`. (2) el fixture de este AC deja PERMANENTEMENTE una ruta con `entregas_pod`
+  aterrizado (append-only, §7.4) en el tenant A compartido — `limpiarBandeja` (borrado de
+  encargos) y los `beforeEach`/limpiezas de `rutas.spec.ts` y `publicar-dia.spec.ts` (borrado
+  crudo de `rutas`, sin el guardia que `limpiarOperacion` ya tenía desde AC-FRUT-23) rebotaban
+  «violates foreign key constraint» contra ese POD; ambos quedan con el mismo guardia
+  `not exists (... entregas_pod ...)`. Además: RUT sintético `76.543.219-7` agregado a la lista
+  congelada (`db/flota/ruts-sinteticos.mjs`, AC-FIDN-21) y liquidación devengada real del tenant
+  B agregada a `preparar-tenants.mjs` para que el centinela 2 (`cruce-tenant.spec.ts`,
+  AC-FTEN-26) tuviera fila real contra la cual probar el cruce en las dos rutas nuevas.
+  `check.sh --full --app=flota` en verde (18 pasos OK, 0 fallidos).
 - [ ] (P1) La app JAMÁS emite DTE (§7.3, §4.6, §3.E2): regla estática en CI con lista de firmas VERSIONADA en el repo (mismo estándar que el grep explícito del §7.1): grep bloqueante sobre `src/` de `apps/flota` de firmas de ESTRUCTURA de DTE — tags XML `<DTE`, `<TED`, `<CAF`, generación o firma de timbre electrónico, librerías de firma XML-DSIG SII, generación de folios — jamás la palabra suelta «DTE» (el registro manual la usa legítimamente); + cero endpoint de emisión en el manifiesto de rutas (test estructural; violación de cualquiera aborta el ítem); el registro MANUAL de folio vía `reference_document(tipo 33|39|52|61, folio, emisor)` opera sobre liquidación `cerrada` (sobre `abierta` ⇒ 422 — supuesto operativo DERIVADO del seed §10 y del pipeline E2 que parte de `cerrada` §3.E2, no mandato del maestro; sujeto a Pregunta 10) y queda como camino paralelo permanente; folio duplicado ⇒ viola `UNIQUE(tipo, folio, emisor)`, 422 y 0 filas — oráculo: CI [AC-FTAR-08]
 - [ ] (P1) Dinero invisible (§4.8, §9.3.10): política RLS `AS RESTRICTIVE` declarada `FOR SELECT` únicamente en TODA tabla con montos del módulo, exigiendo `app.current_role NOT IN ('chofer','responsable_carga')`; pgTAP con el rol de app real: chofer `SELECT` sobre cada tabla de montos ⇒ 0 filas; chofer cierra recarga offline + replay ⇒ 2xx, fila con `costo_clp` NULL y cero rebotes (la RESTRICTIVE no es total justamente para no rebotar ese INSERT); `costo_clp` lo completa el operador o el trigger desde `parametros.tarifa_kwh_clp` — oráculo: CI [AC-FTAR-09]
 - [ ] (P1) Aislamiento del rol `cliente` y cross-tenant (§9.3.2, §9.3.3, §4.3, §0): sesión `cliente` de la empresa X ⇒ 0 filas de tarifas/liquidaciones/líneas de la empresa Y en toda tabla operativa (política en BD + vistas) y payloads sin columnas de economía interna del operador (costos de energía, `tarifa_kwh_clp`, ahorro vs diésel); todas las rutas del módulo cubiertas por la suite HTTP A-contra-B autogenerada del manifiesto: recurso de otro tenant ⇒ 404 con body sin cadenas centinela y BD de B sin cambios — oráculo: CI [AC-FTAR-10]

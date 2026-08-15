@@ -18,7 +18,7 @@ type Conexion = { sql: <T = Record<string, string>>(t: string, p?: unknown[]) =>
 
 const RUT_DUENA = Object.keys(VALIDOS)[7]!;
 const SECRETO_DUENA = secretoNuevo();
-const RUT_EMPRESA = "76.543.210-1";
+const RUT_EMPRESA = "76.543.219-7";
 const RAZON_SOCIAL = "Farmacia Drill-Down SpA";
 
 let liquidacionId = "";
@@ -114,7 +114,7 @@ test("[AC-FTAR-07] un clic sobre la línea abre su evidencia completa, en es-CL"
   await expect(page.getByTestId("liquidacion")).toBeVisible();
   await expect(page.getByTestId("cabecera-liquidacion")).toContainText(RAZON_SOCIAL);
   // RUT es-CL: `12.345.678-5` (§0) — el punto de miles y el guión antes del dígito verificador.
-  await expect(page.getByTestId("empresa-rut")).toHaveText("RUT 76.543.210-1");
+  await expect(page.getByTestId("empresa-rut")).toHaveText("RUT 76.543.219-7");
   // Fecha es-CL dd-mm-aaaa (§0), no mm-dd-aaaa.
   await expect(page.getByTestId("cabecera-liquidacion")).toContainText("06-04-2026 a 12-04-2026");
 

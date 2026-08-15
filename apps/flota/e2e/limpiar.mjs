@@ -74,8 +74,14 @@ export async function limpiarBandeja(sql) {
   );
   // Los encargos con ítems vivos se QUEDAN: sus ítems cuelgan de una parada que un manifiesto
   // firmado sostiene, y esa carga no se tira.
+  // Y desde AC-FTAR-07 tampoco los que ya tienen un POD aterrizado: `entregas_pod` es el mismo
+  // hecho write-once del §4.5, append-only por el mismo §7.4, y su FK apunta al encargo DIRECTO
+  // (no solo a la parada, como ya cubre el `delete from rutas` de arriba) — un encargo del
+  // fixture del drill-down sin ítems pero con POD moría en «violates foreign key constraint».
   await sql(
-    "delete from encargos e where not exists (select 1 from items i where i.encargo_id = e.id)",
+    `delete from encargos e
+      where not exists (select 1 from items i where i.encargo_id = e.id)
+        and not exists (select 1 from entregas_pod ep where ep.encargo_id = e.id)`,
   );
   await sql(
     `delete from destinos d

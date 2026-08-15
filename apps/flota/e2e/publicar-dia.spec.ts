@@ -352,7 +352,19 @@ test("[AC-FRUT-05] con la feature encendida, un documento vencido rebota la publ
   const sinFeature = await publicar();
   expect(sinFeature.respuesta.ok()).toBe(true);
 
-  await con(BD_A, async (c: Conexion) => await c.sql("delete from rutas"));
+  // Guardia contra `entregas_pod` (§4.5, §7.4 — mismo criterio que `limpiarOperacion`,
+  // AC-FRUT-23): desde AC-FTAR-07 el tenant A siempre tiene al menos una ruta con POD aterrizado,
+  // y un `delete` sin este guardia rebota «violates foreign key constraint».
+  await con(
+    BD_A,
+    async (c: Conexion) =>
+      await c.sql(
+        `delete from rutas r
+          where not exists (
+            select 1 from paradas p join entregas_pod ep on ep.parada_id = p.id where p.ruta_id = r.id
+          )`,
+      ),
+  );
 
   // ENCENDIDA rebota, y con 0 filas.
   await entitlement(true, "documentos_vencidos_bloquean");

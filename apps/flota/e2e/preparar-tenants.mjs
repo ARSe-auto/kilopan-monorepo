@@ -203,6 +203,29 @@ async function sembrarIdentidadDelVecino(slug) {
     // reconocer una excepción de B — le robaría el dueño (`asignado_a`) de una fila que su
     // operación todavía no vio, y la marcaría atendida sin que nadie de su casa lo haya hecho.
     await sql(`insert into review_queue (origen, severidad) values ('datos_sync', 'rojo')`);
+    // Y una LIQUIDACIÓN devengada del vecino [AC-FTAR-07]: `/api/liquidaciones/[id]` y
+    // `/api/liquidacion-lineas/[id]/evidencia` son de tipo recurso y el caso del centinela 2 saca
+    // de acá el id REAL con el que A intenta leer la liquidación de B — su razón social, su RUT,
+    // cada monto CLP de sus líneas, y la evidencia (foto/firma/motivo) de una entrega real de la
+    // empresa cliente del vecino. La línea nace por el MISMO camino que usa la app —
+    // `devengar_entrega()`, SECURITY DEFINER, única puerta de escritura de `liquidacion_lineas`
+    // (AC-FTAR-03)— sobre un POD real del vecino, para que el caso pruebe algo de verdad y no un
+    // id inventado.
+    await sql(
+      "insert into tarifas (empresa_cliente_id, concepto, precio_clp, vigente_desde) values ($1, 'por_entrega', 3900, timestamptz '2026-01-01 00:00-04')",
+      [empresaDelVecino.id],
+    );
+    const [podDelVecino] = await sql(
+      `insert into entregas_pod (encargo_id, parada_id, resultado, event_time, tz_offset_min)
+       values ($1, $2, 'exito', now(), -240) returning id::text as id`,
+      [encargoDelVecino.id, paradaDelVecino.id],
+    );
+    const [liquidacionDelVecino] = await sql(
+      `insert into liquidaciones (empresa_cliente_id, periodo_inicio, periodo_fin)
+       values ($1, current_date - 6, current_date) returning id::text as id`,
+      [empresaDelVecino.id],
+    );
+    await sql("select devengar_entrega($1, $2)", [podDelVecino.id, liquidacionDelVecino.id]);
   });
 }
 
