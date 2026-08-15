@@ -15,7 +15,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { CLUSTER_LOCAL, bdDeTenant } from "./conectar.mjs";
+import { destinoDelCluster, bdDeTenant } from "./conectar.mjs";
 
 /** Los binarios del cluster. Mismo default y misma variable que `db/flota/cluster.sh`. */
 export const PGBIN =
@@ -46,9 +46,9 @@ export function volcarTenant(slug, { destino } = {}) {
   execFileSync(
     binario("pg_dump"),
     [
-      "-h", CLUSTER_LOCAL.host,
-      "-p", String(CLUSTER_LOCAL.puerto),
-      "-U", CLUSTER_LOCAL.superusuario,
+      "-h", destinoDelCluster().host,
+      "-p", destinoDelCluster().puerto,
+      "-U", destinoDelCluster().usuario,
       "-d", bd,
       "--format=plain",
       "--no-owner",
@@ -72,9 +72,9 @@ export function restaurarEn(bdDestino, archivo, { dueno } = {}) {
   }
   const psql = binario("psql");
   const base = [
-    "-h", CLUSTER_LOCAL.host,
-    "-p", String(CLUSTER_LOCAL.puerto),
-    "-U", CLUSTER_LOCAL.superusuario,
+    "-h", destinoDelCluster().host,
+    "-p", destinoDelCluster().puerto,
+    "-U", destinoDelCluster().usuario,
   ];
   execFileSync(psql, [...base, "-d", "postgres", "-c",
     `drop database if exists ${bdDestino} with (force)`], { stdio: "pipe" });
