@@ -1,123 +1,79 @@
-# Traspaso — 11-ago-2026, 14:35
+# HANDOFF — tres worktrees, dos motores vivos, uno aparcado (15-Aug-2026 16:19)
 
-> ## ACTUALIZACIÓN 18:47 — sesión de SUPERVISIÓN (no reemplaza lo de abajo, lo continúa)
->
-> **96 de 199 ACs.** El motor sigue **VIVO** desde las 14:30 (pid 98681), **iteración 15 de 20**,
-> más de cuatro horas sin una sola pausa. Cerró de corrido el bloque de sincronización offline del
-> módulo 04: **AC-FPOD-04, 05, 06, 07, 08, 09 y 10**. Mientras tenga el lock `builder-flota`, NO se
-> construye en paralelo ni se corre `check.sh` — el gate leería un árbol que él está escribiendo.
->
-> **Y ojo con escribir en este árbol sin comitear en el acto:** al arrancar cada iteración, el loop
-> manda a stash TODO lo que encuentre sucio. Esta misma actualización se perdió una vez así
-> (`motor-wip-20260811-184540`, a los 40 segundos de escribirla). Editar y comitear por ruta
-> explícita, en el mismo minuto, o no editar.
->
-> ### El CI dejó de estar rojo, y llevaba días así
->
-> Cada commit del motor disparaba DOS runs (push y PR contra main) y los dos fallaban, con su
-> correo de «run failed» cada vez. **La causa no estaba en el código sino en el arnés**: el caso
-> (c5) de `prueba-arnes.sh` corre `watchdog.sh` sin credencial y exige que se frene POR ESO, pero
-> `watchdog.sh` tiene dos frenos ANTES —`claude` y `pnpm` en el PATH— y en un runner de GitHub no
-> existe ninguno de los dos. Se frenaba por el primero, la prueba leía ESE mensaje y denunciaba
-> que faltaba el guard de la credencial. **Verde en el Mac, rojo en el runner, sin que ninguna de
-> las dos mintiera sobre el código.** Arreglado en `cd748ea`: los dos binarios se estuban en un
-> PATH temporal, así el freno que se ejerce es el de la credencial en cualquier entorno, y el
-> mensaje del rojo ahora lleva la salida REAL con la que se frenó.
->
-> Desde ese commit **todos los pushes salieron verdes**, incluidos los del propio motor. La
-> lección vale más que el arreglo: **una prueba del arnés que depende de qué binarios tenga la
-> máquina no prueba el arnés, prueba la máquina** — y el gate local verde NO es el veredicto de CI.
->
-> **`main` sigue rojo desde el 9-ago y se deja así A PROPÓSITO**: por esto mismo más un e2e que en
-> la rama ya está arreglado. Nadie empuja a `main`, así que no manda correos; se sanea al mergear
-> el PR #1. Un commit suelto ahí dispararía un run que puede fallar por ese e2e viejo — otro correo.
->
-> **Para diagnosticar un rojo de CI:** la consola del step solo muestra el resumen `OK/FALLÓ`; el
-> detalle lo redirige `check.sh` a `ultimo-check.log`, que el workflow sube como artefacto —
-> `gh run download <run-id> --repo ARSe-auto/kilopan-monorepo --dir <tmp>`. Sin ese archivo, un
-> `FALLÓ: prueba-arnes` no dice cuál de sus ~111 casos se cayó. Y `gh` no está en el PATH:
-> `export PATH="$HOME/.local/bin:$PATH"`.
->
-> ### Hoy hubo DOS sesiones vivas sobre este árbol
->
-> A las 13:49 los archivos del fixture de AC-FPOD-03 cambiaron solos mientras esta sesión los
-> leía. La identificación rápida NO fue `ps aux` —hay quince procesos `claude` y ninguno dice en
-> qué árbol escribe— sino `list_sessions`: la única con `isRunning: true` y actividad de hace un
-> minuto. Se le pasó lo verificado por `send_message` y esta sesión se retiró del árbol. **Antes
-> de escribir, mirar mtimes; si se mueven solos, hay alguien más.**
->
-> ### Lo que le toca a la próxima sesión supervisada, en orden
->
-> 1. **AC-FPOD-11** — el DDL de `entregas_pod` (write-once + UNIQUE parcial por encargo).
->    **CORRECCIÓN de las 18:50: el motor SÍ lo tomó**, a las 18:45, y escribió
->    `db/migraciones-flota/tenant/0055_entregas_pod.sql`. La prohibición que ejerce `loop.sh`
->    mira `db/migraciones/` —el árbol de KiloPan— y NO `db/migraciones-flota/`, así que en
->    FLOTA el motor sí crea migraciones y ya lo hizo hoy dos veces (0049 y 0055). Antes de
->    tomar este AC, verificar si quedó cerrado. **Cierra el bloqueo de AC-FRUT-23**, uno de los
->    dos atascados, que sigue siendo lo que hay que revisar apenas el 11 esté verde.
-> 2. **AC-FIDN-07** — atascado desde el 10-ago; nadie diagnosticó todavía POR QUÉ.
-> 3. **Anomalía menor a confirmar:** entre las 14:30 y las 17:30 hubo seis commits con id de AC y
->    el contador subió cinco. `verify-refs` sigue verde (no hay `[x]` sin respaldo), así que es
->    contable, no de fondo — pero conviene mirarlo.
-> 4. **Churn:** `apps/flota/next-env.d.ts` lo reescribe `next build` y cada arranque del motor
->    gasta un stash en él. Va al `.gitignore`, como ya está el de kilopan.
+> **LO PRIMERO: hay DOS motores autónomos construyendo en paralelo**, cada uno con su worktree,
+> su cluster de Postgres y su puerto de e2e. No compiten: el reparto de familias de ACs es
+> explícito y está en los lanzadores de `~/bin/`. **138 de 199 ACs cerrados.**
 
-## Dónde está la plataforma
+## El mapa (verificar vivo con `ps -p <pid>` antes de afirmar nada)
 
-**90 de 199 ACs cerrados.** Rama `flota/specs-e1`, PR #1 al día
-(https://github.com/ARSe-auto/kilopan-monorepo/pull/1). HEAD `2adf1d3`, verde.
+| | motor 1 | motor 2 | motor 3 |
+|---|---|---|---|
+| worktree | `~/kilopan-monorepo-flota` | `~/kilopan-monorepo-flota2` | `~/kilopan-monorepo-flota3` |
+| rama · HEAD | `flota/specs-e1` · 6dda969 | `flota/motor2` · 0f80a62 | `flota/motor3` · fcc2c18 |
+| estado | VIVO (pid 27334) | VIVO (pid 43201) | **APARCADO — no arrancar sin leer abajo** |
+| familias | todo salvo FMIG/FPOR | `^AC-FPOR-` (portabilidad) | `^AC-FMIG-` (migración) |
+| Postgres | 54331 (`~/.flota-pg`) | 54332 (`~/.flota-pg-2`) | 54333 (`~/.flota-pg-3`, ARRIBA) |
+| e2e | 3311 | 3312 | 3313 |
+| lanzador | `arrancar-motor-flota.sh` (dentro del repo) | `~/bin/arrancar-motor2.sh` | `~/bin/arrancar-motor3.sh` |
+| supervisor | `supervisor-flota.sh` vivo | `supervisor-flota2.sh` vivo | escrito, NO arrancado a propósito |
 
-Motor autónomo **VIVO** (`arrancar-motor-flota.sh`, watchdog + loop), construyendo AC-FPOD-04
-(idempotencia del outbox). Tope de 20 iteraciones por lanzamiento.
+Los supervisores son procesos `nohup` desprendidos: sobreviven a las sesiones, relanzan su motor
+al agotar la tanda, reanudan pausas con HEAD verde (máx 3) y ESPERAN sin tocar el marcador si la
+pausa exige una persona. Bitácora de cada uno en `~/supervisor-flota*.log`.
 
-## Lo que se cerró hoy, después de las respuestas del dueño
+## Por qué el motor 3 está aparcado, y el paso EXACTO que sigue
 
-Alexis respondió las tres preguntas que bloqueaban ACs
-(`docs/respuestas-dueno-2026-08-11-spec01-spec03.md`), absorbidas en sus specs como RESPONDIDA:
+Su cluster (54333) está provisionado desde cero y VERDE en migraciones; su `check.sh --full` dio
+verde en todo salvo **la suite de tenancy** (`db/flota/gate.sh --full`, paso «plantilla,
+provisión ×2 y rezago»): «hay 1 conexión abierta contra tenant_template» al copiar la plantilla.
+Lo ya DESCARTADO con evidencia, para no repetirlo: (a) no es concurrencia entre archivos — el
+gate corre `--test-concurrency=1`; (b) no es el pool ocioso de la suite anterior — `crearBase`
+ahora espera 12 s re-contando (commit fcc2c18 en `flota/motor3`) y falló igual; (c) el archivo
+solo (`node --test db/flota/suite-bd/hechos.test.mjs`) pasa ENTERO; (d) tras el gate,
+`pg_stat_activity` sobre 54333 muestra CERO conexiones a la plantilla. Conclusión: algo DEL
+PROPIO GATE retiene la plantilla >12 s, solo visible bajo `--full` y de momento solo en ese
+cluster. Hubo además un segundo FALLÓ en ese gate cuyo nombre no quedó capturado.
+**Siguiente paso concreto:** correr `gate.sh --full` con un vigía que muestree
+`select pid, usename, application_name, state, query from pg_stat_activity where
+datname='tenant_template'` cada segundo en el 54333 — eso nombra al que la retiene — y leer los
+DOS «FALLÓ:» completos del gate. Con eso arrancarlo: `bash ~/bin/arrancar-motor3.sh` y
+`nohup ~/bin/supervisor-flota3.sh &`.
 
-- **spec 03 P1** — máquina de estados del encargo: `solicitado → aceptado → asignado →
-  publicado → entregado | no_entregado`, con seguimiento de ruta explícito. Un ítem bajado del
-  manifiesto sin DTE es re-planificable el MISMO día, sin `reintento_de`. Desbloquea AC-FRUT-03.
-- **spec 01 P4** — passkey al primer uso de «transferir propiedad»; recuperación por el
-  break-glass del §7.9 ya aprobado. Desbloquea AC-FIDN-13.
-- **spec 01 P8** — ARCO solo por `admin_tenant`, JSON estructurado, retención 30d/90d/1año/1año.
-  Desbloquea AC-FIDN-15.
+## Deudas y reglas de convivencia (las que ya costaron trabajo esta semana)
 
-Los tres salieron de `packages/metodo/acs-bloqueados-flota.txt`; siguen ahí solo los dos de
-oráculo humano (AC-FVEH-16, AC-FRUT-16), que no bloquean al loop.
+- **Comitear SIEMPRE `git commit -F <msg> -- <rutas>`** y mirar `git diff --cached --name-only`
+  antes: el índice es compartido y `git add <ruta>` NO protege (memoria
+  `git-commit-por-ruta-no-basta-el-add`). No usar `git add -A`.
+- **El motor 2 corre con el filtro VIEJO en memoria** (`^AC-(FMIG|FPOR)-`). Su lanzador ya dice
+  `^AC-FPOR-`, así que se corrige SOLO cuando el supervisor lo relance al agotar la tanda. Solo
+  urge si va a agotar los 17 FPOR dentro de la tanda actual — vigilar, no matar en vuelo.
+- **No empujar a mano las ramas `flota/motor2`/`flota/motor3`**: cada push dispara el CI (correo
+  si rojo). El watchdog de cada motor publica solo lo verificado. Los merges hacia
+  `flota/specs-e1` los hace una persona, con los DOS motores en límite de iteración; la fricción
+  esperada es `IMPLEMENTATION_PLAN_flota.md` y las specs (los tres marcan `[x]`).
+- **El CI NO corre el e2e de FLOTA** (verificado bajando el artefacto: solo suites de KiloPan,
+  cero menciones del cluster). Las 498 pruebas son reproducibles desde cero — quedó demostrado
+  hoy con el cluster 2 — así que agregar el job de FLOTA al workflow ya es POSIBLE; es el
+  backlog de arnés más valioso que queda.
+- **El plist de launchd sigue sin cargar** (`launchctl` denegado): el arranque tras REINICIO de
+  la máquina depende de que alguien corra los lanzadores. Pedirle el sí a Alexis en una línea.
+- Gasto: dos motores ≈ el doble de tokens/hora. Con el 3, el triple.
 
-## Los tres defectos del arnés que se arreglaron, y por qué importan
+## Cómo verificar el estado en 30 segundos
 
-1. **Extracción del id de un ítem** (`gate_specs.mjs`, `verify-refs.mjs`): tomaban el PRIMER
-   corchete en vez del último, así que un ítem que citaba otro AC a mitad de frase «definía» ese
-   AC ajeno y dejaba el suyo huérfano. Caso de regresión 4c en `prueba-arnes.sh`.
-2. **Índice de fixture fuera de rango** (`db/flota/ruts-sinteticos.mjs`): `Object.keys(VALIDOS)[11]`
-   sobre una lista de 10. El `!` de TypeScript prometía que había algo; en corrida era `undefined`
-   y el fixture insertaba una persona SIN RUT — que explotaba lejos, como violación de
-   `personas_anonimizacion_completa`. Ahora `rutDeFixture(i)` tira un error que nombra el índice,
-   el tamaño y qué hacer. Se sumó `4.444.444-5` AL FINAL de la lista congelada.
-3. **La pausa que detenía el motor toda la noche** (`watchdog.sh` + `trabajo-en-curso.sh` nuevo):
-   el agente sin presupuesto comitea y deja el AC ABIERTO —lo correcto—, el gate se pone rojo por
-   el e2e que él escribió y no corrió, y se pausaba TODO hasta que una persona mirara. Ahora un
-   HEAD que trae la línea canónica `AC-ABIERTO: <id>` **y** cuyo AC sigue sin marcar `[x]` no
-   pausa. La pausa se mantiene intacta para el verde falso: un AC marcado con gate rojo pausa
-   igual. Cuatro casos en `prueba-arnes.sh` (116 verde, 0 rojo).
-
-## Lo único que espera decisión
-
-`~/Library/LaunchAgents/com.flota.ralph-loop.plist` está escrito y correcto —relanza cada 30 min
-y se abstiene si hay `PAUSA-REVISION`— pero **launchd nunca lo cargó**, así que cuando el motor
-agota sus 20 iteraciones nadie lo levanta. Cargarlo necesita `launchctl`, que está en el `deny` de
-`.claude/settings.json`. **No se rodea con un guion envoltorio**: se le pide el sí a Alexis en una
-línea, y con el sí se levanta el permiso y se carga.
-
-## Cómo se retoma
-
-```bash
-bash db/flota/cluster.sh iniciar
-bash packages/metodo/scripts/check.sh --app=flota --full
+```
+for n in "" 2 3; do W=~/kilopan-monorepo-flota$n; P=$(cat $W/packages/metodo/panel/motor-flota.pid 2>/dev/null); \
+  echo "motor ${n:-1}: $(ps -p $P >/dev/null 2>&1 && echo VIVO || echo muerto) · $(cd $W && git log --oneline -1)"; done
+pgrep -fl supervisor-flota; tail -2 ~/supervisor-flota*.log
 ```
 
-**Ante una pausa del motor, sospechá del ARNÉS antes que del AC.** Van siete de siete. Y antes de
-reconstruir nada, verificá si el trabajo YA está hecho y solo quedó sin marcar: pasó dos veces hoy
-—AC-FPOD-03 estaba completo y solo faltaba correr su e2e y poner el `[x]`—.
+## Prompt de arranque de la sesión nueva
+
+> Retomá la supervisión de la Plataforma FLOTA. Leé `~/kilopan-monorepo-flota/docs/HANDOFF.md`
+> COMPLETO y archivalo en `docs/handoffs/` al absorberlo. Hay DOS motores autónomos vivos (sus
+> supervisores desprendidos los relanzan solos) y un TERCERO aparcado con su diagnóstico y su
+> próximo paso escritos arriba. Tu trabajo es el de supervisión: atender pausas (diagnóstico
+> primero, el arnés miente menos que el AC), destrabar el motor 3, unir las ramas
+> periódicamente, y NO construir a mano lo que los motores pueden construir. Armá tu despertador
+> de 4h30m al arrancar. Reglas duras: un solo builder por worktree · lock `e2e-flota` antes de
+> cualquier e2e manual · commits solo con `-F <msg> -- <rutas>` · nada sin verificar se publica.

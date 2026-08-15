@@ -2242,3 +2242,25 @@ la rama.
 prueba el entorno — y un gate local verde no es el veredicto de CI. El detalle de un rojo de CI
 NO está en la consola del step (solo el resumen `OK/FALLÓ`), sino en el artefacto `gate-logs`,
 que trae `ultimo-check.log`.
+
+
+## 15-Aug-2026 16:19 — Dos motores en paralelo, y lo que costó llegar
+
+La M4 corría al 20% con un motor. Hoy quedaron DOS construyendo a la vez (specs-e1 → tarifas y
+resto; motor2 → portabilidad) y un tercero aparcado (migración) por una conexión fantasma a la
+plantilla en su cluster — diagnóstico y próximo paso en docs/HANDOFF.md.
+
+Montar el aislamiento destapó CUATRO defectos que ya vivían en la rama, ninguno del motor nuevo:
+pg_dump/psql clavados al 54331 (offboarding volcaba en el cluster ajeno), un ítem de spec
+firmado sin id (pausó al motor 1), el puerto 3311 repetido en 35 archivos del e2e (262 fallas
+con el server en otro puerto), y DOCE suites armando su pg.Pool contra el cluster clavado — el
+worktree 2 escribía en las bases del 1. Con eso arreglado, la suite e2e completa dio 498/498 en
+un cluster nacido el mismo día: primera prueba de reproducibilidad desde que existe.
+
+Hallazgo mayor: el CI no corre el e2e de FLOTA (artefacto revisado: solo KiloPan). Hasta hoy
+nadie podía afirmar que esas pruebas corrieran fuera de esta máquina; ahora es un backlog
+concreto de una tarde, no una incógnita.
+
+La lección de la semana, tres veces confirmada: un dato de conexión repetido no es un dato — son
+N datos que envejecen por separado. Y la de hoy: el gate ANTES de soltar un motor nuevo no es
+burocracia; fue lo único que evitó que dos motores se corrompieran las bases en silencio.
