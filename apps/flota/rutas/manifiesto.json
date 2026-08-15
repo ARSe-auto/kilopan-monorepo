@@ -1084,6 +1084,18 @@
       }
     },
     {
+      "ruta": "/cliente",
+      "archivo": "src/app/cliente/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Raíz del namespace del portal del contratante (§3.E1.10) [AC-FPOR-04]. No recibe identificador por URL, así que el cruce que aplica es el genérico —identidad de B por los canales falsificables (host propio de A + cabeceras de tenant apuntando a B)—, PERO acá pesa distinto que en el resto del panel: antes de que Next vea el request, `servidor.mjs` ya decidió 403 si el portal está apagado para el tenant resuelto por el HOST, nunca por una cabecera. Contra el vecino B, el host de A resuelve el pool de A (AC-FTEN-05) y el entitlement que se consulta es el de A — la respuesta jamás depende de lo que A haya mandado sobre B."
+      }
+    },
+    {
       "ruta": "/entrega",
       "archivo": "src/app/entrega/page.tsx",
       "metodos": [

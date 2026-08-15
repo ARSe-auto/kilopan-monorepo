@@ -47,6 +47,15 @@ export const TENANTS = [
   // recargas, y la que se pondría roja sería la que no hizo nada. Va al FINAL por lo mismo que
   // `gobierno`: media docena de suites toma los dos primeros activos por índice.
   { slug: "hechos", estado: "activo" },
+  // Base PROPIA para el gate HTTP del portal del contratante [AC-FPOR-04].
+  //
+  // La suite sella `config_version` DIRECTO con `crear_config_version()` para fijar el
+  // entitlement `portal_contratante` en ON y en OFF —el sembrado real vía `plan_features`/
+  // overrides es del hito (g), que todavía no existe (mismo motivo que `manifest.ts` fija sus
+  // entitlements por fixture)—, y `config_version` es APPEND-ONLY: compartiendo la base del
+  // primer activo, la versión que otra suite ya selló seguiría siendo la vigente y esta suite
+  // no podría demostrar el ON después del OFF dentro de la MISMA base.
+  { slug: "portal_cliente", estado: "activo" },
 ];
 
 /** Subdominio que jamás se registra. Nombrarlo acá evita que el test lo invente distinto. */

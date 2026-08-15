@@ -140,11 +140,32 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
       dominio puro (10 casos). Gate en verde:
       `bash packages/metodo/scripts/check.sh --full --app=flota` (18 OK, 0 rojos) y
       `pnpm --filter flota e2e` (502/502, incluidos los 4 tests nuevos) en PRIMER PLANO.
-- [ ] (P1) Módulo apagado en HTTP: con el portal OFF (mi_flota u override), TODA ruta
+- [x] (P1) Módulo apagado en HTTP: con el portal OFF (mi_flota u override), TODA ruta
       `/cliente/*` (lectura y planificación) responde 403; el namespace no expone ningún
       endpoint de captura (auditoría del manifiesto de rutas: nada de `/cliente/*` en el
       contrato 2xx-siempre); con portal ON en daas las mismas rutas responden 2xx para
-      el rol `cliente` (§0, §5.5, §4.2) — oráculo: CI [AC-FPOR-04]
+      el rol `cliente` (§0, §5.5, §4.2) — oráculo: CI [AC-FPOR-04]. Probado: el candado vive
+      en `servidor.mjs` (mismo lugar que el 404/503 por subdominio, AC-FTEN-05, y por la
+      MISMA razón — un Server Component no puede fijar el status HTTP), justo antes de
+      `atender()`, para TODO request cuya ruta matchee `dominio/portal-ruta.ts` (prefijo de
+      segmento `/cliente`, no substring). Consulta `servidor/portal.ts`, que resuelve
+      `entitlementVigente(..., FEATURES.portal_contratante)` sobre la config CONGELADA del
+      tenant — la MISMA `feature_lookup_key` que `modo_recorte` apaga en `mi_flota`
+      (0003_modo_como_preset.sql). El namespace existe de verdad (`src/app/cliente/page.tsx`,
+      declarado en `rutas/manifiesto.json` con su caso de cruce) para que el ON no sea
+      vacuo. `rutas/portal-sin-captura.test.mjs` audita el manifiesto GENERADO (AC-FTEN-26):
+      ninguna ruta `/cliente/*` importa `sesionParaSincronizarCapturas` —la única puerta que
+      puede llamarla, «ninguna otra ruta debe usar esto» dice `gobierno.ts`— con un positivo
+      sobre `/api/sync/capturas` que prueba que el chequeo atraparía el caso si existiera.
+      `e2e/portal-modulo-apagado.spec.ts` (base propia `portal_cliente`; `config_version` se
+      sella DIRECTO con `crear_config_version()` —el sembrado real por `plan_features`/
+      overrides es del hito g, todavía no construido, mismo motivo por el que
+      `dominio/manifest.ts` resuelve sus entitlements por fixture— append-only, así que la
+      suite necesita OFF y luego ON en la MISMA base): OFF (mi_flota) ⇒ 403 en `/cliente`,
+      `/cliente/`, `/cliente/hoy` y una ruta inventada bajo el prefijo, CON y SIN sesión
+      válida de la casa; `/clientela` (fuera del namespace) no cae en el candado. ON (daas)
+      ⇒ 2xx con una sesión real del rol `cliente`. `pnpm check:full --app=flota` en verde
+      (506/506 e2e).
 - [ ] (P1) Confinamiento del rol en BD: constraint que exige `empresa_cliente_id NOT
       NULL` cuando rol=`cliente` (alta sin empresa ⇒ rebote); pgTAP con el rol de app
       real y `set_config('app.current_role','cliente')`: SELECT del cliente de la

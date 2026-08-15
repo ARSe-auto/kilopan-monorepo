@@ -41,6 +41,18 @@ export function respuestaSinTenant(): Response {
   );
 }
 
+/** El namespace `/cliente/*` con el portal apagado: 403 [AC-FPOR-04] — HTTP.modulo_apagado. Un
+ *  solo cuerpo para TODA la ruta, exista o no en el árbol: el candado es del prefijo. */
+export function respuestaPortalApagado(): Response {
+  return new Response(
+    documento(
+      "Portal no disponible",
+      "<p>Esta cuenta no tiene el portal del contratante habilitado.</p>",
+    ),
+    { status: HTTP.modulo_apagado, headers: HTML },
+  );
+}
+
 /** Tenant suspendido: 503 y ni una conexión contra su base. */
 export function respuestaSuspendido(): Response {
   return new Response(
