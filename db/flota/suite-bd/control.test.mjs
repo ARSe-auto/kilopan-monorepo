@@ -10,6 +10,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { migrar } from "../migrar.mjs";
 import { con, conectar, BD_CONTROL, ROL_MIGRADOR, bdDeTenant } from "../conectar.mjs";
+import { desregistrarComo } from "./desregistrar.mjs";
 import { duenoDe } from "../provisionar.mjs";
 import { versionEsperada } from "../aplicar.mjs";
 
@@ -161,7 +162,10 @@ test("[AC-FTEN-04] el registro de tenants no deja que la BD y el slug diverjan",
     "insert into planes (lookup_key, nombre, limite_vehiculos) values ('gate_partida', 'Partida', 1) " +
       "on conflict (lookup_key) do update set nombre = excluded.nombre returning id::text as id",
   );
-  await control.sql("delete from tenants where slug like 'gate_%'");
+  // La baja completa, no un delete directo: el paso exportador del gate corre ANTES de esta
+  // suite y les deja agregados a `gate_a`/`gate_b` (evidencia viva de provisionar) — con la
+  // FK puesta, el delete a secas rebota y este test moría con 23503.
+  await desregistrarComo("gate\\_%");
 
   await control.sql(
     "insert into tenants (slug, bd, plan_id) values ($1, $2, $3)",
@@ -179,7 +183,7 @@ test("[AC-FTEN-04] el registro de tenants no deja que la BD y el slug diverjan",
     { code: "23514" },
   );
 
-  await control.sql("delete from tenants where slug like 'gate_%'");
+  await desregistrarComo("gate\\_%");
 });
 
 test("[AC-FTEN-04] un override de feature sin motivo escrito no entra", async () => {
@@ -240,7 +244,7 @@ test("[AC-FTEN-04] un grant de soporte sin vencimiento no entra", async () => {
 
 /** Arma un tenant con un plan que trae `enElPlan` y no trae `fueraDelPlan`. */
 async function escenarioDeEntitlements() {
-  await control.sql("delete from tenants where slug like 'gate_ent%'");
+  await desregistrarComo("gate\\_ent%");
   const [plan] = await control.sql(
     "insert into planes (lookup_key, nombre) values ('gate_ent_plan', 'Gate') " +
       "on conflict (lookup_key) do update set nombre = excluded.nombre returning id::text as id",
@@ -364,7 +368,7 @@ test("[AC-FTEN-11] los límites cuantitativos son COLUMNAS del plan, no features
 const RECORTE_MI_FLOTA = ["tarifas", "liquidacion_por_cliente", "portal_contratante", "facturacion"];
 
 async function tenantConTodoEnElPlan() {
-  await control.sql("delete from tenants where slug like 'gate_modo%'");
+  await desregistrarComo("gate\\_modo%");
   const [plan] = await control.sql(
     "insert into planes (lookup_key, nombre) values ('gate_modo_plan', 'Completo') " +
       "on conflict (lookup_key) do update set nombre = excluded.nombre returning id::text as id",

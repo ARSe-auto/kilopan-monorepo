@@ -21,6 +21,7 @@ import {
   UUID_CENTINELA_PLANTILLA,
 } from "../provisionar.mjs";
 import { con, conectar, BD_CONTROL, BD_PLANTILLA, bdDeTenant } from "../conectar.mjs";
+import { desregistrar } from "./desregistrar.mjs";
 import { versionEsperada } from "../aplicar.mjs";
 
 const RAIZ = new URL("../../..", import.meta.url).pathname.replace(/\/$/, "");
@@ -35,6 +36,9 @@ async function borrar(slug) {
   await con("postgres", ({ sql }) =>
     sql(`drop database if exists ${bdDeTenant(slug)} with (force)`),
   );
+  // Con el alta persistida [AC-FPOR-01], dropear la base sola deja la fila huérfana en
+  // `control.tenants` y el exportador de la corrida SIGUIENTE la nombra como rezago.
+  await desregistrar(slug);
 }
 
 /** El CLI, devolviendo `{ codigo, salida }` en vez de tirar: acá el exit code ES el aserto. */

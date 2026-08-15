@@ -148,6 +148,12 @@ if [ "$FULL" -eq 1 ]; then
   paso "pgTAP contra el canario: catálogo de PKs UUIDv7 e idempotencia por client_uuid" \
     node db/flota/pgtap.mjs
 
+  # Una corrida abortada de la suite deja fixtures `gate_*` registrados sin base, y el
+  # exportador los nombraría como rezago REAL en TODAS las corridas siguientes: rojo
+  # permanente hasta limpieza manual (así se aparcó el motor 3). Sanearlos antes.
+  paso "saneo de fixtures huérfanos (gate_*/canary registrados sin base)" \
+    node db/flota/sanear-gate.mjs
+
   # El job exportador de verdad, contra el cluster (§4.1: la ÚNICA vía por la que un dato sale
   # de la BD de un tenant). [AC-FTEN-20]
   paso "job exportador: agregados técnicos de cada tenant activo hacia control" \

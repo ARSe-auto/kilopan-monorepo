@@ -19,6 +19,7 @@ import { migrar } from "../migrar.mjs";
 import { provisionar, desalta } from "../provisionar.mjs";
 import { borrarRolDeApp } from "../rol-app.mjs";
 import { con, conectar, ROL_MIGRADOR, bdDeTenant } from "../conectar.mjs";
+import { desregistrar } from "./desregistrar.mjs";
 
 const SLUG = "gate_offb";
 const RESTAURADA = "t_gate_offb_restaurada";
@@ -36,6 +37,9 @@ async function limpiar() {
     await sql(`drop database if exists ${RESTAURADA} with (force)`);
   });
   await borrarRolDeApp(SLUG);
+  // Con el alta persistida [AC-FPOR-01], sin esta baja la fila de `gate_offb` queda huérfana
+  // y el exportador de la corrida siguiente la nombra como rezago (AC-FTEN-20).
+  await desregistrar(SLUG);
 }
 
 before(async () => {
