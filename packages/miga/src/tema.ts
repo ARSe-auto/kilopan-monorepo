@@ -4,8 +4,9 @@ import { CONTRASTE } from "../../nucleo-comun/src/constants.ts";
 // Theming por filas — la MITAD de plataforma del §5.1 [AC-FMIG-02].
 //
 // «El tenant personaliza EXACTAMENTE tres cosas: logo, UN acento y terminología. La
-// plataforma DERIVA pressed/disabled/dark y RECHAZA si <4.5:1» (§5.1, §4.4). Este archivo
-// es la mitad que deriva; la que rechaza es `tenant_theme` (0010_tema_y_terminologia.sql,
+// plataforma DERIVA pressed/disabled/dark y RECHAZA si el contraste queda por debajo del
+// mínimo de CONTRASTE.texto» (§5.1, §4.4). Este archivo es la mitad que deriva; la que
+// rechaza es `tenant_theme` (0010_tema_y_terminologia.sql,
 // AC-FTEN-10) — su trigger valida `accent_claro` contra `fondo_claro` y `accent_oscuro`
 // contra `fondo_oscuro` con la MISMA fórmula WCAG de acá abajo, así que este módulo NUNCA
 // decide solo si un tema entra: propone, y la base es la autoridad (AGENTS.md «la BD es la
@@ -16,12 +17,13 @@ import { CONTRASTE } from "../../nucleo-comun/src/constants.ts";
 //
 // ─── POR QUÉ LA DERIVACIÓN ES UN DESPLAZAMIENTO FIJO, NO UNA BÚSQUEDA HASTA PASAR ─────────
 //
-// Mezclar hacia negro (o blanco) SIEMPRE encuentra un punto que cruza 4.5:1 — en el extremo,
-// negro puro contra blanco da 21:1. Una derivación que buscara «hasta que pase» jamás
-// rebotaría: cualquier acento entraría, aunque el resultado ya no se pareciera en nada a la
-// marca del tenant. Eso volvería el caso de rebote del AC —«accent_color con contraste
-// <4.5:1 ⇒ 422»— IMPOSIBLE de alcanzar, y un caso de rebote que no se puede alcanzar es un
-// caso que no está probado. Por eso la plataforma mueve el acento un tramo FIJO hacia cada
+// Mezclar hacia negro (o blanco) SIEMPRE encuentra un punto que cruza el mínimo de
+// CONTRASTE.texto — en el extremo, negro puro contra blanco da 21:1. Una derivación que
+// buscara «hasta que pase» jamás rebotaría: cualquier acento entraría, aunque el resultado
+// ya no se pareciera en nada a la marca del tenant. Eso volvería el caso de rebote del AC
+// —«accent_color con contraste por debajo de CONTRASTE.texto ⇒ 422»— IMPOSIBLE de alcanzar,
+// y un caso de rebote que no se puede alcanzar es un caso que no está probado. Por eso la
+// plataforma mueve el acento un tramo FIJO hacia cada
 // fondo (menos para el claro, que ya parte con más margen contra blanco; más para el
 // oscuro, porque `#101314` es casi negro) y santo remedio: si ni con ese tramo alcanza, el
 // tenant eligió un acento demasiado pálido para ser texto/botón y la plataforma no le va a

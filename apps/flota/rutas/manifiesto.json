@@ -975,6 +975,19 @@
       }
     },
     {
+      "ruta": "/api/tema",
+      "archivo": "src/app/api/tema/route.ts",
+      "metodos": [
+        "GET",
+        "PUT"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Lee y guarda el tema del tenant [AC-FMIG-02]: la fila única de tenant_theme de SU base, resuelta por poolDe(x-flota-tenant-bd), igual que /api/tenant. Sin parámetro de ruta, así que no hay id de B que colar — el riesgo de cruce acá no es leer la fila de otro tenant (el pool ya está fijado a la base de A) sino escribirle a A un acento derivado de un cálculo hecho con el fondo o el mínimo de contraste de OTRO tenant, y eso no puede pasar porque ambos son constantes de plataforma (superficie, CONTRASTE.texto), no filas por tenant. El PUT MUTA, así que enciende el comparador de huella de la BD de B: un GET/PUT sin la cabecera de B nunca la toca, y la fila de B queda intacta."
+      }
+    },
+    {
       "ruta": "/api/tenant",
       "archivo": "src/app/api/tenant/route.ts",
       "metodos": [

@@ -108,7 +108,7 @@ test("cssDelTema NUNCA emite una propiedad fuera del contrato de 4 variables [AC
   const permitidas = new Set(Object.values(PROPIEDAD_CSS));
   for (const prop of declaraciones) assert.ok(permitidas.has(prop!), `propiedad no declarada: ${prop}`);
   // La translucidez Liquid Glass tiene su propio guardián — `db/flota/gate-theming-por-filas.mjs`,
-  // que vigila TODO `packages/miga` incluido este archivo — así que esa cadena no se repite acá.
+  // que vigila el árbol entero de `packages/miga` incluido este archivo — esa cadena no se repite acá.
 });
 
 // ─── Pressed/disabled: derivados, jamás una fila propia (§4.4: solo logo+acento+extras) ───

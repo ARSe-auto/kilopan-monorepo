@@ -11,8 +11,9 @@
 //       (custom_css, css_libre, estilos_tenant, raw_css/html) es la forma en que ese agujero
 //       empezaría a existir, mucho antes de que alguien lo conecte a algo.
 //
-// ALCANCE DECLARADO (nunca silencioso): TODO `packages/miga` (todos sus componentes son de
-// terreno, §5.2) y TODO `apps/flota/src/app` salvo `api/` (las rutas HTTP no son pantallas).
+// ALCANCE DECLARADO (nunca silencioso): el árbol entero de `packages/miga` (todos sus
+// componentes son de terreno, §5.2) y el árbol entero de `apps/flota/src/app` salvo `api/`
+// (las rutas HTTP no son pantallas).
 // Es más ancho que «solo terreno» a propósito: ninguna pantalla de esta PWA —tampoco el panel
 // admin— tiene un caso de uso legítimo para translucidez o CSS libre por tenant, y limitar el
 // gate a un subárbol de pantallas sería inventar una excepción que el maestro no pide.

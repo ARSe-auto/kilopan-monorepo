@@ -42,7 +42,7 @@ test("el repo real pasa el gate", () => {
 
 test("backdrop-filter en una pantalla de packages/miga ⇒ ROJO", () => {
   const raiz = sandbox({
-    "packages/miga/src/componentes/.fixture.tsx": "const s = { backdropFilter: 'blur(8px)' };\n",
+    "packages/miga/src/componentes/.fixture.tsx": "const s = { backdropFilter: 'blur(6px)' };\n",
   });
   const { codigo, salida } = correr(raiz);
   assert.equal(codigo, 1);
