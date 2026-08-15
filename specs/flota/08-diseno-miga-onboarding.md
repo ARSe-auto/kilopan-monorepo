@@ -271,7 +271,18 @@ reales en seeds/fixtures (§10, §7.8):
   `tenant_terminology_largo_por_tipo` acepta (la extrema de referencia)— con selectores
   IDÉNTICOS, más el caso de UPDATE servido sin build. `npx playwright test
   e2e/terminologia.spec.ts`: 3/3 verdes. `check.sh --full --app=flota`: VERDE.
-- [ ] (P1) Formatos es-CL únicos y en un solo lugar (§0): `$12.500` (CLP entero; la UI formatea, la BD calcula — §7.5), `dd-mm-aaaa`, RUT `12.345.678-5` con unit tests de la capa de formato; caso de rebote: string visible en inglés en `src/` ⇒ grep-gate rojo (§0, §9.2) — oráculo: CI [AC-FMIG-05]
+- [x] (P1) Formatos es-CL únicos y en un solo lugar (§0): `$12.500` (CLP entero; la UI formatea, la BD calcula — §7.5), `dd-mm-aaaa`, RUT `12.345.678-5` con unit tests de la capa de formato; caso de rebote: string visible en inglés en `src/` ⇒ grep-gate rojo (§0, §9.2) — oráculo: CI [AC-FMIG-05]
+  PROBADO: la capa de formato ya existía en UN solo lugar — `packages/nucleo-comun/src/fechas.ts`
+  (`dineroEsCl` → `$12.500`, `fechaEsCl` → `dd-mm-aaaa`) y `rut.ts` (`formatearRut`/`rutValido` →
+  `12.345.678-5`), leyendo el ejemplo canónico de `FORMATOS` (`constants.ts`), con sus unit tests
+  (`fechas.test.ts`, `rut.test.ts`) ya en verde. Lo que faltaba era el grep-gate del caso de
+  rebote para FLOTA: `packages/metodo/scripts/verifica-es-cl.mjs` (compartido con AC-H0-09 de
+  KiloPan) ya soportaba `--app=flota` y escanea `apps/flota/src` + `packages/miga/src`, pero
+  nada ejercía ese camino de punta a punta — se le agregó `--raiz=<sandbox>` (sin cambiar su
+  comportamiento por defecto) y tres tests nuevos en `verifica-es-cl.test.mjs`: el árbol real de
+  FLOTA hoy en verde, una pantalla con inglés visible poniendo el gate en rojo, y la misma
+  pantalla en español quedando verde. Ya cableado en `check.sh:142-143` para `--app=$APP`.
+  `check.sh --full --app=flota`: VERDE.
 - [ ] (P1) Edición de terminología en el panel admin white-label (§9.1.4.g; la restricción de rol NO se aserta aquí — el maestro no la cierra y queda BLOQUEADA por la Pregunta al dueño n.º 11; al cerrarse se agrega su AC de rebote por rol): singular+plural obligatorios, largos por tipo (navegación ≤12, títulos ≤24, descripciones ≤40) y caracteres prohibidos `# $ % ; < = >` rechazados con 422 tipado es-CL (PLANIFICACIÓN, §4.2; CHECKs en BD del módulo 00, §4.4); términos de sistema/auditoría no aparecen como editables; degradación: el cambio aplica al próximo bootstrap y un turno abierto termina con su `config_version_id` congelado — el e2e verifica que la PWA del turno abierto NO cambia términos a mitad de turno (§0, §4.4, §5.1) — oráculo: CI [AC-FMIG-06]
 - [ ] (P2) Snapshot 375 px con 5 módulos activos y términos al máximo largo permitido (12/24/40) sin desbordes ni solapes, y texto al 200 % sin truncar cifras (§9.2, §5.7); caso de rebote: regresión visual o cifra truncada ⇒ gate rojo — oráculo: CI [AC-FMIG-07]
 - [ ] (P1) Pantalla «Funciones» del panel admin (§5.5): `admin_tenant` apaga CUALQUIER feature (override OFF siempre permitido) y enciende solo las del plan; intento de ON fuera de plan ⇒ locked-state con upsell SOLO en panel admin (jamás en la PWA de terreno); cada toggle escribe `audit_trail` y aplica en el próximo bootstrap; caso de degradación: turno abierto durante el toggle termina con su config congelada (§4.4); casos de rebote server-side (la UI no es el gate): (a) mutación DIRECTA por API (sin UI) de override ON sobre una feature fuera del plan ⇒ 422 tipado es-CL (PLANIFICACIÓN, §4.2), 0 filas en `tenant_feature_overrides` y cero toggle registrado en `audit_trail` — el entitlement efectivo `override ?? plan` (§4.4) no enciende nada gratis; (b) toggle (ON u OFF) con rol distinto de `admin_tenant` ⇒ 403 y 0 filas — la pantalla «Funciones» está en el plano de control EXCLUSIVO del dueño (§5.4), test calcado del patrón de vehículos §5.4 — oráculo: CI [AC-FMIG-08]
