@@ -99,14 +99,21 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
       (`db/flota/provisionar.mjs`); `db/flota/suite-bd/provisionar.test.mjs` cubre alta
       con modo explícito, default `mi_flota`, recrear conservando `id` y el rebote del
       dominio cerrado — las 4 pruebas en verde en `pnpm check:full --app=flota`.
-- [ ] (P1) Centinela 11 — conmutación aditiva, jamás destructiva: sobre un tenant con
+- [x] (P1) Centinela 11 — conmutación aditiva, jamás destructiva: sobre un tenant con
       datos operativos sembrados, mi_flota→daas→mi_flota NO PIERDE ni una fila. Oráculo
       de NO-PÉRDIDA, jamás de igualdad de counts (cada conmutación appendea filas
       legítimamente: `audit_trail` de cada toggle §5.5 y config de entitlements por
       filas §4.4): por cada tabla de dominio, toda fila del snapshot previo sigue
       presente tras la doble conmutación (comparación por PK) y count(después) ≥
       count(antes); la empresa implícita queda intacta (mismo id, misma fila) (§3,
-      §9.3.11, §5.5) — oráculo: CI [AC-FPOR-02]
+      §9.3.11, §5.5) — oráculo: CI [AC-FPOR-02]. Probado:
+      `db/flota/suite-bd/centinela-11.test.mjs` enumera CADA tabla con PK de `public` vía
+      `information_schema` (≥20 tablas, sin lista a mano), siembra datos a lo ancho de
+      ~20 tablas operativas, conmuta mi_flota→daas→mi_flota (alta una empresa nueva
+      mientras está en daas) y compara por PK: cero filas perdidas, count(después) ≥
+      count(antes) en cada tabla, la empresa implícita es la MISMA fila y la contratante
+      dada de alta en daas sobrevive la vuelta — gate propio de flota en verde
+      (`pnpm check:full --app=flota`).
 - [ ] (P1) Contracción mi_flota (manifest + e2e; el trigger de la empresa implícita se
       aserta aparte en AC-FPOR-17): el manifest server-side (entitlements × rol) no
       incluye tarifas, liquidación por cliente, portal ni facturación (sin huecos ni
