@@ -2264,3 +2264,35 @@ concreto de una tarde, no una incógnita.
 La lección de la semana, tres veces confirmada: un dato de conexión repetido no es un dato — son
 N datos que envejecen por separado. Y la de hoy: el gate ANTES de soltar un motor nuevo no es
 burocracia; fue lo único que evitó que dos motores se corrompieran las bases en silencio.
+
+
+## 15-Aug-2026 17:00 — Tres motores vivos; la «conexión fantasma» tenía nombre y apellido
+
+El motor 3 quedó destrabado y construyendo (FMIG), y la pausa que a las 16:30 detuvo al motor 2
+resultó ser LA MISMA enfermedad en dos formas. El diagnóstico del HANDOFF anterior quedó
+cerrado con evidencia:
+
+**1. El gate se auto-envenenaba (motores 2 y 3).** Desde que `provisionar()` da de alta en
+`control.tenants` [AC-FPOR-01], toda limpieza que solo dropeaba la base dejaba filas huérfanas:
+el exportador de la corrida SIGUIENTE las nombraba como rezago (AC-FTEN-20 medía 7≠1 en el 3,
+4≠1 en el 2) y los agregados de `gate_a`/`gate_b` bloqueaban por FK la limpieza de control.test
+(23503). Verde sobre cluster limpio, rojo en la que viene — por eso el 3 «fallaba solo dentro
+del gate». Fix: baja completa (`suite-bd/desregistrar.mjs`, hijas→fila) + paso de saneo en el
+gate (`sanear-gate.mjs`: borra fixtures `gate_*`/canary registrados SIN base; un huérfano de
+slug real se sigue nombrando). En el 2 además había 3 huérfanos de suites que YA NO EXISTEN
+(anonimizacion/firmas/revocacion): nadie los iba a limpiar jamás — exactamente el caso del
+saneo. Commits: ccf8aa7 (motor3), 62aaa49 (motor2).
+
+**2. La «conexión fantasma a tenant_template» era el pool ocioso.** El vigía pedido por el
+HANDOFF (pg_stat_activity cada 1 s) la nombró en el 54332: `idle`, `flota_admin`, última query
+`set time zone`, muere sola a los ~12 s — el residuo del pool de `pg` (`idleTimeoutMillis`
+10 s) de la suite anterior. fcc2c18 (crearBase espera 12 s) es el antídoto y quedó en las TRES
+ramas (e6b4bef en motor2, 02b4042 en specs-e1). En el 3 nunca reapareció: verde ×4 hoy.
+
+**Regla que deja esto:** un gate que comparte estado entre corridas (cluster vivo) tiene que
+poder ARRANCAR desde el estado que la corrida anterior dejó, incluso abortada — la limpieza
+en `finally` no existe para quien murió antes del finally.
+
+Pendiente de arnés: el job `gate-flota` del CI quedó escrito y comiteado en la rama efímera
+`ci/gate-flota` (local); publicarla para ensayarla exige un push manual que el arnés de esta
+sesión tiene denegado. El e2e móvil de FLOTA en CI sigue en backlog.
