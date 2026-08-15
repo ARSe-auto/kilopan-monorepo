@@ -44,6 +44,11 @@ paso "matriz KiloRuta: N filas, IDs únicos y cada test referenciado existe" \
 paso "familia canónica de constantes: cero números mágicos duplicados (§0)" \
   node db/flota/gate-constantes.mjs
 
+# Theming por filas (§5.1): cero Liquid Glass en pantallas/componentes y cero vía de CSS
+# arbitrario por tenant — el tema entra ÚNICAMENTE como custom properties derivadas. [AC-FMIG-02]
+paso "theming por filas: cero Liquid Glass, cero CSS arbitrario por tenant (§5.1)" \
+  node db/flota/gate-theming-por-filas.mjs
+
 # La otra mitad del §0: `gate-constantes` vigila los VALORES de la familia de energía; este
 # vigila la ARITMÉTICA. Nadie copia el factor de consumo a mano —el otro gate lo atrapa—, pero
 # cualquiera escribe la multiplicación en la pantalla que está armando, y a partir de ahí hay
