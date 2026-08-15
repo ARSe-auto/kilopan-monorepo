@@ -78,6 +78,16 @@ async function sembrarEmpresaConEncargoYLiquidacion(
     "insert into encargos (empresa_cliente_id, destino_id, bultos, estado) values ($1, $2, 2, 'solicitado') returning id::text as id",
     [empresa!.id, destino!.id],
   );
+  // `evidenciaDelCliente` (servidor/portal-cliente.ts) confina por `items` —el mismo camino
+  // que la RLS de `paradas` (0040)—, así que el fixture necesita el ítem real: sin él ninguna
+  // empresa (ni la dueña) vería su propia evidencia. El trigger de `items` (0037) rebota un
+  // encargo `solicitado` en una parada: coherente con que este fixture ya trae un POD de
+  // entrega EXITOSA, así que se acepta antes de armar la parada.
+  await sql("update encargos set estado = 'aceptado' where id = $1", [encargo!.id]);
+  await sql(
+    "insert into items (parada_id, encargo_id, qty_planificada) values ($1, $2, 2)",
+    [parada!.id, encargo!.id],
+  );
   await sql(
     "insert into tarifas (empresa_cliente_id, concepto, precio_clp, vigente_desde) values ($1, 'por_entrega', 4500, timestamptz '2026-01-01 00:00-04')",
     [empresa!.id],

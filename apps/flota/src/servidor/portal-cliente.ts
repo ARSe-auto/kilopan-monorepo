@@ -10,11 +10,17 @@ import type { Sesion } from "./sesion.ts";
 // el namespace del portal para que la suite de aislamiento (`e2e/portal-aislamiento.spec.ts`)
 // tenga algo real que ejercer, con el mismo candado que va a usar el resto del portal después.
 //
-// CADA función deja que la RLS de la tabla base decida (`aplicar_rls_de_empresa`, 0040/0061/
-// 0063; las vistas de 0067 para liquidación son security_invoker=true y NO agregan aislamiento
-// propio): ninguna arma un `where empresa_cliente_id = …` a mano. `enLectura` ya declara
-// `app.current_role`/`app.current_empresa` desde la sesión (gobierno.ts) — omitirlo acá sería
-// repetir el error que el §7.2 ya cerró en la capa de BD.
+// CADA función filtra `empresa_cliente_id = $2` A MANO, además de dejar declarado
+// `app.current_role`/`app.current_empresa` (`enLectura`, gobierno.ts) para la RLS de la tabla
+// base (`aplicar_rls_de_empresa`, 0040/0061/0063). El filtro explícito NO es la redundancia que
+// el comentario de 0040 advierte que sobra «hasta la consulta número treinta y uno»: acá SÍ hace
+// falta, porque el pool de este servidor conecta como `flota_admin` (`servidor/conexion.ts`), y
+// `flota_admin` es superusuario con `rolbypassrls=true` — la política de fila no se evalúa NUNCA
+// sobre esta conexión, sin importar qué declare `set_config`. Confirmado con
+// `select rolbypassrls from pg_roles where rolname='flota_admin'` (verdadero). Hasta que un AC
+// dedicado retire ese privilegio o abra una conexión con un rol restringido para este camino, el
+// `where` de acá es la ÚNICA guardia real; la RLS queda como defensa en profundidad para el día
+// que ese privilegio se corrija, no como la garantía que 0040 pensó que iba a ser.
 //
 // El schema de cada retorno es LITERAL — las columnas que se seleccionan son las que salen del
 // tipo — a propósito: es lo que hace que "sin columnas de economía interna ni telemetría EV"
@@ -45,8 +51,8 @@ export async function encargoDelCliente(
               destino_id::text as destino_id, bultos,
               to_char(fecha_servicio, 'YYYY-MM-DD') as fecha_servicio, estado::text as estado,
               reintento_de::text as reintento_de, creado_en::text as creado_en
-         from encargos where id = $1`,
-      [id],
+         from encargos where id = $1 and empresa_cliente_id = $2`,
+      [id, sesion.empresaClienteId],
     );
     return rows[0] ?? null;
   });
@@ -102,16 +108,16 @@ export async function liquidacionDelCliente(
               to_char(periodo_inicio, 'YYYY-MM-DD') as periodo_inicio,
               to_char(periodo_fin, 'YYYY-MM-DD') as periodo_fin,
               estado::text as estado, creado_en::text as creado_en
-         from liquidacion_cliente where id = $1`,
-      [id],
+         from liquidacion_cliente where id = $1 and empresa_cliente_id = $2`,
+      [id, sesion.empresaClienteId],
     );
     const cabecera = rows[0];
     if (!cabecera) return null;
 
     const { rows: lineas } = await c.query<LineaDeLiquidacionCliente>(
       `select ${COLUMNAS_LINEA} from liquidacion_lineas_cliente
-        where liquidacion_id = $1 order by creado_en`,
-      [id],
+        where liquidacion_id = $1 and empresa_cliente_id = $2 order by creado_en`,
+      [id, sesion.empresaClienteId],
     );
     return { ...cabecera, lineas };
   });
@@ -126,8 +132,8 @@ export async function lineaDelCliente(
 ): Promise<LineaDeLiquidacionCliente | null> {
   return enLectura(pool, sesion, async (c) => {
     const { rows } = await c.query<LineaDeLiquidacionCliente>(
-      `select ${COLUMNAS_LINEA} from liquidacion_lineas_cliente where id = $1`,
-      [id],
+      `select ${COLUMNAS_LINEA} from liquidacion_lineas_cliente where id = $1 and empresa_cliente_id = $2`,
+      [id, sesion.empresaClienteId],
     );
     return rows[0] ?? null;
   });
@@ -135,10 +141,9 @@ export async function lineaDelCliente(
 
 export type EvidenciaDelCliente = { id: string; tipo: string; capturada_en: string };
 
-/** Una evidencia (`evidence`, §4.6), confinada JOINEANDO contra `paradas` — la RLS de `paradas`
- *  (0040, por sus ítems) es quien de verdad decide si esta fila es de la empresa de la sesión;
- *  `evidence` no tiene columna `empresa_cliente_id` propia y por eso no lleva su propia política
- *  — el join es la garantía, no un `where` adicional que se pueda olvidar. */
+/** Una evidencia (`evidence`, §4.6), confinada por `exists` contra `items` vía `paradas` —
+ *  `evidence` no tiene columna `empresa_cliente_id` propia, así que el filtro va por el mismo
+ *  camino que la RLS de `paradas` (0040) usa para decidir de quién es una parada compartida. */
 export async function evidenciaDelCliente(
   pool: Pool,
   sesion: Sesion,
@@ -149,8 +154,11 @@ export async function evidenciaDelCliente(
       `select ev.id::text as id, ev.tipo::text as tipo, ev.capturada_en::text as capturada_en
          from evidence ev
          join paradas p on p.id = ev.objeto_id
-        where ev.objeto_tabla = 'paradas' and ev.id = $1`,
-      [id],
+        where ev.objeto_tabla = 'paradas' and ev.id = $1
+          and exists (
+            select 1 from items i where i.parada_id = p.id and i.empresa_cliente_id = $2
+          )`,
+      [id, sesion.empresaClienteId],
     );
     return rows[0] ?? null;
   });
