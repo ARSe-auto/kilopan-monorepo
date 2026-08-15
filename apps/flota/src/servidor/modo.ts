@@ -33,6 +33,34 @@ export type CambioDeModo =
   | { tipo: "ok"; modo: Modo; empresas: number }
   | { tipo: "tenant_no_existe" };
 
+// ─── ALTA: el registro en `control.tenants`, con el modo elegido [AC-FPOR-01] ──────────
+//
+// El botón del wizard que arma slug/bd/plan es GUI del módulo 08 (AC-FMIG-14, todavía sin
+// construir); esto es el servicio que ese botón va a llamar. El dominio cerrado de `modo` se
+// valida ACÁ, antes de tocar la base, con el mismo `esModo` que usa la conmutación — así el
+// rebote es el mismo para las dos puertas y no dos historias distintas de qué es un modo
+// válido. La columna en sí ya lo cierra de nuevo con el enum `tenant_modo`: un valor que se
+// coló hasta el SQL (otro caller, una migración de fixture) rebota igual, por CHECK de tipo.
+
+export type AltaTenant =
+  | { tipo: "ok"; tenantId: string; modo: Modo }
+  | { tipo: "modo_desconocido" };
+
+export async function altaTenant(datos: {
+  slug: string;
+  bd: string;
+  modo: string;
+  planId?: string | null;
+}): Promise<AltaTenant> {
+  if (!esModo(datos.modo)) return { tipo: "modo_desconocido" };
+  const { rows } = await poolDe("control").query<{ id: string }>(
+    "insert into tenants (slug, bd, plan_id, modo) values ($1, $2, $3, $4::tenant_modo) " +
+      "returning id::text as id",
+    [datos.slug, datos.bd, datos.planId ?? null, datos.modo],
+  );
+  return { tipo: "ok", tenantId: rows[0]!.id, modo: datos.modo };
+}
+
 export async function modoVigente(slug: string): Promise<Modo | null> {
   const { rows } = await poolDe("control").query<{ modo: Modo }>(
     "select modo::text as modo from tenants where slug = $1",

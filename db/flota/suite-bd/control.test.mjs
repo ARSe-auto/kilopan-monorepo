@@ -12,6 +12,7 @@ import { migrar } from "../migrar.mjs";
 import { con, conectar, BD_CONTROL, ROL_MIGRADOR, bdDeTenant } from "../conectar.mjs";
 import { duenoDe } from "../provisionar.mjs";
 import { versionEsperada } from "../aplicar.mjs";
+import { altaTenant } from "../../../apps/flota/src/servidor/modo.ts";
 
 /** El plano de control de E1, tabla por tabla. Agregar una acá es un acto, no un descuido. */
 const TABLAS = [
@@ -473,6 +474,87 @@ test("[AC-FTEN-22] CENTINELA 11 (base): mi_flota→daas→mi_flota no pierde una
     assert.deepEqual(await efectivos(), resueltoAntes, "conmutar ida y vuelta no dejó todo igual");
   } finally {
     await control.sql("delete from tenants where id = $1", [tenant.id]);
+  }
+});
+
+// --- Selector persistido: dominio y alta ---------------------------------------- [AC-FPOR-01]
+// El botón del wizard que arma slug/bd/plan es GUI del módulo 08 (AC-FMIG-14, sin construir
+// todavía); lo que este AC prueba es el servicio de alta que ese botón va a llamar —
+// `altaTenant`— y que el dominio de `modo` está cerrado en las DOS puertas por las que se
+// puede colar un valor: el servicio (antes de tocar la base) y la columna misma (para
+// cualquier otro caller que la toque directo, como un fixture).
+
+test("[AC-FPOR-01] `altaTenant` rebota un modo fuera de dominio, sin tocar la base", async () => {
+  await control.sql("delete from tenants where slug like 'gate_fpor%'");
+  const antes = (await control.sql("select count(*)::int as n from tenants where slug like 'gate_fpor%'"))[0].n;
+
+  const resultado = await altaTenant({
+    slug: "gate_fpor_malo",
+    bd: bdDeTenant("gate_fpor_malo"),
+    modo: "franquicia",
+  });
+  assert.deepEqual(resultado, { tipo: "modo_desconocido" });
+
+  const despues = (await control.sql("select count(*)::int as n from tenants where slug like 'gate_fpor%'"))[0].n;
+  assert.equal(despues, antes, "el rebote del servicio dejó una fila puesta");
+});
+
+test("[AC-FPOR-01] la columna `control.tenants.modo` rebota el mismo valor fuera de dominio (CHECK de tipo)", async () => {
+  // El servicio de arriba es una puerta; esta es la otra. Si algo la esquivara —un fixture, una
+  // migración de datos— el dominio sigue cerrado porque `modo` es un enum, no un `text` con
+  // convención: un valor que no está en `tenant_modo` no es una fila inválida, es SQL que no
+  // corre.
+  await control.sql("delete from tenants where slug = 'gate_fpor_sql'");
+  await assert.rejects(
+    () =>
+      control.sql("insert into tenants (slug, bd, modo) values ($1, $2, 'franquicia')", [
+        "gate_fpor_sql",
+        bdDeTenant("gate_fpor_sql"),
+      ]),
+    { code: "22P02" },
+  );
+  const [{ n }] = await control.sql("select count(*)::int as n from tenants where slug = 'gate_fpor_sql'");
+  assert.equal(n, 0, "el INSERT rebotado dejó una fila puesta");
+});
+
+test("[AC-FPOR-01] el alta persiste el modo elegido, no el default", async () => {
+  await control.sql("delete from tenants where slug = 'gate_fpor_daas'");
+  try {
+    const resultado = await altaTenant({
+      slug: "gate_fpor_daas",
+      bd: bdDeTenant("gate_fpor_daas"),
+      modo: "daas",
+    });
+    assert.equal(resultado.tipo, "ok");
+    assert.equal(resultado.modo, "daas");
+
+    const [fila] = await control.sql("select modo::text as modo from tenants where id = $1", [
+      resultado.tenantId,
+    ]);
+    // `mi_flota` es el DEFAULT de la columna (§4.4): si el alta lo ignorara y la fila naciera
+    // con el default en vez del valor elegido, esta aserción no lo notaría con otro modo que no
+    // fuera precisamente el que NO es el default.
+    assert.equal(fila.modo, "daas", "el alta no persistió el modo elegido en el wizard");
+  } finally {
+    await control.sql("delete from tenants where slug = 'gate_fpor_daas'");
+  }
+});
+
+test("[AC-FPOR-01] el alta también persiste `mi_flota` cuando es el modo elegido explícitamente", async () => {
+  await control.sql("delete from tenants where slug = 'gate_fpor_mi_flota'");
+  try {
+    const resultado = await altaTenant({
+      slug: "gate_fpor_mi_flota",
+      bd: bdDeTenant("gate_fpor_mi_flota"),
+      modo: "mi_flota",
+    });
+    assert.equal(resultado.tipo, "ok");
+    const [fila] = await control.sql("select modo::text as modo from tenants where id = $1", [
+      resultado.tenantId,
+    ]);
+    assert.equal(fila.modo, "mi_flota");
+  } finally {
+    await control.sql("delete from tenants where slug = 'gate_fpor_mi_flota'");
   }
 });
 
