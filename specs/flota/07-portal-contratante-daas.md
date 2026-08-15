@@ -166,12 +166,23 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
       válida de la casa; `/clientela` (fuera del namespace) no cae en el candado. ON (daas)
       ⇒ 2xx con una sesión real del rol `cliente`. `pnpm check:full --app=flota` en verde
       (506/506 e2e).
-- [ ] (P1) Confinamiento del rol en BD: constraint que exige `empresa_cliente_id NOT
+- [x] (P1) Confinamiento del rol en BD: constraint que exige `empresa_cliente_id NOT
       NULL` cuando rol=`cliente` (alta sin empresa ⇒ rebote); pgTAP con el rol de app
       real y `set_config('app.current_role','cliente')`: SELECT del cliente de la
       empresa X sobre TODA tabla operativa ⇒ 0 filas de la empresa Y; su liquidación es
       accesible SOLO vía las vistas destinadas al rol (§4.1, §4.3, §9.3.3) — oráculo:
-      CI [AC-FPOR-05]
+      CI [AC-FPOR-05]. Probado: el CHECK `usuarios_cliente_con_empresa` (0011) y la RLS
+      de `aplicar_rls_de_empresa` ya confinaban `encargos`/`items`/`usuarios`/`paradas`/
+      `rutas` (AC-FRUT-12) y `liquidacion_lineas` (AC-FTAR-06) con el rol de app real;
+      `db/flota/suite-bd/confinamiento-portal.test.mjs` cierra el resto de «TODA tabla
+      operativa» con datos reales sobre `tarifas`, `tarifa_zonas`,
+      `tarifa_recargo_horario` y `liquidaciones` (cabecera) — positivo y negativo por
+      tabla, más el caso «cliente sin empresa ⇒ 0 filas» y «sin rol ⇒ el operador ve las
+      dos empresas». `db/migraciones-flota/tenant/0067_vistas_liquidacion_cliente.sql`
+      agrega `liquidacion_cliente`/`liquidacion_lineas_cliente` (security_invoker=true,
+      invariante AC-FVEH-13) como la vía sancionada del §4.3 — RLS de la tabla base
+      sigue siendo quien confina, probado con el rol de app real leyendo a través de la
+      vista. `pnpm check:full --app=flota` en verde (gate propio de flota: 24 OK).
 - [ ] (P1) Suite HTTP de aislamiento sobre `/cliente/*` (autogenerada del manifiesto de
       rutas, §9.2): sesión `cliente` de la empresa X con IDs de recursos de la empresa Y
       (encargos, liquidaciones, líneas, evidencias) ⇒ 404 —jamás 403 revelador—, body
