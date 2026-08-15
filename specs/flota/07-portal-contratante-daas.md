@@ -88,11 +88,17 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
 
 ## Criterios de aceptación
 
-- [ ] (P1) Selector persistido — dominio y alta: `control.tenants.modo` acepta SOLO
+- [x] (P1) Selector persistido — dominio y alta: `control.tenants.modo` acepta SOLO
       `mi_flota|daas` (valor fuera del dominio ⇒ rebote 422/CHECK y 0 filas); el alta de
       la operación persiste el modo elegido (el botón del wizard es GUI del módulo 08;
       aquí se prueba el servicio de alta/conmutación que ese módulo consume) (§3, §4.4)
-      — oráculo: CI [AC-FPOR-01]
+      — oráculo: CI [AC-FPOR-01]. Probado: el enum `tenant_modo` cierra el dominio en la
+      BD (`db/migraciones-flota/control/0001_plano_de_control.sql`); `provisionar()` da
+      de alta el tenant en `control.tenants` con el modo elegido, rechazando ANTES de
+      tocar el cluster cualquier valor fuera de `mi_flota|daas`
+      (`db/flota/provisionar.mjs`); `db/flota/suite-bd/provisionar.test.mjs` cubre alta
+      con modo explícito, default `mi_flota`, recrear conservando `id` y el rebote del
+      dominio cerrado — las 4 pruebas en verde en `pnpm check:full --app=flota`.
 - [ ] (P1) Centinela 11 — conmutación aditiva, jamás destructiva: sobre un tenant con
       datos operativos sembrados, mi_flota→daas→mi_flota NO PIERDE ni una fila. Oráculo
       de NO-PÉRDIDA, jamás de igualdad de counts (cada conmutación appendea filas

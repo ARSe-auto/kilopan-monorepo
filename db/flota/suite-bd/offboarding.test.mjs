@@ -31,6 +31,9 @@ let carpeta;
 let volcado;
 
 async function limpiar() {
+  // Complemento del alta en `control.tenants` [AC-FPOR-01]: sin esto, la fila sobrevive al
+  // DROP DATABASE y el job exportador la reporta huérfana en la corrida siguiente.
+  await desalta(SLUG);
   await con("postgres", async ({ sql }) => {
     await sql(`drop database if exists ${bdDeTenant(SLUG)} with (force)`);
     await sql(`drop database if exists ${RESTAURADA} with (force)`);

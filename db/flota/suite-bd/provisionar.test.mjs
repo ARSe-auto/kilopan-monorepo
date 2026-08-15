@@ -19,6 +19,7 @@ import {
   versionesDe,
   basesDeTenant,
   UUID_CENTINELA_PLANTILLA,
+  desalta,
 } from "../provisionar.mjs";
 import { con, conectar, BD_CONTROL, BD_PLANTILLA, bdDeTenant } from "../conectar.mjs";
 import { versionEsperada } from "../aplicar.mjs";
@@ -32,6 +33,9 @@ const B = "gate_b";
 const REZAGADO = "gate_rezagado";
 
 async function borrar(slug) {
+  // Complemento del alta en `control.tenants` [AC-FPOR-01]: sin esto, la fila sobrevive al
+  // DROP DATABASE y el job exportador la reporta huérfana en la corrida siguiente.
+  await desalta(slug);
   await con("postgres", ({ sql }) =>
     sql(`drop database if exists ${bdDeTenant(slug)} with (force)`),
   );
