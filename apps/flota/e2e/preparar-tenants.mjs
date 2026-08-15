@@ -47,6 +47,16 @@ export const TENANTS = [
   // recargas, y la que se pondría roja sería la que no hizo nada. Va al FINAL por lo mismo que
   // `gobierno`: media docena de suites toma los dos primeros activos por índice.
   { slug: "hechos", estado: "activo" },
+  // Base PROPIA para editar terminología con un turno de por medio [AC-FMIG-06].
+  //
+  // `terminologia.spec.ts` (AC-FMIG-04) deja escrito que `tenant_terminology` es una tabla que
+  // NINGUNA otra suite toca, y este AC la muta de verdad —PUT real, no INSERT directo— además
+  // de sellar `config_version` nuevas cada vez que edita. Sumarle esa escritura a `ruteo_activo`
+  // rompería esa invariante para la propia suite de AC-FMIG-04; sumarla a `hechos` —compartida
+  // por media docena de suites de POD/turnos— arriesgaría que un `config_version` nuevo
+  // resellado a mitad de esa corrida cambiara qué versión congela el PRÓXIMO turno que abra
+  // cualquiera de ellas. Va al final por la misma razón que `gobierno` y `hechos`.
+  { slug: "config_congelada", estado: "activo" },
 ];
 
 /** Subdominio que jamás se registra. Nombrarlo acá evita que el test lo invente distinto. */

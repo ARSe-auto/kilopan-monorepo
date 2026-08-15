@@ -1015,12 +1015,13 @@
       "ruta": "/api/terminologia",
       "archivo": "src/app/api/terminologia/route.ts",
       "metodos": [
-        "GET"
+        "GET",
+        "PUT"
       ],
       "params": [],
       "cruce": {
         "tipo": "sin_recurso",
-        "nota": "Catálogo de terminología resuelto del tenant [AC-FMIG-04]. Sin parámetro de ruta: el tenant sale de x-flota-tenant-bd, igual que /api/tema. Una fuga acá sería silenciosa comparada con otras rutas —no hay dinero ni PII, «parada» de B en vez de «Punto extra» de A no compromete nada operativo— pero SÍ delataría estructura: el conjunto de term_keys y los nombres que un tenant eligió para renombrar son parte de cómo se identifica su marca frente a sus propios choferes, y sin aislamiento un vecino vería con qué palabras opera otro negocio. El caso genérico va sin credencial de tenant y la guardia contesta 404 pelado antes de tocar tenant_terminology."
+        "nota": "Catálogo de terminología resuelto del tenant [AC-FMIG-04] y su edición [AC-FMIG-06]. Sin parámetro de ruta: el tenant sale de x-flota-tenant-bd, igual que /api/tema. El GET es la fuga silenciosa que ya documentaba este AC —no hay dinero ni PII, «parada» de B en vez de «Punto extra» de A no compromete nada operativo, pero SÍ delataría estructura de marca frente a un vecino—. El PUT eleva el daño: sin aislamiento, A podría RENOMBRAR el diccionario de B —vandalizar cómo la app le habla a sus propios choferes— y, por sellar una config_version nueva en cada edit (§4.4), correrle además la versión congelada al PRÓXIMO turno que B abra. El caso genérico va sin credencial de tenant y la guardia contesta 404 pelado antes de tocar tenant_terminology, en las dos verbos."
       }
     },
     {

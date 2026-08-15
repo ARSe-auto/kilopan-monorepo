@@ -300,7 +300,7 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
   verifica-es-cl.mjs --app=flota (apps/flota/src + packages/miga/src) cableado en
   check.sh, con 3 tests nuevos end-to-end (verde real, rojo con inglés, verde con
   español). check.sh --full --app=flota: VERDE.
-- [ ] (P1) Edición de terminología con CHECKs de BD (largos por tipo, caracteres, sistema no editable) ⇒ 422 es-CL; aplica al próximo bootstrap con turno abierto congelado — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-06]
+- [x] (P1) Edición de terminología con CHECKs de BD (largos por tipo, caracteres, sistema no editable) ⇒ 422 es-CL; aplica al próximo bootstrap con turno abierto congelado — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-06]
 - [ ] (P2) Snapshot 375px con 5 módulos y términos al máximo largo sin desbordes; texto 200% sin truncar cifras — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-07]
 - [ ] (P1) Pantalla «Funciones»: OFF siempre permitido, ON solo del plan (mutación directa por API fuera de plan ⇒ 422 y 0 filas; rol no admin ⇒ 403); audit + próximo bootstrap — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-08]
 - [ ] (P1) Regla de contracción completa: manifest server-side sin el módulo, 403 en planificación/lectura, captura 2xx con flag; app mínima todo-OFF sigue siendo producto completo — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-09]
