@@ -99,14 +99,23 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
       que lo esquive; el alta persiste el modo elegido tanto para `daas` como para
       `mi_flota` explícito (no el default de la columna) — 4 pruebas nuevas en
       `db/flota/suite-bd/control.test.mjs`, gate completo verde.
-- [ ] (P1) Centinela 11 — conmutación aditiva, jamás destructiva: sobre un tenant con
+- [x] (P1) Centinela 11 — conmutación aditiva, jamás destructiva: sobre un tenant con
       datos operativos sembrados, mi_flota→daas→mi_flota NO PIERDE ni una fila. Oráculo
       de NO-PÉRDIDA, jamás de igualdad de counts (cada conmutación appendea filas
       legítimamente: `audit_trail` de cada toggle §5.5 y config de entitlements por
       filas §4.4): por cada tabla de dominio, toda fila del snapshot previo sigue
       presente tras la doble conmutación (comparación por PK) y count(después) ≥
       count(antes); la empresa implícita queda intacta (mismo id, misma fila) (§3,
-      §9.3.11, §5.5) — oráculo: CI [AC-FPOR-02]
+      §9.3.11, §5.5) — oráculo: CI [AC-FPOR-02]. Probado:
+      `db/flota/suite-bd/centinela-11-portal.test.mjs` — un tenant real (`gate_centinela11`)
+      con datos operativos sembrados en varios módulos (empresas_cliente, encargos, rutas,
+      paradas, items, personas, usuarios, vehiculos), conmutado con el `conmutarModo` real
+      de `apps/flota/src/servidor/modo.ts`; el barrido de tablas es dinámico
+      (`pg_class`/`pg_constraint`) y compara por PK cada tabla de dominio antes/después, con
+      un caso explícito de que `eventos` SÍ crece (para que la prueba no acepte una
+      implementación de `=` disfrazada de `≥`); la empresa implícita se verifica por
+      igualdad profunda de fila y por unicidad (ninguna segunda implícita tras el viaje de
+      vuelta). Gate completo verde.
 - [ ] (P1) Contracción mi_flota (manifest + e2e; el trigger de la empresa implícita se
       aserta aparte en AC-FPOR-17): el manifest server-side (entitlements × rol) no
       incluye tarifas, liquidación por cliente, portal ni facturación (sin huecos ni
