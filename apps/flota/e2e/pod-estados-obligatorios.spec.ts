@@ -4,6 +4,7 @@ import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
 import { rutDeFixture } from "../../../db/flota/ruts-sinteticos.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
 import { UNDO } from "../../../packages/nucleo-comun/src/constants.ts";
+import { PUERTO_E2E } from "./puerto.ts";
 
 // Los 4 estados obligatorios de la pantalla de parada (§5.7) [AC-FPOD-22]: vacío accionable ·
 // skeleton <50 ms y spinner solo >400 ms · error es-CL con recuperación (las capturas JAMÁS
@@ -28,7 +29,7 @@ import { UNDO } from "../../../packages/nucleo-comun/src/constants.ts";
 
 const A = TENANTS.find((t) => t.slug === "hechos")!;
 const BD_A = bdDeTenant(A.slug);
-const EN_A = `http://${A.slug}.localhost:3311`;
+const EN_A = `http://${A.slug}.localhost:${PUERTO_E2E}`;
 type Conexion = { sql: <T = Record<string, string>>(t: string, p?: unknown[]) => Promise<T[]> };
 
 const SECRETO = secretoNuevo();

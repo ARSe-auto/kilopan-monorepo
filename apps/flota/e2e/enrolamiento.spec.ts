@@ -4,6 +4,7 @@ import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
 import { VALIDOS } from "../../../db/flota/ruts-sinteticos.mjs";
 import { INVITACION, PIN } from "../../../packages/nucleo-comun/src/constants.ts";
 import { TENANTS } from "./preparar-tenants.mjs";
+import { PUERTO_E2E } from "./puerto.ts";
 
 // El flujo feliz del §5.4, contando ACCIONES [AC-FIDN-02] — §5.3, §5.4, §7.6.
 //
@@ -25,7 +26,7 @@ import { TENANTS } from "./preparar-tenants.mjs";
 // cuando alguien mejora una etiqueta, y entonces el presupuesto de acciones deja de medirse
 // por una razón que no tiene nada que ver con los toques.
 
-const PUERTO = 3311;
+const PUERTO = PUERTO_E2E;
 const A = TENANTS.filter((t) => t.estado === "activo")[0]!;
 const BD_A = bdDeTenant(A.slug);
 type Conexion = { sql: <T = Record<string, string>>(t: string, p?: unknown[]) => Promise<T[]> };

@@ -7,6 +7,7 @@ import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
 import { VALIDOS } from "../../../db/flota/ruts-sinteticos.mjs";
 import { ROLES, type Rol } from "../../../packages/nucleo-comun/src/constants.ts";
 import { TENANTS } from "./preparar-tenants.mjs";
+import { PUERTO_E2E } from "./puerto.ts";
 
 // Aislamiento y roles del tablero [AC-FSEM-09] — spec 05 §2.8, §4.
 //
@@ -29,7 +30,7 @@ import { TENANTS } from "./preparar-tenants.mjs";
 //       puede recibir un CLP de este módulo. El grep vigila que eso no cambie sin que alguien
 //       lo note.
 
-const PUERTO = 3311;
+const PUERTO = PUERTO_E2E;
 const DOMINIO = "localhost";
 const SLUG = "hechos";
 const HOST = `${SLUG}.${DOMINIO}:${PUERTO}`;

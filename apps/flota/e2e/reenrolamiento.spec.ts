@@ -9,6 +9,7 @@ import { fijarPin } from "../src/servidor/pin.ts";
 import { resolverSesion } from "../src/servidor/sesion.ts";
 import { con, bdDeTenant, CLUSTER_LOCAL, ROL_MIGRADOR } from "../../../db/flota/conectar.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
+import { PUERTO_E2E } from "./puerto.ts";
 
 // «Ya tengo cuenta»: el teléfono nuevo [AC-FIDN-08] — §4.3, §5.4 F-E.
 //
@@ -16,7 +17,7 @@ import { TENANTS } from "./preparar-tenants.mjs";
 // activo por operario se cumple ANTES, DURANTE y DESPUÉS. Jamás dos activos, jamás cero tras
 // aprobar. Y el aparato viejo queda revocado EN EL MISMO ACTO, no en una limpieza posterior.
 
-const PUERTO = 3311;
+const PUERTO = PUERTO_E2E;
 const DOMINIO = "localhost";
 const A = TENANTS.filter((t) => t.estado === "activo")[0]!;
 const BD_A = bdDeTenant(A.slug);

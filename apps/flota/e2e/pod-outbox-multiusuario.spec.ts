@@ -4,6 +4,7 @@ import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
 import { rutDeFixture } from "../../../db/flota/ruts-sinteticos.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
 import { UNDO } from "../../../packages/nucleo-comun/src/constants.ts";
+import { PUERTO_E2E } from "./puerto.ts";
 
 // Outbox particionado por (tenant, usuario) y JAMÁS purgado [AC-FPOD-09] — §4.7, centinela 9
 // (§9.3), §4.6.
@@ -30,7 +31,7 @@ import { UNDO } from "../../../packages/nucleo-comun/src/constants.ts";
 
 const A = TENANTS.find((t) => t.slug === "hechos")!;
 const BD_A = bdDeTenant(A.slug);
-const EN_A = `http://${A.slug}.localhost:3311`;
+const EN_A = `http://${A.slug}.localhost:${PUERTO_E2E}`;
 type Conexion = { sql: <T = Record<string, string>>(t: string, p?: unknown[]) => Promise<T[]> };
 
 /** Dos choferes PROPIOS de esta suite: el §4.3 admite un dispositivo personal activo por

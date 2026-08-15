@@ -9,6 +9,7 @@ import {
   centinelasIndistinguibles,
 } from "../rutas/veredicto.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
+import { PUERTO_E2E } from "./puerto.ts";
 
 // Suite HTTP A-contra-B AUTOGENERADA del manifiesto de rutas [AC-FTEN-26] — centinela 2 del
 // §9.3, exigida por §9.2 dentro de `check.sh --full`.
@@ -24,7 +25,7 @@ import { TENANTS } from "./preparar-tenants.mjs";
 // `ruteo.spec.ts`: la identidad del tenant se juega en la cabecera `Host`, que un navegador
 // tiene prohibido fijar.
 
-const PUERTO = 3311;
+const PUERTO = PUERTO_E2E;
 const DOMINIO = "localhost";
 
 const ACTIVOS = TENANTS.filter((t) => t.estado === "activo");

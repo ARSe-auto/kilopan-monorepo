@@ -4,6 +4,7 @@ import { con, bdDeTenant } from "../../../db/flota/conectar.mjs";
 import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
 import { VALIDOS, rutDeFixture } from "../../../db/flota/ruts-sinteticos.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
+import { PUERTO_E2E } from "./puerto.ts";
 
 // Detalle N2 [AC-FSEM-05] — spec 05 §2.3, §2.4, §2.8.
 //
@@ -17,7 +18,7 @@ import { TENANTS } from "./preparar-tenants.mjs";
 //       SERVIDOR contra `review_queue` REAL — mismo patrón HTTP crudo que `peek-n1.spec.ts`,
 //       porque la identidad del tenant se juega en la cabecera `Host`.
 
-const PUERTO = 3311;
+const PUERTO = PUERTO_E2E;
 const DOMINIO = "localhost";
 const T = TENANTS.find((t) => t.slug === "hechos")!;
 const BD = bdDeTenant(T.slug);

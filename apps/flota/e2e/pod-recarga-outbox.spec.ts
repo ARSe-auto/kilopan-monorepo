@@ -5,6 +5,7 @@ import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
 import { rutDeFixture } from "../../../db/flota/ruts-sinteticos.mjs";
 import { limpiarFixture } from "./limpiar.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
+import { PUERTO_E2E } from "./puerto.ts";
 
 // Outbox generalizado a la recarga [AC-FPOD-13] — §4.2 (regla de oro), §4.7 (outbox), §4.8
 // (dinero invisible), §5.2 F4, §9.3 centinela 10.
@@ -28,7 +29,7 @@ import { TENANTS } from "./preparar-tenants.mjs";
 // nada. Mismo criterio y mismo tenant que `recargas.spec.ts` (AC-FVEH-08).
 const A = TENANTS.find((t) => t.slug === "hechos")!;
 const BD_A = bdDeTenant(A.slug);
-const EN_HECHOS = `http://${A.slug}.localhost:3311`;
+const EN_HECHOS = `http://${A.slug}.localhost:${PUERTO_E2E}`;
 type Conexion = { sql: <T = Record<string, string>>(t: string, p?: unknown[]) => Promise<T[]> };
 
 const RUT_CHOFER = rutDeFixture(21);

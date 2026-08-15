@@ -9,6 +9,7 @@ import { limpiarFixture } from "./limpiar.mjs";
 import { con, bdDeTenant, BD_CONTROL, CLUSTER_LOCAL, ROL_MIGRADOR } from "../../../db/flota/conectar.mjs";
 import { TENANTS, VECINO } from "./preparar-tenants.mjs";
 import { PIN } from "../../../packages/nucleo-comun/src/constants.ts";
+import { PUERTO_E2E } from "./puerto.ts";
 
 // El plano de control exclusivo del dueño, por HTTP [AC-FIDN-12] — §4.3, §5.4, §3.E1.14.
 //
@@ -23,7 +24,7 @@ import { PIN } from "../../../packages/nucleo-comun/src/constants.ts";
 // sale del MANIFIESTO (AC-FTEN-26), que se deriva del árbol. Una ruta de gobierno nueva entra
 // sola a los dos barridos, o el gate se pone rojo antes por no tener cruce declarado.
 
-const PUERTO = 3311;
+const PUERTO = PUERTO_E2E;
 const DOMINIO = "localhost";
 
 const T = TENANTS.find((t) => t.slug === "gobierno")!;
