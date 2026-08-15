@@ -123,7 +123,21 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
       mecánica: los nodos DOM de los módulos contraídos no existen en NINGÚN frame
       entre el bootstrap y el render estable del e2e; el semáforo no ofrece tarjeta
       SLA; e2e del tenant C del seed: UI contraída y cero CLP de tarifas visibles (§3,
-      §5.5, §3.E1.11, §10) — oráculo: CI [AC-FPOR-03]
+      §5.5, §3.E1.11, §10) — BLOQUEADO por DDL de sesión supervisada, el MISMO root
+      cause que [AC-FTAR-18] (spec 06) ya documenta: las 4 `lookup_key` que
+      `modo_recorte` recorta (`tarifas`, `liquidacion_por_cliente`,
+      `portal_contratante`, `facturacion`; `db/migraciones-flota/control/
+      0003_modo_como_preset.sql`) NUNCA se insertaron en la tabla `features` de
+      `control` (verificado: ninguna migración 0001–0008 las inserta; patrón exacto
+      sería el de `0006_feature_de_documentos.sql`/`0007_feature_del_modulo.sql`/
+      `0008_feature_de_certificaciones.sql`); sin esa fila, `entitlements_efectivos`
+      (`cross join features`) jamás produce una entrada para ellas, y
+      `estadoDeFeature`/`entitlementVigente` (`apps/flota/src/servidor/config.ts`)
+      devuelven `null` SIEMPRE, para CUALQUIER modo — construir el manifest hoy
+      dejaría `daas` tan contraído como `mi_flota` (verde falso: el e2e del tenant C
+      pasaría por accidente, no porque el modo recorte de verdad). Este módulo es
+      DUEÑO del entregable genérico junto con [AC-FMIG-09] (spec 08); ambos se
+      resuelven al insertarse la migración de `features` — oráculo: CI [AC-FPOR-03]
 - [ ] (P1) Módulo apagado en HTTP: con el portal OFF (mi_flota u override), TODA ruta
       `/cliente/*` (lectura y planificación) responde 403; el namespace no expone ningún
       endpoint de captura (auditoría del manifiesto de rutas: nada de `/cliente/*` en el
