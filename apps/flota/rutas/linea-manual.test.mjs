@@ -62,7 +62,7 @@ test("[AC-FTAR-04] los patrones atrapan de verdad lo que dicen atrapar", () => {
     );
   }
   // Y el positivo: el futuro drill-down GET línea→evidencia (AC-FTAR-07) y las rutas legítimas
-  // del producto no disparan por MÉTODO — el patrón solo bloquea cuando además MUTA.
+  // del producto no disparan por el VERBO HTTP — el patrón solo bloquea cuando además MUTA.
   for (const ruta of ["/api/sesion", "/api/encargos", "/api/tarifas", "/"]) {
     assert.ok(!LINEA_MANUAL.some((p) => p.test(ruta)), `«${ruta}» disparó y es legítima`);
   }
@@ -70,7 +70,7 @@ test("[AC-FTAR-04] los patrones atrapan de verdad lo que dicen atrapar", () => {
 
 test("[AC-FTAR-04] el drill-down línea→evidencia (GET) no dispararía el gate aunque exista", () => {
   // Documenta la frontera: el patrón atrapa el NOMBRE «líneas», así que el filtro real es el
-  // MÉTODO. Un GET sobre esa misma forma de ruta es AC-FTAR-07 y no está prohibido.
+  // VERBO HTTP. Un GET sobre esa misma forma de ruta es AC-FTAR-07 y no está prohibido.
   const rutaFutura = "/api/liquidaciones/[id]/lineas/[lineaId]/evidencia";
   assert.ok(LINEA_MANUAL.some((p) => p.test(rutaFutura)), "el patrón de nombre sí matchea");
   assert.ok(!MUTA.has("GET"), "pero GET no está en el set de métodos que mutan");

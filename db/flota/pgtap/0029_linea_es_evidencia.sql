@@ -143,7 +143,7 @@ select is(
   'supersede DESPUÉS de devengada (motivo=undo, §4.7) ⇒ la línea queda BLOQUEADA'
 );
 select is(
-  (select count(*)::int from liquidacion_lineas where evidencia_id = (select id from linea_nunoa)),
+  (select count(*)::int from liquidacion_lineas where id = (select id from linea_nunoa)),
   1,
   'el trigger de supersede jamás borra la línea: sigue existiendo exactamente UNA, bloqueada'
 );

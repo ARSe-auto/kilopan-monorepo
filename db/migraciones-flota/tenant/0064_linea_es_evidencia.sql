@@ -188,7 +188,8 @@ comment on function devengar_entrega(uuid, uuid) is
 -- NO quedó marcada `bloqueada`. Con el trigger de arriba sosteniendo la invariante, esta vista
 -- es la comprobación independiente de que sostiene de verdad sobre datos reales — no una
 -- tautología del mismo código que la escribe.
-create or replace view liquidacion_lineas_huerfanas as
+create or replace view liquidacion_lineas_huerfanas
+  with (security_invoker = true) as
   select l.*
     from liquidacion_lineas l
     join entregas_pod p on l.evidencia_tipo = 'entrega_pod' and p.id = l.evidencia_id
