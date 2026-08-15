@@ -5,7 +5,7 @@ import { firmarConPin } from "../src/servidor/firmas.ts";
 import { resolverSesion, revocarDispositivo } from "../src/servidor/sesion.ts";
 import { fijarPin } from "../src/servidor/pin.ts";
 import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
-import { con, bdDeTenant, CLUSTER_LOCAL, ROL_MIGRADOR } from "../../../db/flota/conectar.mjs";
+import { con, bdDeTenant, ROL_MIGRADOR, destinoDelCluster } from "../../../db/flota/conectar.mjs";
 import { provisionar } from "../../../db/flota/provisionar.mjs";
 import { borrarRolDeApp } from "../../../db/flota/rol-app.mjs";
 
@@ -48,7 +48,7 @@ async function crear(rut: string, nombre: string, rol: string) {
 
 test.beforeAll(async () => {
   await provisionar(SLUG, { recrear: true });
-  pool = new Pool({ host: CLUSTER_LOCAL.host, port: CLUSTER_LOCAL.puerto, database: BD, user: ROL_MIGRADOR });
+  pool = new Pool({ host: destinoDelCluster().host, port: Number(destinoDelCluster().puerto), database: BD, user: ROL_MIGRADOR });
 
   Object.assign(chofer, await crear("12.345.678-5", "Chofer", "chofer"));
   Object.assign(responsable, await crear("7.654.321-6", "Responsable", "responsable_carga"));

@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { Pool } from "pg";
 import { otorgar, revocar, vigente, registrarAcceso, ALCANCES, DURACIONES } from "../src/servidor/soporte.ts";
-import { con, bdDeTenant, BD_CONTROL, CLUSTER_LOCAL, ROL_MIGRADOR } from "../../../db/flota/conectar.mjs";
+import { con, bdDeTenant, BD_CONTROL, ROL_MIGRADOR, destinoDelCluster } from "../../../db/flota/conectar.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
 
 // Soporte sin god-mode, contra el cluster [AC-FIDN-11] — §4.3, §7.9.
@@ -23,7 +23,7 @@ let tenantPool: Pool;
 let tenantId: string;
 
 const conexion = (bd: string) =>
-  new Pool({ host: CLUSTER_LOCAL.host, port: CLUSTER_LOCAL.puerto, database: bd, user: ROL_MIGRADOR });
+  new Pool({ host: destinoDelCluster().host, port: Number(destinoDelCluster().puerto), database: bd, user: ROL_MIGRADOR });
 
 test.beforeAll(async () => {
   control = conexion(BD_CONTROL);

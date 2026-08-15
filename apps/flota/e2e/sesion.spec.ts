@@ -7,7 +7,7 @@ import { clasificar, flagDe, revisionDe } from "../src/dominio/revocacion.ts";
 import { codigoNuevo, hashDeCodigo, expiraEn } from "../src/dominio/invitaciones.ts";
 import { aprobar } from "../src/servidor/aprobacion.ts";
 import { revocarDispositivo } from "../src/servidor/sesion.ts";
-import { con, bdDeTenant, CLUSTER_LOCAL, ROL_MIGRADOR } from "../../../db/flota/conectar.mjs";
+import { con, bdDeTenant, ROL_MIGRADOR, destinoDelCluster } from "../../../db/flota/conectar.mjs";
 import { provisionar } from "../../../db/flota/provisionar.mjs";
 import { borrarRolDeApp } from "../../../db/flota/rol-app.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
@@ -61,8 +61,8 @@ function pedirSesion(autorizacion: string | null, host = `${A.slug}.${DOMINIO}:$
 
 test.beforeAll(async () => {
   pool = new Pool({
-    host: CLUSTER_LOCAL.host,
-    port: CLUSTER_LOCAL.puerto,
+    host: destinoDelCluster().host,
+    port: Number(destinoDelCluster().puerto),
     database: BD_A,
     user: ROL_MIGRADOR,
   });

@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { PIN } from "../../../packages/nucleo-comun/src/constants.ts";
 import { esperaSegundos } from "../src/dominio/pin.ts";
 import { verificarPin, fijarPin, desbloquear } from "../src/servidor/pin.ts";
-import { con, bdDeTenant, CLUSTER_LOCAL, ROL_MIGRADOR } from "../../../db/flota/conectar.mjs";
+import { con, bdDeTenant, ROL_MIGRADOR, destinoDelCluster } from "../../../db/flota/conectar.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
 
 // El PIN y su bloqueo contra la base de verdad [AC-FIDN-06] — §0, §4.3, §5.4 F-D.
@@ -55,8 +55,8 @@ async function filaDe(usuarioId: string) {
 
 test.beforeAll(async () => {
   pool = new Pool({
-    host: CLUSTER_LOCAL.host,
-    port: CLUSTER_LOCAL.puerto,
+    host: destinoDelCluster().host,
+    port: Number(destinoDelCluster().puerto),
     database: BD_A,
     user: ROL_MIGRADOR,
   });

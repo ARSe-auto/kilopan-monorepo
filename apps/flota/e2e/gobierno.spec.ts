@@ -6,7 +6,7 @@ import { registrarAcceso } from "../src/servidor/soporte.ts";
 import { enActo, registrarEvento, type CodigoDeEvento } from "../src/servidor/gobierno.ts";
 import { casosDelRepo } from "../rutas/generar.mjs";
 import { limpiarFixture } from "./limpiar.mjs";
-import { con, bdDeTenant, BD_CONTROL, CLUSTER_LOCAL, ROL_MIGRADOR } from "../../../db/flota/conectar.mjs";
+import { con, bdDeTenant, BD_CONTROL, ROL_MIGRADOR, destinoDelCluster } from "../../../db/flota/conectar.mjs";
 import { TENANTS, VECINO } from "./preparar-tenants.mjs";
 import { PIN } from "../../../packages/nucleo-comun/src/constants.ts";
 import { PUERTO_E2E } from "./puerto.ts";
@@ -128,10 +128,10 @@ async function enrolar(rut: string, nombre: string, rol: string) {
 }
 
 test.beforeAll(async () => {
-  pool = new Pool({ host: CLUSTER_LOCAL.host, port: CLUSTER_LOCAL.puerto, database: BD, user: ROL_MIGRADOR });
+  pool = new Pool({ host: destinoDelCluster().host, port: Number(destinoDelCluster().puerto), database: BD, user: ROL_MIGRADOR });
   control = new Pool({
-    host: CLUSTER_LOCAL.host,
-    port: CLUSTER_LOCAL.puerto,
+    host: destinoDelCluster().host,
+    port: Number(destinoDelCluster().puerto),
     database: BD_CONTROL,
     user: ROL_MIGRADOR,
   });

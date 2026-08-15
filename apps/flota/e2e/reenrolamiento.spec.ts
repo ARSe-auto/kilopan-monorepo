@@ -7,7 +7,7 @@ import { codigoNuevo, hashDeCodigo, expiraEn } from "../src/dominio/invitaciones
 import { aprobar } from "../src/servidor/aprobacion.ts";
 import { fijarPin } from "../src/servidor/pin.ts";
 import { resolverSesion } from "../src/servidor/sesion.ts";
-import { con, bdDeTenant, CLUSTER_LOCAL, ROL_MIGRADOR } from "../../../db/flota/conectar.mjs";
+import { con, bdDeTenant, ROL_MIGRADOR, destinoDelCluster } from "../../../db/flota/conectar.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
 import { PUERTO_E2E } from "./puerto.ts";
 
@@ -79,8 +79,8 @@ const solicitudPendiente = async () => {
 
 test.beforeAll(async () => {
   pool = new Pool({
-    host: CLUSTER_LOCAL.host,
-    port: CLUSTER_LOCAL.puerto,
+    host: destinoDelCluster().host,
+    port: Number(destinoDelCluster().puerto),
     database: BD_A,
     user: ROL_MIGRADOR,
   });
