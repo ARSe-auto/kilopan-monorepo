@@ -47,6 +47,10 @@ export const TENANTS = [
   // recargas, y la que se pondría roja sería la que no hizo nada. Va al FINAL por lo mismo que
   // `gobierno`: media docena de suites toma los dos primeros activos por índice.
   { slug: "hechos", estado: "activo" },
+  // Base PROPIA para transferir propiedad [AC-FIDN-13]: la ceremonia MUTA el rol de dos
+  // usuarios (`admin_tenant` ⇄ `operador`) y deja passkeys registradas, y compartir la base
+  // de `gobierno` le movería el rol a la dueña que esa suite da por fija en su `beforeAll`.
+  { slug: "transferencia", estado: "activo" },
 ];
 
 /** Subdominio que jamás se registra. Nombrarlo acá evita que el test lo invente distinto. */

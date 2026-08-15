@@ -392,6 +392,18 @@
       }
     },
     {
+      "ruta": "/api/gobierno/transferencia",
+      "archivo": "src/app/api/gobierno/transferencia/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Transferir propiedad con passkey/WebAuthn del admin [AC-FIDN-13, §5.4 F-H]. Sin identificador por URL, igual que `modo`: el admin sale de la sesión y el destino del cuerpo. La ÚNICA passkey del sistema — grep de este manifiesto contra `WebAuthn`/`credentials.create`/`credentials.get` prueba que ningún otro flujo la usa. Contra el vecino no hay caso de cruce que montar: el destino (`nuevo_admin_usuario_id`) se valida contra la tabla `usuarios` de la BASE del tenant que resolvió el ruteo, así que un id de B simplemente no está ahí — la misma ausencia por construcción que `grants`/`modo`. El daño real de esta ruta no es de aislamiento entre tenants sino DENTRO del propio tenant si la ceremonia fuera decorativa: por eso la verificación criptográfica corre ANTES de abrir transacción (0 cambios sin ceremonia válida) y por eso el rol destino está cerrado a los cuatro internos no-admin, jamás `cliente` ni `admin_tenant`."
+      }
+    },
+    {
       "ruta": "/api/gobierno/usuarios/[id]/pin",
       "archivo": "src/app/api/gobierno/usuarios/[id]/pin/route.ts",
       "metodos": [

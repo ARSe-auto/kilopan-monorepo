@@ -61,6 +61,10 @@ export const EVENTOS = {
   usuario_desbloqueado: "gobierno.usuario_desbloqueado",
   soporte_otorgado: "gobierno.soporte_otorgado",
   soporte_revocado: "gobierno.soporte_revocado",
+  // La passkey se registra al PRIMER uso de «transferir propiedad» (§5.4 F-H, Pregunta 4
+  // respondida el 11-ago-2026) [AC-FIDN-13]: no hay un paso de setup aparte.
+  passkey_registrada: "gobierno.passkey_registrada",
+  propiedad_transferida: "gobierno.propiedad_transferida",
   // El §5.4 pone «alta, edición de capacidades/documentos y desactivación de VEHÍCULOS»
   // dentro del plano de control exclusivo del dueño, en la misma lista que aprobar accesos y
   // revocar aparatos. Por eso su evento es `gobierno.*` y no de otro dominio: es lo que hace

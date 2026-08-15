@@ -34,6 +34,11 @@ export const TABLAS_DE_OPERACION = [
  *  y ese acto es append-only. Quien amparó o bajó una carga se queda — es justamente el dato que
  *  hace que la vía sea explícita y no un override anónimo. `limpiarFixture` los excluye. */
 export const TABLAS_DE_IDENTIDAD = [
+  // La ceremonia de transferir propiedad [AC-FIDN-13] cuelga de `usuarios` por DOS columnas
+  // (`usuario_id` y `nuevo_admin_usuario_id`); igual que `codigos_puente`, va antes o el
+  // borrado de identidad rebota "violates foreign key constraint".
+  "retos_webauthn",
+  "admin_passkeys",
   "codigos_puente",
   "solicitudes_acceso",
   "invitaciones",
