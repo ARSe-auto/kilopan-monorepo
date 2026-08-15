@@ -49,6 +49,13 @@ paso "familia canónica de constantes: cero números mágicos duplicados (§0)" 
 paso "theming por filas: cero Liquid Glass, cero CSS arbitrario por tenant (§5.1)" \
   node db/flota/gate-theming-por-filas.mjs
 
+# Selectores de e2e SOLO por data-testid/term_key (§5.1, §9.2): getByText sobre un término
+# RENOMBRABLE (catálogo de packages/miga/src/terminologia.ts) se rompe el día que un tenant
+# lo renombra — caso de rebote textual del AC: «PR con getByText sobre un renombrable ⇒ lint
+# rojo». [AC-FMIG-04]
+paso "selectores de e2e: cero getByText sobre un término renombrable (§5.1, §9.2)" \
+  node db/flota/gate-getbytext-renombrable.mjs
+
 # La otra mitad del §0: `gate-constantes` vigila los VALORES de la familia de energía; este
 # vigila la ARITMÉTICA. Nadie copia el factor de consumo a mano —el otro gate lo atrapa—, pero
 # cualquiera escribe la multiplicación en la pantalla que está armando, y a partir de ahí hay

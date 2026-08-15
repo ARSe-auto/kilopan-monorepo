@@ -26,6 +26,9 @@ const COMPONENTES_SIN_CIFRAS = [
   "ChipOperador.tsx",
   "Copyright.tsx",
   "SelectorUnToque.tsx",
+  // AC-FMIG-04: renderiza el texto resuelto de un term_key (singular/plural/canónico) — nunca
+  // dinero ni peso.
+  "Termino.tsx",
   // AC-H0-11: los tres estados de listado. Ninguno muestra dinero ni peso — rinden un
   // skeleton, un mensaje de vacío o uno de error con su botón. `EstadoVacio` recibe texto
   // libre, así que una pantalla PODRÍA pasarle un monto; si eso pasa, el que formatea es

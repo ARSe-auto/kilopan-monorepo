@@ -294,7 +294,7 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 
 - [x] (P1) Theming por filas: CSS custom properties del bootstrap con derivados pressed/disabled/dark; acento <4.5:1 ⇒ 422; grep anti-Liquid-Glass; dos tenants, temas distintos, UN build — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-02]
 - [x] (P1) Teclado numérico PROPIO (teclas ≥64px) en PIN/odómetro/SOC/cantidades; el del sistema jamás en terreno; campo = 1 acción con emisión de toques_flujo — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-03]
-- [ ] (P1) Capa de copy única term_key tenant→vertical→base es-CL; canónico entre paréntesis para el admin; lint que veta getByText; suite e2e DOBLE sin cambiar un selector — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-04]
+- [x] (P1) Capa de copy única term_key tenant→vertical→base es-CL; canónico entre paréntesis para el admin; lint que veta getByText; suite e2e DOBLE sin cambiar un selector — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-04]
 - [ ] (P1) Formatos es-CL únicos ($12.500, dd-mm-aaaa, RUT) con unit tests; grep cero strings visibles en inglés — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-05]
 - [ ] (P1) Edición de terminología con CHECKs de BD (largos por tipo, caracteres, sistema no editable) ⇒ 422 es-CL; aplica al próximo bootstrap con turno abierto congelado — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-06]
 - [ ] (P2) Snapshot 375px con 5 módulos y términos al máximo largo sin desbordes; texto 200% sin truncar cifras — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-07]

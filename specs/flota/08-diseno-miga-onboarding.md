@@ -257,7 +257,20 @@ reales en seeds/fixtures (§10, §7.8):
   inserción válida, rol de terreno no-admin, flujo fuera de whitelist ⇒ 422, toques=0 ⇒ 422, sin
   sesión ⇒ 404. El caso de rebote del teclado del sistema ya lo cubren los e2e existentes de cada
   pantalla (assert de cero `<input>`/`<textarea>` en terreno).
-- [ ] (P1) UNA capa de copy con resolución `term_key` tenant → vertical → base es-CL (§5.1); el admin ve el término canónico entre paréntesis (§5.1); selectores e2e SOLO por `data-testid`/`term_key` con lint que VETA `getByText` sobre renombrables (caso de rebote: PR con `getByText` sobre un renombrable ⇒ lint rojo); la suite e2e corre DOS veces —terminología base y extrema del tenant B— sin cambiar un selector (§9.2) — oráculo: CI [AC-FMIG-04]
+- [x] (P1) UNA capa de copy con resolución `term_key` tenant → vertical → base es-CL (§5.1); el admin ve el término canónico entre paréntesis (§5.1); selectores e2e SOLO por `data-testid`/`term_key` con lint que VETA `getByText` sobre renombrables (caso de rebote: PR con `getByText` sobre un renombrable ⇒ lint rojo); la suite e2e corre DOS veces —terminología base y extrema del tenant B— sin cambiar un selector (§9.2) — oráculo: CI [AC-FMIG-04]
+  PROBADO: `packages/miga/src/terminologia.{ts,test.ts}` (cadena tenant→vertical→base, canónico
+  SIEMPRE de la base, resolución por clave y no por tenant entero); `Termino.tsx` (data-testid
+  y data-term-key nunca dependen del texto resuelto); lado servidor
+  `apps/flota/src/servidor/terminologia.ts` + `api/terminologia/route.ts` (GET, lee
+  `tenant_terminology` real — AC-FTEN-10 es su autoridad) y `panel/terminologia/page.tsx`
+  (solo lectura; editar es AC-FMIG-06). El lint del caso de rebote:
+  `db/flota/gate-getbytext-renombrable.mjs` + su `.test.mjs` (9 mutantes, incluido el caso de
+  rebote textual del AC: `getByText` sobre un renombrable ⇒ ROJO), enganchado a
+  `db/flota/gate.sh`. El e2e `terminologia.spec.ts` corre la MISMA suite contra dos tenants —A
+  sin fila propia (sirve la base es-CL) y B con una fila real al largo MÁXIMO que
+  `tenant_terminology_largo_por_tipo` acepta (la extrema de referencia)— con selectores
+  IDÉNTICOS, más el caso de UPDATE servido sin build. `npx playwright test
+  e2e/terminologia.spec.ts`: 3/3 verdes. `check.sh --full --app=flota`: VERDE.
 - [ ] (P1) Formatos es-CL únicos y en un solo lugar (§0): `$12.500` (CLP entero; la UI formatea, la BD calcula — §7.5), `dd-mm-aaaa`, RUT `12.345.678-5` con unit tests de la capa de formato; caso de rebote: string visible en inglés en `src/` ⇒ grep-gate rojo (§0, §9.2) — oráculo: CI [AC-FMIG-05]
 - [ ] (P1) Edición de terminología en el panel admin white-label (§9.1.4.g; la restricción de rol NO se aserta aquí — el maestro no la cierra y queda BLOQUEADA por la Pregunta al dueño n.º 11; al cerrarse se agrega su AC de rebote por rol): singular+plural obligatorios, largos por tipo (navegación ≤12, títulos ≤24, descripciones ≤40) y caracteres prohibidos `# $ % ; < = >` rechazados con 422 tipado es-CL (PLANIFICACIÓN, §4.2; CHECKs en BD del módulo 00, §4.4); términos de sistema/auditoría no aparecen como editables; degradación: el cambio aplica al próximo bootstrap y un turno abierto termina con su `config_version_id` congelado — el e2e verifica que la PWA del turno abierto NO cambia términos a mitad de turno (§0, §4.4, §5.1) — oráculo: CI [AC-FMIG-06]
 - [ ] (P2) Snapshot 375 px con 5 módulos activos y términos al máximo largo permitido (12/24/40) sin desbordes ni solapes, y texto al 200 % sin truncar cifras (§9.2, §5.7); caso de rebote: regresión visual o cifra truncada ⇒ gate rojo — oráculo: CI [AC-FMIG-07]

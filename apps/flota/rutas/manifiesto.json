@@ -1012,6 +1012,18 @@
       }
     },
     {
+      "ruta": "/api/terminologia",
+      "archivo": "src/app/api/terminologia/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Catálogo de terminología resuelto del tenant [AC-FMIG-04]. Sin parámetro de ruta: el tenant sale de x-flota-tenant-bd, igual que /api/tema. Una fuga acá sería silenciosa comparada con otras rutas —no hay dinero ni PII, «parada» de B en vez de «Punto extra» de A no compromete nada operativo— pero SÍ delataría estructura: el conjunto de term_keys y los nombres que un tenant eligió para renombrar son parte de cómo se identifica su marca frente a sus propios choferes, y sin aislamiento un vecino vería con qué palabras opera otro negocio. El caso genérico va sin credencial de tenant y la guardia contesta 404 pelado antes de tocar tenant_terminology."
+      }
+    },
+    {
       "ruta": "/api/turnos",
       "archivo": "src/app/api/turnos/route.ts",
       "metodos": [
@@ -1190,6 +1202,18 @@
       "cruce": {
         "tipo": "sin_recurso",
         "nota": "Pantalla del dueño (F-A y F-C del §5.4). No recibe identificador por URL: todo lo que hace pasa por /api/gobierno/**, que ya tiene sus propios casos declarados, y el tenant sale del ruteo. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y acá pesa porque el HTML servido no puede traer ni el slug ni la base del vecino antes siquiera de que haya sesión: sin credencial la pantalla no pinta datos de nadie."
+      }
+    },
+    {
+      "ruta": "/panel/terminologia",
+      "archivo": "src/app/panel/terminologia/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de solo lectura del catálogo de terminología [AC-FMIG-04]. No recibe identificador por URL: todo lo que pinta pasa por /api/terminologia, que ya tiene su propio caso declarado, y el tenant sale del ruteo por host. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y el HTML servido no puede traer un term_key ni una fila de tenant_terminology del vecino antes de que /api/terminologia resuelva contra la base correcta."
       }
     },
     {
