@@ -700,11 +700,15 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       índices, y es la clase de costo que no se ve hasta que la tabla tiene años. **Queda
       FUERA, con su AC:** transferir propiedad (AC-FIDN-13, bloqueado por la Pregunta 4) —
       oráculo: CI [AC-FIDN-12]
-- [ ] (P2) Transferir propiedad del tenant exige passkey/WebAuthn del admin — única
+- [x] (P2) Transferir propiedad del tenant exige passkey/WebAuthn del admin — única
       passkey del sistema (prohibido WebAuthn en cualquier otro flujo, grep del
       manifiesto de rutas): sin ceremonia passkey válida ⇒ rebote 422 y 0 cambios; con
       ella, el nuevo dueño queda `admin_tenant`, el anterior pierde el gobierno y todo
-      queda en audit_trail; e2e con virtual authenticator (§5.4) — oráculo: CI
+      queda en audit_trail; e2e con virtual authenticator (§5.4) — oráculo: CI. Probado:
+      `apps/flota/e2e/transferencia-propiedad.spec.ts` (5/5 verde) con virtual
+      authenticator real de Playwright 1.62 y `src/dominio/passkey.test.ts` (14/14,
+      verificación WebAuthn propia sin librería de terceros); gate completo de flota en
+      verde (verde-20260815-195901)
       [AC-FIDN-13]
 - [x] (P1) 21.719 estructural: ninguna tabla de HECHOS lleva PII — las tablas de
       hechos/append-only y operativas (eventos, reading, evidence, firmas,

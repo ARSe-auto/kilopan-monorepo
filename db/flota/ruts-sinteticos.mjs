@@ -66,6 +66,7 @@ export const VALIDOS = {
   "6.180.340-8": "el chofer de la foto y el GPS degradados de F4 (AC-FPOD-12), propio y no prestado: compartía el índice 20 con pod-evidencia-sha256.spec.ts — mismo hallazgo del 12-ago-2026 que los de arriba",
   "76.543.219-7": "la empresa cliente del drill-down línea→evidencia (AC-FTAR-07): rango 76.xxx de persona jurídica, propia y no prestada — la suite necesita SU propia empresa contratante para sembrar tarifa y encargo sin pisar la de otro módulo",
   "76.222.333-3": "la empresa cliente de la contracción sin pérdida de filas del módulo de tarifas (AC-FTAR-12): rango 76.xxx de persona jurídica, propia y no prestada — la suite necesita SU propia empresa para sembrar tarifa+zona+recargo+liquidación+línea sin pisar la de AC-FTAR-07 ni de AC-FTAR-10",
+  "6.396.828-5": "el operario C de la transferencia de propiedad con passkey (AC-FIDN-13), propio y no prestado: la ceremonia muta el rol de A y de C en el mismo acto (admin_tenant ⇄ operador/chofer), así que el tercer operario necesita su propia identidad para no pisar el rol que otra suite da por fijo",
 };
 
 /**

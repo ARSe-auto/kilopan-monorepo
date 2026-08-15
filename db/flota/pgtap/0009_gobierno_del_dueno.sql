@@ -71,7 +71,11 @@ select is(
     -- El selector de modo (§3) cambia qué módulos ve la operación entera: es un acto del dueño
     -- y por eso vive en esta familia [AC-FRUT-14].
     'gobierno.modo_conmutado',
+    -- La transferencia de propiedad (§5.4 F-H) exige passkey/WebAuthn del admin: registro al
+    -- primer uso o autenticación si ya tiene una de una vuelta anterior [AC-FIDN-13].
+    'gobierno.passkey_registrada',
     'gobierno.pin_definido',
+    'gobierno.propiedad_transferida',
     'gobierno.puente_emitido',
     'gobierno.solicitud_aprobada',
     'gobierno.solicitud_rechazada',
@@ -86,7 +90,7 @@ select is(
     'gobierno.vehiculo_editado',
     'gobierno.vehiculo_reactivado'
   ],
-  'catálogo de eventos de gobierno: los veinte actos, sin uno de menos'
+  'catálogo de eventos de gobierno: los veintidós actos, sin uno de menos'
 );
 
 -- Y cada uno con su descripción escrita: un catálogo de códigos sin texto es un panel de
@@ -94,7 +98,7 @@ select is(
 select is(
   (select count(*)::int from evento_tipo
     where codigo like 'gobierno.%' and length(btrim(descripcion)) > 0),
-  20, 'cada tipo de evento de gobierno trae su descripción en es-CL'
+  22, 'cada tipo de evento de gobierno trae su descripción en es-CL'
 );
 
 select finish();

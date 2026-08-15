@@ -110,7 +110,7 @@ test.beforeAll(async () => {
   await limpiarFixture(sql);
   a = await enrolar("11.111.111-1", "Dueña A", "admin_tenant");
   b = await enrolar("7.654.321-6", "Operario B", "operador");
-  c = await enrolar("6.396.828-2", "Operario C", "chofer");
+  c = await enrolar("6.396.828-5", "Operario C", "chofer");
 });
 
 test.afterAll(async () => {
@@ -268,6 +268,17 @@ test("[AC-FIDN-13] destino inválido (rol cliente/admin, o uno mismo) ⇒ 422 si
 // YA tiene la passkey que registró en el primer paso ⇒ ceremonia AUTENTICACIÓN — el camino
 // que un registro nuevo por cada vaivén habría hecho imposible de ejercer.
 
+// El virtual authenticator vive en el `context` de CADA test, no en la BD: sin re-sembrar la
+// credencial de A entre tests, «A ya tiene passkey» sería cierto en la BD pero falso en el
+// navegador nuevo, y la autenticación de la tercera prueba rebotaría con «No matching
+// credential» aunque el servidor sí la reconociera. `context.credentials.get()` expone la
+// clave privada de la credencial que el navegador acaba de registrar (Playwright 1.62, pensado
+// exactamente para esto) y `context.credentials.create(rpId, ...)` la re-siembra en el
+// authenticator vacío del siguiente test.
+const RP_ID = HOST.split(":")[0]!;
+let credencialDeA: { id: string; rpId: string; userHandle: string; privateKey: string; publicKey: string } | null =
+  null;
+
 test("[AC-FIDN-13] primer uso: registro passkey + transferencia en el mismo acto", async ({ context, page }) => {
   await context.credentials.install();
   await page.goto(`${ORIGEN}/panel`);
@@ -287,6 +298,10 @@ test("[AC-FIDN-13] primer uso: registro passkey + transferencia en el mismo acto
     a.usuarioId,
   ]);
   expect(passkeyA!.n).toBe("1");
+
+  const credenciales = await context.credentials.get({ rpId: RP_ID });
+  expect(credenciales).toHaveLength(1);
+  credencialDeA = credenciales[0]!;
 
   const [evTransferencia] = await sql<{ n: string }>(
     `select count(*)::text as n from eventos e join evento_tipo t on t.id = e.tipo_id
@@ -326,6 +341,8 @@ test("[AC-FIDN-13] A vuelve a transferir: YA tiene passkey ⇒ autenticación, n
   page,
 }) => {
   await context.credentials.install();
+  if (!credencialDeA) throw new Error("credencialDeA: el test de registro no corrió antes, o no capturó nada");
+  await context.credentials.create(RP_ID, credencialDeA);
   await page.goto(`${ORIGEN}/panel`);
 
   const [antes] = await sql<{ contador: string }>("select contador::text as contador from admin_passkeys where usuario_id = $1", [
