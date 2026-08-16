@@ -1,7 +1,10 @@
-import { tipografia } from "../tokens.ts";
+import { tipografia, grilla } from "../tokens.ts";
+import { componente } from "../estructura.ts";
+import { BotonTactil } from "./BotonTactil.tsx";
 
 // Teclado numérico PROPIO — jamás el teclado del sistema (PROMPT_MAESTRO.md §5).
-// Teclas >=64px (manos con harina/guantes). Coma es-CL como separador decimal.
+// El tamaño de tecla sale de `componente.tecla`, que lo toma de la familia canónica del
+// §0 (manos con harina/guantes) [AC-FMIG-01]. Coma es-CL como separador decimal.
 const TECLAS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ",", "0", "⌫"] as const;
 
 export function TecladoNumerico({
@@ -10,6 +13,8 @@ export function TecladoNumerico({
   permitirDecimal = false,
   permitirCeroInicial = false,
   permitirGuion = false,
+  permitirK = false,
+  onToque,
 }: {
   valor: string;
   onCambiar: (nuevoValor: string) => void;
@@ -26,8 +31,21 @@ export function TecladoNumerico({
    *  coma decimal por «−» en la misma celda (un código no tiene decimales, nunca
    *  coexisten). El prefijo «P» lo agrega la pantalla, no este teclado. */
   permitirGuion?: boolean;
+  /** AC-FIDN-17: el RUT chileno. Sustituye la coma decimal por «K» en la misma celda —un
+   *  RUT no tiene decimales, así que nunca coexisten—. Sin esto, el 10% largo de la
+   *  población cuyo dígito verificador es K no puede tipear su propio RUT con el teclado
+   *  PROPIO que el §5.4 exige, y la pantalla tendría que abrir el del sistema justo en el
+   *  campo donde el maestro lo prohíbe. Los puntos y el guion los pone el formateador de
+   *  `packages/nucleo-comun/src/rut.ts`, no este teclado: acá solo se entra el alfabeto. */
+  permitirK?: boolean;
+  /** AC-FMIG-03: cuenta los toques REALES (incluida cada «⌫» de corrección) sin importar la
+   *  convención de presupuesto del §5.3, que sigue contando el campo entero como 1 acción —
+   *  quien llama decide cuándo el campo "se completó" y qué hacer con el total (emitirlo a
+   *  `client_metric` tipo `toques_flujo`, típicamente). Este componente no sabe de sync. */
+  onToque?: () => void;
 }) {
   function tocar(tecla: string) {
+    onToque?.();
     if (tecla === "⌫") {
       onCambiar(valor.slice(0, -1));
       return;
@@ -36,6 +54,10 @@ export function TecladoNumerico({
     // que espera la BD en el código P<correlativo>-<n> — dos glifos, un solo carácter real.
     if (permitirGuion && tecla === "−") {
       onCambiar(valor + "-");
+      return;
+    }
+    if (permitirK && tecla === "K") {
+      onCambiar(valor + "K");
       return;
     }
     if (tecla === ",") {
@@ -50,39 +72,47 @@ export function TecladoNumerico({
     <div
       role="group"
       aria-label="Teclado numérico"
-      style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}
+      style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: componente.tecla.separacionPx }}
     >
       {TECLAS.map((tecla) => {
-        // Hallazgo menor de la auditoría: en /ingresar y /vincular (PIN de 4 dígitos,
-        // sin decimales) esta tecla se mostraba apagada y sin poder tocarse — un botón
+        // Hallazgo menor de la auditoría: en /ingresar y /vincular (PIN, sin decimales)
+        // esta tecla se mostraba apagada y sin poder tocarse — un botón
         // muerto ocupando espacio, con contraste bajo el mínimo. Si no aplica, no se
         // pinta: se deja el hueco vacío para no correr "0" y "⌫" de lugar.
-        if (tecla === "," && !permitirDecimal && !permitirGuion) {
-          return <div key={tecla} aria-hidden="true" style={{ minHeight: 64, minWidth: 64 }} />;
+        if (tecla === "," && !permitirDecimal && !permitirGuion && !permitirK) {
+          return (
+            <div
+              key={tecla}
+              aria-hidden="true"
+              style={{ minHeight: componente.tecla.altoMinPx, minWidth: componente.tecla.anchoMinPx }}
+            />
+          );
         }
-        const etiqueta = tecla === "," && permitirGuion ? "−" : tecla;
+        const etiqueta =
+          tecla === "," ? (permitirGuion ? "−" : permitirK ? "K" : tecla) : tecla;
         return (
-          <button
+          <BotonTactil
             key={tecla}
             type="button"
             onClick={() => tocar(etiqueta)}
             aria-label={etiqueta === "⌫" ? "Borrar" : etiqueta}
             style={{
-              minHeight: 64,
-              minWidth: 64,
-              // AC-H0-08: 24px no pertenecía a la escala tipográfica de Miga — "titulo"
-              // (22/600) es el peldaño correcto, y el peso ya coincidía con el token.
+              minHeight: componente.tecla.altoMinPx,
+              minWidth: componente.tecla.anchoMinPx,
+              // AC-H0-08: el tamaño que había acá no pertenecía a la escala tipográfica
+              // de Miga — "titulo" (22/600) es el peldaño correcto, y el peso ya coincidía
+              // con el token.
               fontSize: tipografia.titulo.tamano,
               fontWeight: tipografia.titulo.peso,
               fontVariantNumeric: "tabular-nums",
-              borderRadius: 12,
+              borderRadius: grilla.radio,
               border: "1px solid rgba(27,23,18,.14)",
               background: "#FFFFFF",
               color: "#1B1712",
             }}
           >
             {etiqueta}
-          </button>
+          </BotonTactil>
         );
       })}
     </div>

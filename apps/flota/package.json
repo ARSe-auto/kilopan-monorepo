@@ -1,0 +1,38 @@
+{
+  "name": "flota",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "//puertos": "3310 dev/start y 3311 e2e, pineados ACÁ y no solo en launch.json (docs/CONTRATO_PUERTOS.md, regla 2): `next dev` a secas cae en 3000, que es de eauto y su motor lo reclama cada pocos minutos matando lo que encuentre. El 3301 es del e2e de apps/kilopan: un esqueleto de esta app ya nació pineado ahí una vez (08-ago-2026) y dejó a otro agente esperando un puerto que no se iba a liberar.",
+  "//start": "El servidor es PROPIO (`servidor.mjs`) y es el mismo en desarrollo y en produccion: el ruteo por subdominio decide 404/503/servir antes que Next (AC-FTEN-05), y un gate que solo corre en produccion es un gate que se descubre roto en produccion.",
+  "scripts": {
+    "dev": "node servidor.mjs",
+    "build": "next build",
+    "start": "NODE_ENV=production node servidor.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "//test": "El guardián del manifiesto de rutas corre ANTES que sus propios mutantes y en el gate RÁPIDO, no solo en --full: una ruta que entra sin caso de cruce tiene que frenarse en la iteración en que se escribió, no diez minutos después. La suite HTTP que sale del manifiesto corre en `e2e` (AC-FTEN-26).",
+    "//test2": "El gate «la app JAMÁS emite DTE» (AC-FTAR-08) corre DESPUÉS de generar.mjs —necesita el manifiesto al día para afirmar que no hay endpoint de emisión— y ANTES de los tests: es un guardrail penal (art. 97 N°4 CT), no una aserción más, y tiene que abortar el ítem antes que nada.",
+    "test": "node rutas/generar.mjs && node dte/gate-jamas-emite.mjs && node --test dte/*.test.mjs rutas/*.test.mjs src/dominio/*.test.ts src/cliente/*.test.ts",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@node-rs/argon2": "^2.0.2",
+    "next": "^15.4.0",
+    "pg": "^8.22.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
+    "@eslint/eslintrc": "^3.2.0",
+    "@playwright/test": "^1.62.0",
+    "@types/node": "^22.10.0",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "eslint": "^9.17.0",
+    "eslint-config-next": "^15.4.0",
+    "typescript": "^5.7.0"
+  }
+}

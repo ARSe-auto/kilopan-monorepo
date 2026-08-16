@@ -5,7 +5,13 @@
 // `.toFixed(1)` — es el primer caso que este test reproduce y mata.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 import { revisarArchivo, faltaRutEnVivo, EXCLUIR_DE_TODO } from "./verifica-es-cl.mjs";
+
+const SCRIPT = new URL("./verifica-es-cl.mjs", import.meta.url).pathname;
 
 test("revisarArchivo: atrapa gramos/1000 formateado a mano (el bug real de MapaPodsDia.tsx)", () => {
   const codigo = '{pod.gramos_entregados ? `${(pod.gramos_entregados / 1000).toFixed(1)} kg` : "Sin peso"}';
@@ -60,4 +66,60 @@ test("faltaRutEnVivo: input de RUT CON estadoRut() en el archivo no viola nada",
 
 test("faltaRutEnVivo: archivo sin campo de RUT no aplica", () => {
   assert.equal(faltaRutEnVivo('<input placeholder="Razón social" />'), false);
+});
+
+// ─── [AC-FMIG-05] El mismo oráculo, para FLOTA ────────────────────────────────────────
+//
+// specs/flota/08-diseno-miga-onboarding.md exige el mismo caso de rebote que AC-H0-09 ya
+// probaba para KiloPan («string visible en inglés en src/ ⇒ grep-gate rojo», §0/§9.2) pero
+// contra los árboles de FLOTA: `apps/flota/src` y `packages/miga/src`. Hasta este AC, nada
+// ejercía el CLI con `--app=flota` de punta a punta — solo revisarArchivo() app-agnóstico —
+// así que el cableado real (RAICES = apps/flota/src + packages/miga/src) nunca se probó.
+
+test("[AC-FMIG-05] node verifica-es-cl.mjs --app=flota: verde contra el árbol real hoy", () => {
+  // Oráculo declarado del AC: CI. Corre el binario tal cual lo invoca check.sh
+  // (packages/metodo/scripts/check.sh:143) — si esto lanza, el test lo reporta con el
+  // stdout/stderr real del gate, igual que vería el motor.
+  const salida = execFileSync("node", [SCRIPT, "--app=flota"], { encoding: "utf8" });
+  assert.match(salida, /verifica-es-cl: OK/);
+});
+
+test("[AC-FMIG-05] --app=flota --raiz=<sandbox>: una pantalla de FLOTA con inglés visible pone el gate rojo", () => {
+  // Sandbox aislado (patrón de db/flota/gate-constantes.test.mjs): prueba que el CLI, con
+  // el par (--app, RAICES) real de FLOTA, SÍ detecta el caso de rebote — no solo que
+  // revisarArchivo() lo detectaría si alguien lo llamara.
+  const raiz = mkdtempSync(join(tmpdir(), "flota-es-cl-"));
+  try {
+    const dirApp = join(raiz, "apps/flota/src/app/panel");
+    mkdirSync(dirApp, { recursive: true });
+    writeFileSync(join(dirApp, "page.tsx"), "export default function Panel() {\n  return <button>Cancel</button>;\n}\n");
+    mkdirSync(join(raiz, "packages/miga/src"), { recursive: true });
+
+    assert.throws(
+      () => execFileSync("node", [SCRIPT, "--app=flota", `--raiz=${raiz}`], { encoding: "utf8" }),
+      (err) => {
+        // `??` no sirve acá: execFileSync deja `stdout` en `""` (no `undefined`) cuando
+        // toda la salida del gate fue por stderr, y `"" ?? x` se queda en `""`.
+        assert.match((err.stdout || "") + (err.stderr || ""), /string visible en inglés/);
+        return true;
+      },
+    );
+  } finally {
+    rmSync(raiz, { recursive: true, force: true });
+  }
+});
+
+test("[AC-FMIG-05] --app=flota --raiz=<sandbox>: español limpio en apps/flota/src queda verde", () => {
+  const raiz = mkdtempSync(join(tmpdir(), "flota-es-cl-"));
+  try {
+    const dirApp = join(raiz, "apps/flota/src/app/panel");
+    mkdirSync(dirApp, { recursive: true });
+    writeFileSync(join(dirApp, "page.tsx"), "export default function Panel() {\n  return <button>Cancelar</button>;\n}\n");
+    mkdirSync(join(raiz, "packages/miga/src"), { recursive: true });
+
+    const salida = execFileSync("node", [SCRIPT, "--app=flota", `--raiz=${raiz}`], { encoding: "utf8" });
+    assert.match(salida, /verifica-es-cl: OK/);
+  } finally {
+    rmSync(raiz, { recursive: true, force: true });
+  }
 });

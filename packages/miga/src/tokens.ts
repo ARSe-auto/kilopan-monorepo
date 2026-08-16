@@ -2,6 +2,13 @@
 // duplicación: cualquier componente de apps/kilopan importa de aquí, nunca hardcodea
 // un hex o un tamaño de fuente. Reusado ÍNTEGRO por apps/flota (KiloRuta) cuando exista,
 // salvo el acento (ver `acentos`).
+//
+// Este archivo es la CARA KiloPan de Miga: paleta, escala tipográfica y superficies de
+// esta app. Los tokens ESTRUCTURALES de plataforma —los que §5.1 del maestro de FLOTA
+// declara constantes NO configurables— viven en `estructura.ts`, derivados de la familia
+// canónica del §0. Lo que acá abajo coincide con esa familia (la grilla) se IMPORTA de
+// ella en vez de repetirse: dos copias del mismo 8 son una divergencia con fecha [AC-FMIG-01].
+import { GRILLA } from "../../nucleo-comun/src/constants.ts";
 
 export const acentos = {
   kilopan: "#C2410C", // "corteza"
@@ -25,9 +32,10 @@ export const superficie = {
   texto: "#1B1712",
   textoDim: "#5B564C",
   // Hallazgo de la auditoría: #8A8377 daba 3.39:1 sobre `fondo` y 3.75:1 sobre
-  // `tarjeta` — bajo el 4.5:1 que exige WCAG AA para texto normal (esto se usa en
-  // 13-14px, muy por debajo del umbral de "texto grande" que se conforma con 3:1).
-  // Mismo matiz, oscurecido lo justo para cruzar 4.5:1 contra los dos fondos.
+  // `tarjeta` — bajo el mínimo que WCAG AA exige para texto normal (`CONTRASTE.texto`
+  // de la familia canónica; esto se usa en tamaños de pie, muy por debajo del umbral
+  // de "texto grande", que se conforma con menos). Mismo matiz, oscurecido lo justo
+  // para cruzar ese mínimo contra los dos fondos.
   textoFaint: "#746E64",
   hairline: "rgba(27,23,18,.14)",
 } as const;
@@ -42,7 +50,14 @@ export const tipografia = {
   pie: { tamano: 13, peso: 400 },
 } as const;
 
-export const grilla = { base: 8, radio: 12 } as const;
+// Derivada, no copiada: la grilla es un token ESTRUCTURAL de plataforma (§5.1) y su
+// valor manda desde la familia canónica del §0 [AC-FMIG-01].
+export const grilla = { base: GRILLA.base_px, radio: GRILLA.radio_tarjeta_px } as const;
+
+/** Pesos de ÉNFASIS de un control. No son la escala ni la cifra operativa: un chip o un
+ *  botón en negrita comparte el 700 con `CIFRA_OPERATIVA.peso` por coincidencia, no por
+ *  significado. Se nombran acá para que un componente no los escriba a mano [AC-FMIG-01]. */
+export const enfasis = { medio: 600, fuerte: 700 } as const;
 
 // Ningún target de toque puede ser menor a esto, en ninguna pantalla (AA, gate lo mide).
 export const targetMinimo = { anchoPt: 44, altoPt: 44, separacionMinimaPx: 8 } as const;

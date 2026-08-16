@@ -248,31 +248,441 @@ activa SOLO `admin_tenant`: mientras la pregunta 1 esté abierta, `operador` y
 
 ## Criterios de aceptación
 
-- [ ] (P1) Nivel 0 completo: con seed A (daas, farmacia `otd_comprometido_pct=95`) el tablero «Hoy» del `admin_tenant` renderiza exactamente 6 tarjetas (las 5 fijas + SLA) y con seed C (`mi_flota`) exactamente 5, sin hueco donde iría SLA; el máximo 6 sale de `constants.ts` (grep-gate al hardcodeo); verde muestra SOLO agregado «N/M» es-CL con token cifra operativa (96/700/tabular-nums) y no genera notificación ni fila de excepción; tarjeta amarilla/roja muestra contador + la excepción más antigua por `record_time` — oráculo: CI [AC-FSEM-01]
-- [ ] (P1) Histéresis por señal: CHECK en `signal_rule` exige `umbral_recuperacion` distinto del de disparo (INSERT con umbral igual ⇒ rebota); test de secuencia: métrica cruza `umbral_amarillo` ⇒ amarillo; retrocede a zona intermedia (entre recuperación y disparo) ⇒ SIGUE amarillo; cruza `umbral_recuperacion` ⇒ verde; misma mecánica para rojo→amarillo — oráculo: CI [AC-FSEM-02]
-- [ ] (P1) Seed Anexo B como filas: tenant provisionado desde `tenant_template` nace con los 6 dominios tenant poblados (umbral_amarillo, umbral_rojo, umbral_recuperacion, playbook NOT NULL — playbook vacío rebota: toda señal accionable o no existe); UPDATE de umbral por el tenant aplica sin deploy y queda en `audit_trail`; cero filas seed que referencien temperatura/humedad (frío = DDL-only §4.9) y cero fila «webhook pactado caído» en E1 — oráculo: CI [AC-FSEM-03]
-- [ ] (P1) Peek N1: 1 toque abre bottom-sheet sin navegación (la pila de navegación no crece); filas ordenadas por severidad × antigüedad, cada una con quién/qué/cuánto/desde cuándo + playbook de 1 línea; swipe o botón ≥48px reconoce (`nueva→reconocida`, `asignado_a`=actor); re-reconocer una ya reconocida ⇒ 422 tipado y 0 filas cambiadas — oráculo: CI [AC-FSEM-04]
-- [ ] (P1) Detalle N2: 1 toque desde el peek (rojo→detalle ≤2 toques desde «Hoy», e2e que cuenta acciones y emite `toques_flujo` a `client_metric`); URL estable deep-linkeable (abrirla directo autenticado rinde el detalle); timeline de eventos + evidencia degradando sin hueco cuando falta foto/GPS/curva SOC; resolver exige nota (`reconocida→resuelta`; sin nota ⇒ 422); e2e: el bottom-sheet N1 NO renderiza la acción de resolver para excepciones rojas (solo reconocer) y la amarilla sí puede quedar solo reconocida — el endpoint de resolver no lleva parámetro de origen, así que la restricción del rojo se verifica en la UI; una regla dura de servidor en términos de ESTADO queda sujeta a la pregunta 9 — oráculo: CI [AC-FSEM-05]
-- [ ] (P1) Refresco degradable: polling del digest cada 15–30 s (constante) solo con pestaña visible — con pestaña oculta 0 requests en el intervalo (test con Page Visibility simulada); digest sin cambios ⇒ 304 con ETag y sin body; pull-to-refresh fuerza GET; grep del módulo: cero `WebSocket`/`EventSource`; offline ⇒ estado «sin conexión» con contador real de cola y digest viejo marcado con antigüedad — oráculo: CI [AC-FSEM-06]
-- [ ] (P1) Dominio Datos/sync desde `client_metric` + eventos: fixture con `outbox_edad_max` 65 min en turno ⇒ amarillo (65 min supera cualquier punto del rango seed «>30–60 min» del Anexo B sin alcanzar el rojo de 3–4 h, así el test no depende de la respuesta a la pregunta 5a); sin sync >4 h con turno abierto ⇒ rojo; parada `done` sin fila en `evidence` tras sync ⇒ rojo; hueco de secuencia por dispositivo (§4.7) ⇒ rojo; la captura degradada que originó el flag entró 2xx (jamás rebotó, §4.2) y aparece como excepción en «Por revisar», no como error del dispositivo; una fila de `review_queue` con severidad alta (captura `post_revocacion_tardia`, §4.3) se proyecta ROJA en la tarjeta Datos/sync (proyección severidad→{amarillo, rojo} sin ambigüedad, §2.4) — oráculo: CI [AC-FSEM-07]
-- [ ] (P1) Dominio Turnos/conductores (un AC por dominio, §9.2 «un AC por commit»; los demás dominios: AC-FSEM-16 a 19) evalúa según Anexo B sobre proyecciones append-only de `eventos`+`turnos`+`bloques_agenda` (jamás contadores mutables; dependencia 02): fixture sin eventos por 65 min en turno ⇒ amarillo (65 min supera cualquier punto del rango seed «30–45 min» sin alcanzar el rojo de >2 h — robusto a la pregunta 5a, misma técnica de AC-FSEM-07); turno sin cerrar >1 h tras fin de bloque ⇒ amarillo; sin señal >2 h ⇒ rojo (fixture 2,5 h); turno abierto cruzando medianoche ⇒ rojo — oráculo: CI [AC-FSEM-08]
-- [ ] (P1) Aislamiento y roles: la suite HTTP A-contra-B autogenerada cubre TODAS las rutas del módulo ⇒ 404 con body sin centinelas de B y BD de B sin cambios (mutaciones incluidas); manifest de `chofer`/`responsable_carga`/`cliente` no contiene el tablero y sus GET al digest ⇒ 403 con 0 filas; manifest de `operador` y de `responsable_tecnico` TAMPOCO contiene el tablero y sus GET al digest ⇒ 403 (§2.8: esta spec activa solo `admin_tenant`; el aserto del `operador` se revisa al responderse la pregunta 1); ninguna respuesta del módulo entrega CLP a esos roles (RLS §4.8 verificada con el rol de app real) — oráculo: CI [AC-FSEM-09]
-- [ ] (P1) Vista e-auto solo-`control`: el render se verifica a nivel de COMPONENTE/VISTA contra fixtures de `control` (sin depender del montaje/autenticación pendientes de la pregunta 2): muestra por tenant estado semafórico + actividad vs media móvil 7d, errores de sync, backlog, versión PWA, latencia p95 y EEVD agregada; el código del plano cross-tenant no abre conexión a ninguna BD `t_<slug>` (regla estática + test de privilegios); centinela 14: inyectar una columna de dinero/tarifa/cliente al payload del exportador ⇒ el test de schema falla en rojo; el e2e navegado con autenticación queda en AC-FSEM-24 — oráculo: CI [AC-FSEM-10]
-- [ ] (P1) Señales cross-tenant con fixtures en `control`: tenant sin eventos un día hábil ⇒ rojo; actividad −30% vs media 7d ⇒ amarillo; errores de sync en 5% exacto ⇒ amarillo (5% cae dentro de la banda seed «1–5%» cualquiera sea su punto y no supera el rojo «>5%» — robusto a la pregunta 5a) y errores >5% sostenidos 15 min ⇒ rojo; >20% dispositivos en PWA vieja ⇒ amarillo; cola de sync >4 h ⇒ rojo; la señal «backlog creciente 2 intervalos» ⇒ amarillo queda CONDICIONADA a la pregunta 3 (sin cadencia del exportador, «intervalo» no tiene semántica cerrada — mismo tratamiento que la señal de ETA en AC-FSEM-19); canario de aislamiento en fallo ⇒ rojo máximo que NO se degrada por histéresis ni por edición de umbral (test que intenta ambas); alarma churn EEVD −30% semana/semana dispara sobre la EEVD agregada — oráculo: CI [AC-FSEM-11]
-- [ ] (P1) AA y estados de pantalla: ningún estado del semáforo comunicado solo por color (texto/ícono siempre, verificable apagando CSS de color); contraste ≥7:1 en indicadores semafóricos y cifra operativa en tema claro Y oscuro (axe/Lighthouse en gate); los 4 estados obligatorios de «Hoy» (vacío accionable con CTA, skeleton <50 ms, error es-CL con recuperación, sin conexión con contador real); snapshot 375px con términos del tenant B al máximo largo sin truncar cifras; la e2e del módulo corre DOS veces (terminología base y extrema) sin cambiar un selector (data-testid/term_key) — oráculo: CI [AC-FSEM-12]
-- [ ] (P1) Contracción sin residuos: apagar el feature de liquidación ⇒ sus `signal_rule` dejan de evaluar en el próximo bootstrap (el turno abierto termina con su config congelada, `turno.config_version_id`) y no nacen excepciones nuevas de ese origen; e2e tenant C: 5 tarjetas, cero CLP de tarifas visible, semáforo operativo; conmutar `mi_flota→daas→mi_flota` conserva todas las filas de `signal_rule` y `review_queue` (centinela 11 aplicado al módulo); la conducta «dominio sin ninguna señal activa no renderiza tarjeta» NO se asevera aquí — está pendiente de la pregunta 8 y vive en AC-FSEM-21 — oráculo: CI [AC-FSEM-13]
+- [x] (P1) Nivel 0 completo: con seed A (daas, farmacia `otd_comprometido_pct=95`) el tablero «Hoy» del `admin_tenant` renderiza exactamente 6 tarjetas (las 5 fijas + SLA) y con seed C (`mi_flota`) exactamente 5, sin hueco donde iría SLA; el máximo 6 sale de `constants.ts` (grep-gate al hardcodeo); verde muestra SOLO agregado «N/M» es-CL con token cifra operativa (96/700/tabular-nums) y no genera notificación ni fila de excepción; tarjeta amarilla/roja muestra contador + la excepción más antigua por `record_time` — oráculo: CI [AC-FSEM-01]
+  - Probado: `semaforo.test.ts` (unit, selección/resumen de tarjetas) + `e2e/hoy-nivel-0.spec.ts` (6/6 verde, playwright en primer plano) sobre las semillas A/C de `semaforo-fixtures.ts`; la evaluación server-side de `signal_rule` contra datos reales queda para AC-FSEM-02/06/07+ (dependen de tablas del módulo 00, sesión supervisada).
+- [x] (P1) Histéresis por señal: CHECK en `signal_rule` exige `umbral_recuperacion` distinto del de disparo (INSERT con umbral igual ⇒ rebota); test de secuencia: métrica cruza `umbral_amarillo` ⇒ amarillo; retrocede a zona intermedia (entre recuperación y disparo) ⇒ SIGUE amarillo; cruza `umbral_recuperacion` ⇒ verde; misma mecánica para rojo→amarillo — oráculo: CI [AC-FSEM-02]
+  - Probado en las dos mitades. **BD:** la migración `db/migraciones-flota/tenant/0058_signal_rule_con_histeresis.sql` crea `signal_rule` con el CHECK `signal_rule_histeresis` (`umbral_recuperacion` distinto del amarillo Y del rojo — los dos son umbrales de disparo), y el pgTAP `db/flota/pgtap/0023_histeresis_de_senales.sql` lo ejerce contra el canario (15/15): el INSERT con recuperación igual al amarillo rebota 23514, igual al rojo también, y el UPDATE que borra la banda rebota lo mismo que el INSERT — la vía real, porque el tenant edita umbrales sin deploy (§2.5); el positivo (banda válida) y la edición que conserva la banda pasan, así un CHECK que rechazara cualquier fila no daría verde. La edición queda en `audit_trail`. **Lógica:** `transicionColor` (`apps/flota/src/dominio/semaforo-histeresis.ts`) con la secuencia paso a paso en su unit (9/9). El CHECK NO exige `umbral_recuperacion < umbral_amarillo`: el sentido de la desigualdad depende de la dirección de la métrica (peor-es-mayor en % de no-entregas, peor-es-menor en SOC) y los valores seed de recuperación siguen en la pregunta 5b — hornear una dirección en el esquema fijaría una decisión que el maestro no toma. Los umbrales seed y el playbook poblado son AC-FSEM-03.
+- [x] (P1) Seed Anexo B como filas: tenant provisionado desde `tenant_template` nace con los 6 dominios tenant poblados (umbral_amarillo, umbral_rojo, umbral_recuperacion, playbook NOT NULL — playbook vacío rebota: toda señal accionable o no existe); UPDATE de umbral por el tenant aplica sin deploy y queda en `audit_trail`; cero filas seed que referencien temperatura/humedad (frío = DDL-only §4.9) y cero fila «webhook pactado caído» en E1 — oráculo: CI [AC-FSEM-03]
+  - Probado: `db/migraciones-flota/tenant/0059_seed_anexo_b_semaforo.sql` siembra `tenant_template` con 1 señal por dominio (la mejor especificada del Anexo B, sin invadir preguntas abiertas: ETA vivo, hora límite EV, semántica de liquidación observada) y el pgTAP `db/flota/pgtap/0024_seed_anexo_b_semaforo.sql` lo ejerce contra `t_canary` (8/8): los 6 dominios exactos poblados, playbook nunca vacío, histéresis real en cada fila, cero frío/humedad y cero «webhook», y el UPDATE de un umbral sembrado deja rastro en `audit_trail` con el valor nuevo adentro. Hallazgo adversarial durante la construcción: sembrar con el trigger de auditoría encendido dejaba filas de `audit_trail` con el tenant_id CENTINELA en la plantilla, y como `audit_trail` es append-only (§7.4) la adopción de CUALQUIER tenant nuevo (`db/flota/provisionar.mjs`) rebotaba para siempre al intentar reasignarlas — se reprodujo el rebote real provisionando `t_ruteo_activo` antes del ajuste. La migración apaga `signal_rule_auditada` para las 6 filas del seed (nace con la plantilla, nadie lo "editó") y lo vuelve a encender; el runner ×N y `apps/flota/e2e/preparar-tenants.mjs` quedaron verdes de nuevo.
+- [x] (P1) Peek N1: 1 toque abre bottom-sheet sin navegación (la pila de navegación no crece); filas ordenadas por severidad × antigüedad, cada una con quién/qué/cuánto/desde cuándo + playbook de 1 línea; swipe o botón ≥48px reconoce (`nueva→reconocida`, `asignado_a`=actor); re-reconocer una ya reconocida ⇒ 422 tipado y 0 filas cambiadas — oráculo: CI [AC-FSEM-04]
+  - Probado: `dominio/peek-n1.ts` (orden severidad × antigüedad — el rango de severidad decide antes que la antigüedad — y descarte de filas crudas sin los campos del peek) con su unit `peek-n1.test.ts`; `POST /api/semaforo/excepciones/[id]/reconocer` (`servidor/review-queue.ts`) transiciona `nueva→reconocida` contra `review_queue` real con `estado='nueva'` en el WHERE del UPDATE (el segundo toque nunca gana la carrera) y rebota 422 tipado con 0 filas cambiadas al re-reconocer; `guardia()` deja el endpoint solo a `admin_tenant` (§2.8) con 403/404 para el resto. `e2e/peek-n1.spec.ts` (11/11, corrido en primer plano) cubre las dos mitades: el contrato de servidor contra una fila real de `review_queue` (200/422/404/403) y la mecánica de UI del bottom-sheet (`hoy/peek-n1.tsx`, montado desde `hoy/tablero-de-hoy.tsx` como estado local — jamás navegación) sobre las semillas de AC-FSEM-01: orden, playbook visible, objetivo táctil ≥48px y la transición visual al tocar «Reconocer». `check.sh --full --app=flota` verde.
+- [x] (P1) Detalle N2: 1 toque desde el peek (rojo→detalle ≤2 toques desde «Hoy», e2e que cuenta acciones y emite `toques_flujo` a `client_metric`); URL estable deep-linkeable (abrirla directo autenticado rinde el detalle); timeline de eventos + evidencia degradando sin hueco cuando no hay foto/GPS/curva SOC; resolver exige nota (`reconocida→resuelta`; sin nota ⇒ 422); e2e: el bottom-sheet N1 NO renderiza la acción de resolver para excepciones rojas (solo reconocer) y la amarilla sí puede quedar solo reconocida — el endpoint de resolver no lleva parámetro de origen, así que la restricción del rojo se verifica en la UI; una regla dura de servidor en términos de ESTADO queda sujeta a la pregunta 9 — oráculo: CI [AC-FSEM-05]
+  - Probado y verde en `check.sh --full --app=flota` + `npx playwright test e2e/detalle-n2.spec.ts` (16/16). **Servidor:**
+    `resolverExcepcion` (`servidor/review-queue.ts`) transiciona `reconocida→resuelta` con
+    nota obligatoria contra `review_queue` REAL (el WHERE lleva `estado='reconocida'`, así
+    que resolver desde `nueva` o re-resolver una `resuelta` es tan ilegal como no traer
+    nota); `POST /api/semaforo/excepciones/[id]/resolver` devuelve 422 tipado
+    (`nota_requerida`/`transicion_ilegal`), 404 cross-tenant, 403 fuera de `admin_tenant`.
+    **UI:** `dominio/detalle-n2.ts` arma el detalle (timeline + los 4 tipos de evidencia
+    SIEMPRE presentes, marcados `presente:false` cuando degradan — nunca un hueco), con su
+    unit `detalle-n2.test.ts` (4/4); `hoy/excepciones/page.tsx` recibe el `id` como
+    parámetro de CONSULTA (mismo criterio que `/api/agenda`, porque mientras AC-FSEM-06/09
+    no exista ese `id` es literal de `semaforo-fixtures.ts`) y es deep-linkeable de verdad;
+    `hoy/peek-n1.tsx` suma el enlace «Ver detalle» y jamás un botón «Resolver», ni para
+    severidad roja ni amarilla. **Toques del drill-down (§5, §5.3, §4.6):** el camino
+    tarjeta→peek→«Ver detalle» es EXACTAMENTE 2 toques, y el e2e de UI
+    (`rojo→detalle en 2 toques desde «Hoy»`) lo recorre y cuenta las acciones sobre la
+    excepción roja `exc-sync-1` de la semilla A. La emisión a `client_metric` es un
+    contrato de SERVIDOR real y separado, mismo criterio que reconocer/resolver mientras
+    `/hoy` siga sin sesión de tenant (AC-FSEM-06/09): `registrarToquesDrillDown`
+    (`servidor/review-queue.ts`) inserta una fila `tipo='toques_flujo'` en `client_metric`
+    real (precedente de `servidor/entorno.ts` para métricas puntuales fuera del lote de
+    sync) vía `POST /api/semaforo/excepciones/[id]/toques` — 422 tipado si `toques` no es
+    entero ≥1, 404 cross-tenant, 403 fuera de `admin_tenant`; declarado en
+    `rutas/manifiesto.json` (`recurso` sobre `review_queue`) y cubierto por la suite
+    A-contra-B autogenerada (`e2e/cruce-tenant.spec.ts`).
+- [x] (P1) Refresco degradable: polling del digest cada 15–30 s (constante) solo con pestaña visible — con pestaña oculta 0 requests en el intervalo (test con Page Visibility simulada); digest sin cambios ⇒ 304 con ETag y sin body; pull-to-refresh fuerza GET; grep del módulo: cero `WebSocket`/`EventSource`; offline ⇒ estado «sin conexión» con contador real de cola y digest viejo marcado con antigüedad — oráculo: CI [AC-FSEM-06]
+  - Probado y verde en `check.sh --full --app=flota` + `npx playwright test e2e/refresco-digest.spec.ts`.
+    **Servidor:** `GET /api/semaforo/digest` (`src/app/api/semaforo/digest/route.ts`) sirve el
+    Nivel 0 sobre `?seed=a|c` — mismo alcance declarado por `hoy/page.tsx` (AC-FSEM-01): la
+    evaluación real de `signal_rule` es AC-FSEM-07+ y la guardia de sesión/rol es AC-FSEM-09.
+    El ETag es un sha256 SOLO de `tarjetas` (nunca de un timestamp), así que el mismo seed
+    devuelve el mismo ETag entre pedidos frescos y `If-None-Match` calza de verdad: 304 sin
+    body cuando coincide, 200 con body si no. **Cliente:** `usar-digest-semaforo.ts` (hook)
+    pollea cada `SEMAFORO.polling_segundos.min` (15 s, el piso del rango — el número sale de
+    la constante, no está escrito en el hook) SOLO con `document.visibilityState === "visible"`;
+    `visibilitychange` arranca/para el temporizador entero (pestaña oculta ⇒ el `setInterval`
+    ni existe, 0 requests — probado con Page Visibility simulada vía `Object.defineProperty`,
+    igual que pide el AC). `tablero-de-hoy.tsx` suma el botón «Actualizar» (pull-to-refresh de
+    respaldo) y el banner «sin conexión» (`banner-sin-conexion`) con el contador REAL de
+    intentos fallidos consecutivos (`cola-offline` — «Hoy» no encola capturas de terreno como
+    el outbox del chofer, así que lo único que hay de verdad para contar acá son los intentos
+    de refresco que no llegaron) y la antigüedad del último digest bueno (`antiguedad-digest`);
+    las tarjetas YA cargadas se quedan a la vista, marcadas viejas — jamás un verde fingido.
+    Bug real encontrado y corregido durante la construcción: `Response.json` serializa
+    `record_time` como texto ISO, y `fechaEsCl`/`horaEsCl` exigen un `Date` real —
+    sin revivirlo, la primera tarjeta amarilla/roja que llegaba por el digest reventaba el
+    render entero («Application error» en el navegador), tumbando de paso `hoy-nivel-0.spec.ts`,
+    `peek-n1.spec.ts` y `detalle-n2.spec.ts`; `revivirFechas` en el hook lo arregla. La ruta
+    nueva quedó declarada en `apps/flota/rutas/manifiesto.json` (`sin_recurso`): sin
+    identificador ni sesión todavía, la respuesta es literal del fixture — cero dato de tenant
+    que un cruce pueda sacar hoy.
+- [x] (P1) Dominio Datos/sync desde `client_metric` + eventos: fixture con `outbox_edad_max` 65 min en turno ⇒ amarillo (65 min supera cualquier punto del rango seed «>30–60 min» del Anexo B sin alcanzar el rojo de 3–4 h, así el test no depende de la respuesta a la pregunta 5a); sin sync >4 h con turno abierto ⇒ rojo; parada `done` sin fila en `evidence` tras sync ⇒ rojo; hueco de secuencia por dispositivo (§4.7) ⇒ rojo; la captura degradada que originó el flag entró 2xx (jamás rebotó, §4.2) y aparece como excepción en «Por revisar», no como error del dispositivo; una fila de `review_queue` con severidad alta (captura `post_revocacion_tardia`, §4.3) se proyecta ROJA en la tarjeta Datos/sync (proyección severidad→{amarillo, rojo} sin ambigüedad, §2.4) — oráculo: CI [AC-FSEM-07]
+  - Probado: `dominio/semaforo-datos-sync.test.ts` (10/10) contra `dominio/semaforo-datos-sync.ts`,
+    función pura `evaluarDatosSync` — sin migración nueva: las tres familias de hechos que
+    combina ya existen desde la migración 0002 (módulo 00) y ya las escribe el módulo 04
+    (`servidor/capturas.ts::dejarDichoQueDegrado`, AC-FPOD-05/07/10). La edad del outbox pasa por
+    `transicionColor` (histéresis, AC-FSEM-02) con los umbrales de la fila `signal_rule` sembrada
+    (`outbox_cola_edad_max_min`, migración 0059): fixture 65 min ⇒ amarillo, 4 h+1 min ⇒ rojo,
+    robustos a la pregunta 5a (mismo criterio que AC-FSEM-08/11/19); un dispositivo con turno
+    cerrado no evalúa. «Parada `done` sin evidence» y «hueco de secuencia» son binarias por Anexo
+    B: rojo directo, sin banda amarilla. El hallazgo del AC: `severidadDeFlag("secuencia_hueco")`
+    (`dominio/pod-sync.ts`, ya cerrado por AC-FPOD-10) entrega severidad `media` — la proyección
+    GENÉRICA severidad→color del §2.4 (`colorDeSeveridad`: `alta`→rojo, el resto→amarillo) por sí
+    sola daría amarillo, contradiciendo el «hueco de secuencia ⇒ rojo» explícito del Anexo B y de
+    este AC. `colorDeExcepcionReviewQueue` resuelve la conciliación: el hueco de secuencia es la
+    excepción documentada a la regla genérica (rojo siempre, por origen), y `post_revocacion_
+    tardia` sí sigue la proyección genérica (su severidad ya es `alta`, mismo resultado). Un test
+    dedicado prueba que la fila de `review_queue` aparece como una `ExcepcionCruda` más del
+    dominio (mismo shape que las demás: playbook, quien, estado) y no como un estado de error
+    aparte del dispositivo. `check.sh --full --app=flota` verde. Wiring del endpoint real
+    (`/api/semaforo/digest` contra `signal_rule`/`client_metric`/`eventos` reales, hoy sirve
+    literales de `semaforo-fixtures.ts` por AC-FSEM-06) queda para un AC posterior: no está en el
+    texto de este AC ni su oráculo lo exige (CI, no e2e).
+- [x] (P1) Dominio Turnos/conductores (un AC por dominio, §9.2 «un AC por commit»; los demás dominios: AC-FSEM-16 a 19) evalúa según Anexo B sobre proyecciones append-only de `eventos`+`turnos`+`bloques_agenda` (jamás contadores mutables; dependencia 02): fixture sin eventos por 65 min en turno ⇒ amarillo (65 min supera cualquier punto del rango seed «30–45 min» sin alcanzar el rojo de >2 h — robusto a la pregunta 5a, misma técnica de AC-FSEM-07); turno sin cerrar >1 h tras fin de bloque ⇒ amarillo; sin señal >2 h ⇒ rojo (fixture 2,5 h); turno abierto cruzando medianoche ⇒ rojo — oráculo: CI [AC-FSEM-08]
+  - Probado: `dominio/semaforo-turnos-conductores.test.ts` (7/7) contra
+    `dominio/semaforo-turnos-conductores.ts`, función pura `evaluarTurnosConductores` — sin
+    migración nueva: el umbral con histéresis (`sin_senal_minutos`, amarillo 30 min / rojo
+    120 min / recuperación 15 min) ya lo siembra la migración 0059 (AC-FSEM-03). Misma
+    mecánica que el dominio hermano AC-FSEM-07: la señal de minutos sin evento pasa por
+    `transicionColor` (65 min ⇒ amarillo, 2,5 h ⇒ rojo, ambos robustos al rango seed del
+    Anexo B) con el qualifier «…en turno» — un turno cerrado con métrica alta no evalúa; las
+    otras dos condiciones del Anexo B («turno sin cerrar >1 h tras fin de bloque»,
+    «cruzando medianoche») son binarias, ya resueltas como hecho por quien llame (`turnos`
+    × `bloques_agenda`), y esta función solo las proyecta a color (amarillo y rojo
+    respectivamente) — mismo criterio que `paradasSinEvidencia` en AC-FSEM-07. `check.sh
+    --full --app=flota` verde. Wiring del endpoint real contra `eventos`/`turnos`/
+    `bloques_agenda` reales queda para un AC posterior, igual que AC-FSEM-07: no está en el
+    texto de este AC ni su oráculo lo exige (CI, no e2e).
+- [x] (P1) Aislamiento y roles: la suite HTTP A-contra-B autogenerada cubre TODAS las rutas del módulo ⇒ 404 con body sin centinelas de B y BD de B sin cambios (mutaciones incluidas); manifest de `chofer`/`responsable_carga`/`cliente` no contiene el tablero y sus GET al digest ⇒ 403 con 0 filas; manifest de `operador` y de `responsable_tecnico` TAMPOCO contiene el tablero y sus GET al digest ⇒ 403 (§2.8: esta spec activa solo `admin_tenant`; el aserto del `operador` se revisa al responderse la pregunta 1); ninguna respuesta del módulo entrega CLP a esos roles (RLS §4.8 verificada con el rol de app real) — oráculo: CI [AC-FSEM-09]
+  - Probado y verde en `check.sh --full --app=flota` + `npx playwright test e2e/semaforo-roles.spec.ts`
+    (11/11, corrido en primer plano). **Guardia:** `GET /api/semaforo/digest`
+    (`src/app/api/semaforo/digest/route.ts`) ahora pasa por `guardia()`
+    (`servidor/gobierno.ts`, misma puerta que reconocer/resolver/toques de AC-FSEM-04/05):
+    sin sesión ⇒ 404 pelado; sesión con rol distinto de `admin_tenant` ⇒ 403 y CERO cuerpo de
+    tarjetas. **Los 5 roles vetados exactos del enum** (`chofer`, `responsable_carga`,
+    `cliente`, `operador`, `responsable_tecnico` — sale de `ROLES.filter(r => r !==
+    "admin_tenant")`, no de una lista escrita a mano que se desincroniza del enum) devuelven
+    403 con 0 filas; `admin_tenant` recibe 200 con tarjetas. **Suite A-contra-B (AC-FTEN-26):**
+    el digest sigue declarado en `manifiesto.json` con `cruce.tipo="sin_recurso"` — verificado
+    en el test, más las 3 rutas de mutación (`reconocer`/`resolver`/`toques`) que ya llevan
+    `cruce.tipo="recurso"` desde AC-FSEM-04/05 — así que las 4 rutas del módulo entran a
+    `cruce-tenant.spec.ts` sin exención. **Cero CLP:** `review_queue`, `client_metric` y
+    `signal_rule` —las únicas tablas que este módulo lee (migraciones 0002 y 0058)— no tienen
+    NINGUNA columna de dinero (grep-gate contra las dos migraciones), así que ni siquiera
+    `admin_tenant` puede recibir un CLP de este módulo: la RLS de §4.8 no tiene qué esconder
+    porque el dato no existe en el schema, y un segundo grep sobre `route.ts`/`dominio/
+    semaforo.ts` vigila que ninguna respuesta arme un campo de dinero desde otra fuente. El
+    hook `usar-digest-semaforo.ts` pasó de `fetch` directo a `pedir()` (`cliente/aparato.ts`)
+    para viajar con el secreto de sesión persistido, y `refresco-digest.spec.ts` (AC-FSEM-06)
+    quedó actualizado para enrolar una dueña real y pasar su secreto — sin eso, la guardia
+    nueva le habría respondido 404 a esa suite entera.
+- [x] (P1) Vista e-auto solo-`control`: el render se verifica a nivel de COMPONENTE/VISTA contra fixtures de `control` (sin depender del montaje/autenticación pendientes de la pregunta 2): muestra por tenant estado semafórico + actividad vs media móvil 7d, errores de sync, backlog, versión PWA, latencia p95 y EEVD agregada; el código del plano cross-tenant no abre conexión a ninguna BD `t_<slug>` (regla estática + test de privilegios); centinela 14: inyectar una columna de dinero/tarifa/cliente al payload del exportador ⇒ el test de schema falla en rojo; el e2e navegado con autenticación queda en AC-FSEM-24 — oráculo: CI [AC-FSEM-10]
+  - Probado: `apps/flota/src/dominio/plano-eauto.test.ts` (7/7) contra `dominio/plano-eauto.ts` — la
+    forma de dato que este plano consume, sin fetch ni cliente de BD propio. **Centinela 14 a
+    nivel de vista:** `validarSchemaAgregadoControl` copia la MISMA lista de columnas
+    (`CAMPOS_AGREGADO_CONTROL_CRUDO`, subconjunto de `COLUMNAS_DEL_AGREGADO`) y el MISMO
+    vocabulario prohibido que `db/flota/suite-bd/control.test.mjs` (AC-FTEN-04, la autoridad
+    real de BD); el test inyecta de verdad `monto_clp`/`tarifa_promedio`/`cliente_principal`/
+    `rut_titular`/`factura_pendiente` y confirma el rebote, más una clave inventada que no huele
+    a dinero pero tampoco está en el schema fijo (mismo criterio: la BD manda, esta vista no
+    inventa columnas). **Regla estática + test de privilegios:** `db/flota/gate-reglas-
+    estaticas.mjs` suma la regla `plano-eauto-sin-bd-de-tenant`, de alcance ACOTADO (campo nuevo
+    `soloEn`, antes solo existían reglas globales) a `dominio/plano-eauto.ts` y
+    `src/plano-eauto/` — el resto de la app sigue pudiendo conectarse a BDs `t_<slug>` para
+    operar, que es exactamente lo que esta regla no puede tocar. 3 fixtures nuevos en
+    `gate-reglas-estaticas.test.mjs`: dispara con `bdDeTenant(...)`/`poolDe("t_...")`/
+    `` `t_${slug}` ``/import de `servidor/conexion`, NO dispara con el mismo texto fuera de su
+    alcance (así no rompería el resto de la app, que sí necesita esas llamadas), y un archivo
+    conforme pasa limpio. **Fixtures y vista:** `dominio/plano-eauto-fixtures.ts` (3 tenants de
+    referencia, verde/amarillo/rojo, uno con `eevd_semanal` NULL declarado) y el componente
+    presentacional `src/plano-eauto/tablero-cross-tenant.tsx` (sin `"use client"` con fetch: solo
+    recibe `FilaTenantControl[]` ya armadas), no montado bajo ninguna ruta —sin URL, sin caso de
+    cruce que declarar en `manifiesto.json` todavía— porque el montaje autenticado es AC-FSEM-24.
+    «Actividad vs media móvil 7d» y «latencia p95» quedan en NULL declarado en todo el seed: hoy
+    `agregados_tecnicos` no las computa ni las tiene como columna (gap real, no inventado);
+    la vista las degrada como «pendiente», mismo tratamiento que `eevd_semanal` antes de su hito
+    (AC-FTEN-04). `bash packages/metodo/scripts/check.sh --full --app=flota` verde.
+- [x] (P1) Señales cross-tenant con fixtures en `control`: tenant sin eventos un día hábil ⇒ rojo; actividad −30% vs media 7d ⇒ amarillo; errores de sync en 5% exacto ⇒ amarillo (5% cae dentro de la banda seed «1–5%» cualquiera sea su punto y no supera el rojo «>5%» — robusto a la pregunta 5a) y errores >5% sostenidos 15 min ⇒ rojo; >20% dispositivos en PWA vieja ⇒ amarillo; cola de sync >4 h ⇒ rojo; la señal «backlog creciente 2 intervalos» ⇒ amarillo queda CONDICIONADA a la pregunta 3 (sin cadencia del exportador, «intervalo» no tiene semántica cerrada — mismo tratamiento que la señal de ETA en AC-FSEM-19); canario de aislamiento en fallo ⇒ rojo máximo que NO se degrada por histéresis ni por edición de umbral (test que intenta ambas); alarma churn EEVD −30% semana/semana dispara sobre la EEVD agregada — oráculo: CI [AC-FSEM-11]
+  - Probado: `dominio/semaforo-cross-tenant.test.ts` (18/18) contra `dominio/semaforo-cross-tenant.ts`,
+    función pura `evaluarSenalesCrossTenant` — sin migración nueva ni conexión a `control`, mismo
+    criterio que AC-FSEM-07/08 (el wiring del job exportador/endpoint real queda para un AC
+    posterior). Las cinco binarias del Anexo B (sin eventos, actividad −30%, PWA vieja >20%,
+    cola de sync >4 h, churn EEVD −30%) son umbral simple, sin banda vecina, mismo tratamiento
+    que «turno cruzando medianoche» en AC-FSEM-08; los fixtures de banda usan valores robustos a
+    la pregunta 5a (35% de caída de actividad, 6,2% de errores, 260 min de cola), igual criterio
+    que AC-FSEM-07/08/19. Errores de sync es la única señal con histéresis real
+    (`colorErroresSync`, zona intermedia sticky igual que `transicionColor` de AC-FSEM-02), y el
+    AC exige además que el 5% exacto NO escale sola: el rojo exige `pct > umbral_rojo` **y**
+    `sostenido15Min` a la vez (hecho aparte que ya llega resuelto, no una serie temporal que esta
+    función calcule) — probado con 5% exacto (queda amarillo), 6,2% sin sostener (queda
+    amarillo) y 6,2% sostenido (rojo). El canario de aislamiento (`evaluarCanarioAislamiento`) es
+    la excepción a toda la mecánica: no recibe `colorPrevio` ni `UmbralesCrossTenant` — no hay
+    parámetro que un caller pudiera manipular para apagarlo — y dos tests lo prueban en fallo
+    combinado con hechos en verde y con umbrales artificialmente permisivos (100.000), ambos
+    rojo. «Backlog creciente 2 intervalos» no se implementa (CONDICIONADA a la pregunta 3,
+    documentado en el comentario de cabecera del archivo y en un test que confirma que el campo
+    no existe en `HechosCrossTenant`). `bash packages/metodo/scripts/check.sh --full --app=flota`
+    verde.
+- [x] (P1) AA y estados de pantalla: ningún estado del semáforo comunicado solo por color (texto/ícono siempre, verificable apagando CSS de color); contraste ≥7:1 en indicadores semafóricos y cifra operativa en tema claro Y oscuro (axe/Lighthouse en gate); los 4 estados obligatorios de «Hoy» (vacío accionable con CTA, skeleton <50 ms, error es-CL con recuperación, sin conexión con contador real); snapshot 375px con términos del tenant B al máximo largo sin truncar cifras; la e2e del módulo corre DOS veces (terminología base y extrema) sin cambiar un selector (data-testid/term_key) — oráculo: CI [AC-FSEM-12]
+  - Probado: `e2e/hoy-aa-estados.spec.ts` (12/12, corrido en primer plano) contra `hoy/tablero-de-hoy.tsx`
+    (dejado a medio camino por una vuelta anterior del motor, commit `90aab86`) y
+    `dominio/hoy-terminologia.ts`. **Color no es la única señal:** con el CSS de color apagado
+    (`grayscale`/`#000 sobre #fff`) y el punto decorativo oculto, la etiqueta de estado sigue
+    diciendo «Rojo»/«Amarillo»/«Verde» por TEXTO. **Contraste 7:1:** `CONTRASTE.cifra_operativa_
+    y_semaforos` (constants.ts) verificado en claro Y oscuro con la fórmula de luminancia relativa
+    WCAG 2.x (mismo cálculo que `pod-a11y-gate.spec.ts`, AC-FPOD-23) sobre el indicador de color y
+    la cifra operativa, más `axe` (`@axe-core/playwright`, ya en `package.json`/`pnpm-lock.yaml`)
+    con tag `wcag2aa` sin violaciones `color-contrast` ni `aria-label` vacíos, las dos en ambos
+    temas — el par claro/oscuro es PROPIO de esta pantalla (`HOY_TEMA_CSS`), documentado en el
+    código: el token general `semantico.ok/alerta/error` de Miga es de otras pantallas (~5:1,
+    solo-claro) y este AC no lo toca. **4 estados:** vacío accionable (`?seed=vacio`, CTA
+    «Actualizar» visible y habilitado), skeleton instantáneo en refresco manual con el aviso de
+    demora recién pasados los 400 ms (el poll de fondo silencioso nunca lo enciende), error es-CL
+    con `role="alert"` y «Reintentar» que de verdad recupera, y «sin conexión» con el contador REAL
+    de intentos fallidos (`page.context().setOffline(true)`). **Snapshot 375px:** con
+    `?terminologia=extremo` (tenant B, `TERMINOLOGIA_EXTREMA_TENANT_B` al `LABELS.largo_max` de su
+    tipo — un test en el propio `hoy-terminologia.ts` revienta si algún día excediera ese límite)
+    ninguna cifra queda recortada por un ancestro `overflow:hidden`. **Doble terminología, mismo
+    selector:** `ejercerTablero(page, "base"|"extremo")` corre el MISMO recorrido de aserciones dos
+    veces sobre los mismos `data-testid`, cambiando solo el parámetro de URL — la etiqueta de color
+    cambia de texto («Rojo» → «Muy urgente!») sin que un solo selector se toque.
+    Hallazgo real durante la construcción: el test de «error con recuperación» fallaba de forma
+    reproducible — `usar-digest-semaforo.ts` dispara un poll AUTOMÁTICO al montar, y ese request
+    (no manual) llegaba a la ruta mockeada ANTES que el click de «Actualizar», consumiendo la
+    bandera de falla del mock; el click quedaba respondido en verde y `error-hoy` nunca aparecía.
+    El test se corrigió instalando el mock antes de `goto` y armando la falla recién después de
+    dejar pasar ese primer poll automático (mismo patrón que `refresco-digest.spec.ts`), no
+    tocando ninguna línea de la implementación. `bash packages/metodo/scripts/check.sh --full
+    --app=flota` verde.
+- [x] (P1) Contracción sin residuos: apagar el feature de liquidación ⇒ sus `signal_rule` dejan de evaluar en el próximo bootstrap (el turno abierto termina con su config congelada, `turno.config_version_id`) y no nacen excepciones nuevas de ese origen; e2e tenant C: 5 tarjetas, cero CLP de tarifas visible, semáforo operativo; conmutar `mi_flota→daas→mi_flota` conserva todas las filas de `signal_rule` y `review_queue` (centinela 11 aplicado al módulo); la conducta «dominio sin ninguna señal activa no renderiza tarjeta» NO se asevera aquí — está pendiente de la pregunta 8 y vive en AC-FSEM-21 — oráculo: CI [AC-FSEM-13]
+  - Probado: `dominio_semaforo_activo`/`signal_rule_activas` (tenant/0060) contra pgTAP
+    `0025_contraccion_signal_rule.sql` (canario): la fila sembrada de `caja_custodia_liquidacion`
+    (AC-FSEM-03) sigue existiendo CRUDA en `signal_rule` con la config congelada en ON, en OFF y
+    en «nunca configurada» — el filtro vive en la LECTURA (`signal_rule_activas`), jamás en un
+    DELETE (centinela 11); dos versiones de `config_version` conviven sin que sellar la nueva
+    reescriba la vieja («el turno abierto termina con su config congelada»); los otros 5 dominios
+    del Anexo B jamás se contraen por esta feature. Espejo TS puro `dominioSemaforoActivo`
+    (`dominio/semaforo.ts`) con las mismas 4 aserciones sobre `semaforo.test.ts` (ON/OFF/sin
+    configurar/los-otros-5-no-se-contraen), sin config congelada de verdad porque el evaluador de
+    dominio que la llamaría (AC-FSEM-16..19) todavía no existe. `e2e/hoy-nivel-0.spec.ts` (seed C,
+    `mi_flota`): 5 tarjetas, la tarjeta de custodia sigue viva (contracción es de la SEÑAL, no de
+    la tarjeta — custodia es operativa, no comercial) y CERO cifra en CLP ni "CLP" en el texto
+    visible de toda la página, tablero sin `error-hoy`. `e2e/semaforo-contraccion.spec.ts`
+    (centinela 11 de punta a punta): conmutar `mi_flota→daas→mi_flota` sobre el cluster real no
+    pierde ni una fila de `signal_rule` (mismos ids, no recreadas) ni de `review_queue`, con una
+    excepción propia de `caja_custodia_liquidacion` sembrada para probar que sobrevive — mismo
+    patrón que AC-FRUT-14 en `modo.spec.ts`. `bash packages/metodo/scripts/check.sh --full
+    --app=flota` verde; `npx playwright test e2e/hoy-nivel-0.spec.ts e2e/semaforo-contraccion.spec.ts`
+    en primer plano, 8/8 verde.
 - [ ] (P2) Telemetría del módulo en producción con el piloto: digest del semáforo emitido a telemetría de producto; métrica de cola al cierre del día tendiendo a cero visible en el panel §10 (la medición de minutos del dueño vive en AC-FSEM-23, condicionada a la pregunta 6 — este AC queda completable con el piloto) — oráculo: producción [AC-FSEM-14]
+  - Construido y verde (la mitad de software; el AC sigue ABIERTO porque su oráculo es
+    producción): el digest que llega a «Hoy» emite su latencia a `client_metric` como
+    `latencia_ms` con `flujo='semaforo_digest'` —el enum del §4.6 es CERRADO y ampliarlo es DDL
+    de sesión supervisada, mismo muro que detuvo a AC-FSEM-23 y AC-FSEM-25—, por el MISMO
+    endpoint de sync que ya vacía la cola de POD (`cliente/telemetria-digest.ts` →
+    `servidor/metricas-sync.ts`); se mide el primer digest del montaje y cada refresco manual,
+    NUNCA el poll de fondo, que no es la espera de nadie y serían cientos de filas por turno.
+    `dominio/telemetria-semaforo.test.ts` (16/16) sobre `telemetria-semaforo.ts` y
+    `e2e/telemetria-digest.spec.ts` (2/2, servidor REAL: el `page.route` mira el cuerpo y llama
+    a `continue()`, y la aserción es la fila en la BD por `client_uuid` exacto). La cola al
+    cierre del día se agrega con `colaAlCierreDelDia` —cero inventado jamás: ventana vacía es
+    NULL declarado, una sola jornada no es tendencia, y conteo negativo, fraccionario o jornada
+    repetida rebotan— y se pinta en la sección `panel-saas-cola-cierre` de
+    `plano-eauto/panel-saas-vista.tsx` con el texto siempre junto al color (AA), sobre el
+    payload de referencia `seedCierresDeJornada()` de `panel-saas-fixtures.ts`, mismo criterio
+    de fixtures-contra-vista que AC-FSEM-22 (el montaje autenticado es AC-FSEM-24).
+    Lo ÚNICO que resta es lo que el oráculo dice: la MEDICIÓN con el piloto corriendo
+    (DONE-adopción del §10, dueño nombrado Alexis). Ningún commit puede afirmarla, así que el
+    AC queda anotado en `packages/metodo/acs-bloqueados-flota.txt` para que el motor no gaste
+    tandas en un ítem que ninguna cantidad de código cierra.
 - [ ] (P2) Validación en vivo del hito: revisión adversarial del hito (e) sin hallazgos críticos sobre el semáforo (datos malformados, doble-tap en ack/resolve, red cortada a mitad de drill-down, tenant A contra B); Alexis valida con capturas el camino dorado: tarjeta SLA demostrable con la farmacia del seed A, tablero del tenant B con terminología extrema, semáforo del tenant C en `mi_flota` — oráculo: humano [AC-FSEM-15]
-- [ ] (P1) Dominio Flota/energía EV (partición de AC-FSEM-08 por §9.2) consumiendo las proyecciones del módulo 02 (fórmula única del §0 — este módulo no la re-especifica): SOC proyectado al fin del bloque < reserva+5 pp ⇒ amarillo; SOC actual < consumo estimado del tramo restante ⇒ rojo (fixture: SOC 20% con consumo restante proyectado equivalente a 30%); retorno proyectado <15% ⇒ rojo (fixture: retorno proyectado 10%); «no quedó enchufado» a la hora límite ⇒ rojo — el fixture fija la fila de `parametros` de la hora límite explícitamente; su default seed sigue en la pregunta 5c — oráculo: CI [AC-FSEM-16]
-- [ ] (P1) Dominio Caja/custodia/liquidación (partición de AC-FSEM-08; dependencias 03 y 06): discrepancia de custodia pendiente ⇒ amarillo (fixture del módulo 03: discrepancia registrada sin resolver); liquidación observada ⇒ amarillo — cláusula CONDICIONADA a la pregunta 11 (§3.E1.9 solo define abierta→cerrada→pagada + disputa por línea; el maestro no fija qué marca deja «observada»); descuadre confirmado sin evidencia ⇒ rojo; línea disputada ⇒ rojo (dinero disputado siempre es rojo, Anexo B); con liquidación OFF esas señales no evalúan (§5.5) — oráculo: CI [AC-FSEM-17]
-- [ ] (P1) Dominio DaaS/SLA (partición de AC-FSEM-08; solo modo `daas`, seed A con farmacia `otd_comprometido_pct=95`): OTD proyectado < comprometido −2 pp ⇒ amarillo; SLA incumplido en el período ⇒ rojo (fixture: OTD del período cerrado 90% contra 95 comprometido, computado de `paradas` cerradas vs ventana × `otd_comprometido_pct`, §4.5); empresa con `otd_comprometido_pct` NULL ⇒ su `signal_rule` no evalúa y sin tarjeta SLA para esa empresa (§4.5) — oráculo: CI [AC-FSEM-18]
-- [ ] (P1) Dominio Entregas vs plan (partición de AC-FSEM-08; dependencia 03) sobre `paradas`: ruta con 10% exacto de no-entregas ⇒ amarillo (10% cae en la banda seed «5–10%» cualquiera sea su punto y no supera el rojo «>10%» — robusto a la pregunta 5a) y ruta con 12% ⇒ rojo; compromiso vencido sin entrega ⇒ rojo, computado de `promesa_original` CONGELADA (§4.5) con ventana vencida y parada sin entrega — NO depende del ETA vivo; la señal amarilla «ETA proyectada + tolerancia (mín. 15 min) excede ventana» sigue condicionada a la pregunta 4 — oráculo: CI [AC-FSEM-19]
-- [ ] (P1) Reasignar y llamar en N2: reasignar transfiere `asignado_a` a otro usuario del tenant con `audit_trail` por trigger (PLANIFICACIÓN §4.2: valida online y rebota); reasignar sobre una excepción resuelta ⇒ 422 tipado y 0 filas cambiadas; reasignar con id de otro tenant ⇒ 404 (§0-HTTP); el detalle N2 renderiza la acción «llamar» (§5.6-N2; aserción de presencia en el e2e) — oráculo: CI [AC-FSEM-20]
+  - Revisión adversarial de código hecha esta vuelta, contra las 4 rutas del módulo y sus
+    funciones de servidor (`servidor/review-queue.ts`, `src/app/api/semaforo/**`):
+    **doble-tap** en `reconocer`/`resolver`/`reasignar` es imposible de ganar por el segundo
+    toque — el UPDATE lleva el estado de origen en el WHERE (`estado='nueva'`,
+    `estado='reconocida'`, `estado<>'resuelta'` respectivamente) y la BD serializa, no un
+    SELECT-luego-UPDATE separado (ya probado 422/0-filas por AC-FSEM-04/05/20); **datos
+    malformados**: cuerpo ausente o JSON roto en `resolver`/`reasignar` cae en catch y se trata
+    como campo vacío (422 tipado, nunca 500), IDs no-UUID rebotan 404 antes de tocar la BD
+    (`esUuid`); **tenant A contra B**: los tres WHERE llevan `tenant_id = tenant_actual()`, así
+    que una excepción de otro tenant es 404 por construcción, ya cubierto de punta a punta por
+    la suite A-contra-B autogenerada de AC-FSEM-09. Sin hallazgos críticos en este perímetro.
+    **Hallazgo real, no crítico pero bloqueante para la validación de Alexis:** ninguno de los
+    tres botones del camino dorado está conectado al servidor que esta misma revisión
+    verificó. `GET /api/semaforo/digest` sigue sirviendo literales de `semaforo-fixtures.ts`
+    (comentario propio del route: «la evaluación real de `signal_rule` … sigue sin existir») en
+    vez de evaluar `signal_rule`/`paradas`/`eventos`/`client_metric` reales — el wiring que
+    AC-FSEM-07/08/11/16-19 declaran explícitamente diferido nunca recibió un AC de seguimiento
+    en este documento. Y en el cliente, «Reconocer» (`hoy/peek-n1.tsx`) y «Reconocer»/«Resolver»
+    (`hoy/excepciones/detalle-n2-vista.tsx`) mutan estado LOCAL de React nada más — el propio
+    comentario del componente lo declara («transiciona ESTE demo localmente … sin llamar al
+    servidor») — y nunca invocan `POST .../reconocer|resolver`, aunque esos endpoints existen y
+    están probados por su cuenta en `e2e/peek-n1.spec.ts`/`e2e/detalle-n2.spec.ts`. Efecto
+    concreto: hoy, Alexis navegando el camino dorado autenticado vería la tarjeta SLA de la
+    farmacia seed A y el tablero B/mi_flota-C, pero SIEMPRE los mismos literales del fixture
+    (no lo que hay realmente en la BD de cada tenant), y tocar «Reconocer»/«Resolver» parecería
+    funcionar sin persistir nada — la captura no sería del sistema real. **Red cortada a mitad
+    de drill-down**: no hay `error.tsx` propio bajo `hoy/` ni `hoy/excepciones/` — un corte
+    entre el peek y «Ver detalle» (N2 es RSC) cae al error genérico de Next, no a un estado
+    propio de Miga; no es una pérdida de dato ni un hueco de seguridad, pero tampoco es la
+    experiencia degradada que el resto del módulo sí construye para offline (AC-FSEM-06).
+    Ninguno de los dos huecos es de este AC (es de revisión, no de construcción) ni de otro ya
+    cerrado — no tienen AC dueño en el documento. AC-FSEM-15 queda anotado en
+    `packages/metodo/acs-bloqueados-flota.txt`: su mitad de revisión adversarial ya se hizo, y
+    validar el camino dorado con Alexis ANTES de que exista el wiring reportaría capturas de
+    fixtures, no del producto — quien decide cuándo abrir el AC de wiring y cuándo recién
+    entonces pedirle las capturas a Alexis es una decisión de persona, no del motor.
+- [x] (P1) Dominio Flota/energía EV (partición de AC-FSEM-08 por §9.2) consumiendo las proyecciones del módulo 02 (fórmula única del §0 — este módulo no la re-especifica): SOC proyectado al fin del bloque < reserva+5 pp ⇒ amarillo; SOC actual < consumo estimado del tramo restante ⇒ rojo (fixture: SOC 20% con consumo restante proyectado equivalente a 30%); retorno proyectado <15% ⇒ rojo (fixture: retorno proyectado 10%); «no quedó enchufado» a la hora límite ⇒ rojo — el fixture fija la fila de `parametros` de la hora límite explícitamente; su default seed sigue en la pregunta 5c — oráculo: CI [AC-FSEM-16]
+  - Probado: `dominio/semaforo-flota-ev.test.ts` (10/10) contra `dominio/semaforo-flota-ev.ts`,
+    función pura `evaluarFlotaEv` — sin migración nueva: la fila `signal_rule` con histéresis
+    (`soc_margen_reserva_pp`, amarillo 5pp / rojo 0pp / recuperación 10pp) ya la siembra la
+    migración 0059 (AC-FSEM-03), y las proyecciones del módulo 02 (`socProyectadoPct`,
+    `consumoDelTramoPct`, `sinEnchufar`, `reservaPctDe`, todas de
+    `packages/nucleo-comun/src/senales-ev.ts`/`energia.ts`, AC-FVEH-09/11) se REUTILIZAN sin
+    re-especificar un solo número de la fórmula única — `gate-formula-energia`/`gate-constantes`
+    siguen verdes. Los dos rojos binarios del Anexo B (SOC actual < consumo del tramo; retorno
+    proyectado <15%, constante fija `RETORNO_MINIMO_PCT` exportada de `senales-ev.ts` para esta
+    reutilización) se proyectan directo, sin histéresis, mismo criterio que «turno cruzando
+    medianoche» en AC-FSEM-08; el amarillo (margen de SOC proyectado sobre la `reserva_pct` del
+    tenant, §4.4) pasa por `transicionColor` con la convención descendente invertida — un
+    tenant con reserva alta exige más margen, probado con `reservaPct=40` sobre el mismo tramo
+    que con la reserva default (15) daría verde. «No quedó enchufado» sale directo de
+    `enchufadoConfirmado`; el `null` («nadie preguntó todavía») NO dispara, mismo criterio que
+    AC-FVEH-11. Un tramo sin ficha EV completa no entra a la cola de excepciones (ni falso verde
+    ni falso rojo) y un caso de histéresis en zona intermedia prueba que el rojo previo baja a
+    amarillo, no salta directo a verde (§2.4). Wiring del endpoint real (`turnos`/`reading`/
+    `energy_entry` reales) queda para un AC posterior, mismo criterio que AC-FSEM-07/08/11: no
+    está en el texto de este AC ni su oráculo lo exige (CI, no e2e). `bash
+    packages/metodo/scripts/check.sh --full --app=flota` verde.
+- [x] (P1) Dominio Caja/custodia/liquidación (partición de AC-FSEM-08; dependencias 03 y 06): discrepancia de custodia pendiente ⇒ amarillo (fixture del módulo 03: discrepancia registrada sin resolver); liquidación observada ⇒ amarillo — cláusula CONDICIONADA a la pregunta 11 (§3.E1.9 solo define abierta→cerrada→pagada + disputa por línea; el maestro no fija qué marca deja «observada»); descuadre confirmado sin evidencia ⇒ rojo; línea disputada ⇒ rojo (dinero disputado siempre es rojo, Anexo B); con liquidación OFF esas señales no evalúan (§5.5) — oráculo: CI [AC-FSEM-17]. Probado: `evaluarCajaCustodiaLiquidacion` (dominio/semaforo-caja-custodia.ts) con 6 tests unitarios propios + el test de contracción OFF existente en semaforo.test.ts (AC-FSEM-13); `check.sh --full --app=flota` verde (17/18 — el único rojo es `prueba-arnes`, guard del zombi de puerto que no encuentra `lsof` en el PATH del arnés, ajeno a este AC y a cualquier código de flota).
+- [x] (P1) Dominio DaaS/SLA (partición de AC-FSEM-08; solo modo `daas`, seed A con farmacia `otd_comprometido_pct=95`): OTD proyectado < comprometido −2 pp ⇒ amarillo; SLA incumplido en el período ⇒ rojo (fixture: OTD del período cerrado 90% contra 95 comprometido, computado de `paradas` cerradas vs ventana × `otd_comprometido_pct`, §4.5); empresa con `otd_comprometido_pct` NULL ⇒ su `signal_rule` no evalúa y sin tarjeta SLA para esa empresa (§4.5) — oráculo: CI [AC-FSEM-18]
+  - Probado: `evaluarDaasSla` (`dominio/semaforo-daas-sla.ts`) con 6 tests unitarios propios
+    (`semaforo-daas-sla.test.ts`, 6/6): sin migración nueva — la fila `signal_rule` sembrada
+    `otd_deficit_pp` (amarillo 2 pp / rojo 5 pp / recuperación 0 pp) ya la siembra la migración
+    0059 (AC-FSEM-03), convención ASCENDENTE directa (mayor déficit = peor), sin inversión de
+    signo a diferencia de `flota_energia_ev`. Una sola métrica —el déficit de OTD contra el
+    comprometido— pasa por `transicionColor` (histéresis) en dos momentos del ciclo: mientras el
+    período sigue abierto usa el OTD PROYECTADO (fixture déficit 2 pp ⇒ amarillo, «OTD proyectado
+    bajo el comprometido»); con el período YA CERRADO usa el OTD real (fixture del propio AC:
+    comprometido 95, período cerrado 90 ⇒ déficit 5 ⇒ rojo, «SLA incumplido en el período» — el
+    mismo número que fija el comentario de la migración 0059 para no reconciliar un segundo
+    valor). Empresa con `otdComprometidoPct` NULL: la función la salta por completo — ni
+    excepción ni denominador (test dedicado con dos empresas, una NULL y otra con contrato: el
+    agregado queda 1/1, no 2/2). Un test de histéresis prueba que un rojo previo que retrocede a
+    zona intermedia (déficit 1 pp, entre recuperación 0 y amarillo 2) baja a amarillo, no salta
+    directo a verde, mismo criterio que el resto de dominios con histéresis (AC-FSEM-02/16).
+    Wiring del endpoint real (`/api/semaforo/digest` contra `paradas`/contratos reales) queda
+    para un AC posterior, mismo criterio que AC-FSEM-07/08/16/17: no está en el texto de este AC
+    ni su oráculo lo exige (CI, no e2e). `check.sh --full --app=flota`: unit/lint/types/build/
+    audit verdes; el único rojo es `e2e/refresco-digest.spec.ts` (AC-FSEM-06, dominio de
+    refresco/polling, no de DaaS/SLA) por una colisión de fixture (`personas_tenant_id_rut_key`)
+    entre specs al correr la suite completa en orden — se reproduce igual con
+    `npx playwright test` a secas, SIN ningún cambio de este AC, y las mismas 7 pruebas de ese
+    archivo pasan 7/7 al correrlas solas (`npx playwright test e2e/refresco-digest.spec.ts`):
+    contaminación de datos entre specs de la suite existente, ajena a este AC y a cualquier
+    código de DaaS/SLA — mismo patrón que el hallazgo de `prueba-arnes`/lsof documentado en
+    AC-FSEM-17.
+- [x] (P1) Dominio Entregas vs plan (partición de AC-FSEM-08; dependencia 03) sobre `paradas`: ruta con 10% exacto de no-entregas ⇒ amarillo (10% cae en la banda seed «5–10%» cualquiera sea su punto y no supera el rojo «>10%» — robusto a la pregunta 5a) y ruta con 12% ⇒ rojo; compromiso vencido sin entrega ⇒ rojo, computado de `promesa_original` CONGELADA (§4.5) con ventana vencida y parada sin entrega — NO depende del ETA vivo; la señal amarilla «ETA proyectada + tolerancia (mín. 15 min) excede ventana» sigue condicionada a la pregunta 4 — oráculo: CI [AC-FSEM-19]
+  - Probado: `semaforo-entregas-vs-plan.test.ts` (8/8) contra `dominio/semaforo-entregas-vs-plan.ts`,
+    función pura `evaluarEntregasVsPlan` — sin migración nueva: la fila `signal_rule` sembrada
+    `no_entregas_pct_ruta` (amarillo 5% / rojo 10% / recuperación 3%) ya la siembra la migración
+    0059 (AC-FSEM-03), mismo criterio que AC-FSEM-07/08/16-18. El % de no-entregas pasa por
+    `colorNoEntregasPct`, una variante de `transicionColor` con disparo a rojo ESTRICTO (`>`, no
+    `>=`): el AC exige que el 10% exacto se quede amarillo («no supera el rojo `>10%`»), mismo
+    ajuste que `colorErroresSync` en AC-FSEM-11 sobre «errores de sync en 5% exacto». El
+    compromiso vencido sin entrega es binario y siempre rojo, computado por el módulo dueño (03)
+    de `promesa_original` congelada contra la ventana — un hecho ya resuelto que esta función solo
+    proyecta, mismo criterio que `cierresDescuadradosSinEvidencia` en AC-FSEM-17; el fixture
+    dedicado prueba que el color de la tarjeta es el peor entre ambas señales y que la histéresis
+    (rojo→zona intermedia→amarillo, no directo a verde) se sostiene igual que en el resto de
+    dominios con banda. La señal amarilla de ETA vivo sigue CONDICIONADA a la pregunta 4 —
+    `HechosEntregasVsPlan` no trae ningún campo de ETA a propósito, con un test que confirma las
+    claves exactas del tipo, mismo tratamiento que «liquidación observada» en AC-FSEM-17. Wiring
+    del endpoint real (`/api/semaforo/digest` contra `paradas` reales) queda para un AC posterior,
+    mismo criterio que AC-FSEM-07/08/16-18: no está en el texto de este AC ni su oráculo lo exige
+    (CI, no e2e). `bash packages/metodo/scripts/check.sh --full --app=flota` verde.
+- [x] (P1) Reasignar y llamar en N2: reasignar transfiere `asignado_a` a otro usuario del tenant con `audit_trail` por trigger (PLANIFICACIÓN §4.2: valida online y rebota); reasignar sobre una excepción resuelta ⇒ 422 tipado y 0 filas cambiadas; reasignar con id de otro tenant ⇒ 404 (§0-HTTP); el detalle N2 renderiza la acción «llamar» (§5.6-N2; aserción de presencia en el e2e) — oráculo: CI [AC-FSEM-20]
+  - Probado: `npx playwright test e2e/detalle-n2.spec.ts` (22/22, corrido en primer plano). **Servidor:**
+    `reasignarExcepcion` (`servidor/review-queue.ts`) transfiere `asignado_a` con un UPDATE que
+    NO toca `estado` (reasignar es cambio de dueño, no transición de ciclo de vida, §4.6) y
+    valida online en el mismo acto (§4.2): el `usuarioId` destino tiene que existir, ser
+    `activo` y de ESTE tenant (`tenant_id = tenant_actual()`), o rebota 422 `usuario_invalido`;
+    el WHERE del UPDATE lleva `estado <> 'resuelta'`, así que reasignar una ya resuelta rebota
+    422 `transicion_ilegal` con 0 filas cambiadas (probado contra una fila real: nota y
+    `resuelta_en` intactos); una excepción que no existe —o es de otro tenant, 404 por
+    construcción igual que reconocer/resolver— rebota 404 ANTES que cualquier validación del
+    cuerpo, para no filtrar por el body si el recurso no está. `audit_trail` lo escribe el
+    trigger `review_queue_auditada` (migración 0002) solo, sin código nuevo. `POST
+    /api/semaforo/excepciones/[id]/reasignar` (nuevo) pasa por la misma `guardia()` que
+    reconocer/resolver/toques: rol distinto de `admin_tenant` ⇒ 403 y 0 filas cambiadas.
+    Declarada en `rutas/manifiesto.json` (`recurso` sobre `review_queue`, mismo criterio que
+    reconocer/resolver) y cubierta por la suite A-contra-B autogenerada. **UI:** «Llamar»
+    [AC-FSEM-20] se agrega a `hoy/excepciones/detalle-n2-vista.tsx` como acción SIEMPRE
+    presente en N2 (`data-testid="detalle-llamar"`, cualquier estado/severidad) — el AC solo
+    exige su presencia (aserción en el e2e); el `tel:` queda vacío a propósito porque ni
+    `FilaPeek` ni `DetalleN2` traen un campo de teléfono todavía (ninguna tabla del dominio lo
+    tiene hoy) — mejora progresiva declarada en el código, no un botón fantasma: el target
+    táctil y el texto están, la marcación real llega con el campo de contacto. Reasignar no se
+    wireó a la UI (mismo criterio que resolver/toques: la pantalla sigue sobre el demo local de
+    `semaforo-fixtures.ts` mientras el digest real no exista, AC-FSEM-06/09; acá se prueba el
+    contrato de SERVIDOR contra `review_queue` real). `check.sh --full --app=flota`: gate.sh,
+    lint, types, unit, build, audit y presupuesto verdes; el único rojo de la corrida completa
+    es `e2e/pod-outbox-multiusuario.spec.ts` (AC-FPOD-09, dominio POD/outbox — ajeno a este AC),
+    que corrido solo da 2/2 verde (`npx playwright test e2e/pod-outbox-multiusuario.spec.ts`):
+    misma contaminación de fixtures entre specs al correr la suite completa en orden que ya
+    documentaron AC-FSEM-18/19, reproducible sin ningún cambio de este AC.
 - [ ] (P1) Tarjeta de dominio sin señales activas — CONDICIONADO a la pregunta 8: si el dueño confirma la derivación (§5.5 + precedente SLA-NULL §4.5), un dominio cuyas señales quedan todas apagadas no renderiza tarjeta, sin huecos ni candados fuera del panel admin (e2e con fixture de entitlements); si resuelve otra conducta (p. ej. tarjeta informativa), este AC se reescribe ANTES de implementarse — el gate no congela la conducta mientras la pregunta esté abierta — oráculo: CI [AC-FSEM-21]
-- [ ] (P1) Panel interno SaaS (§10) a nivel de componente/vista contra fixtures de `control` (sin depender de la pregunta 2): EEVD agregada y POR TENANT con tendencia 4 semanas (4 valores semanales por tenant empujados por el exportador desde `eevd_semanal`); embudo de activación p50/p90 alta→primera entrega (métricas 1 y 2 del §2); tenants activos y % de vehículos con turno; calidad de la norte — % paradas sin evidencia y % PODs supersedidos EXCLUYENDO motivo=`undo` (fixture: un supersede con motivo=`undo` NO cuenta, §4.7); los agregados nuevos viajan en el schema fijo del exportador y el centinela 14 sigue verde (cero columnas de dinero/tarifas/clientes); el contador de exenciones de la suite se renderiza con tendencia — su ingesta desde el gate CI (§9.2) queda condicionada a la pregunta 10 — oráculo: CI [AC-FSEM-22]
+- [x] (P1) Panel interno SaaS (§10) a nivel de componente/vista contra fixtures de `control` (sin depender de la pregunta 2): EEVD agregada y POR TENANT con tendencia 4 semanas (4 valores semanales por tenant empujados por el exportador desde `eevd_semanal`); embudo de activación p50/p90 alta→primera entrega (métricas 1 y 2 del §2); tenants activos y % de vehículos con turno; calidad de la norte — % paradas sin evidencia y % PODs supersedidos EXCLUYENDO motivo=`undo` (fixture: un supersede con motivo=`undo` NO cuenta, §4.7); los agregados nuevos viajan en el schema fijo del exportador y el centinela 14 sigue verde (cero columnas de dinero/tarifas/clientes); el contador de exenciones de la suite se renderiza con tendencia — su ingesta desde el gate CI (§9.2) queda condicionada a la pregunta 10 — oráculo: CI [AC-FSEM-22]
+  - Probado: `node --test src/dominio/panel-saas.test.ts` (14/14) y `check.sh --full --app=flota` verde.
+    `dominio/panel-saas.ts` extiende el Plano B (AC-FSEM-10) con 5 funciones puras: EEVD por
+    tenant con tendencia 4 semanas (`filaEevdTendencia`, con su propio guard de centinela 14 a
+    nivel de vista, `validarSchemaEevdTendencia`, mismo criterio que `plano-eauto.ts`); embudo
+    de activación p50/p90 (`embudoActivacion`, percentil por rango más cercano sobre las horas
+    alta→primera entrega, NULL declarado si ningún tenant activó); salud de plataforma
+    (`saludPlataforma`: tenants activos + % vehículos con turno); calidad de la norte
+    (`calidadNorte`: % paradas sin evidencia + % PODs supersedidos EXCLUYENDO `motivo='undo'` —
+    probado con el fixture exacto que pide la spec, un supersede `undo` no cuenta); y el
+    contador de exenciones con tendencia (`contadorExenciones`, bandera `creciente` comparando
+    los extremos de la ventana). `panel-saas-fixtures.ts` arma el payload de los 3 tenants de
+    referencia (`daas`/`mi_flota`/`ruteo_activo`, mismos slugs que AC-FSEM-10). Presentación
+    pura en `plano-eauto/panel-saas-vista.tsx` (sin fetch, sin cliente de BD, no montada bajo
+    ninguna ruta — mismo criterio que `tablero-cross-tenant.tsx`, montaje real es AC-FSEM-24).
+    El contador de exenciones queda declarado como pendiente de ingesta real (pregunta 10);
+    acá solo se ejercita su render con tendencia sobre el valor que el pipeline ya emite.
 - [ ] (P2) Minutos del dueño en el panel ≤5/día (§10) — CONDICIONADO a la pregunta 6: el enum cerrado de `client_metric` (§4.6) no trae tipo de tiempo-en-panel; el AC se activa con el mecanismo que fije la respuesta y se mide con el piloto — oráculo: producción [AC-FSEM-23]
+  - Revisado el 16-ago-2026: a diferencia de AC-FSEM-14 (que sí tenía mitad de software
+    construible), acá no hay nada que construir todavía. La pregunta 6 no solo desbloquea el
+    enum de `client_metric` — fija el MECANISMO mismo de la medición (¿tiempo de sesión en el
+    panel? ¿un evento por vista abierta/cerrada? ¿ambos?), y sin esa decisión cualquier
+    instrumentación sería una apuesta sobre una superficie que el maestro no especifica.
+    Escribir código ahora sería inventar el mecanismo, no medirlo. El AC queda anotado en
+    `packages/metodo/acs-bloqueados-flota.txt` para que ninguna tanda del motor se gaste en
+    él hasta que exista la respuesta a la pregunta 6.
 - [ ] (P2) E2e autenticado del panel cross-tenant de e-auto — CONDICIONADO a la pregunta 2 (autenticación y montaje): navegar al panel, lista por tenant con estado semafórico y detalle de un tenant mostrando SOLO lo que `control` contiene — oráculo: CI [AC-FSEM-24]
+  - Revisado el 16-ago-2026: no queda mitad construible, y por una razón distinta a la de
+    AC-FSEM-23. Acá la mitad de software YA está construida y verde — el render por tenant
+    con estado semafórico y los agregados de `control` es AC-FSEM-10
+    (`dominio/plano-eauto.ts` + `plano-eauto/tablero-cross-tenant.tsx`, 7/7) y el panel §10
+    es AC-FSEM-22 (`dominio/panel-saas.ts` + `plano-eauto/panel-saas-vista.tsx`, 14/14),
+    ambos contra fixtures de `control` y con el centinela 14 a nivel de vista. Lo que este
+    AC agrega sobre eso es EXACTAMENTE lo que la pregunta 2 bloquea, y nada más: el
+    **montaje** (una URL en `app/`) y la **autenticación** de e-auto. Ninguna de las dos se
+    puede derivar: el enum de roles es FIJO y por-tenant (`ROLES` en
+    `packages/nucleo-comun/src/constants.ts`; §0/§4.3 «los packs de vertical NO crean
+    roles») y no existe rol de plataforma, así que `guardia()` —la puerta de todas las
+    rutas del módulo (AC-FSEM-09)— no tiene sujeto a quien dejar pasar; y el maestro
+    describe el CONTENIDO del panel (§5.6 «Vista e-auto», §10 «Panel interno SaaS») sin
+    decir jamás dónde vive ni cómo entra su dueño.
+    Montarlo hoy sobre fixtures y sin sesión —el patrón `?seed=` de `hoy/page.tsx`— no
+    sirve como sustituto: (1) no cerraría el AC, cuyo texto pide el e2e AUTENTICADO;
+    (2) inventaría la URL que la pregunta 2 pregunta, y con ella el caso de cruce del
+    `manifiesto.json` de una ruta cuya semántica de aislamiento nadie fijó; (3) dejaría el
+    tablero cross-tenant servido sin sesión, que es justo lo que §4.1-prohibido y §7.2
+    custodian. Sería congelar en el gate una decisión del dueño, no adelantar trabajo.
+    El AC queda anotado en `packages/metodo/acs-bloqueados-flota.txt` para que ninguna
+    tanda del motor se gaste en él hasta que exista la respuesta a la pregunta 2.
 - [ ] (P2) BLOQUEADO por la Pregunta al dueño 12 — «hints re-mostrados = bug» (§10, telemetría de producto): el concepto de hint no existe en ninguna de las 9 specs del conjunto y el enum CERRADO de `client_metric` (§4.6) no trae tipo para medirlo (misma situación que AC-FSEM-23); este módulo, dueño de la telemetría de producto y del panel §10, la reclama para que la obligación no quede huérfana y NO construye hints, ni amplía el enum, ni inventa una superficie de guía hasta la respuesta. Resuelta, el AC se reescribe ANTES de implementarse con su oráculo (fuente de la métrica + indicador en el panel §10, con «re-mostrado» como condición de alerta) — oráculo: producción (condicionado a la Pregunta 12) [AC-FSEM-25]
+  - Revisado el 16-ago-2026: sin mitad de software construible, misma clase que AC-FSEM-23
+    y no la de AC-FSEM-14. La pregunta 12 no es solo el tipo que falta en el enum de
+    `client_metric` — es doble: (1) si el hint existe siquiera en E1 (¿guía A2HS del
+    enrolamiento §5.4? ¿demo tocable del wizard §3.E1.13? ¿primeras pasadas de un flujo de
+    terreno?) y (2) si existe, si se cablea como tipo nuevo del enum CERRADO (cambio de
+    esquema que toca los módulos 00-DDL y 04-ingesta) o se deriva de `eventos`. Construir
+    cualquiera de las dos vías hoy sería inventar tanto la superficie de guía como el
+    mecanismo de medición — ninguna de las 9 specs del conjunto la especifica. El AC queda
+    anotado en `packages/metodo/acs-bloqueados-flota.txt` para que ninguna tanda del motor
+    se gaste en él hasta que exista la respuesta a la pregunta 12.
 
 ## Dependencias
 

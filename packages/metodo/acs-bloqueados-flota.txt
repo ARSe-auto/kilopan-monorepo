@@ -1,0 +1,42 @@
+# ACs que el motor NO debe elegir, y por qué.
+#
+# Distinto de `panel/acs-atascados.txt`: aquel lo escribe el motor solo, cuando un AC le falla N
+# veces y decide seguir con el siguiente. Éste lo escribe una PERSONA, y dice que el AC no se
+# puede construir hoy — no porque sea difícil, sino porque falta una decisión que no es del
+# arnés.
+#
+# POR QUÉ EXISTE. El 10-ago-2026 el motor eligió AC-FRUT-03 y quemó los 6 USD de su presupuesto
+# intentando cerrarlo. No podía: la máquina de estados del encargo espera una respuesta del
+# dueño, y el enum tiene a propósito solo los dos valores que el maestro fija literalmente.
+# Sin esta lista lo habría reintentado en cada tanda, indefinidamente, gastando en cada vuelta.
+#
+# Formato: el id del AC, y después de `#` la razón. La razón NO es decorativa: es lo que le
+# permite a quien lea esto saber qué desbloquea el AC. Un id sin razón es un AC que nadie va a
+# volver a mirar.
+#
+# QUITAR UNA LÍNEA ES UNA DECISIÓN. Se quita cuando la respuesta llegó, no cuando el AC parece
+# fácil.
+
+# ─── Bloqueados por una pregunta al dueño sin responder ─────────────────────────────
+#
+# (11-ago-2026: AC-FRUT-03, AC-FIDN-13 y AC-FIDN-15 SALIERON de esta lista — Alexis respondió
+# spec 03 P1 y spec 01 P4/P8. Registro: docs/respuestas-dueno-2026-08-11-spec01-spec03.md.
+# Quedan sin línea propia porque no hay más ACs bloqueados por decisión hoy; si aparece uno
+# nuevo, se agrega con su razón al lado, como el resto de este archivo.)
+
+# ─── De oráculo HUMANO: no se cierran con código, JAMÁS bloquean al loop (§9.2, §10) ──
+AC-FVEH-16   # DONE-adopción: alta real cronometrada en menos de dos minutos y lectura del semáforo sin ayuda. Dueño nombrado: Alexis.
+AC-FRUT-16   # Camino dorado de custodia del piloto B en producción, 14 días con ≥95% de entregas con evidencia. Dueño nombrado: Alexis.
+AC-FSEM-14   # DONE-adopción del §10: la MEDICIÓN del digest y de la cola-a-cero con el piloto corriendo en producción. Dueño nombrado: Alexis. Toda la mitad de software ya está construida y verde (ver la nota bajo el ítem en specs/flota/05-semaforo-visibilidad.md): el digest emite latencia_ms a client_metric y la cola al cierre se agrega y se pinta en el panel §10. Lo desbloquea el piloto, no más código.
+AC-FSEM-15   # DONE-adopción: revisión adversarial (hecha, sin hallazgos críticos, ver la nota bajo el ítem en specs/flota/05-semaforo-visibilidad.md) + Alexis valida con capturas el camino dorado. Dueño nombrado: Alexis. Pedirle las capturas HOY sería pedirle que valide fixtures: /api/semaforo/digest sirve semaforo-fixtures.ts en vez de evaluar signal_rule real, y los botones Reconocer/Resolver de hoy/peek-n1.tsx y hoy/excepciones/detalle-n2-vista.tsx mutan solo estado local de React, nunca llaman al servidor. Lo desbloquea el AC de wiring del digest/acciones (todavía sin numerar en la spec), no más revisión.
+AC-FSEM-24   # CONDICIONADO a la pregunta 2 sin responder, y BLOQUEADO ENTERO por ella: lo único que este AC agrega sobre AC-FSEM-10/22 (ya construidos y verdes contra fixtures de `control`) es el MONTAJE (una URL) y la AUTENTICACIÓN de e-auto, que es literalmente lo que la pregunta 2 pide decidir. El enum de roles es fijo y por-tenant (ROLES en packages/nucleo-comun/src/constants.ts, §0/§4.3: los packs no crean roles) ⇒ no hay sujeto de plataforma a quien `guardia()` deje pasar, y el maestro describe el contenido del panel (§5.6, §10) sin decir dónde se monta ni cómo entra su dueño. Montarlo sobre fixtures sin sesión no lo cierra (el AC pide e2e AUTENTICADO) e inventaría la URL y su caso de cruce. Lo desbloquea la respuesta a la pregunta 2, no más código.
+AC-FSEM-23   # Doble bloqueo, sin mitad de software construible (a diferencia de AC-FSEM-14): (1) CONDICIONADO a la pregunta 6 sin responder — sin esa respuesta no se sabe siquiera QUÉ instrumentar como «minutos del dueño en el panel»; (2) el enum CERRADO de client_metric (§4.6) no trae tipo de tiempo-en-panel, misma pared DDL de sesión supervisada que frenó a AC-FSEM-14/25; (3) su oráculo es el piloto en producción. Lo desbloquea la respuesta a la pregunta 6 (que fija el mecanismo) y después el piloto midiendo, no más código.
+AC-FSEM-25   # BLOQUEADO entero por la pregunta 12, sin mitad de software construible, misma clase que AC-FSEM-23: el concepto de «hint» no existe en ninguna de las 9 specs del conjunto (¿existe siquiera en E1? ¿guía A2HS del enrolamiento, demo tocable del wizard, primeras pasadas de un flujo de terreno?) y, si existiera, la pregunta 12 también fija el MECANISMO — tipo nuevo en el enum CERRADO de client_metric (§4.6, cambio de esquema que toca los módulos 00/04) o derivarla de eventos. Construir hoy sería inventar tanto la superficie de guía como el mecanismo de medición. Lo desbloquea la respuesta a la pregunta 12, no más código.
+AC-FTAR-15   # DONE-adopción del §10 (checklist con dueño humano, JAMÁS bloquea al loop §9.2): la primera liquidación semanal REAL del tenant A (e-auto DaaS) cerrada, con folio y pagada sin líneas manuales, la verifica Alexis en producción — no hay oráculo de CI que lo cierre. Además tiene una mitad de software que hoy es inalcanzable: registrar el folio contra ESA liquidación pasa por [AC-FTAR-16], bloqueado porque `liquidaciones` no tiene `reference_document_id` (DDL de sesión supervisada, ver AC-FTAR-13 arriba, misma pared). Dueño nombrado: Alexis. Lo desbloquea el ALTER de AC-FTAR-16 y después el piloto liquidando en producción, no más código.
+
+# ─── Bloqueados por DDL que solo escribe una sesión supervisada (AGENTS.md) ──────────
+#
+# Clase distinta de las dos de arriba: acá no falta una decisión de producto ni un piloto — falta
+# una migración. El motor NUNCA crea ni edita `db/migraciones*/` (AGENTS.md, regla dura), así que
+# el AC no es difícil: es inalcanzable desde el arnés hasta que una persona corra el ALTER.
+AC-FPOR-14   # Gemelo del anterior para el piloto A (e-auto DaaS): 7 días de producción con rutas manuales y ≥90% de entregas con evidencia, medidos por Alexis en el panel. Es DONE-adopción del §10 («checklist humana, dueño: Alexis; JAMÁS bloquea al loop»), no DONE-software: no hay nada que construir ni test que lo pueda ejercer — el oráculo son 7 días de operación real. Se quita cuando el piloto A corrió y Alexis leyó el umbral en el panel. (16-ago-2026: el motor lo eligió como si fuera construible; sin esta línea lo habría reintentado en cada tanda.)
