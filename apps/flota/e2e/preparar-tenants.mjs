@@ -79,6 +79,14 @@ export const TENANTS = [
   // de edición del §3.E1.10) — compartir base con otra suite del portal dejaría encargos
   // aceptados a medio camino que no son de nadie.
   { slug: "portal_encargos_alta", estado: "activo" },
+  // Base PROPIA para la disputa de liquidación por línea del portal [AC-FPOR-10].
+  //
+  // Misma razón que `portal_encargos_alta`: sella `config_version` DIRECTO con
+  // `crear_config_version()` para encender `portal_contratante`, y esta suite además CIERRA
+  // liquidaciones y les RETRASA el evento `liquidacion.cerrada` para fabricar el caso «fuera de
+  // la ventana de 7 días» sin mover el reloj del servidor — compartir base con otra suite del
+  // portal dejaría liquidaciones cerradas o eventos retrasados que no son de nadie.
+  { slug: "portal_liquidacion_disputa", estado: "activo" },
 ];
 
 /** Subdominio que jamás se registra. Nombrarlo acá evita que el test lo invente distinto. */

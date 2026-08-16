@@ -1164,6 +1164,42 @@
       }
     },
     {
+      "ruta": "/cliente/api/liquidacion-lineas/[id]/disputa",
+      "archivo": "src/app/cliente/api/liquidacion-lineas/[id]/disputa/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "liquidacion_lineas",
+          "columna": "id"
+        },
+        "nota": "La disputa por línea del contratante [AC-FPOR-10]. `disputarLineaDelCliente` (servidor/portal-cliente.ts) filtra `liquidacion_lineas_cliente where id = $1 and empresa_cliente_id = $2` A MANO antes de invocar `disputar_linea()` (0066) — necesario porque el pool conecta como `flota_admin` (`rolbypassrls=true`) y la RLS de la función nunca se evalúa sobre esta conexión (cabecera de `portal-cliente.ts`). Contra un id de la empresa vecina o de otro tenant, el filtro no encuentra fila: 404 y CERO escritura — el POST MUTA (`disputa_estado`, evento `liquidacion_linea.disputada`) y por eso este caso enciende además el comparador de huella de la BD de B: una disputa escrita en el vecino no se puede deshacer (E1 no construye resolución, spec 06 Pregunta 4) y contaminaría su registro de reclamo."
+      }
+    },
+    {
+      "ruta": "/cliente/api/liquidacion-lineas/[id]/evidencia",
+      "archivo": "src/app/cliente/api/liquidacion-lineas/[id]/evidencia/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "liquidacion_lineas",
+          "columna": "id"
+        },
+        "nota": "El drill-down línea→evidencia del contratante [AC-FPOR-10], gemelo confinado de `/api/liquidacion-lineas/[id]/evidencia` del operador (AC-FTAR-07). `evidenciaDeLineaDelCliente` confirma PRIMERO que la línea es de la empresa de la sesión vía `liquidacion_lineas_cliente` (mismo filtro explícito que el resto de este archivo, RLS no evaluada por `flota_admin`) y solo entonces lee `entregas_pod`/`evidence`. Contra un id de la empresa vecina o de otro tenant, el filtro inicial no encuentra fila: 404 y BD de B sin cambios."
+      }
+    },
+    {
       "ruta": "/cliente/api/liquidaciones",
       "archivo": "src/app/cliente/api/liquidaciones/route.ts",
       "metodos": [
@@ -1191,6 +1227,18 @@
           "columna": "id"
         },
         "nota": "La liquidación del contratante con sus líneas, leída vía `liquidacion_cliente`/`liquidacion_lineas_cliente` (0067) [AC-FPOR-06]. RLS de `liquidaciones` (0063) confina por `empresa_cliente_id`; trae el período y cada monto CLP de sus líneas, cruzando además el límite de tenant. Contrato 404 y BD de B sin cambios."
+      }
+    },
+    {
+      "ruta": "/cliente/api/motivos-disputa",
+      "archivo": "src/app/cliente/api/motivos-disputa/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "El catálogo de motivos de disputa [AC-FPOR-10] — filtrado por `estado_asociado = 'liquidacion_linea_disputada'`, jamás el catálogo de no-entrega del terreno. Sin identificador por URL; `motivos` es una tabla del TENANT (no de la empresa contratante), así que no hay cruce intra-tenant que probar acá — el host de A resuelve el pool de A (AC-FTEN-05) y el catálogo que sale es siempre el del tenant de la sesión."
       }
     },
     {

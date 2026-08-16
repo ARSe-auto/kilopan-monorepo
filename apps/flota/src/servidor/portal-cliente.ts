@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { enLectura } from "./gobierno.ts";
+import { enActo, enLectura } from "./gobierno.ts";
 import type { Sesion } from "./sesion.ts";
 
 // Las cuatro lecturas del portal del contratante bajo `/cliente/*` [AC-FPOR-06] — spec 07 §2,
@@ -201,4 +201,186 @@ export async function evidenciaDelCliente(
     );
     return rows[0] ?? null;
   });
+}
+
+// ─── Disputa por línea y su drill-down [AC-FPOR-10] — spec 07 §2.4, spec 06 §6 ───────────────
+//
+// El motor entero ya vive en la BD desde AC-FTAR-06 (`disputar_linea()`, 0066): catálogo de
+// motivos, ventana de 7 días medida desde el evento `liquidacion.cerrada`, idempotencia por
+// `disputa_client_uuid`. Lo que faltaba era la superficie HTTP del portal — acá abajo.
+
+export type MotivoDeDisputa = { id: string; codigo: string; etiqueta: string };
+
+/** El catálogo de motivos de disputa, y SOLO ese: `motivos` es una tabla compartida por todo
+ *  el tenant (no-entrega, disputa, y lo que venga), así que filtrar por
+ *  `estado_asociado = 'liquidacion_linea_disputada'` es lo que evita que el portal del
+ *  contratante le muestre a un cliente el catálogo de motivos de no-entrega del terreno. */
+export async function motivosDeDisputa(pool: Pool, sesion: Sesion): Promise<MotivoDeDisputa[]> {
+  return enLectura(pool, sesion, async (c) => {
+    const { rows } = await c.query<MotivoDeDisputa>(
+      `select id::text as id, codigo, etiqueta from motivos
+        where estado_asociado = 'liquidacion_linea_disputada' and activo
+        order by orden`,
+    );
+    return rows;
+  });
+}
+
+export type EvidenciaDePodCliente = {
+  tipo: "entrega_pod";
+  resultado: string;
+  metodo_entrega: string | null;
+  motivo_etiqueta: string | null;
+  event_time: string;
+  capturas: { tipo: string; capturada_en: string }[];
+};
+
+export type EvidenciaDeLineaCliente = {
+  linea_id: string;
+  evidencia_tipo: string;
+  evidencia_id: string;
+  detalle: EvidenciaDePodCliente | null;
+};
+
+/** El drill-down línea→evidencia del portal, mismo criterio que
+ *  `servidor/liquidaciones.ts::evidenciaDeLinea` (AC-FTAR-07) pero confinado a la empresa de la
+ *  sesión: PRIMERO se confirma que la línea es SUYA vía `liquidacion_lineas_cliente` —la RLS de
+ *  la tabla base no se evalúa sobre este pool, cabecera del archivo— y solo entonces se lee el
+ *  detalle de `entregas_pod`, que no tiene columna de empresa propia (la línea ya la confinó). */
+export async function evidenciaDeLineaDelCliente(
+  pool: Pool,
+  sesion: Sesion,
+  lineaId: string,
+): Promise<EvidenciaDeLineaCliente | null> {
+  return enLectura(pool, sesion, async (c) => {
+    const { rows: lineaRows } = await c.query<{
+      id: string;
+      evidencia_tipo: string;
+      evidencia_id: string;
+    }>(
+      `select id::text as id, evidencia_tipo, evidencia_id::text as evidencia_id
+         from liquidacion_lineas_cliente where id = $1 and empresa_cliente_id = $2`,
+      [lineaId, sesion.empresaClienteId],
+    );
+    const linea = lineaRows[0];
+    if (!linea) return null;
+
+    if (linea.evidencia_tipo !== "entrega_pod") {
+      return {
+        linea_id: linea.id,
+        evidencia_tipo: linea.evidencia_tipo,
+        evidencia_id: linea.evidencia_id,
+        detalle: null,
+      };
+    }
+
+    const { rows: podRows } = await c.query<{
+      resultado: string;
+      metodo_entrega: string | null;
+      parada_id: string;
+      event_time: string;
+      motivo_etiqueta: string | null;
+    }>(
+      `select ep.resultado::text as resultado, ep.metodo_entrega,
+              ep.parada_id::text as parada_id, ep.event_time::text as event_time,
+              m.etiqueta as motivo_etiqueta
+         from entregas_pod ep
+         left join motivos m on m.id = ep.motivo_id
+        where ep.id = $1`,
+      [linea.evidencia_id],
+    );
+    const pod = podRows[0];
+    if (!pod) {
+      return {
+        linea_id: linea.id,
+        evidencia_tipo: "entrega_pod",
+        evidencia_id: linea.evidencia_id,
+        detalle: null,
+      };
+    }
+
+    const { rows: capturas } = await c.query<{ tipo: string; capturada_en: string }>(
+      `select tipo::text as tipo, capturada_en::text as capturada_en
+         from evidence
+        where objeto_tabla = 'paradas' and objeto_id = $1
+        order by capturada_en`,
+      [pod.parada_id],
+    );
+
+    return {
+      linea_id: linea.id,
+      evidencia_tipo: "entrega_pod",
+      evidencia_id: linea.evidencia_id,
+      detalle: {
+        tipo: "entrega_pod",
+        resultado: pod.resultado,
+        metodo_entrega: pod.metodo_entrega,
+        motivo_etiqueta: pod.motivo_etiqueta,
+        event_time: pod.event_time,
+        capturas,
+      },
+    };
+  });
+}
+
+export type DisputaDeLinea =
+  | { tipo: "ok"; lineaId: string; repetida: boolean }
+  | { tipo: "no_existe" }
+  | { tipo: "liquidacion_no_cerrada" }
+  | { tipo: "fuera_de_ventana" }
+  | { tipo: "motivo_invalido" }
+  | { tipo: "ya_disputada" };
+
+/** El código con que Postgres rebota los CHECK de `disputar_linea()` (§4.2: PLANIFICACIÓN
+ *  rebota) — mismo criterio que `servidor/encargos.ts`. */
+const CHECK_VIOLATION = "23514";
+
+/**
+ * Disputa una línea propia. `disputar_linea()` (0066, AC-FTAR-06) NO lleva `SECURITY DEFINER`
+ * a propósito: corre con la RLS de quien invoca para que el confinamiento del rol `cliente` sea
+ * una garantía de la BD. Pero ESTE pool conecta como `flota_admin` (`rolbypassrls=true`,
+ * cabecera del archivo) — la RLS no se evalúa nunca sobre esta conexión, así que sin el `where`
+ * explícito de acá cualquier `cliente` podría disputar la línea de cualquier empresa con solo
+ * adivinar el id. El `select 1 ... where` ANTES de invocar la función es esa guardia real.
+ */
+export async function disputarLineaDelCliente(
+  pool: Pool,
+  sesion: Sesion,
+  lineaId: string,
+  datos: { motivoId: string; nota: string | null; clientUuid: string },
+): Promise<DisputaDeLinea> {
+  try {
+    return await enActo(
+      pool,
+      async (c) => {
+        const { rows: propia } = await c.query(
+          `select 1 from liquidacion_lineas_cliente where id = $1 and empresa_cliente_id = $2`,
+          [lineaId, sesion.empresaClienteId],
+        );
+        if (propia.length === 0) return { tipo: "no_existe" };
+
+        const { rows } = await c.query<{ id: string; repetida: boolean }>(
+          `select id::text as id, repetida from disputar_linea($1, $2, $3, $4, $5)`,
+          [lineaId, datos.motivoId, datos.nota, sesion.usuarioId, datos.clientUuid],
+        );
+        const fila = rows[0];
+        if (!fila) return { tipo: "no_existe" };
+        return { tipo: "ok", lineaId: fila.id, repetida: fila.repetida };
+      },
+      sesion,
+    );
+  } catch (error) {
+    // Los cuatro rebotes de `disputar_linea()` llegan como `check_violation` con un mensaje
+    // reconocible (0066): se distinguen por texto porque cada uno lo arregla el cliente de una
+    // forma distinta — no es lo mismo llegar tarde que elegir un motivo que no existe.
+    const e = error as { code?: string; message?: string };
+    if (e.code === CHECK_VIOLATION) {
+      const msg = e.message ?? "";
+      if (msg.includes("fuera de la ventana")) return { tipo: "fuera_de_ventana" };
+      if (msg.includes("catálogo")) return { tipo: "motivo_invalido" };
+      if (msg.includes("ya tiene una disputa")) return { tipo: "ya_disputada" };
+      if (msg.includes("solo una liquidación cerrada")) return { tipo: "liquidacion_no_cerrada" };
+    }
+    throw error;
+  }
 }
