@@ -48,10 +48,33 @@ trap 'bash packages/metodo/scripts/lock.sh soltar "builder-'"$APP"'" '"$$"' >/de
 # pendiente, solo deja de ser el tapón.
 ATASCADOS="$LOG_DIR/acs-atascados.txt"
 
+# ACs BLOQUEADOS por una decisión que no es del arnés (10-ago-2026). Distinto de los atascados:
+# aquellos los anota el motor tras fallar; éstos los escribe una persona porque el AC NO SE PUEDE
+# construir hoy — falta una respuesta del dueño, o su oráculo es humano (§9.2, §10).
+#
+# Sin esta lista, el motor eligió la máquina de estados del encargo —un AC que espera una
+# respuesta del dueño— y quemó los 6 USD de su presupuesto intentando cerrarlo. Lo habría
+# reintentado en cada tanda, indefinidamente, gastando en cada vuelta. El archivo lleva la RAZÓN
+# de cada uno al lado, que es lo que permite saber qué lo desbloquea.
+#
+# Los ids NO se citan en este archivo a propósito: `verify-refs` escanea los `.sh` del método y
+# un id de una app citado desde acá se lee como cita huérfana en el gate de la OTRA app. Van en
+# el `.txt`, que no se escanea.
+BLOQUEADOS="packages/metodo/acs-bloqueados-${APP}.txt"
+
 esta_atascado () { # $1 = id del AC
   [ -n "${1:-}" ] || return 1
   [ -f "$ATASCADOS" ] || return 1
   grep -qxF "$1" "$ATASCADOS"
+}
+
+esta_bloqueado () { # $1 = id del AC
+  [ -n "${1:-}" ] || return 1
+  [ -f "$BLOQUEADOS" ] || return 1
+  # El id al principio de línea y seguido de espacio o fin de línea. El ancla importa: sin ella,
+  # un id de dos cifras bloquearía también al de tres que lo tiene como prefijo el día que
+  # exista. La razón, que va después del `#`, no estorba.
+  grep -qE "^${1}([[:space:]]|\$)" "$BLOQUEADOS"
 }
 
 siguiente_ac() {
@@ -61,7 +84,16 @@ siguiente_ac() {
     while IFS= read -r linea; do
       [ -n "$linea" ] || continue
       id=$(echo "$linea" | grep -oE '\[AC-[A-Z0-9-]+\]' | tr -d '[]')
+      # FAMILIAS DE ESTE MOTOR. Con dos motores en dos worktrees, ambos leen el MISMO plan y sin
+      # esto elegirían el mismo AC: dos agentes construyendo lo mismo, dos ramas que se pisan al
+      # unir. Cada motor declara qué familias le tocan (`KILOPAN_FAMILIAS`, un regex sobre el id)
+      # y la partición queda explícita en su arranque, no en la suerte del orden del plan.
+      # Sin la variable no filtra nada: un solo motor sigue tomando todo, como hasta hoy.
+      if [ -n "${KILOPAN_FAMILIAS:-}" ] && ! echo "$id" | grep -qE "$KILOPAN_FAMILIAS"; then continue; fi
       esta_atascado "$id" && continue
+      # Un AC bloqueado por una decisión del dueño no se intenta: gastaría el presupuesto entero
+      # de la iteración en algo que ninguna cantidad de trabajo cierra.
+      esta_bloqueado "$id" && continue
       echo "$linea"
       return 0
     done <<EOF
@@ -202,6 +234,16 @@ Reglas duras:
   lleva su estado. Leé la spec dueña del AC y la sección del maestro que cita su línea
   'Fuente: §N' (docs/PROMPT_MAESTRO*.md) ANTES de escribir código.
 - Un AC = un commit, con su test naciendo en el mismo commit.
+- Al comitear, LIMITÁ EL COMMIT A TUS RUTAS: 'git commit -F <archivo> -- ruta1 ruta2'.
+  Agregar por ruta explícita NO alcanza, y creer que sí es la trampa: 'git add ruta' suma
+  al índice, pero 'git commit' a secas comitea el índice ENTERO — todo lo que haya quedado
+  preparado ahí por una iteración anterior que murió a mitad, o por otra sesión trabajando
+  en el mismo árbol, viaja adentro de tu commit sin que lo veas. Pasó el 12-ago-2026: un
+  commit que arreglaba el selector de modelo se llevó puesto el revert de otra sesión
+  —una suite de 267 líneas borrada— y el mensaje no explicaba nada de eso. El daño no fue
+  el contenido (era correcto); fue que quedó un commit que dentro de un mes nadie va a
+  poder leer. Antes de comitear, mirá 'git diff --cached --name-only': si aparece algo que
+  no escribiste vos, limitá el commit a lo tuyo.
 - Corré 'bash packages/metodo/scripts/check.sh --full --app=${APP}' y NO hagas commit si
   no queda verde (arreglar lo que encuentres es parte del AC).
 - CITÁ el id del AC (${AC_ID}) en un comentario del código o del test que lo implementa.
@@ -217,6 +259,33 @@ Reglas duras:
   'npx playwright test <su spec.ts>' en PRIMER PLANO antes de marcar nada — el check
   rápido NO corre e2e, y un [x] con e2e rojo lo pilla el gate independiente y pausa
   todo el motor (pasó el 06-ago con AC-DES-06).
+- Si te quedás sin presupuesto a mitad de un AC, comitear lo construido y dejar el AC
+  ABIERTO es lo CORRECTO — no lo escondas y no marques [x]. Pero hay que DECLARARLO, y el
+  DÓNDE importa tanto como el qué. La declaración es la ÚLTIMA LÍNEA DEL CUERPO del
+  mensaje de commit, sola, empezando en la primera columna:
+
+      AC-ABIERTO: ${AC_ID:-AC-XXXX-NN} — qué falta
+
+  Copiá esa línea tal cual y cambiá solo lo de después del guión. Tres lugares donde
+  ponerla NO cuenta, y los tres se vieron el 11-ago-2026 en la misma noche:
+    · en el TÍTULO del commit («docs: AC-FPOD-22 estado AC-ABIERTO en plan») — no cuenta;
+    · como nota en el PLAN o en la spec — no cuenta, el supervisor lee el commit;
+    · mencionada en medio de un párrafo — no cuenta, tiene que empezar la línea.
+  No es burocracia: es lo único que distingue tu trabajo a medio camino —que NO frena el
+  motor— de un agente afirmando un verde falso, que lo frena entero hasta que una persona
+  lo mire a la mañana siguiente. Si la mención valiera en cualquier lado, sería un
+  salvoconducto y ningún rojo volvería a frenar nada.
+  Y ojo: solo vale con el AC SIN marcar. Si marcaste [x] y el gate está rojo, la línea no
+  te salva — estás afirmando un verde que no existe, y eso pausa igual.
+- Si tu AC agrega una RUTA HTTP o una PANTALLA, declará su caso de cruce en
+  apps/${APP}/rutas/manifiesto.json ANTES de comitear. Es lo que más veces frenó al motor
+  la noche del 10-ago-2026: 'node apps/${APP}/rutas/generar.mjs --escribir' regenera la
+  lista y deja el 'cruce' en null, y con un null el gate NO pasa. Cada ruta nueva necesita
+  su 'tipo' ('recurso' si lleva identificador en la URL, 'sin_recurso' si no), su
+  'ids_de_b' con la tabla de la que sale ese identificador cuando es 'recurso', y una
+  'nota' que diga QUÉ DAÑO haría esa ruta ejecutada contra el tenant vecino. La nota no es
+  decorativa: es lo que hace pensar si el 404 alcanza o si además hay que mirar la huella
+  de la BD de B (centinela 2, §9.3.2).
 - Un AC no se marca [x] si todavía falta parte de él. Si quedó a medias, partilo: cerrá
   lo hecho y dejá el resto como AC abierto nuevo en la spec. Un [x] cuyo texto dice
   'falta' pone el gate en rojo — y con razón.
@@ -224,11 +293,22 @@ Reglas duras:
   Usá comandos SIMPLES: sin 'cd' (ya estás en la raíz del repo), sin ';', sin '&&' y sin
   heredocs — un comando compuesto NO calza ningún patrón y muere denegado, quemando el
   turno. 'pnpm …', 'node …', 'git …', 'bash packages/metodo/scripts/…' directos sí pasan.
+  Las REDIRECCIONES a archivo tampoco pasan, aunque el comando de la izquierda esté en la
+  lista blanca: 'git show HEAD:algo > /tmp/x' muere denegado igual que si 'git show' no
+  estuviera permitido (le quemó 4 turnos al agente del 11-ago-2026). No hace falta el
+  archivo intermedio: corré 'git show HEAD:algo' a secas y leé su salida, o abrí el
+  archivo con la herramienta de lectura, que para eso está.
 - JAMÁS lances el gate ni tests en background, y tu último mensaje JAMÁS puede ser
   «espero que termine X»: en modo -p NO EXISTE el turno siguiente — morirías esperando
   (pasó el 06-ago: gate lanzado en background, sesión terminada «esperando», cero
   commit con el trabajo listo). Corré 'bash packages/metodo/scripts/check.sh' en
   PRIMER PLANO, esperá su exit code en el mismo turno, y actuá: verde ⇒ commit AHORA.
+  Y ojo con la trampa exacta que te va a tentar: NO EXISTE ninguna notificación que te
+  despierte cuando termine una tarea de fondo. Si pensás «el gate me avisa al terminar,
+  freno acá y espero el aviso», estás a punto de matar la iteración — pasó el 11-ago-2026
+  tres veces seguidas con AC-FPOD-13, con esas palabras casi textuales, y las tres veces
+  el trabajo quedó sin comitear. Ese aviso llega a una sesión interactiva; vos no sos una.
+  Tu turno termina cuando dejás de llamar herramientas, y ahí nadie te vuelve a llamar.
 - ANTES de escribir nada: corré 'git stash list'. Si hay stashes 'motor-wip' recientes,
   alguno puede traer TU PROPIO avance de este mismo AC, de una iteración que murió por
   presupuesto (el arnés guarda el trabajo, no lo bota). Miralo con
@@ -250,13 +330,54 @@ Reglas duras:
   inventes trabajo ni marques nada como [x]."
 
 mkdir -p "$LOG_DIR"
+
+# EL FALLBACK NO PUEDE DEGRADAR UNA REGLA DURA (8-ago-2026). Esto llamaba SIEMPRE con
+# `--fallback-model sonnet`: si el modelo pedido no estaba disponible o la iteración topaba
+# el presupuesto, el CLI bajaba a Sonnet solo y sin avisar, y el commit quedaba idéntico a
+# uno sano. Un AC ruteado a Opus por ser regla dura —RLS, migración, trigger, invariante—
+# terminaba escrito por un modelo menor, que es justo lo que el §8 prohíbe.
+#
+# Regla: si el selector pidió el modelo TOPE, no hay red de contención. Vale más una
+# iteración fallida y reintentada que un commit fundacional escrito por otro modelo. Para
+# todo lo demás el fallback sigue, porque ahí sí es preferible avanzar a detenerse.
+#
+# BUG REAL (10-ago-2026, primer arranque del motor de FLOTA): la rama sin fallback moría con
+# «FALLBACK[@]: unbound variable» y el motor no podía construir NI UN AC de los que el §8 manda
+# al modelo tope — que en FLOTA son casi todos. El bash de macOS es 3.2, y ahí expandir un array
+# VACÍO bajo `set -u` cuenta como variable no definida; en bash ≥4.4 no. Por eso la expansión de
+# abajo va con la forma `${A[@]+"${A[@]}"}`, que es fea y es la única que funciona en las dos.
+#
+# El síntoma engañaba, como el del token en KiloPan: el gate corría VERDE, el loop elegía bien
+# su AC y anunciaba el modelo correcto, y recién ahí moría. Tres iteraciones así y el watchdog
+# pausó el motor por «sin avance» — que es cierto, pero la causa no estaba en ningún AC.
+MODELO_PEDIDO="$(bash packages/metodo/scripts/model-selector.sh build "$APP" "$AC_ID")"
+MODELO_TOPE="$(bash packages/metodo/scripts/model-selector.sh modelo-tope)"
+FALLBACK=(--fallback-model sonnet)
+if [ "$MODELO_PEDIDO" = "$MODELO_TOPE" ]; then
+  FALLBACK=()
+  echo "loop: ${AC_ID:-?} va al modelo tope ($MODELO_PEDIDO) — sin fallback, por el §8"
+fi
+
 claude -p "$PROMPT" \
   --output-format json \
   --max-budget-usd "$MAX_BUDGET_USD" \
   --permission-mode acceptEdits \
-  --model "$(bash packages/metodo/scripts/model-selector.sh build "$APP" "$AC_ID")" \
-  --fallback-model sonnet \
+  --model "$MODELO_PEDIDO" \
+  ${FALLBACK[@]+"${FALLBACK[@]}"} \
   > "$LOG_DIR/ultimo-resultado.json" 2>>"$LOG_DIR/ultimo-loop.log"
+
+# Y la segunda mitad: mirar quién respondió DE VERDAD. Quitar el fallback evita el degradado
+# en el caso caro, pero no lo hace visible en los demás — y un degradado invisible es
+# indistinguible de un build sano hasta que alguien lee el código meses después.
+if ! node packages/metodo/scripts/detectar-degradado.mjs \
+       "$LOG_DIR/ultimo-resultado.json" "$MODELO_PEDIDO" >>"$LOG_DIR/ultimo-loop.log" 2>&1; then
+  RC_DEG=$?
+  if [ "$RC_DEG" = "4" ]; then
+    printf '%s %s pedido=%s\n' "$(date '+%F %T')" "${AC_ID:-?}" "$MODELO_PEDIDO" \
+      >> "$LOG_DIR/modelo-degradado.log"
+    echo "loop: DEGRADADO — ${AC_ID:-?} se pidió a $MODELO_PEDIDO y respondió otro modelo (ver $LOG_DIR/modelo-degradado.log)"
+  fi
+fi
 
 COMMITS_DESPUES=$(git rev-list --count HEAD 2>/dev/null || echo 0)
 node "$LOG_DIR/generar.mjs" >/dev/null 2>&1 || true
@@ -324,6 +445,53 @@ if [ "$AVANCE_DEL_AC" -eq 1 ]; then
   rm -f "$CONT_AC"
   exit 0
 else
+  # ─────────────────────────────────────────────────────────────────────────────────
+  # EL TRABAJO A MEDIO CAMINO SE COMITEA DECLARADO, NO SE MANDA AL STASH (bug real,
+  # 11-ago-2026 — tres iteraciones seguidas, unos 10 USD, cero líneas conservadas).
+  #
+  # CÓMO SE VEÍA. El agente construyó AC-FPOD-13 casi entero —nueve archivos, pantalla,
+  # dominio, servidor y su test—, no llegó a comitear, y terminó el turno. La vuelta
+  # siguiente encontró el árbol sucio, lo mandó al stash y arrancó DE CERO sobre el mismo
+  # AC. Otra vez. Y otra. Tres vueltas, tres stashes con el mismo trabajo enterrado, ningún
+  # commit, y el watchdog pausó por «3 iteraciones sin avance» — que era cierto en el
+  # contador y falso en los hechos: hubo muchísimo avance, se tiraba al empezar.
+  #
+  # El stash NO pierde los bytes; lo que se pierde es la CONTINUIDAD. Nadie lo saca nunca,
+  # así que cada vuelta paga otra vez el mismo trabajo. Comitearlo, en cambio, lo deja en
+  # el árbol: la vuelta siguiente arranca ENCIMA y termina lo que falta.
+  #
+  # Se comitea DECLARADO ABIERTO, con la línea canónica que watchdog.sh sabe leer
+  # (trabajo-en-curso.sh): un HEAD rojo que declara su AC abierto y sin marcar NO pausa el
+  # motor, y no se publica nada hasta que esté verde porque los publicadores exigen
+  # `last-green.sha == HEAD`. Esto NO afloja la regla de «no comitear sin verde»: esa regla
+  # prohíbe AFIRMAR que un AC está listo, y acá se afirma exactamente lo contrario.
+  SUCIO_FINAL="$(git status --porcelain -- "${EXCLUIR_SUCIO[@]}" 2>/dev/null)"
+  if [ -n "$SUCIO_FINAL" ] && [ -n "${AC_ID:-}" ]; then
+    echo "loop: el agente dejó trabajo sin comitear para ${AC_ID}. Se comitea DECLARADO ABIERTO"
+    echo "loop: en vez de mandarlo al stash, para que la próxima vuelta lo continúe en vez de rehacerlo."
+    # Por ruta explícita y con las mismas exclusiones del arranque: `git add -A` barrería
+    # los artefactos del panel que el propio motor reescribe en cada corrida.
+    if git add -- . ':!packages/metodo/panel' ':!apps/kilopan/next-env.d.ts' >/dev/null 2>&1 &&
+       git commit -q -F - <<COMMITEOF
+wip(${APP}): trabajo a medio camino de ${AC_ID}, comiteado para no rehacerlo [${AC_ID}]
+
+Lo dejó una iteración del motor que no llegó a comitear. NO afirma que el AC esté
+listo: afirma lo contrario, y por eso lleva la línea de abajo. El gate puede estar
+rojo sobre este HEAD y es lo esperado — nada se publica hasta que una vuelta lo
+termine y lo ponga verde (los publicadores exigen last-green.sha == HEAD).
+
+Se comitea en vez de stashearlo porque el stash nunca lo saca nadie: la vuelta
+siguiente arrancaba de cero sobre el mismo AC y pagaba otra vez el mismo trabajo.
+
+AC-ABIERTO: ${AC_ID} — falta terminarlo y ponerlo verde
+COMMITEOF
+    then
+      echo "loop: comiteado como trabajo en curso declarado ($(git rev-parse --short HEAD))."
+    else
+      echo "loop: no pude comitear el trabajo a medio camino; queda sucio y la próxima vuelta lo stashea."
+    fi
+  fi
+  # ─────────────────────────────────────────────────────────────────────────────────
   # BLOQUEO POR PERMISOS (bug real, 2-ago-2026). `--permission-mode acceptEdits` auto-aprueba
   # ediciones de archivo pero NO comandos Bash: el agente escribía el test del AC y después
   # no podía correr check.sh —«This command requires approval»— y, corriendo no interactivo,

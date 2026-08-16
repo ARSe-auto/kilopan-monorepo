@@ -62,6 +62,23 @@ function parseItems(texto) {
   return items;
 }
 
+// El id de un ÍTEM es su ÚLTIMO corchete, no el primero. Un ítem puede citar a mitad de
+// frase, entre corchetes, el id de OTRO AC de OTRA spec —para decir «mismo diagnóstico
+// que allá»— y cerrar recién al final con el SUYO propio, que es como el 99% de los
+// ítems de este repo terminan la frase («— oráculo: CI [su-id]»). Esa cita de mitad de
+// frase no es el id del ítem: lo es el último corchete. Un primer-match ahí registraba
+// la cita ajena como si ESTA spec definiera ese id de OTRA — colisión contra la spec que
+// sí lo define — y dejaba el id real del ítem sin registrar: huérfano para verify-refs.
+// (Bug real 11-ago-2026, no reproducido acá con AC de ejemplo a propósito: escribir un id
+// con FORMA de AC en un comentario lo convierte en una cita que verify-refs recorre igual
+// que código — el propio gate se habría puesto rojo por documentarse a sí mismo.)
+// Se usa desde dos lugares (specs del AC y el plan), por eso vive acá y no dentro de
+// ninguno de los dos bucles.
+function idDe(texto) {
+  const ms = [...texto.matchAll(/\[(AC-[A-Z0-9]+-\d+)\]/g)];
+  return ms.length ? ms[ms.length - 1][1] : null;
+}
+
 for (const app of apps) {
   const dirSpecs = join(ROOT, "specs", app);
   const rutaMaestro = MAESTRO[app];
@@ -110,8 +127,10 @@ for (const app of apps) {
       }
     }
 
-    // 2. >=3 ACs con formato [AC-FAM-NN]
-    const ids = [...texto.matchAll(/\[(AC-[A-Z0-9]+-\d+)\]/g)].map((m) => m[1]);
+    // 2. >=3 ACs con formato [AC-FAM-NN], uno por ÍTEM — no cualquier corchete del archivo
+    //    (ver idDe arriba: el id de un ítem es su ÚLTIMO corchete, no el primero).
+    const items = parseItems(texto);
+    const ids = items.map((item) => idDe(item.texto)).filter(Boolean);
     if (ids.length < 3) err(`${app}/${archivo}: ${ids.length} ACs (mínimo 3)`);
 
     // 3. ids únicos en todo el conjunto de specs de la app
@@ -123,8 +142,8 @@ for (const app of apps) {
     }
 
     // 4. Estado explícito, y un AC cerrado no puede confesar trabajo pendiente.
-    for (const item of parseItems(texto)) {
-      const id = item.texto.match(/\[(AC-[A-Z0-9]+-\d+)\]/)?.[1];
+    for (const item of items) {
+      const id = idDe(item.texto);
       if (!id) { err(`${app}/${archivo}: ítem sin id de AC → "${item.texto.trim().slice(0, 60)}…"`); continue; }
       if (item.estado === "x") cerrados++;
       else abiertos++;
@@ -144,7 +163,7 @@ for (const app of apps) {
   if (rutaPlan) {
     const porId = new Map(); // id -> [{estado, linea}]
     for (const item of parseItems(readFileSync(rutaPlan, "utf8"))) {
-      const id = item.texto.match(/\[(AC-[A-Z0-9]+-\d+)\]/)?.[1];
+      const id = idDe(item.texto);
       if (!id || !estadoSpec.has(id)) continue; // sin id (histórico) o de otra app
       if (!porId.has(id)) porId.set(id, []);
       porId.get(id).push({ estado: item.estado, linea: item.linea });

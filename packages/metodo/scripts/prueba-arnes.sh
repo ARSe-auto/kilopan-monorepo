@@ -9,6 +9,24 @@
 # Cada prueba ejerce el guard contra el caso REAL que debe atrapar y exige que falle.
 # Un guard que pasa esta suite en verde por no dispararse nunca, no existe.
 #
+# ─── UN GUARDIÁN INFORMA; QUIEN LEE DECIDE (12-ago-2026) ─────────────────────────
+#
+# Vale para todo aviso de acá que sugiera algo IRREVERSIBLE —matar un proceso, borrar,
+# revertir—. Ese día un aviso nuevo afirmaba «es un servidor de una corrida anterior» y
+# cerraba con «kill <pids>». La afirmación venía de leer `ps -o etime` «01:06» como una
+# hora seis cuando eran un minuto seis: el proceso estaba VIVO, sirviendo la corrida de
+# otra sesión, y seguir el consejo del aviso le habría matado el trabajo.
+#
+# El error de lectura es perdonable —ese formato muerde a cualquiera—. Lo que lo volvió
+# peligroso fue que el guardián DECIDIÓ por quien lo leía: convirtió una lectura dudosa en
+# un comando destructivo. Un guardián no tiene el contexto para saber de quién es un
+# proceso, y no puede pretenderlo.
+#
+# La forma correcta: dar el HECHO en su forma menos ambigua (una hora absoluta, no una
+# edad relativa), nombrar las dos lecturas posibles («si arrancó recién, es una corrida
+# viva: esperá»), y dejar la acción a quien sabe. Un guardián que afirma más de lo que
+# sabe es peor que no tenerlo.
+#
 # Uso: bash packages/metodo/scripts/prueba-arnes.sh
 # Exit: 0 todo verde · 1 algún guard no protege lo que dice proteger.
 set -uo pipefail
@@ -140,6 +158,22 @@ case "$SALIDA_TZ" in
 esac
 
 echo
+echo "== 2c-ter. Todo cliente PGlite fija la zona horaria de la app (11-ago-2026) =="
+# El 2c de arriba cubre `db/migrar.mjs`. Pero el e2e abre su PROPIO PGlite en
+# `apps/kilopan/e2e/preparar-base.mjs` para sembrar las rutas del día, y ése no fijaba nada:
+# heredaba la del host. En este Mac el host ya es Chile y no se nota; en el runner (UTC)
+# sembraba «hoy» con la fecha de MAÑANA, la app no encontraba la ruta, y
+# pod-rechazo-parcial.spec.ts se caía TRES veces seguidas cada noche entre las 20:00 y las
+# 24:00 de Chile — con su correo de «run failed» cada vez, hasta que alguien miraba.
+# La regla es estática y no cuesta nada: quien abre un PGlite fija la zona en el mismo archivo.
+SIN_TZ=""
+for f in $(grep -rl "new PGlite(" "$RAIZ/apps" "$RAIZ/db" --include=*.ts --include=*.mjs 2>/dev/null | grep -v node_modules); do
+  grep -q "set timezone = 'America/Santiago'" "$f" || SIN_TZ="$SIN_TZ ${f#"$RAIZ/"}"
+done
+[ -z "$SIN_TZ" ] \
+  && ok "todo archivo que abre un PGlite fija America/Santiago ahi mismo (la fecha no depende del host)" \
+  || no "abren PGlite sin fijar la zona de la app, asi que current_date sale en la del host:$SIN_TZ"
+
 echo "== 3. Lock de un solo builder (casilla 15) =="
 bash "$M/lock.sh" soltar prueba-arnes >/dev/null 2>&1
 bash "$M/lock.sh" tomar prueba-arnes >/dev/null 2>&1 && ok "toma el lock cuando está libre" || no "no pudo tomar un lock libre"
@@ -261,10 +295,24 @@ awk '/^while \[ "\$i" -lt "\$MAX_ITERACIONES" \]/{dentro=1} dentro && /-f "\$PAU
 # (c5) UN SOLO PUNTO DE ARRANQUE. Lanzado a mano hereda el PATH pero no la credencial que
 # exporta el plist; cada iteración muere en segundos y marca ACs sanos como atascados.
 # Se ejerce de verdad: se corre watchdog.sh SIN la variable y se exige que se frene.
-SAL_TOKEN="$(env -u CLAUDE_CODE_OAUTH_TOKEN KILOPAN_PANEL_DIR="$(mktemp -d)" KILOPAN_MAX_ITERACIONES=1 bash "$M/watchdog.sh" 2>&1 | head -4)"
+#
+# LOS DOS BINARIOS SE ESTUBAN, Y NO ES COMODIDAD (11-ago-2026). watchdog.sh tiene dos frenos
+# ANTES de éste —'claude' y 'pnpm' en el PATH— y en un runner de CI no existe ninguno de los
+# dos. Se frenaba por el primero, esta prueba leía ESE mensaje, no encontraba en él lo que
+# buscaba y denunciaba que faltaba el guard de la credencial: verde en la máquina de casa y
+# ROJO en GitHub Actions en CADA push, con su correo de «run failed» cada vez. Una prueba que
+# depende de qué binarios tenga la máquina no prueba el arnés, prueba la máquina. Con los dos
+# estubados, el freno que se ejerce es el de la credencial —el que esta prueba dice probar—
+# en cualquier entorno.
+BIN_ESTUBADO="$(mktemp -d)"
+for b in claude pnpm; do printf '#!/bin/sh\nexit 0\n' > "$BIN_ESTUBADO/$b"; chmod +x "$BIN_ESTUBADO/$b"; done
+SAL_TOKEN="$(env -u CLAUDE_CODE_OAUTH_TOKEN PATH="$BIN_ESTUBADO:$PATH" KILOPAN_PANEL_DIR="$(mktemp -d)" KILOPAN_MAX_ITERACIONES=1 bash "$M/watchdog.sh" 2>&1 | head -4)"
+rm -rf "$BIN_ESTUBADO"
 case "$SAL_TOKEN" in
   *CLAUDE_CODE_OAUTH_TOKEN*|*launchd*) ok "watchdog.sh se frena si lo lanzan sin la credencial del plist (no quema ACs en falso)" ;;
-  *) no "watchdog.sh arranca sin credencial: cada iteración falla en segundos y marca ACs sanos como atascados" ;;
+  # La salida REAL va en el mensaje. Sin ella, este rojo solo se diagnostica reproduciendo a
+  # mano el entorno del runner, que es exactamente lo que costó los correos de agosto.
+  *) no "watchdog.sh arranca sin credencial: cada iteración falla en segundos y marca ACs sanos como atascados — se frenó con: ${SAL_TOKEN:-(sin salida)}" ;;
 esac
 
 # (c6) EL LOCK PROTEGE EL RECURSO, NO EL ROL. El puerto 3301 es fijo para todos los
@@ -318,6 +366,132 @@ case "$SALIDA_PAUSA" in
   *"EN PAUSA"*) ok "con el marcador puesto, el watchdog no arranca (frena de verdad)" ;;
   *)            no "el marcador de pausa no frena al watchdog: sigue construyendo" ;;
 esac
+
+echo
+echo "== 3b-d2. Trabajo a medio camino DECLARADO no pausa el motor (11-ago-2026) =="
+# BUG REAL, dos veces en un día: el agente se queda sin presupuesto a mitad de un AC, comitea lo
+# construido y declara el AC ABIERTO —la conducta correcta—, el gate independiente encuentra ese
+# HEAD rojo por el e2e que él mismo escribió y no corrió, y el watchdog pausaba TODO hasta que
+# una persona mirara. El motor pasaba la noche detenido sobre trabajo sano.
+#
+# Las cuatro aserciones son las cuatro esquinas de la decisión, y la tercera es la que importa:
+# sin ella la línea sería un salvoconducto y la pausa no volvería a dispararse jamás.
+TEC="$M/trabajo-en-curso.sh"
+PLAN_FIX="$(mktemp -d)/plan.md"
+printf -- '- [ ] (P1) algo sin terminar [%s-%s-%s]\n- [x] (P1) algo cerrado [%s-%s-%s]\n' \
+  "AC" "FPOD" "03" "AC" "FPOD" "01" > "$PLAN_FIX"
+AC_ABIERTO_FIX="$(printf 'AC-%s-%s' 'FPOD' '03')"
+AC_CERRADO_FIX="$(printf 'AC-%s-%s' 'FPOD' '01')"
+
+bash "$TEC" --app=flota --plan="$PLAN_FIX" \
+  --mensaje="$(printf 'feat: a medio camino\n\nAC-ABIERTO: %s — el e2e no se corrió, presupuesto agotado' "$AC_ABIERTO_FIX")" >/dev/null 2>&1 \
+  && ok "un commit que declara su AC abierto, y sigue abierto en el plan, NO pausa el motor" \
+  || no "el trabajo a medio camino declarado sigue pausando: el motor pasa la noche detenido sobre trabajo sano"
+
+bash "$TEC" --app=flota --plan="$PLAN_FIX" --mensaje="feat: dice que está listo y no lo está" >/dev/null 2>&1 \
+  && no "un commit SIN declaración pasa como trabajo en curso: un verde falso ya no frena nada" \
+  || ok "un commit sin la declaración canónica sigue pausando (el verde falso es lo que la pausa protege)"
+
+bash "$TEC" --app=flota --plan="$PLAN_FIX" \
+  --mensaje="$(printf 'feat: marcado y rojo\n\nAC-ABIERTO: %s — pero lo marqué igual' "$AC_CERRADO_FIX")" >/dev/null 2>&1 \
+  && no "la declaración se volvió un salvoconducto: un AC marcado con el gate rojo ya no pausa" \
+  || ok "declarar abierto un AC que está marcado como cerrado NO salva del pausado (es afirmar un verde que no existe)"
+
+bash "$TEC" --app=flota --plan="$PLAN_FIX" \
+  --mensaje="$(printf 'feat: lo menciono en prosa\n\nHablé de AC-ABIERTO: %s en medio de un párrafo' "$AC_ABIERTO_FIX")" >/dev/null 2>&1 \
+  && no "una mención en prosa cuenta como declaración: cualquier commit que nombre la línea evade la pausa" \
+  || ok "la declaración se ancla al principio de línea (mencionarla en prosa no cuenta)"
+
+# El rechazo DIAGNOSTICA cuando la marca está pero mal puesta. Sin esto, el log decía «no
+# declara nada» sobre un commit que sí la nombraba —en el título— y mandaba a buscar lo que
+# ya estaba escrito. Pasó el 11-ago-2026: el agente erró el LUGAR, no el mecanismo.
+SALIDA_TITULO="$(bash "$TEC" --app=flota --plan="$PLAN_FIX" \
+  --mensaje="$(printf 'docs: %s estado AC-ABIERTO en plan' "$AC_ABIERTO_FIX")" 2>&1 || true)"
+case "$SALIDA_TITULO" in
+  *"no en su lugar"*) ok "si la marca está pero mal puesta, el rechazo lo DICE (no manda a buscar lo que ya está escrito)" ;;
+  *)                  no "el rechazo no distingue «falta la marca» de «la marca está mal puesta»: el log manda a buscar en falso" ;;
+esac
+
+# La otra mitad del contrato: al agente hay que PEDIRLE la línea, o nunca la va a escribir.
+grep -q "AC-ABIERTO:" "$M/loop.sh" \
+  && ok "loop.sh le pide al agente la línea canónica al dejar un AC abierto (sin eso, la regla no se ejerce nunca)" \
+  || no "loop.sh no le pide la declaración: el watchdog espera una línea que nadie escribe y todo sigue pausando"
+
+echo
+echo "== 3b-d3. Un servidor zombi en el puerto NO es un AC roto (12-ago-2026) =="
+# BUG REAL: una corrida anterior murió sin bajar su servidor y dejó el 3311 tomado.
+# Playwright aborta con «is already used» y eso llega al resumen como un rojo pelado de
+# «e2e móvil», indistinguible de una prueba que falla. El motor pausó sobre AC-FSEM-16 y el
+# diagnóstico apuntaba al AC, que estaba bien. Se ejerce con un socket DE VERDAD: creerle a
+# un grep sobre check.sh sería probar que el texto existe, no que la detección funciona.
+PET="$M/puerto-e2e-tomado.sh"
+PUERTO_LIBRE=$(node -e 'const n=require("net").createServer();n.listen(0,()=>{console.log(n.address().port);n.close();});')
+bash "$PET" "--puerto=$PUERTO_LIBRE" >/dev/null 2>&1 \
+  && ok "un puerto libre se reporta libre (no es un alarmista que grita siempre)" \
+  || no "reporta tomado un puerto que nadie usa: el aviso perdería todo su valor"
+
+# Se abre el puerto y se comprueba que lo VEA. El listener se baja al terminar.
+node -e '
+  const net = require("net");
+  const s = net.createServer();
+  s.listen(Number(process.argv[1]), () => setTimeout(() => s.close(), 8000));
+' "$PUERTO_LIBRE" &
+PID_LISTENER=$!
+sleep 1
+SALIDA_PET="$(bash "$PET" "--puerto=$PUERTO_LIBRE" 2>&1 || true)"
+case "$SALIDA_PET" in
+  *"está TOMADO"*) ok "con el puerto ocupado lo DETECTA y lo dice (el rojo deja de parecer del AC)" ;;
+  *)                  no "no detecta un puerto ocupado: el zombi seguiría disfrazado de prueba rota" ;;
+esac
+case "$SALIDA_PET" in
+  *"NO es el AC"*) ok "el aviso nombra la conclusión que importa: no es el AC, es el puerto" ;;
+  *)               no "el aviso no dice que el AC está sano: quien lo lea va a revisar el lugar equivocado" ;;
+esac
+# NO DA POR MUERTO LO QUE PUEDE ESTAR VIVO (12-ago-2026). La primera versión de este aviso
+# afirmaba «es un servidor de una corrida anterior» y mandaba a matarlo. Ese día el proceso
+# del 3311 era el webServer VIVO de otra sesión: se leyó su `etime` («01:06») como una hora
+# seis cuando eran un minuto seis —el formato es [[dd-]hh:]mm:ss— y el aviso, encodando esa
+# lectura, habría matado la corrida ajena. Ahora imprime la hora ABSOLUTA de arranque, que
+# no se puede leer mal así, y deja la decisión a quien sepa de quién es el proceso.
+case "$SALIDA_PET" in
+  *"arrancó"*) ok "el aviso da la HORA DE ARRANQUE de cada proceso (una edad relativa se lee mal)" ;;
+  *)           no "el aviso no dice cuándo arrancó: no se puede distinguir un residuo de una corrida viva" ;;
+esac
+case "$SALIDA_PET" in
+  *"corrida VIVA"*) ok "advierte que puede ser una corrida viva y que hay que esperar, no matar" ;;
+  *)                no "el aviso da por muerto el proceso: manda a matar el trabajo de otra sesión" ;;
+esac
+wait "$PID_LISTENER" 2>/dev/null || true
+
+echo
+echo "== 3b-d4. Los guardianes se prueban bajo el PATH DEL MOTOR, no el de la terminal (12-ago-2026) =="
+# DOS BUGS DEL MISMO MOLDE EN VEINTICUATRO HORAS, los dos vistos recién en producción:
+#   · `watchdog.sh` se frenaba por no resolver `claude` antes de llegar al guard que la prueba
+#     quería medir — verde en el Mac, rojo en el runner de GitHub;
+#   · `puerto-e2e-tomado.sh` se declaraba «no hay lsof en esta máquina» bajo el motor, porque
+#     en macOS `lsof` vive en /usr/sbin y el PATH que el arrancador le fija a sus hijos no lo
+#     incluye. En la terminal andaba perfecto; bajo el motor no verificaba NADA, y sus cuatro
+#     casos de texto caían por falta de sujeto: prueba-arnes rojo ⇒ gate rojo ⇒ motor pausado,
+#     con el rojo apuntando al arnés y no a su causa.
+#
+# Una prueba que corre con el PATH del usuario no prueba lo que el motor ejecuta: prueba la
+# terminal de quien la escribió. El PATH se LEE del arrancador —no se clava acá— porque dos
+# copias del mismo PATH envejecen separadas y la de este archivo envejecería en silencio.
+PATH_MOTOR="$(grep -oE '^PATH="[^"]+"' "$M/arrancar-motor-flota.sh" 2>/dev/null | head -1 | sed 's/^PATH="//; s/"$//')"
+if [ -z "$PATH_MOTOR" ]; then
+  no "no pude leer el PATH que el arrancador le fija al motor: esta sección no probó nada"
+else
+  ok "el PATH del motor se lee del arrancador (una copia clavada acá envejecería sola)"
+  PATH_MOTOR_EXPANDIDO="$(HOME="$HOME" eval echo "$PATH_MOTOR")"
+  PUERTO_PM=$(node -e 'const n=require("net").createServer();n.listen(0,()=>{console.log(n.address().port);n.close();});')
+  SALIDA_PM="$(env -i HOME="$HOME" PATH="$PATH_MOTOR_EXPANDIDO" bash "$M/puerto-e2e-tomado.sh" "--puerto=$PUERTO_PM" 2>&1 || true)"
+  case "$SALIDA_PM" in
+    *"no hay lsof"*|*"NO se verificó"*)
+      no "bajo el PATH del motor el guardián del puerto NO puede mirar: en producción no verifica nada y sus casos de texto caen en cascada" ;;
+    *)
+      ok "bajo el PATH del motor el guardián del puerto SÍ verifica (no se degrada a «no puedo mirar»)" ;;
+  esac
+fi
 
 echo
 echo "== 3b-e. Un AC atascado no pausa el motor entero (3-ago-2026) =="
@@ -517,6 +691,41 @@ node "$M/verify-refs.mjs" --app="$APP_FX" --estricto >/dev/null 2>&1 \
   || ok "sigue pillando el AC que ninguna spec de ninguna app define"
 rm -f "apps/kilopan/src/comun/__prueba-arnes-huerfano.ts"
 rm -rf "specs/$APP_FX"
+
+echo
+echo "== 4c. El id de un ítem es su ÚLTIMO corchete, no el primero (11-ago-2026) =="
+# Bug real: un ítem de una spec citaba a mitad de frase, ENTRE CORCHETES, el id de un AC de
+# OTRA spec —para decir «mismo diagnóstico que allá»— y cerraba recién al final con el
+# SUYO propio. El extractor tomaba TODOS los corchetes del archivo como "ids que esta spec
+# define", no solo el último de cada ítem: el id ajeno salía «definido en dos specs»
+# (colisión contra la que sí lo definía) y el id que el ítem SÍ definía nunca quedaba
+# registrado — huérfano para verify-refs. Frenó al motor autónomo una noche entera.
+#
+# Los ids de este fixture, aunque son de prueba, NO se escriben literales ni en el código
+# ni en ESTE comentario: verify-refs recorre el árbol entero por la forma de un id de AC y
+# no distingue una cita real de un ejemplo en prosa — un id de ejemplo escrito a mano pone
+# el propio gate en rojo por documentarse a sí mismo. Por eso nacen partidos con `printf`.
+#
+# gate_specs.mjs exige una app CONOCIDA (mapea contra su maestro), así que el fixture usa
+# kilopan de verdad —archivos NUEVOS, se borran al final— y no la app sintética de 4b.
+FXA="AC-$(printf 'YYR')-01"; FXB="AC-$(printf 'YYR')-02"; FXC="AC-$(printf 'YYR')-03"
+FXD="AC-$(printf 'YYS')-01"; FXE="AC-$(printf 'YYS')-02"; FXF="AC-$(printf 'YYS')-03"
+printf '# fixture A\nFuente: §4\n- [ ] uno [%s]\n- [ ] dos [%s]\n- [ ] tres [%s]\n' \
+  "$FXA" "$FXD" "$FXE" > specs/kilopan/98-fixture-corchete-a.md
+printf '# fixture B\nFuente: §4\n- [ ] cuatro [%s]\n- [ ] cita a mitad de frase a la spec A [%s]. Cierra con su propio id — oráculo: CI [%s]\n- [ ] seis [%s]\n' \
+  "$FXB" "$FXA" "$FXC" "$FXF" > specs/kilopan/98-fixture-corchete-b.md
+if node "$M/gate_specs.mjs" --app=kilopan >/dev/null 2>&1; then
+  ok "una cita a mitad de frase, entre corchetes, no se lee como una segunda definición"
+else
+  no "gate_specs volvió a confundir la cita de mitad de frase con el id del propio ítem"
+fi
+node "$M/verify-refs.mjs" --app=kilopan --estricto >/dev/null 2>&1 \
+  && ok "y el id que el ítem SÍ define —el último corchete— queda registrado, no huérfano" \
+  || no "verify-refs perdió el id real del ítem por quedarse con la cita de mitad de frase"
+rm -f specs/kilopan/98-fixture-corchete-a.md specs/kilopan/98-fixture-corchete-b.md
+node "$M/gate_specs.mjs" --app=kilopan >/dev/null 2>&1 \
+  && ok "vuelve a verde tras restaurar" \
+  || no "quedó rojo tras restaurar — la suite ensució el repo"
 
 echo
 echo "== 5. Estructura del monorepo (AC-H0-01) =="
@@ -740,9 +949,24 @@ echo "== 9. Selector de modelo (casilla 12) =="
 # a Opus quema la ventana en silencio». La prueba central no es que devuelva un id, es
 # que DIFERENCIE. Un no-op pasaría cualquier test que mire una sola línea.
 SEL="$M/model-selector.sh"
-[ "$(bash "$SEL" plan)"   = "claude-sonnet-5"   ] && ok "plan → Sonnet"  || no "plan no rutea a Sonnet"
-[ "$(bash "$SEL" verify)" = "claude-sonnet-5"   ] && ok "verify → Sonnet" || no "verify no rutea a Sonnet"
-[ "$(bash "$SEL" juez)"   = "claude-opus-4-8"   ] && ok "juez → Opus (mandato de refutar)" || no "juez no rutea a Opus"
+# LOS IDS SE LEEN DEL SELECTOR, NO SE CLAVAN ACÁ (8-ago-2026). Esta sección repetía
+# `claude-opus-4-8` literal en seis aserciones, así que cuando el id de Opus quedó una
+# generación atrás la suite lo CONFIRMABA en vez de delatarlo: el arnés custodiaba el valor
+# viejo. Lo que hay que vigilar es lo que el §8 pide de verdad —que los tres difieran, que
+# el tope sea de la familia Opus, y que el ruteo mande cada cosa a donde corresponde—, no un
+# número de generación que envejece solo.
+eval "$(bash "$SEL" ids)"
+[ -n "${OPUS:-}" ] && [ -n "${SONNET:-}" ] && [ -n "${HAIKU:-}" ] \
+  && ok "el selector publica sus tres ids ($OPUS · $SONNET · $HAIKU)" \
+  || no "el selector no publica sus ids: la suite tendría que clavarlos y volvería a envejecer"
+[ "$OPUS" != "$SONNET" ] && [ "$SONNET" != "$HAIKU" ] && [ "$OPUS" != "$HAIKU" ] \
+  && ok "los tres ids son distintos (un no-op que todo lo manda al mismo modelo quema la ventana)" \
+  || no "dos de los tres ids coinciden: el selector no diferencia"
+case "$OPUS" in claude-opus-*) ok "el modelo tope es de la familia Opus" ;; *) no "el modelo tope no es Opus, es $OPUS" ;; esac
+[ "$(bash "$SEL" modelo-tope)" = "$OPUS" ] && ok "modelo-tope coincide con el id de Opus" || no "modelo-tope no devuelve el id de Opus"
+[ "$(bash "$SEL" plan)"   = "$SONNET" ] && ok "plan → Sonnet"  || no "plan no rutea a Sonnet"
+[ "$(bash "$SEL" verify)" = "$SONNET" ] && ok "verify → Sonnet" || no "verify no rutea a Sonnet"
+[ "$(bash "$SEL" juez)"   = "$OPUS"   ] && ok "juez → Opus (mandato de refutar)" || no "juez no rutea a Opus"
 
 TMPP="$(mktemp -d)"; cp IMPLEMENTATION_PLAN.md "$TMPP/plan.bak"
 # HERMETICIDAD (2-ago-2026): estas pruebas de ruteo dan por sentado que el contador de
@@ -757,18 +981,32 @@ FX="AC-$(printf X)$(printf X)"   # id de fixture armado en runtime: escrito lite
                                   # archivo citaría ACs que ninguna spec define y verify-refs
                                   # pondría el gate en rojo por el andamio de su propia suite.
 FXS="AC-$(printf S)EC"
+RUTEOS=""   # lo que el selector devolvió de verdad, para el anti-no-op de más abajo
 probar_ruteo () { # $1 = linea de ítem · $2 = modelo esperado · $3 = descripción
   printf '# plan de prueba\n\n%s\n' "$1" > IMPLEMENTATION_PLAN.md
   got="$(bash "$SEL" build)"
-  [ "$got" = "$2" ] && ok "$3 → $(echo "$2" | sed 's/claude-//;s/-4-8//;s/-5//')" || no "$3 ruteó a $got, esperaba $2"
+  RUTEOS="$RUTEOS$got\n"
+  [ "$got" = "$2" ] && ok "$3 → $(echo "$2" | sed 's/claude-//;s/-[0-9-]*$//')" || no "$3 ruteó a $got, esperaba $2"
 }
-probar_ruteo '- [ ] (P0-SEC) bloqueo por PIN errado [${FXS}-99]'        "claude-opus-4-8"  "ítem -SEC"
-probar_ruteo '- [ ] (P1) migración que agrega un trigger [${FX}-99]'    "claude-opus-4-8"  "ítem que toca migración"
-probar_ruteo '- [ ] (P1) chip con el nombre del operador [${FX}-98]'    "claude-haiku-4-5" "ítem de UI"
-probar_ruteo '- [ ] (P1) cola con reintento automático [${FX}-97]'      "claude-sonnet-5"  "ítem estándar"
+probar_ruteo '- [ ] (P0-SEC) bloqueo por PIN errado [${FXS}-99]'        "$OPUS"   "ítem -SEC"
+probar_ruteo '- [ ] (P1) migración que agrega un trigger [${FX}-99]'    "$OPUS"   "ítem que toca migración"
+probar_ruteo '- [ ] (P1-HIG) chip con el nombre del operador [${FX}-98]' "$HAIKU"  "ítem de UI ETIQUETADO -HIG"
+probar_ruteo '- [ ] (P1) cola con reintento automático [${FX}-97]'      "$SONNET" "ítem estándar"
+# LA PROSA NO ES LA ETIQUETA (bug real, 11/12-ago-2026 — costó la noche entera). El ruteo
+# por palabras mandaba a Haiku cualquier ítem cuyo TEXTO mencionara `pantalla|skeleton|
+# contraste|chip|botón|mapa`. En un plan bien escrito casi todo AC de terreno nombra la
+# pantalla donde ocurre, así que clasificaba la redacción, no el trabajo. Los dos ítems de
+# abajo son los dos que cayeron: el primero falló TRES veces, rompió cuatro ACs ya cerrados
+# y terminó atascado; el segundo era un gate de accesibilidad con axe y Lighthouse
+# —infraestructura, no pulido— y se marcó [x] con el gate rojo. Los dos DECÍAN palabras de
+# pulido táctil; ninguno lo era.
+probar_ruteo '- [ ] (P1) los 4 estados de la pantalla de parada: vacío, skeleton, error [${FX}-96]' \
+  "$SONNET" "ítem que sólo NOMBRA una pantalla (sin etiqueta) NO baja a Haiku"
+probar_ruteo '- [ ] (P1) gate AA de accesibilidad: contraste, targets, aria-labels [${FX}-95]' \
+  "$SONNET" "ítem que nombra contraste pero es un gate NO baja a Haiku"
 # Escalación de dos strikes sobre un ítem NO-duro
 mkdir -p .ralph; echo 2 > .ralph/build-fails
-probar_ruteo '- [ ] (P1) cola con reintento automático [${FX}-96]'      "claude-opus-4-8"  "2 strikes escala a"
+probar_ruteo '- [ ] (P1) cola con reintento automático [${FX}-96]'      "$OPUS"   "2 strikes escala a"
 
 # EL BUCLE DE MUERTE (bug real, 3-ago-2026): la regla de arriba dice «2 fallos en el MISMO
 # AC» pero leía `.ralph/build-fails`, que es GLOBAL y sólo vuelve a cero con un commit.
@@ -780,13 +1018,13 @@ FXP="AC-$(printf P)ES"
 printf '# plan de prueba\n\n- [ ] (P1) cola con reintento automático [%s-95]\n' "$FXP" > IMPLEMENTATION_PLAN.md
 mkdir -p .ralph/fallos; echo 9 > .ralph/build-fails; rm -f ".ralph/fallos/${FXP}-95"
 got_sano="$(bash "$SEL" build kilopan "${FXP}-95")"
-[ "$got_sano" = "claude-sonnet-5" ] \
+[ "$got_sano" = "$SONNET" ] \
   && ok "un AC SIN fallos propios no hereda el contador global (el bucle de muerte no puede volver)" \
   || no "model-selector volvió a leer el contador GLOBAL: con global=9 y 0 fallos propios ruteó a $got_sano — es el bucle que quemó 9 iteraciones"
 # Y el control en negativo: el mismo AC, ahora CON sus propios strikes, sí debe escalar.
 echo 2 > ".ralph/fallos/${FXP}-95"
 got_malo="$(bash "$SEL" build kilopan "${FXP}-95")"
-[ "$got_malo" = "claude-opus-4-8" ] \
+[ "$got_malo" = "$OPUS" ] \
   && ok "y con 2 fallos PROPIOS sí escala a Opus (la escalación sigue viva, no se desactivó)" \
   || no "la escalación por AC no dispara: 2 fallos propios rutearon a $got_malo"
 rm -f ".ralph/fallos/${FXP}-95"
@@ -800,7 +1038,7 @@ printf '# plan\n\n- [ ] (P0-SEC) item atascado que el motor NO va a tomar [%s-94
 printf '%s-94\n' "$FXS" > "$ATAS"
 rm -f .ralph/build-fails
 got_sal="$(bash "$SEL" build)"
-[ "$got_sal" = "claude-sonnet-5" ] \
+[ "$got_sal" = "$SONNET" ] \
   && ok "el selector saltea los ACs atascados igual que loop.sh (clasifica el que se va a construir)" \
   || no "el selector clasificó un AC ATASCADO que loop.sh no va a tomar: ruteó a $got_sal"
 if [ -f "$ATMP/atascados.bak" ]; then cp "$ATMP/atascados.bak" "$ATAS"; else rm -f "$ATAS"; fi
@@ -811,9 +1049,48 @@ rm -rf "$ATMP"
 rm -f .ralph/build-fails
 [ -f "$TMPP/build-fails.bak" ] && cp "$TMPP/build-fails.bak" .ralph/build-fails
 cp "$TMPP/plan.bak" IMPLEMENTATION_PLAN.md; rm -rf "$TMPP"
-# El anti-no-op: los cuatro casos de arriba deben haber dado al menos 3 modelos distintos.
-distintos=$(printf '%s\n' "claude-opus-4-8" "claude-haiku-4-5" "claude-sonnet-5" | sort -u | wc -l | tr -d ' ')
-[ "$distintos" -ge 3 ] && ok "el selector DIFERENCIA (no es un no-op que manda todo a Opus)" || no "selector no-op"
+# EL ANTI-NO-OP, ahora sobre datos reales. Esta línea contaba tres ids ESCRITOS A MANO y
+# los pasaba por `sort -u`: siempre daba 3, dijera lo que dijera el selector. Era la única
+# aserción que el §8 pide explícitamente («se testea contra el caso normal») y era la única
+# que no probaba nada. Ahora cuenta lo que el selector DEVOLVIÓ en los casos de arriba.
+distintos=$(printf "$RUTEOS" | grep -c . >/dev/null && printf "$RUTEOS" | sort -u | grep -c .)
+[ "$distintos" -ge 3 ] \
+  && ok "el selector DIFERENCIA: los casos de arriba dieron $distintos modelos distintos" \
+  || no "selector no-op: los casos de arriba dieron solo $distintos modelo(s) distinto(s)"
+
+echo
+echo "== 9b. El fallback no puede degradar una regla dura (8-ago-2026) =="
+# `loop.sh` llamaba SIEMPRE con `--fallback-model sonnet`. Si el modelo pedido no estaba
+# disponible o la iteración topaba el presupuesto, el CLI bajaba a Sonnet solo y en silencio,
+# y el commit quedaba idéntico a uno sano: un AC de regla dura escrito por un modelo menor,
+# que es lo que el §8 existe para impedir.
+grep -q 'MODELO_PEDIDO" = "$MODELO_TOPE"' "$M/loop.sh" \
+  && ok "loop.sh quita el fallback cuando el AC va al modelo tope" \
+  || no "loop.sh sigue pasando --fallback-model incondicional: una regla dura puede caer a Sonnet sin aviso"
+grep -q 'detectar-degradado.mjs' "$M/loop.sh" \
+  && ok "y además comprueba QUIÉN respondió después de cada build" \
+  || no "nadie mira qué modelo respondió: el degradado sigue siendo invisible"
+
+# El detector, ejercido de verdad contra los tres casos que distingue.
+DEG="$M/detectar-degradado.mjs"; DTMP="$(mktemp -d)"
+printf '{"modelUsage":{"%s":{"inputTokens":10}}}' "$OPUS" > "$DTMP/sano.json"
+printf '{"modelUsage":{"%s":{"inputTokens":10}}}' "$SONNET" > "$DTMP/degradado.json"
+printf '{"result":"ok","total_cost_usd":0.1}' > "$DTMP/mudo.json"
+node "$DEG" "$DTMP/sano.json" "$OPUS" >/dev/null 2>&1 \
+  && ok "el detector deja pasar la corrida en que respondió el modelo pedido" \
+  || no "el detector marca degradado una corrida sana: sería ruido y lo apagarían"
+node "$DEG" "$DTMP/degradado.json" "$OPUS" >/dev/null 2>&1; [ "$?" = "4" ] \
+  && ok "detecta el degradado: se pidió el tope y respondió otro (exit 4)" \
+  || no "el detector NO ve el degradado — el problema sigue invisible"
+node "$DEG" "$DTMP/mudo.json" "$OPUS" >/dev/null 2>&1; [ "$?" = "3" ] \
+  && ok "y si el resultado no nombra modelo lo dice (exit 3), en vez de dar por bueno lo que no sabe" \
+  || no "el detector afirma que no hubo degradado sin tener con qué saberlo"
+# Un snapshot fechado del MISMO modelo no es un degradado.
+printf '{"modelUsage":{"%s-20260101":{"inputTokens":10}}}' "$OPUS" > "$DTMP/fechado.json"
+node "$DEG" "$DTMP/fechado.json" "$OPUS" >/dev/null 2>&1 \
+  && ok "un snapshot fechado del mismo modelo no cuenta como degradado" \
+  || no "el detector confunde un snapshot fechado con un modelo distinto: daría falsos positivos"
+rm -rf "$DTMP"
 
 echo
 echo "=================== RESUMEN ARNÉS ==================="

@@ -1,13 +1,17 @@
 #!/usr/bin/env node
-// verifica-es-cl.mjs — grep de gate para es-CL (specs/kilopan/09-plataforma-miga.md
-// [AC-H0-09]). El contrato: kg con coma decimal, CLP con punto de miles y sin
-// decimales, fechas dd-mm-aaaa, RUT validado AL ESCRIBIR (no solo al enviar), y cero
-// strings visibles en inglés. `apps/kilopan/src/comun/{formato,peso,valida_rut}.ts` YA
-// implementan esto (con sus propios tests unitarios) — lo que faltaba, y lo que este
-// script cierra, es el guardia que impide que una pantalla nueva lo bypasee a mano
-// (exactamente lo que hacía MapaPodsDia.tsx con `.toFixed(1)` antes de este AC).
+// verifica-es-cl.mjs — grep de gate para es-CL, compartido por las dos apps del
+// monorepo (specs/kilopan/09-plataforma-miga.md [AC-H0-09] y
+// specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-05]). El contrato: kg con coma
+// decimal, CLP con punto de miles y sin decimales, fechas dd-mm-aaaa, RUT validado AL
+// ESCRIBIR (no solo al enviar), y cero strings visibles en inglés. Cada app trae su
+// propia implementación de referencia con sus tests unitarios —
+// `apps/kilopan/src/comun/{formato,peso,valida_rut}.ts` para KiloPan y
+// `packages/nucleo-comun/src/{fechas,rut}.ts` (fuera del alcance escaneado, igual que
+// la de KiloPan) para FLOTA — lo que faltaba, y lo que este script cierra, es el
+// guardia que impide que una pantalla nueva lo bypasee a mano (exactamente lo que
+// hacía MapaPodsDia.tsx con `.toFixed(1)` antes del AC de KiloPan).
 //
-// Uso: node verifica-es-cl.mjs [--app=kilopan]
+// Uso: node verifica-es-cl.mjs [--app=kilopan|flota] [--raiz=<ruta>]
 // Exit: 0 verde · 1 alguna pantalla bypasea el formato es-CL.
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -105,8 +109,13 @@ function archivosFuente(dir) {
 // Solo ejecuta el CLI cuando se invoca directamente (`node verifica-es-cl.mjs`), no
 // cuando el test lo importa como módulo para ejercer revisarArchivo() en un fixture.
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const ROOT = new URL("../../..", import.meta.url).pathname;
   const argv = process.argv.slice(2);
+  // `--raiz` es el mismo escape hatch que el resto de los gates de FLOTA (p.ej.
+  // db/flota/gate-constantes.mjs): sin él, probar que el CLI detecta una violación en
+  // el árbol REAL de una app significaría escribirla de verdad en apps/flota/src y
+  // borrarla después — un test que ensucia el repo que dice proteger.
+  const raizArg = argv.find((a) => a.startsWith("--raiz="))?.split("=")[1];
+  const ROOT = raizArg ?? new URL("../../..", import.meta.url).pathname;
   const app = argv.find((a) => a.startsWith("--app="))?.split("=")[1] ?? "kilopan";
 
   const RAICES = [`apps/${app}/src`, "packages/miga/src"].map((r) => join(ROOT, r));

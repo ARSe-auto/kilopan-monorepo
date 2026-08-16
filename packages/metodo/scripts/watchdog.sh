@@ -16,6 +16,11 @@ cd "$(dirname "$0")/../../.."
 # hicieron creer que el motor estaba detenido cuando no lo estaba— y, si el gate coincidía
 # con el arranque de una iteración, podía pausar el motor de PRODUCCIÓN. Un test que puede
 # apagar el sistema que vigila no es un test, es una avería con permiso.
+# QUÉ APP construye este motor. Default `kilopan` a propósito: el plist que ya existe no
+# declara nada y tiene que seguir haciendo exactamente lo mismo. El de FLOTA la declara, y con
+# eso el gate independiente verifica SU app — sin esto, el motor de flota habría corrido el gate
+# de KiloPan y declarado verde un HEAD que nunca verificó (§9.2: el auto-reporte no es evidencia).
+APP="${KILOPAN_APP:-kilopan}"
 LOG_DIR="${KILOPAN_PANEL_DIR:-packages/metodo/panel}"
 PIDFILE="$LOG_DIR/loop.pid"
 LOG="$LOG_DIR/watchdog.log"
@@ -48,6 +53,16 @@ pausar () { # $1 = motivo
   { echo "$(date -Iseconds) — $1"; } > "$PAUSA"
   echo "watchdog: PAUSA — $1" | tee -a "$LOG"
   echo "watchdog: motor detenido hasta que una persona borre $PAUSA" | tee -a "$LOG"
+  # AVISAR, y no solo dejar el marcador (10-ago-2026). El motor de FLOTA pausó a las 14:37 y
+  # nadie lo supo hasta las 17: una tarde entera de máquina parada porque el único aviso era un
+  # archivo que hay que salir a mirar. La pausa es EL momento en que hace falta una persona, así
+  # que es el momento en que hay que ir a buscarla.
+  #
+  # `osascript` falla solo si no hay sesión gráfica (CI, ssh) y por eso va con `|| true`: un
+  # motor que muere porque no pudo avisar sería peor que uno que avisa a nadie.
+  if command -v osascript >/dev/null 2>&1; then
+    osascript -e "display notification \"$1\" with title \"Motor ${APP} DETENIDO\" sound name \"Basso\"" >/dev/null 2>&1 || true
+  fi
   exit 0
 }
 
@@ -106,7 +121,7 @@ while [ "$i" -lt "$MAX_ITERACIONES" ]; do
   # KILOPAN_LOOP_CMD (default: loop.sh de verdad) existe para que prueba-arnes.sh pueda
   # sustituir un stub que devuelve un rc exacto — probar el manejo de rc 9 sin gastar en
   # una invocación real de `claude -p` es la única forma honesta de probarlo.
-  ${KILOPAN_LOOP_CMD:-bash packages/metodo/scripts/loop.sh} 2>&1 | tee -a "$LOG"
+  ${KILOPAN_LOOP_CMD:-bash packages/metodo/scripts/loop.sh --app=$APP} 2>&1 | tee -a "$LOG"
   rc=${PIPESTATUS[0]}
 
   case "$rc" in
@@ -129,7 +144,10 @@ while [ "$i" -lt "$MAX_ITERACIONES" ]; do
       # externa) la ponía roja con HEAD sano — «TODOS los DTE» del WIP pausó el motor.
       # Mismo tratamiento que al inicio de iteración: el WIP se guarda en stash con
       # marca — JAMÁS se borra — y el veredicto es sobre lo comiteado.
-      EXCLUIR_SUCIO_WD=(':!packages/metodo/panel' ':!apps/kilopan/next-env.d.ts')
+      # El churn de artefacto es POR APP: `next build` reescribe el `next-env.d.ts` de la que
+      # se construyó, y excluir solo el de KiloPan dejaba el de FLOTA contando como WIP ajeno —
+      # el motor apartaría en stash un archivo que él mismo acaba de generar, en cada vuelta.
+      EXCLUIR_SUCIO_WD=(':!packages/metodo/panel' ':!apps/kilopan/next-env.d.ts' ':!apps/flota/next-env.d.ts')
       if [ -n "$(git status --porcelain -- "${EXCLUIR_SUCIO_WD[@]}" 2>/dev/null)" ]; then
         MARCA_PV="motor-wip-preverify-$(date +%Y%m%d-%H%M%S)"
         if git stash push -u -m "$MARCA_PV (guardado por watchdog.sh — NO borrado)" -- "${EXCLUIR_SUCIO_WD[@]}" >/dev/null 2>&1; then
@@ -139,8 +157,41 @@ while [ "$i" -lt "$MAX_ITERACIONES" ]; do
           echo "watchdog: no pude apartar el WIP — verifico igual; un rojo aquí puede ser del WIP y no de HEAD." | tee -a "$LOG"
         fi
       fi
-      if ! bash packages/metodo/scripts/check.sh --full 2>&1 | tee -a "$LOG"; then
-        pausar "el gate independiente NO dio verde sobre el HEAD que el agente acaba de comitear ($(git rev-parse --short HEAD)). El auto-reporte del agente no es evidencia; revisar a mano."
+      if ! bash packages/metodo/scripts/check.sh --app="$APP" --full 2>&1 | tee -a "$LOG"; then
+        # TRABAJO EN CURSO DECLARADO ≠ AGENTE QUE MIENTE (bug real, 11-ago-2026, dos veces
+        # en un día). El agente se queda sin presupuesto a mitad de un AC y hace lo correcto:
+        # comitea lo construido y declara que el AC queda ABIERTO porque no alcanzó a correr
+        # su e2e. Este gate encontraba ese HEAD rojo —por el e2e que el propio agente escribió
+        # y no corrió— y pausaba TODO hasta que una persona mirara. Nadie mira hasta la mañana
+        # siguiente, así que el motor pasaba la noche detenido sobre trabajo sano.
+        #
+        # La pausa sigue existiendo para el caso que la justifica: el agente que afirma verde
+        # sobre algo que no lo está (§9.2, «el verde lo estampa el exit code del gate, jamás un
+        # agente»). Los dos casos se distinguen con DOS condiciones, y hacen falta las dos:
+        #
+        #   1 · HEAD trae la línea canónica `AC-ABIERTO: <id>`, y
+        #   2 · ese <id> sigue SIN marcar [x] en el plan.
+        #
+        # La segunda es la que impide que la línea se vuelva un salvoconducto: un agente que
+        # marcó el AC como cerrado Y dejó el gate rojo está afirmando un verde que no existe,
+        # y eso pausa igual, traiga la línea o no.
+        #
+        # Seguir construyendo sobre un HEAD rojo así es seguro porque la PUBLICACIÓN no depende
+        # de esto: los dos publicadores exigen `last-green.sha == HEAD`, y un HEAD rojo nunca
+        # estampa ese marcador. El trabajo a medio camino se queda local hasta que una vuelta
+        # lo termine y lo ponga verde. Lo único que cambia es que el motor sigue solo.
+        # El veredicto vive en su propio guion para que prueba-arnes.sh lo ejerza con fixtures,
+        # sin fabricar commits ni gastar una invocación real del agente.
+        # El veredicto se toma del exit code del guion, NO de una tubería: `cmd | tee` devuelve
+        # el código de `tee`, que es 0 siempre — encadenarlo acá haría que todo rojo pareciera
+        # trabajo en curso y la pausa no volviera a dispararse nunca.
+        VEREDICTO_WIP="$(bash packages/metodo/scripts/trabajo-en-curso.sh --app="$APP" 2>&1)" && ES_WIP=0 || ES_WIP=1
+        echo "$VEREDICTO_WIP" | tee -a "$LOG"
+        if [ "$ES_WIP" -eq 0 ]; then
+          echo "watchdog: gate rojo sobre un HEAD que DECLARA trabajo en curso — no es un verde falso, es un AC a medio camino. Sigo: la próxima vuelta lo termina, y nada se publica hasta que esté verde." | tee -a "$LOG"
+        else
+          pausar "el gate independiente NO dio verde sobre el HEAD que el agente acaba de comitear ($(git rev-parse --short HEAD)). El auto-reporte del agente no es evidencia; revisar a mano."
+        fi
       fi
       # Publicar lo ya verificado. `loop.sh` comitea local y el agente no tiene permiso de
       # `git push` (.claude/settings.json) — sin este paso el trabajo del motor no llegaba
@@ -149,7 +200,21 @@ while [ "$i" -lt "$MAX_ITERACIONES" ]; do
       # el HEAD que el gate independiente acaba de declarar verde (ver empujar-si-verde.sh).
       # Un push fallido (red caída, remoto adelantado) se registra y NO frena el motor:
       # es infraestructura, no un veredicto sobre el código.
-      bash packages/metodo/scripts/empujar-si-verde.sh 2>&1 | tee -a "$LOG" || \
+      # Dos publicadores, uno por forma de trabajo, y el que corre depende de la rama:
+      #
+      #   · en `main` → `empujar-si-verde.sh`, que empuja directo.
+      #   · en una rama de trabajo → `publicar-pr.sh`, que empuja Y abre o actualiza su PR.
+      #
+      # Sin el segundo, el motor de una rama construía toda la noche y el trabajo se quedaba
+      # local: `empujar-si-verde.sh` se niega a empujar cualquier cosa que no sea `main`, con
+      # razón, pero eso dejaba la cadena cortada justo al final. Los dos exigen lo mismo antes
+      # de tocar el remoto —`last-green.sha` apuntando al HEAD—, así que la garantía es la misma.
+      if [ "$(git rev-parse --abbrev-ref HEAD)" = "main" ]; then
+        PUBLICADOR="packages/metodo/scripts/empujar-si-verde.sh"
+      else
+        PUBLICADOR="packages/metodo/scripts/publicar-pr.sh"
+      fi
+      bash "$PUBLICADOR" --app="$APP" 2>&1 | tee -a "$LOG" || \
         echo "watchdog: el push no salió; sigo construyendo, queda para la próxima vuelta." | tee -a "$LOG"
       ;;
     10)

@@ -54,6 +54,17 @@ const { pgcrypto } = await import("@electric-sql/pglite/contrib/pgcrypto");
 const { btree_gist } = await import("@electric-sql/pglite/contrib/btree_gist");
 const db = new PGlite(dir, { extensions: { pgcrypto, btree_gist } });
 
+// LA MISMA ZONA QUE LA APP, o la siembra queda un día adelante (bug real, 11-ago-2026).
+// `apps/kilopan/src/comun/db.ts` abre su PGlite y hace exactamente esto; este sembrador no
+// hacía nada y heredaba la zona del HOST. En un Mac chileno coincide por casualidad y no se
+// nota. En el runner de CI el host es UTC, así que entre las 20:00 y la medianoche de Chile
+// las rutas «de hoy» se sembraban con la fecha de MAÑANA: la app —que sí fuerza
+// America/Santiago— no las encontraba, `/ruta` respondía «No tienes paradas hoy» y
+// pod-rechazo-parcial.spec.ts se caía tres veces seguidas, todas las noches, con su correo
+// de «run failed». Mismo bug que ya se había arreglado en db/migrar.mjs el 3-ago; faltaba
+// esta boca, que es la que siembra las rutas del día.
+await db.exec("set timezone = 'America/Santiago'");
+
 const uno = async (sql, params = []) => (await db.query(sql, params)).rows[0];
 const todos = async (sql, params = []) => (await db.query(sql, params)).rows;
 

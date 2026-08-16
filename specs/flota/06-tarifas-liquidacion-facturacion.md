@@ -84,13 +84,95 @@ Rate card en estado **borrador** + volúmenes hipotéticos ⇒ total simulado en
 
 ## Criterios de aceptación
 
-- [ ] (P1) Esquema de tarifas por empresa cliente (§3.E1.8, §4.5, §0): `concepto` con CHECK contra el catálogo cerrado de 5 (`por_entrega`, `por_bulto`, `por_bloque_horas`, `por_devolucion`, `por_intento_fallido`) — INSERT de concepto fuera del catálogo ⇒ rechazo en BD y 0 filas; `precio_clp bigint` CLP entero; intento de dejar 5 conceptos activos en una empresa ⇒ 422 y 0 filas (máx 4); zonas SOLO como modificadores de `por_entrega` definidas por comunas con máximo 5 — la 6ª zona ⇒ 422 y 0 filas (el test corre bajo el supuesto operativo «tope evaluado POR EMPRESA CLIENTE», coherente con la rate card por empresa; el ámbito real del «zonas máx 5» del §0 queda sujeto a Pregunta 9); recargo horario SOLO como modificador — no existe concepto «zona» ni «horario» ni recargo por combustible/energía indexado (test de catálogo + grep §7.5) — oráculo: CI [AC-FTAR-01]
-- [ ] (P1) Vigencia append-only (§3.E1.8, §4.5, §9.3.5): `UPDATE` de `precio_clp` con el rol de app ⇒ RAISE del trigger y 0 cambios (corregir precio = INSERT con nuevo `vigente_desde`); tarifa solapada para la misma empresa+concepto ⇒ 422 y 0 filas (centinela 5); toda tabla del módulo lleva `COMMENT ON TABLE` clase PLANIFICACIÓN y pasa el linter de migraciones (`tenant_id` + CHECK constante + índice + FK compuesta, §4.2/§9.2) — oráculo: CI [AC-FTAR-02]
-- [ ] (P1) Devengo único en BD (§7.5, §4.8, §3.E1.8): las líneas SOLO las crea la función `SECURITY DEFINER` — INSERT directo a `liquidacion_lineas` con el rol de app ⇒ 42501; el monto se calcula EN LA BD en CLP entero con `round_clp()` aplicando la tarifa con mayor `vigente_desde` ≤ `event_time` de la evidencia (test con dos vigencias: la evidencia anterior al cambio devenga el precio viejo); entrega sin zona que calce o sin comuna resoluble ⇒ precio base de `por_entrega` sin modificador, cero error; grep-gate: cero float y cero aritmética monetaria fuera de la BD — oráculo: CI [AC-FTAR-03]
-- [ ] (P1) Línea=evidencia (§3.E1.9, §9.3.7): cada línea referencia exactamente UNA evidencia de tipo `entrega_pod|cierre_turno|devolucion|sesion_recarga` con `UNIQUE(tenant, tipo, id)` — la segunda línea sobre la misma evidencia viola el UNIQUE; el devengo solo crea líneas desde evidencia VIGENTE (`cerrada AND supersede IS NULL`, §4.5) — fixture: POD supersedido ANTES del devengo ⇒ 0 líneas de ese POD; POD devengado y LUEGO supersedido con motivo=`undo` (§4.7) ⇒ la línea queda bloqueada + fila en `review_queue` y `count(lineas)` no cambia (supuesto operativo sujeto a Pregunta 11); consulta de líneas huérfanas = 0 sobre seed y camino dorado, con definición operativa: huérfana = línea cuya evidencia referenciada está supersedida sin resolución (único sentido no trivial del centinela §9.3.7 con evidencia append-only y FK compuesta); NO existe endpoint de línea manual en el manifiesto de rutas (test estructural); excursión inyectada por fixture (gancho §4.9, inerte en E1) BLOQUEA la línea y jamás la crea ni la borra — `count(lineas)` idéntico antes y después — oráculo: CI [AC-FTAR-04]
-- [ ] (P1) Máquina de estados `abierta→cerrada→pagada` (§3.E1.9, §4.6, §2): solo la liquidación `abierta` acepta líneas nuevas; `cerrada` congela líneas y totales; transición que salta o retrocede (`abierta→pagada`, `pagada→cerrada`, nueva línea sobre `cerrada`) ⇒ 422 y 0 cambios; cada transición emite evento append-only + `audit_trail` por trigger; el estado visible es proyección, jamás contador mutable — oráculo: CI [AC-FTAR-05]
-- [ ] (P1) Disputa por línea (§3.E1.9, §0, §4.2, §9.3.3): sobre liquidación `cerrada` y dentro de la ventana de 7 días (constante en `constants.ts`, jamás hardcodeada), con motivo tipado obligatorio de catálogo del tenant; fuera de ventana, sin motivo, con motivo fuera de catálogo o sobre liquidación en estado distinto de `cerrada` (`abierta`; el caso `pagada` queda además ligado a Pregunta 4) ⇒ 422 y 0 filas; doble envío de la misma disputa (doble-tap, §9.4) ⇒ exactamente 1 disputa y 1 evento — centinela §9.3.1: replay doble de CUALQUIER mutación ⇒ `count(*)=1` por `client_uuid`; la disputa emite evento + audit y deja el estado legible para la señal roja Caja/custodia («dinero disputado siempre es rojo», Anexo B); el rol `cliente` solo disputa líneas de SU empresa — línea de otra empresa ⇒ 404 y 0 filas (derivación del §9.3.3: fila invisible por política de rol; el 404 del §0 es cross-tenant) — oráculo: CI [AC-FTAR-06]
-- [ ] (P1) Drill-down línea→evidencia a 1 clic + es-CL (§3.E1.9, §0, §9.2): e2e con selectores `data-testid` (cero getByText sobre renombrables) que desde una línea de la liquidación abre la evidencia completa (POD con foto/firma/motivo) en UNA interacción; montos `$12.500` (CLP entero, miles con punto), fechas `dd-mm-aaaa`, RUT `12.345.678-5`; grep: cero strings visibles en inglés en el módulo — oráculo: CI [AC-FTAR-07]
+- [x] (P1) Esquema de tarifas por empresa cliente (§3.E1.8, §4.5, §0): `concepto` con CHECK contra el catálogo cerrado de 5 (`por_entrega`, `por_bulto`, `por_bloque_horas`, `por_devolucion`, `por_intento_fallido`) — INSERT de concepto fuera del catálogo ⇒ rechazo en BD y 0 filas; `precio_clp bigint` CLP entero; intento de dejar 5 conceptos activos en una empresa ⇒ 422 y 0 filas (máx 4); zonas SOLO como modificadores de `por_entrega` definidas por comunas con máximo 5 — la 6ª zona ⇒ 422 y 0 filas (el test corre bajo el supuesto operativo «tope evaluado POR EMPRESA CLIENTE», coherente con la rate card por empresa; el ámbito real del «zonas máx 5» del §0 queda sujeto a Pregunta 9); recargo horario SOLO como modificador — no existe concepto «zona» ni «horario» ni recargo por combustible/energía indexado (test de catálogo + grep §7.5) — oráculo: CI [AC-FTAR-01]
+  - Probado: `db/migraciones-flota/tenant/0061_tarifas_por_empresa.sql` (tablas `tarifas`,
+    `tarifa_zonas`, `tarifa_recargo_horario`; CHECK de catálogo cerrado; triggers de tope de
+    conceptos distintos activos y de zonas, con `errcode = check_violation` que el servidor
+    traduce a 422; RLS restrictiva del rol `cliente` vía `aplicar_rls_de_empresa`, reusando la
+    de AC-FRUT-12) + `db/flota/pgtap/0026_tarifas_por_empresa.sql`. `check.sh --full --app=flota`
+    en verde (gate-constantes: los topes se referencian desde `TARIFAS.activos_max_por_empresa`
+    del canónico, sin duplicar el número mágico).
+- [x] (P1) Vigencia append-only (§3.E1.8, §4.5, §9.3.5): `UPDATE` de `precio_clp` con el rol de app ⇒ RAISE del trigger y 0 cambios (corregir precio = INSERT con nuevo `vigente_desde`); tarifa solapada para la misma empresa+concepto ⇒ 422 y 0 filas (centinela 5); toda tabla del módulo lleva `COMMENT ON TABLE` clase PLANIFICACIÓN y pasa el linter de migraciones (`tenant_id` + CHECK constante + índice + FK compuesta, §4.2/§9.2) — oráculo: CI [AC-FTAR-02]
+  - Probado: `db/migraciones-flota/tenant/0062_tarifas_vigencia_append_only.sql` (trigger
+    `tarifas_vigencia_append_only` — BEFORE UPDATE, RAISE con `errcode = check_violation` sobre
+    CUALQUIER columna, no solo `precio_clp`: la fila completa es la vigencia; trigger
+    `tarifas_vigencia_no_solapada` — BEFORE INSERT, rebota si `vigente_desde` <= la última ya
+    registrada del mismo empresa+concepto, centinela 5; `vigente_desde` pasa su DEFAULT de
+    `now()` —fijo dentro de una transacción— a `clock_timestamp()`, porque la corrección de
+    precio necesita vigencias estrictamente crecientes incluso dentro de la transacción única
+    de una suite pgTAP) + `db/flota/pgtap/0027_tarifas_vigencia_append_only.sql`. La clase
+    PLANIFICACIÓN y el linter ya quedaban verdes desde AC-FTAR-01 (0062 no crea tablas nuevas).
+    `check.sh --full --app=flota` en verde.
+- [x] (P1) Devengo único en BD (§7.5, §4.8, §3.E1.8): las líneas SOLO las crea la función `SECURITY DEFINER` — INSERT directo a `liquidacion_lineas` con el rol de app ⇒ 42501; el monto se calcula EN LA BD en CLP entero con `round_clp()` aplicando la tarifa con mayor `vigente_desde` ≤ `event_time` de la evidencia (test con dos vigencias: la evidencia anterior al cambio devenga el precio viejo); entrega sin zona que calce o sin comuna resoluble ⇒ precio base de `por_entrega` sin modificador, cero error; grep-gate: cero float y cero aritmética monetaria fuera de la BD — oráculo: CI [AC-FTAR-03]
+  - Probado: `db/migraciones-flota/tenant/0063_devengo_unico.sql` (tablas `liquidaciones` y
+    `liquidacion_lineas` con la forma mínima que el devengo necesita; trigger
+    `liquidacion_lineas_solo_devengo` — INSERT directo ⇒ 42501 hasta para el migrador — más el
+    REVOKE INSERT al rol de app, que `db/flota/rol-app.mjs` deriva de la PRESENCIA de ese
+    trigger igual que el REVOKE UPDATE/DELETE de los hechos; `devengar_entrega()` SECURITY
+    DEFINER con `search_path` fijo calcula el monto con `round_clp()` sobre
+    `tarifa_vigente_al()` —mayor `vigente_desde` ≤ `event_time`— más
+    `modificadores_de_entrega()`, que devuelve 0 sin zona que calce o sin comuna) +
+    `db/flota/pgtap/0028_devengo_unico.sql` (15/15: dos vigencias con la entrega de marzo
+    devengando 3.500 y la de julio 3.800; Ñuñoa 3.500+700 de zona; Maipú y el destino sin
+    comuna a precio base sin error; el rol `app_t_canary` sin INSERT y con SELECT; devengar dos
+    veces la misma evidencia no crea una segunda línea) + grep-gate
+    `db/flota/gate-dinero-en-la-bd.mjs` con sus mutantes (cero aritmética monetaria y cero
+    flotante sobre símbolos `*_clp` en `apps/flota`, `packages/nucleo-comun` y `packages/miga`;
+    el «cero float» de las COLUMNAS ya lo cubren el linter y `0003_dinero.sql`).
+    `check.sh --full --app=flota` en verde.
+- [x] (P1) Línea=evidencia (§3.E1.9, §9.3.7): cada línea referencia exactamente UNA evidencia de tipo `entrega_pod|cierre_turno|devolucion|sesion_recarga` con `UNIQUE(tenant, tipo, id)` — la segunda línea sobre la misma evidencia viola el UNIQUE; el devengo solo crea líneas desde evidencia VIGENTE (`cerrada AND supersede IS NULL`, §4.5) — fixture: POD supersedido ANTES del devengo ⇒ 0 líneas de ese POD; POD devengado y LUEGO supersedido con motivo=`undo` (§4.7) ⇒ la línea queda bloqueada + fila en `review_queue` y `count(lineas)` no cambia (supuesto operativo sujeto a Pregunta 11); consulta de líneas huérfanas = 0 sobre seed y camino dorado, con definición operativa: huérfana = línea cuya evidencia referenciada está supersedida sin resolución (único sentido no trivial del centinela §9.3.7 con evidencia append-only y FK compuesta); NO existe endpoint de línea manual en el manifiesto de rutas (test estructural); excursión inyectada por fixture (gancho §4.9, inerte en E1) BLOQUEA la línea y jamás la crea ni la borra — `count(lineas)` idéntico antes y después — oráculo: CI. Probado: `db/flota/pgtap/0029_linea_es_evidencia.sql` (15/15) + `apps/flota/rutas/linea-manual.test.mjs`; gate completo verde (25/25 db/flota, 493 e2e) [AC-FTAR-04]
+- [x] (P1) Máquina de estados `abierta→cerrada→pagada` (§3.E1.9, §4.6, §2): solo la liquidación `abierta` acepta líneas nuevas; `cerrada` congela líneas y totales; transición que salta o retrocede (`abierta→pagada`, `pagada→cerrada`, nueva línea sobre `cerrada`) ⇒ 422 y 0 cambios; cada transición emite evento append-only + `audit_trail` por trigger; el estado visible es proyección, jamás contador mutable — oráculo: CI [AC-FTAR-05]
+  - Probado: `db/migraciones-flota/tenant/0065_maquina_de_estados_de_liquidacion.sql` (trigger
+    `liquidacion_guarda_de_estados` — BEFORE UPDATE, rebota con `check_violation` todo salto o
+    retroceso de `estado`, incluido el retroceso desde el estado final `pagada`; trigger
+    `liquidacion_emitir_evento_de_estado` — AFTER UPDATE, emite `liquidacion.cerrada` o
+    `liquidacion.pagada` a `eventos` con el huso de `America/Santiago` resuelto contra la base
+    de husos del sistema, jamás 0 fijo; `audit_trail` ya quedaba enganchado desde AC-FTAR-03,
+    sin duplicar el trigger; `solo_el_devengo_crea_lineas()` extendida para rebotar con
+    `check_violation` cualquier línea nueva —incluso desde `devengar_entrega()` SECURITY
+    DEFINER— contra una liquidación que no esté `abierta`) + `db/flota/pgtap/0030_maquina_de_
+    estados_de_liquidacion.sql` (21/21: salto `abierta→pagada` y retrocesos `cerrada→abierta` /
+    `pagada→cerrada` rebotan con 0 cambios y 0 eventos; el camino dorado `abierta→cerrada→pagada`
+    deja exactamente 2 eventos y 2 filas de `audit_trail`; `devengar_entrega()` sobre una
+    liquidación `cerrada` rebota 422 y deja 0 líneas; un UPDATE que no toca `estado` no emite
+    evento). `check.sh --full --app=flota` en verde.
+- [x] (P1) Disputa por línea (§3.E1.9, §0, §4.2, §9.3.3): sobre liquidación `cerrada` y dentro de la ventana de 7 días (constante en `constants.ts`, jamás hardcodeada), con motivo tipado obligatorio de catálogo del tenant; fuera de ventana, sin motivo, con motivo fuera de catálogo o sobre liquidación en estado distinto de `cerrada` (`abierta`; el caso `pagada` queda además ligado a Pregunta 4) ⇒ 422 y 0 filas; doble envío de la misma disputa (doble-tap, §9.4) ⇒ exactamente 1 disputa y 1 evento — centinela §9.3.1: replay doble de CUALQUIER mutación ⇒ `count(*)=1` por `client_uuid`; la disputa emite evento + audit y deja el estado legible para la señal roja Caja/custodia («dinero disputado siempre es rojo», Anexo B); el rol `cliente` solo disputa líneas de SU empresa — línea de otra empresa ⇒ 404 y 0 filas (derivación del §9.3.3: fila invisible por política de rol; el 404 del §0 es cross-tenant) — oráculo: CI. Probado: `db/migraciones-flota/tenant/0066_disputa_por_linea.sql` (columnas
+  `disputa_*` en `liquidacion_lineas`, catálogo de 4 motivos, evento
+  `liquidacion_linea.disputada`, función `disputar_linea()` SIN `SECURITY DEFINER` — corre con
+  los privilegios e RLS de quien invoca, a propósito, para que `aplicar_rls_de_empresa` del rol
+  `cliente` (viva desde la 0063) decida qué línea existe para quién) + `db/flota/pgtap/
+  0031_disputa_por_linea.sql` (23/23: camino dorado, replay del mismo `client_uuid` — centinela
+  1 —, ventana de 7 días medida desde el evento `liquidacion.cerrada`, motivo ausente/fuera de
+  catálogo, liquidación no cerrada) + `db/flota/suite-bd/disputa-por-linea.test.mjs`, NUEVO en
+  este AC, con el rol de app real NOSUPERUSER (pgTAP corre como superusuario y a un superusuario
+  la RLS no se le aplica — mismo motivo que AC-FRUT-12): el cliente disputa SU línea (positivo),
+  la línea de OTRA empresa es invisible — 0 filas sin excepción, la derivación exacta del
+  §9.3.3 —, y un cliente sin empresa declarada tampoco disputa nada. `check.sh --full --app=flota`
+  en verde. [AC-FTAR-06]
+- [x] (P1) Drill-down línea→evidencia a 1 clic + es-CL (§3.E1.9, §0, §9.2): e2e con selectores `data-testid` (cero getByText sobre renombrables) que desde una línea de la liquidación abre la evidencia completa (POD con foto/firma/motivo) en UNA interacción; montos `$12.500` (CLP entero, miles con punto), fechas `dd-mm-aaaa`, RUT `12.345.678-5`; grep: cero strings visibles en inglés en el módulo — oráculo: CI. Probado:
+  `apps/flota/src/servidor/liquidaciones.ts` (`liquidacionConLineas`, `evidenciaDeLinea`, SOLO
+  LECTURA vía `enLectura` — el devengo, la máquina de estados y la disputa ya existen en la BD
+  desde AC-FTAR-03/05/06) + rutas `GET /api/liquidaciones/[id]` y
+  `GET /api/liquidacion-lineas/[id]/evidencia` (guardia `admin_tenant`/`operador`, 404 pelado
+  cross-tenant, 403 con un rol sin panel) + pantalla `/liquidaciones?id=` con bottom-sheet local
+  (mismo patrón que `hoy/peek-n1.tsx`: la evidencia es estado de la MISMA pantalla, jamás una
+  ruta nueva) que abre foto/firma/motivo de la línea en el mismo clic que la selecciona, con
+  `dineroEsCl`/`fechaEsCl`/`formatearRut` (cero string en inglés) + `apps/flota/e2e/
+  liquidacion-drill-down.spec.ts`, NUEVO en este AC (sembrando con `devengar_entrega()` real,
+  la misma función SECURITY DEFINER que usa la app). Dos hallazgos reales de la corrida completa,
+  arreglados en este mismo commit: (1) `periodo_inicio`/`periodo_fin` son `date` sin huso —
+  `fechaEsCl(new Date(...))` les aplicaba el huso de Chile y corría la fecha un día hacia atrás
+  (`06-04-2026` se leía `05-04-2026`); se ancla a mediodía (`T12:00:00`), mismo patrón que
+  `bandeja/page.tsx`. (2) el fixture de este AC deja PERMANENTEMENTE una ruta con `entregas_pod`
+  aterrizado (append-only, §7.4) en el tenant A compartido — `limpiarBandeja` (borrado de
+  encargos) y los `beforeEach`/limpiezas de `rutas.spec.ts` y `publicar-dia.spec.ts` (borrado
+  crudo de `rutas`, sin el guardia que `limpiarOperacion` ya tenía desde AC-FRUT-23) rebotaban
+  «violates foreign key constraint» contra ese POD; ambos quedan con el mismo guardia
+  `not exists (... entregas_pod ...)`. Además: RUT sintético `76.543.219-7` agregado a la lista
+  congelada (`db/flota/ruts-sinteticos.mjs`, AC-FIDN-21) y liquidación devengada real del tenant
+  B agregada a `preparar-tenants.mjs` para que el centinela 2 (`cruce-tenant.spec.ts`,
+  AC-FTEN-26) tuviera fila real contra la cual probar el cruce en las dos rutas nuevas.
+  `check.sh --full --app=flota` en verde (18 pasos OK, 0 fallidos). [AC-FTAR-07]
 - [ ] (P1) La app JAMÁS emite DTE (§7.3, §4.6, §3.E2): regla estática en CI con lista de firmas VERSIONADA en el repo (mismo estándar que el grep explícito del §7.1): grep bloqueante sobre `src/` de `apps/flota` de firmas de ESTRUCTURA de DTE — tags XML `<DTE`, `<TED`, `<CAF`, generación o firma de timbre electrónico, librerías de firma XML-DSIG SII, generación de folios — jamás la palabra suelta «DTE» (el registro manual la usa legítimamente); + cero endpoint de emisión en el manifiesto de rutas (test estructural; violación de cualquiera aborta el ítem); el registro MANUAL de folio vía `reference_document(tipo 33|39|52|61, folio, emisor)` opera sobre liquidación `cerrada` (sobre `abierta` ⇒ 422 — supuesto operativo DERIVADO del seed §10 y del pipeline E2 que parte de `cerrada` §3.E2, no mandato del maestro; sujeto a Pregunta 10) y queda como camino paralelo permanente; folio duplicado ⇒ viola `UNIQUE(tipo, folio, emisor)`, 422 y 0 filas — oráculo: CI [AC-FTAR-08]
 - [ ] (P1) Dinero invisible (§4.8, §9.3.10): política RLS `AS RESTRICTIVE` declarada `FOR SELECT` únicamente en TODA tabla con montos del módulo, exigiendo `app.current_role NOT IN ('chofer','responsable_carga')`; pgTAP con el rol de app real: chofer `SELECT` sobre cada tabla de montos ⇒ 0 filas; chofer cierra recarga offline + replay ⇒ 2xx, fila con `costo_clp` NULL y cero rebotes (la RESTRICTIVE no es total justamente para no rebotar ese INSERT); `costo_clp` lo completa el operador o el trigger desde `parametros.tarifa_kwh_clp` — oráculo: CI [AC-FTAR-09]
 - [ ] (P1) Aislamiento del rol `cliente` y cross-tenant (§9.3.2, §9.3.3, §4.3, §0): sesión `cliente` de la empresa X ⇒ 0 filas de tarifas/liquidaciones/líneas de la empresa Y en toda tabla operativa (política en BD + vistas) y payloads sin columnas de economía interna del operador (costos de energía, `tarifa_kwh_clp`, ahorro vs diésel); todas las rutas del módulo cubiertas por la suite HTTP A-contra-B autogenerada del manifiesto: recurso de otro tenant ⇒ 404 con body sin cadenas centinela y BD de B sin cambios — oráculo: CI [AC-FTAR-10]

@@ -1,0 +1,275 @@
+LISTA CONGELADA DE CRITERIOS KILORUTA — Plataforma FLOTA, etapa E1
+==================================================================
+
+Qué es esto (encabezado «HECHO VERIFICADO» del maestro FLOTA, §9.1(4)(a), AC-FTEN-18):
+KiloRuta existía SOLO como spec en disco — cero código, cero pantallas, cero esquema. La
+plataforma se construye greenfield contra `docs/PROMPT_MAESTRO_FLOTA.md`, y la
+compatibilidad con KiloRuta (primer tenant real: «Rutapan») se demuestra contra ESTA lista,
+extraída UNA vez y congelada.
+
+Insumo: `docs/compatibilidad-kiloruta-E1.md` (los 63 criterios verificados uno por uno
+contra las specs 00–08). Fuente de los criterios: `docs/PROMPT_MAESTRO_KILORUTA.md`
+(690 líneas, supersedido por el maestro FLOTA — Anexo C).
+
+N = 63
+
+Los IDs son CERRADOS y ESTABLES: KR-01…KR-63 conservan su significado para siempre; jamás
+se renumeran ni se reciclan. Si más adelante aparece un criterio nuevo, se emite KR-64 y la
+N sube en un commit con la firma del dueño; nunca se reordena lo emitido.
+
+Aprobación: la aprueba Alexis (oráculo humano de AC-FTEN-18). Aprobar significa dos cosas:
+(1) los 63 criterios son la definición completa de «FLOTA es compatible con KiloRuta»; y
+(2) las 7 decisiones de la sección DECISIONES quedan tomadas y se escriben como ACs nuevos
+en las specs que correspondan (o se descartan con nota).
+
+Consumo mecánico: `docs/matriz-kiloruta.md` (AC-FTEN-19) mapea cada ID a
+`tabla/constraint | test (ruta::nombre)`, y el gate verifica tres cosas: count(filas) == N,
+cada ID aparece exactamente una vez, y cada test referenciado existe en el repo.
+
+
+CLASES
+------
+cubierto     Una spec+AC de FLOTA lo satisface. El gate lo exige.
+parcial      Satisfecho en parte, con hueco explícito y nombrado.
+supersedido  El maestro FLOTA lo reemplazó por decisión de diseño. El gate NO lo exige;
+             está en la lista para que la ausencia sea deliberada y no un olvido.
+bloqueado    Depende de una pregunta al dueño YA registrada en una spec. No se implementa
+             por adelantado ni se inventa la respuesta.
+omision      Hueco REAL: fuera de E1 sin decisión explícita del maestro FLOTA. Son las 7
+             decisiones de la sección siguiente.
+
+
+DECISIONES DEL DUEÑO — FIRMADAS EL 08-ago-2026 POR ALEXIS
+----------------------------------------------------------
+Las siete se resolvieron en el sentido recomendado. Queda constancia del resultado en cada
+una; lo que entra a E1 nace como AC nuevo en su spec, en el mismo commit que esta firma.
+
+  D1 KR-29  ENTRA a E1   → spec 03, AC-FRUT-22 (nuevo)
+  D2 KR-41  ENTRA a E1   → spec 02, AC-FVEH-22 (nuevo)
+  D3 KR-34  DESCARTADO   → no vuelve sin orden explícita del dueño
+  D4 KR-38  DIFERIDO     → E2, junto a la re-optimización parcial
+  D5 KR-48  DESCARTADO   → el canal es el portal del contratante (spec 07)
+  D6 KR-51  DIFERIDO     → «próximo servicio por km» necesita modelo propio; no es E1
+  D7 KR-17  DESCARTADA la condición «solo primera apertura»; el n=8 queda como detalle de
+            seed del pack `vertical-panaderia`
+
+El razonamiento de cada una, tal como se presentó para la firma:
+
+D1 · KR-29 — «Ninguna parada de entrega se abre sin manifiesto confirmado».
+     FLOTA ancla el art. 55 DL 825 en el DTE-gate del manifiesto (§7.3) pero NO trae el
+     candado entrega←manifiesto, y ningún AC lo asserta.
+     RECOMIENDO: ENTRAR a E1 (spec 03). Es el ancla legal de la carga a bordo y sale
+     barato: validación bloqueante en el cliente + invariante en BD.
+
+D2 · KR-41 — Cierre forzado administrativo del turno sin cerrar (evento + datos flageados,
+     sin alimentar la monotonicidad del odómetro).
+     El semáforo YA detecta el turno sin cerrar (05 · AC-FSEM-08, rojo) pero no existe
+     ninguna acción que lo resuelva: la excepción se queda roja para siempre y la cola
+     nunca tiende a cero, que es el contrato del §5.6.
+     RECOMIENDO: ENTRAR a E1 (spec 02). Sin esto el semáforo tiene un rojo sin salida.
+
+D3 · KR-34 — Receptor precargado desde el destino y editable en el POD.
+     `destinos` (§4.5) no trae contacto y el POD feliz de FLOTA son 2 acciones exactas.
+     RECOMIENDO: DESCARTAR con nota. Reponerlo cuesta toques en el camino feliz, que es el
+     contrato más caro de FLOTA (§5.3). El PIN del destinatario cubre el caso duro en E3.
+
+D4 · KR-38 — Delta de ruta en curso («Ruta actualizada: +1 parada») y confirmación de que
+     el teléfono la recibió.
+     El snapshot de FLOTA se congela al publicar el día (§5.2 F1).
+     RECOMIENDO: DIFERIR a E2, junto con la re-optimización parcial que ya vive ahí.
+
+D5 · KR-48 — Preliquidación como PDF exportado, compartida fuera de la app.
+     RECOMIENDO: DESCARTAR con nota. El canal de FLOTA es el portal del contratante (07)
+     con drill-down línea→evidencia. Si Rutapan lo exige en producción, vuelve como ítem.
+
+D6 · KR-51 (cláusula) — «Próximo servicio por km» junto a los vencimientos por fecha.
+     Mantención por kilometraje no es un documento con fecha: necesita modelo propio.
+     RECOMIENDO: DIFERIR. Los vencimientos por fecha (revisión técnica, permiso, SOAP) sí
+     están en E1 (02 · AC-FVEH-17).
+
+D7 · KR-17 (cláusula) — Checklist de 8 ítems SOLO en la primera apertura del día por
+     vehículo.
+     En FLOTA el chequeo pre es por turno y los ítems llegan como filas del pack
+     (`vertical_template.checklists[]`); ni el n=8 ni la condición «solo la primera» existen
+     en el maestro.
+     RECOMIENDO: DESCARTAR la condición «solo primera apertura» (un turno sin chequeo es un
+     turno sin evidencia) y dejar el n=8 como detalle de seed del pack `vertical-panaderia`.
+
+
+LOS 63 CRITERIOS
+----------------
+Formato: KR-NN [clase] criterio — dónde vive en FLOTA
+
+KR-01 [supersedido] Variable norte IFD (CLP devengado ÷ furgón-día) — la norte de plataforma
+      es la EEVD (decisión del dueño #2, §2). La sustancia (todo peso devengado enlazado a
+      evidencia) vive en 06 · AC-FTAR-03/04. El IFD como métrica no se computa en E1.
+KR-02 [cubierto] 100% del devengo enlazado a su evidencia; cero líneas manuales — 06 ·
+      AC-FTAR-03 (solo SECURITY DEFINER crea líneas), AC-FTAR-04 (línea = UNA evidencia).
+KR-03 [cubierto] Doble reloj: devengo por reloj del dispositivo, el del servidor manda para
+      el resto — §4.6 (event_time+tz_offset / record_time), 04 · AC-FPOD-05/21, 06 · AC-FTAR-03.
+KR-04 [cubierto] Furgón-día operativo por EVENTO de apertura; recarga y mantención jamás en
+      el denominador — 02 · AC-FVEH-20 (vista `eevd_semanal`).
+KR-05 [cubierto] Identidad RUT módulo 11 + PIN 4 dígitos; roles operativos fijos — 01 ·
+      AC-FIDN-01/06/17 (FLOTA mejora: argon2id; enum de 6 roles ⊇ los 4 de KR).
+KR-06 [cubierto] Dispositivos enrolados, secreto emitido UNA vez, revocación sin DELETE —
+      01 · AC-FIDN-04 y AC-FIDN-09.
+KR-07 [cubierto] Firma puntual ≠ sesión: PIN en dispositivo ajeno jamás desplaza la sesión
+      propia — 01 · AC-FIDN-10, 03 · AC-FRUT-09 (centinela 12).
+KR-08 [bloqueado] Validar PIN sin señal (hash de los usuarios del turno cacheado en el
+      dispositivo) — pregunta abierta 03-7. Hueco operativo real del milk-run de madrugada.
+KR-09 [bloqueado] Una sesión activa por usuario, desplazamiento auditado, auto-bloqueo a PIN
+      — el maestro no fija duración ni caducidad de sesiones; pregunta abierta 01-1.
+KR-10 [cubierto] Empresa cliente de primera clase, separada del receptor — 03 · AC-FRUT-14,
+      06 · AC-FTAR-01.
+KR-11 [cubierto] Rate card por empresa con catálogo cerrado y tope de conceptos activos —
+      06 · AC-FTAR-01 (catálogo de 5, máx 4 activos; los 3 de KR caben).
+KR-12 [cubierto] Tarifas append-only con vigencia; UPDATE de precio ⇒ RAISE — 06 · AC-FTAR-02.
+KR-13 [cubierto] CLP entero con `round_clp()` calculado por la BD; la UI jamás reimplementa
+      redondeos — 00 · AC-FTEN-09, 06 · AC-FTAR-03, 08 · AC-FMIG-05.
+KR-14 [cubierto] Agenda del vehículo con bloques que reservan ventana; recarga y mantención
+      como agenda pura — 02 · AC-FVEH-07/08.
+KR-15 [cubierto] «Duplicar semana» clona los bloques REALES de 7 días atrás — 02 · AC-FVEH-07
+      (colisiones con bloques existentes: pregunta 02-12).
+KR-16 [cubierto] Apertura de turno compacta: checklist + odómetro + SOC — 02 · AC-FVEH-10
+      (FLOTA fija presupuesto de toques, ≤9 acciones, en vez de «una pantalla» literal).
+KR-17 [parcial] Checklist fijo de 8 ítems con severidad por ítem — los checklists llegan como
+      filas de `vertical_template.checklists[]` (00 · AC-FTEN-12; seeds 08 · AC-FMIG-15/18).
+      La condición «solo primera apertura del día» y el n=8 no existen en FLOTA → D7.
+KR-18 [cubierto] Semáforo «Alcanza / No alcanza — recarga antes» textual al abrir — 02 ·
+      AC-FVEH-09/10 (fórmula única del §0 en vez del `soc_minimo_pct` fijo de KR).
+KR-19 [cubierto] SOC bajo o ítem fallado JAMÁS exige admin: un toque de confirmación +
+      evento + cola — 02 · AC-FVEH-10 y AC-FVEH-04 (§7.6).
+KR-20 [cubierto] Cierre de turno mínimo: odómetro + SOC + reporte de daño opcional — 02 ·
+      AC-FVEH-21 (F5 ≤6 acciones; el daño entra por la cadena defecto→issue de AC-FVEH-04).
+KR-21 [cubierto] Encargo en <10 s con 3 campos (empresa + destino + bultos; fecha hoy) —
+      03 · AC-FRUT-01 (≤4 acciones).
+KR-22 [cubierto] «Duplicar encargos de ayer» como gesto masivo — 03 · AC-FRUT-17.
+KR-23 [parcial] Estados del encargo: intermedias por trigger, finales SOLO por trigger de
+      entregas; `anulado` prohibido tras POD — 03 · AC-FRUT-03 cubre finales-por-trigger; la
+      regla «anulado prohibido tras POD» cae en la máquina de estados no enumerada por el
+      maestro: pregunta abierta 03-1.
+KR-24 [cubierto] Reintento = encargo NUEVO con `reintento_de`, conservando historia — 03 ·
+      AC-FRUT-03.
+KR-25 [cubierto] Sub-manifiesto por parada de carga y POR EMPRESA, firmado en el punto;
+      declarado vs contado; discrepancia registrada ahí mismo — 03 · AC-FRUT-07.
+KR-26 [cubierto] DTE asociado ANTES de abandonar la parada (escaneo TED o folio manual) —
+      03 · AC-FRUT-08 (folio manual como fallback obligatorio, §7.6).
+KR-27 [cubierto] «Bajar del manifiesto»: la mercadería se queda, flag + evento + excepción;
+      las otras empresas jamás rehenes — 03 · AC-FRUT-08/10.
+KR-28 [cubierto] Doble firma responsable↔chofer por PIN; UNA firma sella ambas si es la
+      misma persona — 03 · AC-FRUT-09.
+KR-29 [omision] Ninguna parada de entrega se abre sin manifiesto confirmado (ancla del
+      art. 55 DL 825) — no existe en el maestro FLOTA ni en spec alguna → D1.
+KR-30 [parcial] Encargo mínimo creado EN ANDÉN durante la recepción, offline, con evento —
+      el seed B lo siembra (08 · AC-FMIG-18) pero la CLASE de esa creación
+      (PLANIFICACIÓN rebota vs CAPTURA offline) está en la pregunta abierta 03-3.
+KR-31 [cubierto] Custodia legal: recepción, traspaso y entrega/devolución como hechos
+      inmutables con identidad (C. de Comercio 166) — 03 · AC-FRUT-09/10/21.
+KR-32 [cubierto] Ruta maestra recurrente con orden editable a mano, sin VRP — 03 · AC-FRUT-06.
+KR-33 [cubierto] App del chofer lineal, UNA acción primaria, POD ≤4 toques — 04 ·
+      AC-FPOD-01/02 (feliz = 2 acciones exactas), 08 · AC-FMIG-21.
+KR-34 [omision] Receptor precargado desde el destino y editable en el POD — `destinos` no
+      trae contacto y el POD feliz no captura receptor → D3.
+KR-35 [cubierto] `dejado_en_punto` de primera clase; con bultos > umbral exige encuadre y
+      queda flageado — 04 · AC-FPOD-02/17 (`parametros.bultos_max_sin_receptor`).
+KR-36 [cubierto] No entregado = motivo de catálogo cerrado; parcial admitido — 04 ·
+      AC-FPOD-02 (parcial por ítem), 03 · AC-FRUT-13. La foto obligatoria de la no-entrega
+      se relaja a mejora progresiva (§7.6, decisión de plataforma).
+KR-37 [cubierto] 100% offline con «Entregada — por sincronizar» y contador real de cola —
+      04 · AC-FPOD-03 y AC-FPOD-22.
+KR-38 [omision] Refresco PULL del delta de ruta en curso, con indicador de recibido en el
+      teléfono — el snapshot se congela al publicar; no existe en E1 → D4.
+KR-39 [cubierto] La parada agrupa N encargos de N empresas al mismo destino como caso
+      normal — 03 · AC-FRUT-04 (desglose por empresa conservado).
+KR-40 [cubierto] Ecuación de cierre POR EMPRESA (cargado = entregado + devuelto + faltante);
+      la ruta no cierra descuadrada — 03 · AC-FRUT-11 y AC-FRUT-21.
+KR-41 [omision] Cierre forzado administrativo del turno sin cerrar — el semáforo lo detecta
+      (05 · AC-FSEM-08) pero no existe la acción que lo resuelve → D2.
+KR-42 [cubierto] GPS denegado bloquea en el cliente y lo dice; precisión mala jamás bloquea
+      — 04 · AC-FPOD-12. Relajado respecto de KR: lo bloqueado es la captura de coordenadas,
+      no el POD (pregunta 04-2), y el GPS va off por defecto por minimización (Ley 21.719).
+KR-43 [cubierto] POD inmutable una vez cerrado; corrección = supersede; foto write-once por
+      sha256 — 04 · AC-FPOD-08/11/19.
+KR-44 [cubierto] Odómetro monotónico contra el chequeo vigente; proyección del vehículo solo
+      por trigger — 02 · AC-FVEH-05. FLOTA fija monotonicidad SUAVE (flag siempre, jamás
+      rebote): más permisiva que KR, hacia el lado que nunca pierde capturas.
+KR-45 [cubierto] Devengo por UNA función SECURITY DEFINER al cerrar cada hecho — 06 ·
+      AC-FTAR-03. El MOMENTO (evento-driven vs corte) no lo fija el maestro; queda a diseño.
+KR-46 [cubierto] Liquidación semanal por empresa abierta→cerrada→pagada, inmutable desde
+      cerrada — 06 · AC-FTAR-05 (periodicidad como parámetro: pregunta 06-1).
+KR-47 [cubierto] Disputa por línea con nota registrada — 06 · AC-FTAR-06, 07 · AC-FPOR-10
+      (FLOTA amplía: motivo tipado, ventana 7 días, disputa directa desde el portal).
+KR-48 [omision] Preliquidación como PDF exportado y compartido fuera de la app — ninguna
+      spec FLOTA lo trae → D5.
+KR-49 [cubierto] La factura la emite el operador por su vía SII; la app SOLO registra el
+      folio y JAMÁS emite DTE — 06 · AC-FTAR-08, 03 · AC-FRUT-08 (§7.3, art. 97 N°4 CT).
+KR-50 [parcial] Panel «Hoy» con bandeja viva de excepciones y acciones — bandeja y
+      accionabilidad en 05 · AC-FSEM-01/04/05/20; «reintentar» = duplicar con historia
+      (03 · AC-FRUT-03/17); «devolver» desde la bandeja no existe como origen: pregunta 03-9.
+KR-51 [parcial] Vencimientos visibles: revisión técnica, permiso, próximo servicio por km —
+      02 · AC-FVEH-17 cubre los de fecha; «próximo servicio por km» no existe → D6.
+KR-52 [parcial] Bloque furgón-turno dedicado a UNA empresa como unidad de venta — el
+      concepto `por_bloque_horas` existe (06 · AC-FTAR-01/03) pero el esquema §4.5 no trae la
+      atribución turno/bloque→empresa que KR resolvía con `turnos.empresa_cliente_id`:
+      pregunta abierta 06-12, con AC-FTAR-14 bloqueado en esa aserción.
+KR-53 [cubierto] Regla de oro: PLANIFICACIÓN rebota online, CAPTURAS jamás rebotan al sync —
+      00 · AC-FTEN-06 (clasificación en DDL + linter), 04 · AC-FPOD-05/20, 02 · AC-FVEH-05,
+      03 · AC-FRUT-10; centinelas 4 y 5.
+KR-54 [cubierto] Replay doble de cualquier mutación ⇒ count(*)=1 por client_uuid — 04 ·
+      AC-FPOD-04 (centinela 1), 00 · AC-FTEN-08 (contrato de idempotencia en DDL).
+KR-55 [cubierto] EXCLUDE de agenda WHERE estado<>'anulado': anular y reemplazar idéntico
+      PASA, el solape real rebota — 02 · AC-FVEH-06/07. NOTA: el caso positivo («reemplazo
+      idéntico pasa») no está enunciado como aserción; se explicita aquí como parte del
+      criterio congelado y su test es barato.
+KR-56 [cubierto] El chofer JAMÁS ve CLP, probado con el rol real — 00 · AC-FTEN-21 (patrón
+      RLS), 02 · AC-FVEH-08, 06 · AC-FTAR-09 (centinela 10).
+KR-57 [cubierto] Enteros duros: bultos 1–500, CLP entero, RUT módulo 11, lat/lng caja Chile —
+      03 · AC-FRUT-01/15, 00 · AC-FTEN-09, 01 · AC-FIDN-17.
+KR-58 [cubierto] DTE con UNIQUE(tipo, folio, emisor), tipos 33/39/52/61, SOLO registrado —
+      00 · AC-FTEN-14 (creador único), 03 · AC-FRUT-08/10, 06 · AC-FTAR-08. Cláusula
+      bloqueada: la clase PLANIFICACIÓN|CAPTURA del `COMMENT ON TABLE` de
+      `reference_document` está contradicha entre las specs 03 y 06 — pregunta abierta 00-13.
+KR-59 [cubierto] Sistema Miga íntegro: cifra 96/700 tabular-nums con test, teclado propio
+      ≥64px, botón primario 56px anclado, undo 8 s en vez de modales, única modal =
+      manifiesto incompleto, ningún estado solo por color, es-CL — 08 · AC-FMIG-01/03/05,
+      04 · AC-FPOD-08, 03 · AC-FRUT-07/08. FLOTA agrega dark mode de serie.
+KR-60 [cubierto] Estados obligatorios de todo listado + AA medible (axe, targets, VoiceOver,
+      200%, cero aria-label vacíos) — 08 · AC-FMIG-10/11/20, 04 · AC-FPOD-22/23/24,
+      05 · AC-FSEM-12, 07 · AC-FPOR-12.
+KR-61 [cubierto] Seed panadero realista: 2 EV48, 4 panaderías, 2 rutas de madrugada (12 y 9
+      paradas), manifiestos con DTEs, encargo de andén, reintento, descuadre clasificado,
+      liquidación cerrada con folio y pagada — 08 · AC-FMIG-18 (tenant B «Rutapan», §10).
+KR-62 [cubierto] SOC DECLARADO manda: sin telemetría, OBD ni OCPP en MVP — 02 · AC-FVEH-05
+      (`fuente='declarada'`) y AC-FVEH-14 (`ProveedorTelemetria` con única implementación).
+      FLOTA agrega la fórmula única de rango del §0 donde KR prohibía motor aritmético:
+      mejora deliberada de plataforma.
+KR-63 [cubierto] La devolución es ESTRUCTURAL, no excepción: tabla `devoluciones` con su
+      captura (bultos + motivo + evidencia) y conservación contra lo cargado — 03 ·
+      AC-FRUT-21 (clase CAPTURA, `client_uuid` idempotente, cuadra la ecuación por empresa
+      vía AC-FRUT-11); el seed A devenga exactamente 1 línea `por_devolucion`.
+
+
+RESUMEN
+-------
+Total N = 63.
+  cubierto     51  (incluye KR-42, KR-55, KR-58 y KR-62 con nota o cláusula anotada)
+  parcial       6  (KR-17, KR-23, KR-30, KR-50, KR-51, KR-52)
+  bloqueado     2  (KR-08 → 03-7, KR-09 → 01-1)
+  supersedido   1  (KR-01, IFD → EEVD)
+  omision       5  (KR-29, KR-34, KR-38, KR-41, KR-48) + 2 cláusulas (KR-17, KR-51)
+
+Cláusulas bloqueadas dentro de criterios cubiertos o parciales, ya registradas como
+preguntas al dueño en su spec: 00-13 (clase de `reference_document`, KR-58) · 03-1 (KR-23) ·
+03-3 (KR-30) · 03-9 (KR-50) · 06-12 (KR-52). Ninguna se implementa por adelantado.
+
+Viabilidad del tenant B (Rutapan) en E1 con lo cubierto: consolidación multi-panadería,
+custodia con DTE, POD offline, devoluciones, ecuación de cierre y liquidación con evidencia
+están completos. Los huecos operativos concretos del pan de madrugada son KR-08 (PIN sin
+señal en milk-run), KR-30 (encargo de andén offline) y KR-48 (canal de preliquidación).
+
+Aprobada por Alexis el 08-ago-2026.
+
+Desde esta línea la lista queda CONGELADA: N=63, los 63 IDs y su significado no se tocan.
+`db/flota/gate-criterios-kiloruta.mjs` lo verifica en cada corrida del gate (N declarada ==
+criterios presentes, IDs contiguos y sin repetir, clases del conjunto cerrado, y esta firma
+presente). Cambiar la lista exige un commit con firma nueva del dueño.

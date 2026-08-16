@@ -40,6 +40,7 @@ LOG_FILE="$LOG_DIR/ultimo-check.log"
 PASSED=()
 FAILED=()
 SKIPPED=()
+NO_APLICA=()
 
 run_step () {
   local name="$1"; shift
@@ -56,6 +57,21 @@ run_step () {
 skip_step () {
   echo "== $1 == (SALTADO: $2)" | tee -a "$LOG_FILE"
   SKIPPED+=("$1 ($2)")
+}
+
+# Un paso que NO APLICA a esta app no es lo mismo que un paso que no se probó, y confundirlos
+# tenía una consecuencia concreta: el marcador de verde exige cero saltados, y el gate de FLOTA
+# salta SIEMPRE los invariantes de BD —son de KiloPan; los suyos corren en db/flota/gate.sh y sí
+# se ejecutan—. O sea que el gate de FLOTA podía correr verde entero y NUNCA estampar su
+# marcador, y como la publicación automática lo exige para tocar el remoto, el trabajo del motor
+# se quedaba local para siempre. Descubierto el 11-ago-2026, con el marcador dos días atrasado.
+#
+# Se sigue listando como SALTADO en el resumen —esconderlo sería peor—, pero no bloquea el
+# marcador: lo que ese paso verifica, en esta app, lo verifica otro que sí corrió.
+no_aplica () {
+  echo "== $1 == (NO APLICA: $2)" | tee -a "$LOG_FILE"
+  SKIPPED+=("$1 ($2)")
+  NO_APLICA+=("$1")
 }
 
 # Casilla 5 del prevuelo: infra caída NO es árbol rojo. Un gate que devuelve el mismo
@@ -97,6 +113,31 @@ else
     node packages/metodo/scripts/verify-refs.mjs "--app=$APP"
 fi
 
+# EL LOCK, ANTES QUE EL CÓDIGO. Va acá —entre el contrato y el build— porque un lock
+# desfasado no rompe nada de lo que corre a continuación en esta máquina: el install local
+# no es `--frozen-lockfile`. Rompe en CI, ANTES de la primera prueba, y el aviso le llega a
+# una persona por correo en vez de a un gate. Pasó el 12-ago-2026 con `@axe-core/playwright`
+# (ea5b9b1): package.json comiteado, lock afuera, verde acá y rojo allá.
+run_step "lock al día: ningún package.json pide algo que pnpm-lock.yaml no conoce" \
+  node packages/metodo/scripts/gate-lock-al-dia.mjs
+
+# Los fixtures que se declaran exclusivos, ANTES del e2e: dos suites con la misma persona
+# hacen morir un `beforeAll` con `duplicate key` y el rojo aparece a tres pasos, en un
+# archivo sano. Acá el diagnóstico llega con el índice y los dos archivos en la mano.
+run_step "fixtures exclusivos: dos suites no comparten un RUT declarado propio" \
+  node packages/metodo/scripts/gate-fixtures-exclusivos.mjs
+
+# Gancho genérico: una app puede traer su propio gate (contrato, esquema, invariantes) en
+# `db/<app>/gate.sh`. Corre acá, junto al resto del contrato y antes del código, y decide
+# por sí mismo qué salta sin --full. KiloPan no tiene uno; FLOTA sí.
+if [ -f "db/$APP/gate.sh" ]; then
+  if [ "$FULL" -eq 1 ]; then
+    run_step "gate propio de $APP (completo)" bash "db/$APP/gate.sh" --full
+  else
+    run_step "gate propio de $APP" bash "db/$APP/gate.sh"
+  fi
+fi
+
 if [ "$HAY_APP" -eq 1 ]; then
   run_step "es-CL ($APP): kg/CLP/fecha sin bypass, RUT validado al escribir, cero inglés (AC-H0-09)" \
     node packages/metodo/scripts/verifica-es-cl.mjs "--app=$APP"
@@ -110,19 +151,26 @@ fi
 # ejecutado, que es precisamente el defecto de AC-H0-05 que este gate existe para evitar.
 run_step "unit (packages/metodo/scripts): mutantes de verifica-es-cl.mjs" \
   node --test packages/metodo/scripts/verifica-es-cl.test.mjs
+# Un gate sin suite es una opinión: la de abajo reproduce el caso real de ea5b9b1.
+run_step "unit (packages/metodo/scripts): el gate del lock atrapa el caso que lo trajo" \
+  node --test packages/metodo/scripts/gate-lock-al-dia.test.mjs
+run_step "unit (packages/metodo/scripts): el gate de fixtures no muerde lo que se comparte a propósito" \
+  node --test packages/metodo/scripts/gate-fixtures-exclusivos.test.mjs
 
 run_step "lint (workspace)" pnpm -r --if-present run lint
 run_step "typecheck (workspace)" pnpm -r --if-present run typecheck
 run_step "unit (workspace)" pnpm -r --if-present run test
 run_step "build (workspace)" pnpm -r --if-present run build
-# El standalone de Next.js sirve 200 en TODA ruta aunque le falten los estáticos
-# (es SSR puro sin ellos) — un healthcheck normal no lo detecta. Sin esto, la app
-# "pasa el gate" y queda completamente muda al tocar cualquier botón en producción.
+# Una app Next sirve 200 en TODA ruta aunque le falten los estáticos (es SSR puro sin
+# ellos) — un healthcheck normal no lo detecta. Sin esto, la app "pasa el gate" y queda
+# completamente muda al tocar cualquier botón en producción. El script conoce las dos
+# formas de servido del monorepo (standalone y servidor propio) y verifica la que
+# corresponda: exigirle a una la forma de la otra sería inventar defectos.
 if [ "$HAY_APP" -eq 1 ]; then
-  run_step "build standalone incluye .next/static y public/ (si no, la app no hidrata)" \
-    bash -c "test -d apps/$APP/.next/standalone/apps/$APP/.next/static && test -f apps/$APP/.next/standalone/apps/$APP/public/sw.js"
+  run_step "artefacto servido completo: estáticos donde el servidor los busca (si no, la app no hidrata)" \
+    bash packages/metodo/scripts/verifica-servido.sh "$APP"
 else
-  skip_step "build standalone de $APP" "apps/$APP todavía no existe (solo hay contrato)"
+  skip_step "artefacto servido de $APP" "apps/$APP todavía no existe (solo hay contrato)"
 fi
 run_step "audit (AC-SEC-03)" pnpm audit --audit-level=high
 
@@ -167,12 +215,29 @@ if [ "$FULL" -eq 1 ]; then
       echo "  esperando el puerto 3301 (otro gate lo tiene)…"
       sleep 15
     done
+    # UN SERVIDOR ZOMBI NO ES UN AC ROTO (bug real, 12-ago-2026). Una corrida anterior que
+    # muere sin bajar su servidor deja el puerto tomado, y Playwright —que no usa
+    # `reuseExistingServer`— aborta con «is already used». Eso llega acá como un rojo pelado
+    # de «e2e móvil», indistinguible de una prueba que falla: el motor pausó por esto sobre
+    # AC-FSEM-16, y el diagnóstico apuntaba al AC en vez de al puerto. Mientras el zombi
+    # viva, TODO gate completo sale rojo, así que el arreglo no es reintentar: es decirlo.
+    # No se mata solo a propósito — matar procesos que este gate no arrancó es exactamente
+    # como se pierde el trabajo de una sesión vecina (§ una sesión, un proyecto).
+    # El veredicto vive en su propio guion para que prueba-arnes.sh lo ejerza abriendo un
+    # socket de verdad, en vez de creerle a un grep sobre este archivo.
+    bash packages/metodo/scripts/puerto-e2e-tomado.sh "--app=$APP" 2>&1 | sed 's/^/  /' || true
     run_step "e2e móvil 390x844" pnpm --filter "$APP" run e2e
     [ "$lock_e2e" = "si" ] && bash packages/metodo/scripts/lock.sh soltar "e2e-$APP" $$ >/dev/null 2>&1
   else
     skip_step "e2e Playwright" "apps/$APP aún no tiene playwright.config.ts"
   fi
-  if [ -f db/migraciones/0001_identidad.sql ]; then
+  # `db/test-invariantes.mjs` y `db/migraciones/` son de KiloPan (schema `pan`, PGlite).
+  # Sin este guard, `check.sh --full --app=flota` corría la suite de OTRA app y la reportaba
+  # como paso propio: un verde que no dice nada de FLOTA y un rojo que tampoco sería suyo.
+  # Los invariantes de FLOTA viven en su `db/flota/gate.sh` (cluster real, §4.1).
+  if [ "$APP" != "kilopan" ]; then
+    no_aplica "invariantes de BD" "son de KiloPan; los de $APP corren en db/$APP/gate.sh"
+  elif [ -f db/migraciones/0001_identidad.sql ]; then
     run_step "invariantes de BD (violar cada CHECK/trigger y esperar rebote)" \
       node db/test-invariantes.mjs
   else
@@ -203,7 +268,10 @@ echo "verde" > "$LOG_DIR/ultimo-check.estado"
 # agente. Solo el gate COMPLETO estampa el verde — un --fast en verde no acredita nada,
 # porque se saltó e2e e invariantes. El watchdog compara este tag contra HEAD para saber
 # si hubo progreso real desde el último verde de verdad.
-if [ "$FULL" -eq 1 ] && [ "${#SKIPPED[@]}" -eq 0 ]; then
+# Cuentan solo los saltados REALES: los que no aplican a esta app ya se verificaron en otro
+# paso que sí corrió, y exigirlos acá dejaba a FLOTA sin poder estampar nunca su verde.
+SALTADOS_REALES=$(( ${#SKIPPED[@]} - ${#NO_APLICA[@]} ))
+if [ "$FULL" -eq 1 ] && [ "$SALTADOS_REALES" -eq 0 ]; then
   TAG="verde-$(date +%Y%m%d-%H%M%S)"
   git tag -f "$TAG" >/dev/null 2>&1 && printf '%s\n' "$TAG" > "$LOG_DIR/last-green.tag"
   printf '%s\n' "$(git rev-parse HEAD 2>/dev/null)" > "$LOG_DIR/last-green.sha"

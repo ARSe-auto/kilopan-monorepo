@@ -32,6 +32,10 @@ export PATH="$HOME/.local/lib/nodejs/current/bin:/opt/homebrew/bin:$PATH"
 cd "$(dirname "$0")/../../.."
 
 PANEL="packages/metodo/panel"
+# Acepta y descarta `--app=`: el watchdog llama al publicador que corresponda con el mismo
+# argumento, y morir por una bandera que no usa cortaría la cadena por nada.
+for arg in "$@"; do case "$arg" in --app=*) ;; *) ;; esac; done
+
 RAMA="$(git rev-parse --abbrev-ref HEAD)"
 
 if [ "$RAMA" != "main" ]; then

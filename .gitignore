@@ -35,3 +35,10 @@ apps/kilopan/playwright-report/
 
 # distDir del e2e (build propio, separado del .next de produccion)
 apps/kilopan/.next-e2e/
+
+# Artefactos de e2e y build de apps/flota (hito 0, 09-ago-2026). Mismos nombres que los
+# de apps/kilopan: el distDir propio del e2e no lo tapa el `.next/` de arriba.
+apps/flota/.next-e2e/
+apps/flota/playwright-report/
+apps/flota/test-results/
+apps/flota/blob-report/

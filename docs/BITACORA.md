@@ -10,6 +10,59 @@ el aprendizaje contradice lo que creíamos. **Qué NO va:** el estado del plan (
 
 ---
 
+## 2026-08-09 · Arranca la construcción de FLOTA: hito (a), 4 ACs y tres defectos del arnés
+
+**Sesión supervisada** (Opus 5, esfuerzo alto, por orden de Alexis y por el §8: el hito (a)
+es decisión fundacional irreversible y no se delega a un motor). Rama `flota/specs-e1`.
+
+**Lo primero fue infraestructura, y era obligatorio.** El §4.1 pide `CREATE DATABASE …
+TEMPLATE`, un rol por tenant con `CONNECT` solo a su base y `uuidv7()` nativo: PGlite —lo que
+usa KiloPan— no da ninguna de las tres. En la máquina ya había PostgreSQL 18.4 (Postgres.app)
+sirviendo el cluster de eauto en el 54329; FLOTA reutiliza los BINARIOS y nada más, con
+cluster propio en 54331 y PGDATA `~/.flota-pg`. pgTAP 1.3.3 vendorizado en `vendor/pgtap/` y
+servido por `extension_control_path`, que es cómo se usa sin escribir dentro del bundle
+compartido con eauto. Todo verificado en vivo ANTES de comprometer diseño.
+
+**El hallazgo que cambia el DDL de toda la plataforma:** `CHECK (tenant_id = (SELECT id FROM
+tenant_info))`, tal como lo escribe el §4.1 literal, **es imposible en PostgreSQL** — «cannot
+use subquery in check constraint», verificado contra 18.4. Se implementa con
+`tenant_actual()`, función IMMUTABLE con el uuid del tenant HORNEADO como literal en la
+provisión. No es un rodeo: es lo único que sobrevive a `pg_restore`, donde las funciones se
+crean antes del COPY y un CHECK que leyera `tenant_info` fallaría fila por fila — y el
+offboarding del §2 (métrica 7) es justamente un dump y un restore.
+
+**Cerrados (4 de 28 del módulo 00):** AC-FTEN-18 (lista KR congelada con N=63, firmada por
+Alexis, que en el mismo acto resolvió las 7 decisiones abiertas — KR-29 y KR-41 entran a E1
+como AC-FRUT-22 y AC-FVEH-22, y el plan pasa a 197 ACs) · AC-FTEN-28 (guardrail §7.1, 9
+mutantes; sin la puerta de «remota intencional» que sí tiene KiloPan) · AC-FTEN-01 (familia
+canónica del §0 en `packages/nucleo-comun/src/constants.ts` + grep-gate, 21 pruebas) ·
+AC-FTEN-06 (linter de migraciones, 15 mutantes).
+
+**Tres defectos que los mutantes destaparon, ninguno teórico.** (1) El grep-gate de
+constantes cazó que un comentario del propio test repetía un número de la familia — y
+después que mordía DENTRO del uuid centinela `…-8000-…`, porque `\b` abre frontera en el
+guion. (2) La exigencia de índice del linter **no podía ponerse roja nunca**: `UNIQUE
+(tenant_id, id)`, que la exigencia 4 ya obliga, es un índice encabezado por `tenant_id`.
+Reescrita para exigir además que cada FK compuesta tenga índice que la encabece — Postgres
+no indexa las FK solo y un borrado en el padre haría scan completo del hijo.
+
+**Y dos del arnés, pedidos por el dueño** (`ac14b67`): el motor apuntaba a
+`claude-opus-4-8` mientras Sonnet y Haiku estaban al día, así que «regla dura ⇒ modelo tope»
+mandaba a una generación anterior — y envejeció invisible porque `prueba-arnes.sh` clavaba
+ese id literal en seis aserciones: la suite custodiaba el valor viejo. Ahora los ids se leen
+del selector. El anti-no-op del selector —la única aserción que el §8 pide por su nombre—
+era falso: contaba tres ids escritos a mano. Y `loop.sh` pasaba `--fallback-model sonnet`
+siempre, así que un AC de regla dura podía terminar escrito por un modelo menor sin que
+nadie se enterara; ahora no hay fallback cuando se pide el tope, y `detectar-degradado.mjs`
+revisa quién respondió de verdad después de cada build.
+
+**Lección de método, y es sobre mí:** le dije al dueño que iba a «seguir construyendo toda
+la noche» entre mensajes. Falso: en este arnés cada turno termina y espera. La sesión quedó
+tres horas ociosa. La continuidad real es el traspaso a sesión nueva, no una promesa de
+trabajo de fondo que el harness no puede cumplir.
+
+---
+
 ## 2026-08-07 · CI en rojo desde el 3-ago (15 corridas seguidas): CVE de nanoid sin override
 
 **Síntoma:** GitHub Actions en rojo casi sin excepción desde la corrida #33 (3cec1bd,
@@ -1614,3 +1667,578 @@ liberar. FLOTA pasa a 3310/3311. Los tres arreglos con su caso en `prueba-arnes.
 
 **Lo que NO se construyó, a propósito:** ni una línea de `apps/flota`. La construcción
 arranca en sesión limpia con Opus 5, desde `docs/ARRANQUE_FLOTA.md`.
+
+---
+
+## 09-ago-2026 · FLOTA hito (a): de 4 a 25 ACs cerrados, y las 11 preguntas del dueño absorbidas
+
+Sesión de construcción supervisada (Opus 5, esfuerzo alto; el §8 prohíbe delegar este hito a
+un motor). Arrancó absorbiendo `docs/HANDOFF.md` de la sesión anterior y cerró **veintiún
+ACs** del módulo 00: 02, 03, 04, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 22, 23,
+24, 25 y 27. El módulo va **25 de 28**. `check.sh --app=flota --full` VERDE de punta a punta,
+con 82 pruebas contra el cluster real y siete suites pgTAP (157 asertos).
+
+**Los tres que quedan no se pueden cerrar todavía, y por qué:** AC-FTEN-05 (ruteo por
+subdominio) y AC-FTEN-26 (generador de la suite HTTP A-contra-B) necesitan que `apps/flota`
+exista —el primero para responder, el segundo para tener un manifiesto de rutas que leer—, y
+AC-FTEN-19 (matriz KiloRuta) va al final por definición: su gate exige que CADA test
+referenciado exista en el repo, y la mayoría nace en los módulos 01–08.
+
+**Lo que ahora existe y no existía.** La provisión completa (`tenant_template` → `t_<slug>`
+con su identidad horneada), el runner ×N con canario y rol `migrator` dueño del esquema, las
+credenciales por tenant con `scram-sha-256` y CONNECT acotado, el DDL transversal del §4.6 con
+append-only por REVOKE y por trigger, la plantilla de vertical + el árbol de grupos sin ciclos
++ los parámetros, el tipado de dinero con `round_clp()` y el patrón de RLS del §4.8, el plano
+de control con sus entitlements y el centinela 14, el job exportador, el offboarding con
+restore verificado, el runbook de brechas y la instancia dedicada documentada.
+
+**Seis defectos reales que el trabajo destapó**, todos con su prueba en el mismo commit:
+
+1. `t_canary` existía, estaba al día y NO tenía identidad: su `tenant_actual()` seguía en el
+   centinela de la plantilla, así que cada CHECK de dominio comparaba contra él y PASABA. Lo
+   encontró la suite pgTAP de AC-FTEN-08, no las pruebas que ya existían. Ahora la provisión
+   se deshace sola si la siembra falla, y `migrar verificar` mira la identidad además del
+   rezago.
+2. El rol de app no tenía USAGE sobre secuencias: no podía insertar un evento, porque el
+   `nextval` del DEFAULT rebotaba con 42501. Habría aparecido con el primer POD del hito (e).
+3. `current_setting(…, true)` devuelve CADENA VACÍA —no NULL— cuando termina la transacción
+   del SET LOCAL. Sin el `nullif` sobre `''`, la transacción siguiente del pool heredaba el
+   permiso de ver dinero.
+4. Un UPDATE sobre tabla VACÍA no dispara un trigger FOR EACH ROW, así que el rebote de
+   append-only se leía como verde. Las pruebas ahora asertan que la tabla no esté vacía antes
+   de exigir el rechazo.
+5. **Toda fila SEMBRADA por una migración llegaba al tenant con el `tenant_id` centinela.** En
+   la plantilla `tenant_actual()` devuelve el centinela, y PostgreSQL no reevalúa un CHECK al
+   reemplazar la función, así que la fila quedaba atada a un tenant que no existe. Nadie se
+   enteraba hasta el primer `pg_dump` + restore, donde el COPY sí revalida y el restore muere
+   — lo destapó la suite de offboarding. La provisión ahora ADOPTA esas filas y verifica que
+   no quede ninguna ajena.
+6. Una base provisionada ANTES de la migración que agrega una constante de plataforma se
+   quedaba sin ella para siempre. El runner ahora las siembra después de migrar, igual que
+   reasienta los privilegios.
+
+**Las 11 preguntas al dueño quedaron respondidas y absorbidas.** Otra sesión levantó las
+respuestas (`docs/respuestas-dueno-2026-08-09.md`); ésta las metió en la spec con su razón,
+sacó las cláusulas BLOQUEADO de AC-FTEN-05, 10 y 25, y reescribió AC-FTEN-27 —que era el único
+bloqueado de punta a punta— con su oráculo doble. La P5 cerró `parametros` en ocho claves y
+obligó a corregir un CHECK que habría rebotado el valor que el propio dueño eligió
+(`bultos_max_sin_receptor = 0`, «siempre foto»).
+
+**Anotado como ítem, no como supuesto:** verificar que el Postgres gestionado de Railway (P2)
+dé PostgreSQL ≥ 18 y `CREATE DATABASE … TEMPLATE` a demanda. Si no, el §4.1 no se puede
+implementar ahí y la decisión vuelve al dueño.
+
+**Dos sesiones en el mismo árbol.** Durante esta sesión hubo otra trabajando en
+`~/kilopan-monorepo-flota` (la que entrevistó al dueño). No se pisaron porque tocaron archivos
+distintos, pero el CLAUDE.md dice «un builder por worktree» por algo: la coordinación fue por
+descubrimiento y no por acuerdo previo.
+
+---
+
+## 09-ago-2026, 11:36 → 16:10 — Hito 0 entregado: `apps/flota` existe, y con ella cuatro pasos del gate dejaron de estar saltados
+
+Tres piezas, en este orden: **AC-FMIG-01** (tokens estructurales de Miga), el **esqueleto de
+`apps/flota`** y **AC-FTEN-05** (ruteo por subdominio). `check.sh --app=flota --full` pasó de
+10 OK / 5 saltados a **14 OK · 0 fallados · 1 saltado** — el único saltado son los invariantes
+de BD, que para FLOTA corren en su propio `db/flota/gate.sh`.
+
+**Lo que enseñó meter `packages/miga` al grep-gate de constantes.** AC-FMIG-01 pide que un
+número mágico de la familia §0 escrito en `packages/miga` ponga el build en rojo. Al hacerlo
+efectivo aparecieron **39 duplicaciones vivas** dentro de los componentes —el 96/700 de la
+cifra operativa, el 56 del botón, el 64 de la tecla, el 48 del target, la grilla y los radios—.
+Ninguna se tapó relajando un patrón: cada componente pasó a leer su token. Y dos patrones
+resultaron no vigilar nada: `\b34\b` no muerde `font-size: 34px` porque entre dígito y letra
+no hay frontera de palabra. Lo pilló el test que ejerce cada patrón contra su propia muestra —
+el guardián del guardián, otra vez.
+
+**El ruteo no cabía en un middleware de Next.** Los tres desenlaces que dictó el dueño
+(404 · 503 · 404) son códigos HTTP, y elegirlos exige consultar `control` con el driver de
+Postgres. El middleware corre en el Edge y su runtime Node **no existe** en la versión
+instalada. Las dos alternativas eran peores: un layout no puede fijar el status —un tenant
+suspendido habría respondido 200 con un cartel, que para un monitor es «todo bien»—, y un
+middleware Edge consultando un endpoint interno convierte a ese endpoint en un oráculo de qué
+subdominios existen, justo lo que el 404-para-los-dos-casos vino a cerrar. Quedó un
+`servidor.mjs` propio, el mismo proceso en desarrollo y en producción. Eso obligó a sacarle
+`output: standalone` a esta app: arrancando dentro del standalone, Next se pone a **descargar
+el paquete de SWC**, o sea maquinaria de build que esa salida existe para no llevar.
+
+**El mutante que sobrevivió, y por qué importa.** El que hace que el servidor respete una
+cabecera `x-flota-tenant-bd` venida de afuera pasó la primera versión del test **en verde**:
+el caso pedía con un host inexistente, así que el 404 saltaba antes de llegar al código de las
+cabeceras. El ataque de verdad es otro — el atacante tiene su propia cuenta, manda un host
+VÁLIDO y apunta la cabecera a la base del vecino. Hizo falta un SEGUNDO tenant activo en el
+fixture para poder montarlo, y ese segundo activo destapó de paso otro verde por accidente:
+con un solo tenant, «el subdominio de A va a la base de A» lo cumple cualquier base, porque
+solo hay un slug posible. Un mutante que no muere vale más que diez tests que pasan.
+
+**Deuda anotada, no tapada:** `scripts/deploy.sh` del §9.1 sigue sin existir (es precondición
+de proceso, no ítem del plan, y por eso no tiene AC que lo reclame), la provisión no registra
+el tenant en `control.tenants` —lo hacen las suites y, en producción, el wizard del hito g— y
+en CI no corre un proceso PgBouncer, declarado dentro del propio AC.
+
+Módulo 00: **26 de 28**. Quedan AC-FTEN-26 (necesita decidir con Alexis dónde vive el
+manifiesto de rutas) y AC-FTEN-19 (va al final del hito por definición).
+
+## 09-ago-2026, 16:10 → · AC-FTEN-26: el manifiesto de rutas se deriva del árbol, y la suite A-contra-B sale de él
+
+Alexis cerró la pregunta que el traspaso anterior dejó abierta, y con el dato que la volvió
+fácil: el manifiesto **no es solo insumo de esta suite**. Es el oráculo de cuatro pruebas de
+AUSENCIA de otros módulos —cero endpoint de emisión de DTE (AC-FTAR-08, art. 97 N°4 CT), sin
+endpoint de línea manual (AC-FTAR-04), nada de `/cliente/*` en el endpoint de captura (07) e
+impersonación (01)—, y una ausencia solo prueba algo si el inventario no puede quedar
+incompleto. De ahí: **derivado de `src/app/**` y comiteado igual**, en `apps/flota/rutas/`.
+Lo generado es la lista; lo que se edita a mano es el `cruce` de cada ruta.
+
+Lo que NO se tapó: hoy no hay sesión (nace en el módulo 01) ni ninguna ruta con parámetro,
+así que el caso «404 jamás 403» no tiene qué ejercer todavía. En vez de declararlo verde, el
+juicio se separó del driver del e2e (`rutas/veredicto.mjs`) y se probó contra respuestas de
+laboratorio; el lector de la huella de la BD de B se ejerce contra el cluster real. Y la
+suite se probó contra una fuga de verdad: con el servidor mutado para respetar la cabecera
+`x-flota-tenant-bd`, `GET /api/tenant` se pone rojo nombrando las dos cadenas filtradas.
+
+Tres guardias contra el verde vacuo, que es el modo de falla natural de una suite
+autogenerada: cero casos emitidos ⇒ rojo; la identidad de B tiene que ser observable por la
+app; y ningún centinela de B puede ser subcadena de la identidad de A (el fixture tiene
+`ruteo_activo` y `ruteo_activo_b`: al revés, el centinela dispararía contra datos propios y
+el arreglo cómodo sería ablandarlo).
+
+Módulo 00: **27 de 28**. Queda AC-FTEN-19, que va al final del hito por definición.
+
+## 09-ago-2026 (misma sesión, continuación) — Hito (b) arrancado: el servidor de identidad, entero
+
+Trece ACs en una sesión: AC-FTEN-26 (cierre del módulo 00) y doce del módulo 01. El módulo 01
+pasó de **0 a 13 de 21**, y llegó a un límite que vale la pena nombrar: **todo lo que queda
+necesita o la PWA o una respuesta del dueño.** El servidor del hito (b) está completo.
+
+Y se verificó desde cero al cerrar: borradas las 8 bases del cluster —control, plantilla,
+canario y todos los fixtures—, el gate completo se reconstruyó desde el repo con los 14 pasos
+en verde. La sesión acumuló varias dependencias de orden entre suites y las fue arreglando; la
+corrida desde vacío es lo que prueba que no quedó ninguna.
+
+### Las tres decisiones de fondo que se tomaron
+
+1. **El manifiesto de rutas se DERIVA del árbol** (AC-FTEN-26). Lo destapó rastrear quién lo
+   consume: no es insumo de una suite, es el oráculo de cuatro pruebas de AUSENCIA de otros
+   módulos. Una ausencia solo prueba algo si el inventario no puede quedar incompleto. Ya
+   trabajó tres veces en la sesión — frenó el build en cada ruta nueva — y AC-FIDN-11 lo usó
+   para probar que no existe endpoint de impersonación.
+
+2. **La sesión ES el aparato** (AC-FIDN-09). El secreto que la aprobación emitió, presentado
+   en cada request. Sin cookie, sin token con vencimiento, sin refresh. No es minimalismo: un
+   token con vencimiento propio tendría que caducar para que la revocación surta efecto, y esa
+   ventana es la que no puede existir cuando alguien perdió el teléfono en la calle.
+
+3. **El secreto viaja en un sobre sellado** (AC-FIDN-04). El dueño aprueba desde su teléfono y
+   el trabajador espera en el suyo; el secreto cruza cifrado contra la clave pública del
+   aparato, con ECDH P-256 y `crypto.subtle` — la MISMA API del navegador, así que el test lo
+   abre con el código exacto que va a correr en el teléfono y con la privada no extraíble.
+
+### Los defectos que los tests destaparon, y que en producción se habrían visto tarde
+
+- **`RETURNING sobre` devolvía el valor NUEVO** —el null que el propio UPDATE acababa de
+  escribir—, así que el retiro borraba el sobre sin entregarlo. El trabajador habría quedado
+  esperando una sesión que nunca iba a arrancar, y se habría visto en el primer enrolamiento
+  real. Corregido con `RETURNING OLD`, de PostgreSQL 18.
+- **El aislamiento del ledger se volvía el problema de la suite siguiente.** Con firmas
+  apuntando a una persona, ninguna otra suite podía limpiar `personas`: el DELETE rebota
+  42501, que es exactamente lo que el §7.4 promete. Las suites que escriben hechos ahora
+  provisionan su propia base.
+- **Dos gates atraparon a quien los escribió**: el CHECK de duración cerrada impidió que el
+  test de soporte falseara un vencimiento, y `gate-ruts.mjs` marcó el RUT literal que su
+  propio test llevaba escrito.
+
+### Ocho preguntas al dueño, respondidas en dos tandas
+
+Sesiones, backoff del PIN, distribución de la invitación y RUT repetido en la primera;
+rotar PIN, rol `cliente`, visibilidad de solicitudes y break-glass en la segunda. Registro en
+`docs/respuestas-dueno-2026-08-09-spec01.md`. Quedan abiertas la 4 (passkey) y la 8 (ARCO y
+plazos), las dos P2.
+
+La que más consecuencias tuvo: **el RUT ya registrado rebota al APROBAR y no al solicitar**,
+con el mismo criterio del `404 · 503 · 404` — quien tiene el link no está autenticado y el link
+viaja por WhatsApp. De ahí salen la respuesta indistinguible del endpoint de solicitud, la del
+re-enrolamiento, y el rebote nombrado del lado del dueño, que sí conoce su nómina.
+
+## 09-ago-2026, 17:15 → · Hito (b) terminado, hito (a) cerrado, y la PWA deja de no existir
+
+Siete ACs cerrados con el gate completo en verde después de cada uno: **AC-FIDN-12** (panel de
+gobierno), **AC-FIDN-17** (RUT en vivo), **AC-FIDN-20** (cero consentimiento), **AC-FIDN-05**
+(standalone + persist), **AC-FTEN-19** (la matriz KiloRuta, que CIERRA el módulo 00 en 28 de
+28) y **AC-FIDN-02** (el flujo feliz entero contando acciones). El módulo 01 pasa de 13 a 18 de
+21, y los tres que quedan no son construibles hoy: AC-FIDN-07 espera el outbox del hito (e), y
+AC-FIDN-13 y AC-FIDN-15 esperan las preguntas 4 y 8. **El hito (b) está terminado en todo lo
+que no depende de otro hito ni de una respuesta.**
+
+Al arrancar la sesión `apps/flota` servía un shell y cuatro rutas de API. Ahora sirve **18
+rutas**, con tres pantallas de verdad —solicitar acceso, esperando aprobación con guía A2HS, y
+«Ya tengo cuenta»— y el plano de control entero del dueño.
+
+### Las decisiones de fondo
+
+1. **Tres respuestas para el panel del dueño, y la asimetría es el diseño.** Sin sesión ⇒ 404
+   pelado; con sesión y rol distinto de `admin_tenant` ⇒ 403 y cero filas; recurso de otro
+   tenant ⇒ 404. El 401 se descarta a propósito: sobre `/api/gobierno/invitaciones/<id>`
+   confirma que ese uuid es una invitación real de alguien. El 403 sí se le dice al operador,
+   que SÍ es de la casa — esconderle la puerta lo deja reportando «no me anda» sobre algo que
+   funciona.
+
+2. **Los barridos de «cada acción de gobierno» salen del manifiesto**, no de una lista escrita
+   a mano. Una ruta de gobierno nueva entra sola a los dos barridos, o el gate la frena antes
+   por no tener cruce declarado. Y son las **primeras rutas de tipo `recurso` del producto**:
+   el «404 jamás 403» del centinela 2 pasó de juzgarse contra respuestas de laboratorio a
+   ejercerse contra la app.
+
+3. **El código puente no lleva plazo, y la ausencia es deliberada.** Ni el maestro ni la
+   respuesta del dueño fijan uno. Lo acotan un solo uso, uno vivo por usuario, y —sobre todo—
+   la sesión del propio operario: quien escuche el código dictado en un galpón no tiene el
+   aparato enrolado de esa persona. Encaja con la respuesta a la pregunta 1: la sesión personal
+   no caduca, así que quien olvidó el PIN sigue teniendo su teléfono adentro.
+
+4. **Dos implementaciones del módulo 11 son inevitables, así que se vigilan.** El §4.3 pide
+   validar al escribir, tecla a tecla y sin red: preguntarle a la base por cada dígito no es
+   una alternativa, es otro producto. La divergencia se cierra con un oráculo diferencial que
+   pasa la lista congelada entera por las dos y exige el mismo veredicto RUT por RUT.
+
+5. **El aparato incompleto TIENE sesión.** Negársela sería el silencio que AC-FIDN-05 prohíbe
+   con esas palabras: no habría pantalla donde decirle qué le queda pendiente. La sesión
+   informa `enrolamiento_completo` con las dos condiciones por separado.
+
+6. **El checkbox de consentimiento no sobra: hace daño.** La base de licitud es la ejecución
+   del contrato; pedirle consentimiento a alguien que necesita el teléfono para trabajar finge
+   una opción que no tiene y debilita al tenant bajo la 21.719. El alcance del grep se DERIVA
+   —las pantallas que llaman a los endpoints de enrolamiento— y no barre la app entera a
+   propósito: los términos del tenant sí existen y los acepta el admin en el wizard.
+
+### Los defectos que aparecieron, y uno estaba latente hace rato
+
+- **`tenant_info.id` y `control.tenants.id` NO coinciden.** El endpoint de grants es el primero
+  que necesita el id del plano de control —la FK de `grants_soporte` apunta ahí— y leerlo de
+  `tenant_info` habría dado violación de FK en el primer grant de PRODUCCIÓN, no en una prueba.
+  Es la deuda que el traspaso anterior ya listaba («la provisión no registra el tenant en
+  control.tenants») mordiendo por primera vez. Resuelto por slug contra `control`; la deuda de
+  fondo sigue abierta y ahora tiene un caso concreto.
+- **La guardia anti-vacuidad de `gate-pii.test.mjs` se rompió sola, con el gate sano.**
+  Comparaba contra `/0 migraciones/` sin anclar, y esa expresión también casa con «20
+  migraciones» — que es a donde llegó el repo esta sesión. Una guardia que falla por contar
+  bien enseña a ignorarla; quedó anclada al separador.
+- **El linter del §9.2 frenó la migración del código puente** por su segunda FK al mismo padre
+  sin índice que la encabece. Dos FK a `usuarios` por columnas distintas necesitan dos índices,
+  y es la clase de costo que no se ve hasta que la tabla tiene años.
+- **Ni `invitaciones.ts` ni `secretos.ts` se pueden importar desde el teléfono**: abren con
+  `node:crypto` y usan `Buffer`. Se PARTIÓ la parte pura (`dominio/codigo-corto.ts`) en vez de
+  copiarla, y la mitad del navegador vive en `cliente/`. Una segunda normalización del código
+  corto y un día el que la persona teclea se acepta en pantalla y rebota en el servidor.
+
+### Y al final, el flujo feliz medido
+
+**F-A en 3 acciones (presupuesto 4), F-B en 5 —una por paso— y F-C en 1. La sesión del
+trabajador arranca con CERO acciones suyas.** El presupuesto del §5.3 se cuenta con un contador
+que envuelve cada toque: agregar un paso al flujo sube la cuenta sola, mientras que un número
+escrito a mano habría seguido diciendo lo de antes. Los toques del teclado propio no entran —
+los dígitos de un RUT o de un PIN son el dato, no decisiones.
+
+**El QR se escribió en vez de instalarse** (decisión de Alexis ante la alternativa concreta).
+Vive en la pantalla del módulo que guarda RUTs y PINs, y una librería de terceros ahí es
+superficie de cadena de suministro y peso en el bundle. El problema real fue el otro: un QR mal
+codificado se ve idéntico a uno bueno. Los mutantes no llevan un solo vector recordado —prueban
+la divisibilidad por el generador de Reed-Solomon, α^255=1 en GF(256), la distancia de Hamming
+del BCH(15,5), el zigzag como permutación— y las tablas de bloques, que no se derivan de nada,
+se validaron contra el decodificador del sistema operativo: 14 casos, versiones 1 a 6, leídos
+idénticos.
+
+Y el hallazgo que solo aparece recorriendo los dos teléfonos en orden: **volver de «Compartir»
+no recargaba la lista**, y entre compartir el link y volver a mirar pasa justo el rato en que la
+persona completa sus datos. El dueño veía «no hay nadie esperando» con alguien esperando.
+
+---
+
+## 09-ago-2026 (20:14 →) · Hito (c) arranca: vehículos, gobierno de la flota y el vehículo-día
+
+Sesión con Opus 5, esfuerzo alto, tras absorber `docs/HANDOFF.md` (archivado en
+`docs/handoffs/2026-08-09-2230.md`). **Módulo 02: 3 de 22.** Plataforma: **49 de 197.**
+
+Tres ACs, tres commits, cada uno con su test naciendo junto al código: **AC-FVEH-01** (alta
+con patente + tipo, y su baseline de acciones), **AC-FVEH-02** (el CRUD es del dueño y el
+DELETE desactiva) y **AC-FVEH-06** (el vehículo-día con su EXCLUDE de solape).
+
+### Lo que costó decidir, y por qué quedó así
+
+**«Progresivo» obliga a que nada tenga default.** El §5.4 pide alta en dos minutos con dos
+campos y el resto después. La forma de sostenerlo no es un comentario: es que TODA columna
+salvo patente y tipo sea nullable y sin default. Un default sano —una autonomía de folleto, un
+SOH de 100— es una cifra inventada con cara de dato medido, y el Anexo A dice con todas las
+letras que los 305 km CLTC no son los 185–245 reales. El pgTAP lo vigila en el catálogo: el día
+que alguien ponga `NOT NULL` en `bateria_wh` «para que los datos estén completos», el alta en
+dos minutos se muere y el gate lo dice antes del deploy.
+
+**El «SOLO por trigger» de las proyecciones se sostiene, no se declara.** `vehiculos.odometro`
+y `vehiculos.soc` tienen un trigger que rebota cualquier escritura que no venga del proyector
+de lecturas. El pgTAP ejerce las DOS mitades —la puerta cerrada y la puerta que sí abre con el
+GUC encendido—, porque un guardián que rebotara siempre pasaría igual el primer test y
+AC-FVEH-05 descubriría que la proyección no tiene forma de escribirse.
+
+**El 422 de patente duplicada se juega en el índice, no en un `select` previo**, y lo mismo el
+solape de turnos: los dos chequeos «mirar antes de escribir» son carreras que dos requests
+simultáneos ganan. La normalización de patente (mayúsculas, sin separadores) es lo que hace que
+el UNIQUE signifique «un camión» y no «un camión por cada forma de tipearlo».
+
+**El maestro pide «tipo (chips)» y no enumera los chips en ninguna parte** — ni §4.5, ni §5.4,
+ni `vertical_template`. Inventar la lista sería responder por el dueño: entró como **pregunta
+15** de la spec 02. Mientras tanto los chips salen de los tipos que ese tenant ya usó: la
+primera alta se escribe, de la segunda en adelante es un toque.
+
+**Dónde vive el gobierno de vehículos.** Las mutaciones van bajo `/api/gobierno/**` porque el
+§5.4 las pone con esas palabras en el plano de control del dueño — y el efecto práctico es que
+el barrido autogenerado de AC-FIDN-12 las recogió solas, con el centinela 15 cubierto sobre
+estas puertas y sobre la que se agregue mañana. La LECTURA quedó aparte (`/api/vehiculos`):
+el mismo §5.4 dice que el operador lee y asigna, y un 403 ahí le rompería el trabajo.
+
+**Cláusulas que salen del maestro y no del enunciado del AC** (escritas en la spec, no
+inventadas en el código): la desactivación se DESHACE con evento propio —una que no se revierte
+es un borrado con pasos extra—; la edición es de lista cerrada porque `patente` es identidad y
+`odometro`/`soc` son proyecciones; un vehículo desactivado no abre jornada; el rol `cliente` no
+abre turnos, porque le sumaría al denominador de la EEVD una jornada que nadie trabajó; y
+`config_version_id` se sella con los entitlements LEÍDOS de `control`, no con `{}` —un snapshot
+vacío se lee igual que «todas las features apagadas».
+
+### Baseline de acciones, que ahora es un techo
+
+El maestro no fija presupuesto de toques para el alta (§5.3 no la lista; el «<2 min» del §5.4 es
+oráculo de tiempo). Así que el camino feliz **fijó su baseline en el primer verde: 3 acciones**
+—patente, tipo, agregar— y de ahí en adelante una regresión que lo suba pone el gate rojo. El
+artefacto (`packages/metodo/panel/acciones-alta-vehiculo.json`) y su histórico deduplicado por
+SHA siguen el molde del contador de exenciones de rutas.
+
+### Dos defectos que el trabajo destapó
+
+- **El grep-gate de constantes se ponía rojo al CITAR el §4.5 del maestro.** «(§4.5)» caía en el
+  patrón del contraste mínimo (4.5), y este módulo cita esa sección en cada archivo. Un guard
+  que castiga citar la constitución es un guard que alguien apaga a la semana: quedó acotado con
+  un lookbehind y un mutante propio que lo ejerce en las dos direcciones —la cita no dispara, el
+  número suelto sí—.
+- **`vehiculos.spec.ts` contaba TOTALES de `eventos` y `audit_trail`.** Son append-only y
+  empezaron a acumular lo que deja el fixture de la suite de turnos, así que el verde duró
+  exactamente hasta el AC siguiente. Pasó a medir por DIFERENCIA, que es la regla de la casa
+  para esas tablas y estaba escrita en el traspaso.
+
+### Estado al cierre del tramo
+
+`check.sh --app=flota --full` en VERDE: **14 OK · 0 fallados · 1 saltado declarado**, con 149
+casos e2e. Última migración: `0018_turnos`. Preguntas al dueño abiertas: **nueve** en la spec 02
+(1, 6, 7, 9, 11, 12, 13, 14 y la 15 nueva) y las 4 y 8 de la spec 01.
+
+## 09-ago-2026 (segundo tramo del hito (c)) · El corazón EV: lecturas, EEVD, fórmula y agenda
+
+Cuatro ACs más en la misma sesión. **Módulo 02: 7 de 22. Plataforma: 53 de 197.**
+**AC-FVEH-05** (odómetro y SOC por `reading`), **AC-FVEH-20** (la vista `eevd_semanal`),
+**AC-FVEH-09** (la fórmula única de energía) y **AC-FVEH-07** (la agenda por vehículo).
+
+### La proyección quedó cerrada por los dos lados
+
+La 0016 había dejado la puerta cerrada —toda escritura de `vehiculos.odometro`/`soc` rebota— y
+la 0019 escribió la llave: el único camino es una fila de `reading`. El pgTAP verifica que
+DESPUÉS de abrirla la puerta siga cerrada para todos los demás, que es lo que hace del «SOLO
+por trigger» del §4.5 algo sostenido y no declarado.
+
+**Rechazos = 0, con número.** El endpoint de lecturas no tiene una sola rama que conteste 4xx
+por el contenido: un SOC de 150, un odómetro que retrocede, un reloj corrido o una lectura sin
+turno entran con 2xx, su flag, su evento y su fila en «Por revisar». El chofer ya miró el
+tablero y ya tecleó lo que vio; un 422 no le devuelve el dato, se lo borra.
+
+**Monotonicidad suave, aplicada a una proyección.** El §4.6 la pide sobre la SERIE. En la
+proyección había una decisión más que tomar: se queda con el MÁXIMO declarado, no con el
+último. Un odómetro físico no retrocede, así que un valor menor es casi siempre un dígito de
+menos tipeado con una mano en el volante, y seguirlo haría que el próximo tramo se calculara
+contra kilómetros que nadie recorrió.
+
+**De qué vehículo es una lectura.** `reading` no tiene `vehiculo_id` y no es un olvido: el §4.6
+la define genérica. Llega al vehículo por el TURNO. La consecuencia quedó escrita: una lectura
+sin turno entra igual —rechazarla rompería la regla de oro por un caso que el maestro ni
+siquiera prohíbe— pero no proyecta nada.
+
+### La variable norte, con su denominador vivo
+
+`eevd_semanal` nace donde tiene que nacer: el primer módulo que tiene turnos. **El numerador no
+es un cero literal**: cuenta el evento `entrega.con_evidencia`, que hoy no está en el catálogo y
+por eso da cero solo. Un cero escrito habría que ir a borrarlo un día, y ese día alguien se
+olvida; este se convierte en el número de verdad en cuanto el hito (e) lo emita.
+
+El vehículo-día es el par (vehículo, día de apertura) contado UNA vez —dos jornadas cortas del
+mismo camión no inflan el denominador— y el día es el de Chile: en UTC, toda jornada abierta
+después de las 20:00 se contaría mañana.
+
+### La fórmula, y el gate que impide la segunda
+
+`rango_efectivo = autonomía × SOH × factor`, **sin** reserva; la reserva se resta una sola vez,
+en `max_distance`. El defecto que esto previene tiene nombre —restar la reserva dos veces— y
+termina con el operador ignorando el semáforo. `gate-constantes` vigilaba los VALORES; el nuevo
+`gate-formula-energia` vigila la ARITMÉTICA, que es la que de verdad se rompe: nadie copia el
+0,85 a mano, pero cualquiera reescribe la multiplicación en la pantalla que está armando.
+
+El gate decide por OPERADOR y no por mención, y no se dispara con la fórmula EXPLICADA en un
+comentario. Eso último no fue previsión: se puso rojo contra el árbol sano por la documentación
+del propio `constants.ts`, y un guard que castiga documentar se apaga solo a la semana.
+
+### Y la agenda, con la pregunta 12 intacta
+
+Cuando la semana destino ya tiene bloques que chocan, el servidor **no elige política**:
+contesta `colision_no_resuelta` y no copia nada. Quedarse con «todo-o-nada» porque es lo que
+sale gratis de una transacción habría sido responder por el dueño y, peor, dejar la pregunta
+respondida sin que nadie lo note.
+
+### Tres defectos que el trabajo destapó
+
+- **El grep-gate se ponía rojo al citar el §4.5 del maestro** —«(§4.5)» caía en el patrón del
+  contraste mínimo (4.5)—, y este módulo lo cita en cada archivo.
+- **`vehiculos.spec.ts` contaba TOTALES de tablas append-only.** Su verde duró exactamente
+  hasta el AC siguiente, cuando el fixture de turnos empezó a escribir en las mismas tablas.
+- **Cada suite armaba su propio orden de `delete`, y lo dictan las FK.** Con tres tablas
+  funcionó; al llegar `turnos` hubo que tocar dos suites y al llegar `bloques_agenda`, cuatro —
+  y la que se ponía roja era siempre la que no había cambiado. El orden pasa a vivir en
+  `e2e/limpiar.mjs`, y quedan cinco tablas por venir en este módulo.
+
+### Estado
+
+`check.sh --app=flota --full` en VERDE: **14 OK · 0 fallados · 1 saltado declarado**, con 158
+casos e2e. Última migración: `0021_bloques_agenda`. Matriz KiloRuta: 15 criterios con test
+verificado (entraron KR-04, KR-14, KR-15, KR-44 y KR-55).
+
+## 09-ago-2026 (tercer tramo) · El hito (c) cerrado: 21 de 22, y el único abierto es humano
+
+**Módulo 02: 21 de 22. Plataforma: 67 de 197.** El único AC que queda —AC-FVEH-16— es de
+oráculo HUMANO (DONE-adopción, dueño nombrado: Alexis) y por contrato jamás bloquea al loop:
+pide un alta real cronometrada en <2 min y la lectura sin ayuda del semáforo y del tablero.
+
+Ocho ACs más en este tramo: **03** (documentos que rebotan solo con feature ON), **17** («por
+vencer»), **18** (config congelada), **19** (máx capturas de SOC), **04** (chequeos y ciclo del
+defecto), **08** (recarga como captura con dinero invisible), **14** (ganchos §4.9), **22**
+(cierre forzado, KR-41), **15** (telemetría), **11** (señales), **10** (apertura F3), **21**
+(cierre F5), **12** (tablero) y **13** (reporte en CLP).
+
+### Los tres defectos REALES que el trabajo destapó, en orden de gravedad
+
+**1. Una vista de PostgreSQL no hereda la RLS.** `energia_semanal` sumaba exactamente las filas
+que el §4.8 le niega al chofer y le devolvía el TOTAL: no veía ninguna fila y veía el monto
+igual. La fuga que el centinela 10 existe para impedir, con la política intacta — ninguna
+revisión de la política la habría encontrado, porque la política estaba bien. Solo aparece
+corriendo la consulta con el rol `app_t_<slug>` real. Las tres vistas del tenant pasan a
+`security_invoker = true` y un invariante lo exige para toda vista futura.
+
+**2. `ON CONFLICT` necesita LEER, y el chofer no puede.** El cierre idempotente de la recarga
+rebotaba con `app.current_role` en chofer: la RLS de dinero le niega el SELECT que el
+`ON CONFLICT DO NOTHING` usa para resolver el replay. O sea, el replay del outbox del chofer
+FALLABA — contra el §4.2. Se resolvió con una función `SECURITY DEFINER` que devuelve solo el
+id: ninguna de las dos reglas se ablandó.
+
+**3. Un entitlement AUSENTE no es «apagado».** La primera versión leía la ausencia como
+apagado, y el gate lo mostró en un segundo: cada captura de cada tenant salía con el flag
+`modulo_apagado`. Habría llenado «Por revisar» de ruido desde el primer día, y una bandeja así
+deja de mirarse en una semana. Ahora hay tres estados y cada consumidor elige el suyo.
+
+### Lo que se respetó sin inventar
+
+Cinco preguntas abiertas se atravesaron y ninguna quedó respondida por accidente: el catálogo
+de tipos de vehículo (15, nueva), la colisión al duplicar semana (12), el conteo de capturas de
+SOC (9), el método de estimación de consumo (13 — los DOS implementados, sin default, y cada
+caso corrido con los dos) y el sugerir-vs-crear del bloque de recarga (14). En los cinco, el
+código hace lo que el maestro sí cierra y DICE lo que falta.
+
+### Presupuestos de toques, medidos
+
+Alta de vehículo **3**, apertura de turno **7** (presupuesto 9), cierre **6** (presupuesto 6).
+Los tres con su artefacto de baseline y su regresión bloqueante.
+
+### Estado
+
+`check.sh --app=flota --full` en VERDE: **14 OK · 0 fallados · 1 saltado declarado**. Última
+migración: `0035_vistas_security_invoker`. 43 rutas con su cruce declarado. Matriz KiloRuta: 23
+criterios con test verificado.
+
+---
+
+## 10-ago-2026 — Hito (d): el módulo 03 pasa la mitad (11 de 22)
+
+Diez commits, nueve ACs cerrados y un defecto propio corregido. La plataforma pasa de **69 a 78
+de 197**; el módulo 03 arranca la sesión en 2 de 22 y termina en **11**.
+
+### Lo que se construyó
+
+`rutas`, `paradas` e `items` —la columna vertebral del módulo— y con ellas la agrupación
+multi-empresa, la publicación del día en 6 clics, las rutas maestras, el catálogo de motivos, la
+empresa implícita del modo `mi_flota`, el bloque de recarga como parada y «repetir el día de
+ayer». Más el chequeo de seeds de `pin_destinatario` y el cierre de la cláusula que AC-FRUT-15
+tenía a medias esperando que `paradas` existiera.
+
+### Las tres decisiones que valen más que el código
+
+**1. La agrupación la garantiza la BD, no el servidor.** «N encargos de ≥2 empresas al mismo
+destino son UNA parada» podría vivir en un `group by`. Vive en un índice único parcial
+(`where tipo = 'entrega'`), porque un servidor correcto lo respeta hasta que otro camino inserte
+la segunda parada — y ese día el camión hace dos veces la misma cuadra y nadie se entera hasta
+que llama el chofer. Va parcial porque las de carga sí se repiten y las de recarga no tienen
+destino.
+
+**2. Derivar los `stop_requirement` es COPIAR, no traducir.** `cargo_type_requirement` nació con
+el MISMO shape que su destino a propósito. Si las columnas se separaran, entre plantilla y parada
+aparecerían reglas de traducción — que son exactamente los condicionales por vertical que el §4.6
+prohíbe con todas las letras. Una parada agrupada recibe la unión DEDUPLICADA por tipo de
+evidencia: dos firmas al mismo destinatario porque dos empresas mandaron cosas distintas se
+resuelven, en el andén, firmando cualquier cosa.
+
+**3. El defecto propio que salió preparando el AC siguiente.** Publicar escribía un bloque `ruta`
+en la agenda del vehículo y dejaba que el EXCLUDE decidiera el solape. Elegante, y equivocado:
+sin ventanas comprometidas ese bloque ocupa el día entero y choca con la recarga nocturna del
+propio camión. Con esa regla no se podía publicar el día de ningún vehículo que cargue de noche
+—que son todos— y AC-FRUT-18 habría sido imposible. Ahora el solape se pregunta explícitamente y
+solo por lo que IMPIDE operar (`mantencion`, `descanso`, otra ruta publicada), detrás de un
+`for update` sobre el vehículo que hace el trabajo de serialización que el EXCLUDE hacía gratis.
+
+### Lo que se respetó sin inventar
+
+La **pregunta 2** (copia vs referencia para el día-desde-maestra): se implementó COPIA y se
+declaró, porque es la que hace cierto «la maestra permanece intacta» sin maquinaria. La
+**pregunta 1** (máquina de estados) sigue bloqueando AC-FRUT-03 y el enum sigue con sus dos
+valores. Y apareció una **pregunta 10, NUEVA**: de dónde se siembra la lista de requisitos de
+cada cargo_type — el §4.6 dice «derivado del cargo_type» y el §4.9 «un vertical son filas», pero
+`cargo_type` es (codigo, nombre) y `vertical_template` trae los códigos sin sus evidencias.
+
+### Presupuestos de toques, medidos
+
+Publicar el día: **6 clics** contra un presupuesto de 15, recorriendo la secuencia F1 completa
+—bandeja → armar rutas → «Listos para salir» → publicar— con el tablero del módulo 02 INCLUIDO en
+el conteo, como el AC exige.
+
+### Estado
+
+`check.sh --app=flota --full` en VERDE: **14 OK · 0 fallados · 1 saltado declarado**. Última
+migración: `0039_empresa_implicita`. 60 rutas con su cruce declarado. pgTAP: 21 suites, la 0020
+con 34 casos.
+
+## 11-ago-2026, 18:45 — El CI estuvo rojo días por una prueba que medía la máquina
+
+`check.sh` daba VERDE en el Mac y GitHub Actions daba ROJO en cada push, dos veces por commit
+(el workflow corre en `push` de cualquier rama y en `pull_request` contra main). El único paso
+rojo era `prueba-arnes`, y dentro de sus 111 casos, uno solo: el (c5), que corre `watchdog.sh`
+sin `CLAUDE_CODE_OAUTH_TOKEN` y exige que se frene POR ESO.
+
+`watchdog.sh` tiene dos frenos ANTES de ese: `claude` y `pnpm` en el PATH. En un runner de
+GitHub no existe ninguno de los dos, así que se frenaba por el primero; la prueba leía ese otro
+mensaje, no encontraba en él lo que buscaba y concluía que el guard de la credencial no estaba.
+Ninguna de las dos máquinas mentía sobre el código: la prueba dependía de qué binarios tuviera
+la máquina que la corría.
+
+Arreglado en `cd748ea`: se le arma un PATH con `claude` y `pnpm` estubados, de modo que el freno
+ejercido sea el de la credencial —el que la prueba dice probar— en cualquier entorno. Y el
+mensaje del caso rojo ahora incluye la salida REAL con la que el watchdog se frenó: sin ella, el
+rojo solo se diagnostica reproduciendo el entorno del runner a mano, que es lo que lo mantuvo
+vivo tanto tiempo.
+
+Después del arreglo, todos los pushes salieron verdes, incluidos los del motor autónomo.
+`main` queda rojo a propósito hasta que se mergee el PR #1: nadie empuja ahí, así que no genera
+correos, y un commit suelto dispararía un run que puede fallar por un e2e viejo ya arreglado en
+la rama.
+
+**Lo que hay que recordar:** una prueba del arnés que depende del entorno no prueba el arnés,
+prueba el entorno — y un gate local verde no es el veredicto de CI. El detalle de un rojo de CI
+NO está en la consola del step (solo el resumen `OK/FALLÓ`), sino en el artefacto `gate-logs`,
+que trae `ultimo-check.log`.

@@ -1,0 +1,12 @@
+{
+  "name": "FLOTA",
+  "short_name": "FLOTA",
+  "lang": "es-CL",
+  "dir": "ltr",
+  "display": "standalone",
+  "orientation": "portrait",
+  "start_url": "/",
+  "scope": "/",
+  "background_color": "#FFFFFF",
+  "theme_color": "#FFFFFF"
+}
