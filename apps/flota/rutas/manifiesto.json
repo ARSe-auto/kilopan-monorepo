@@ -534,6 +534,19 @@
       }
     },
     {
+      "ruta": "/api/manifiesto",
+      "archivo": "src/app/api/manifiesto/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "ids_de_b": [],
+        "nota": "Sin sesión propia: 404 (sesionDelTenant). Con sesión de B contra la BD de A: cabecera x-flota-tenant-bd la resuelve el ruteo por subdominio de A, no el cliente — B nunca puede apuntar su sesión a la BD de A, así que no hay fila del vecino que leer ni con qué armar el manifest ajeno."
+      }
+    },
+    {
       "ruta": "/api/manifiesto-items/[id]/bajar",
       "archivo": "src/app/api/manifiesto-items/[id]/bajar/route.ts",
       "metodos": [
