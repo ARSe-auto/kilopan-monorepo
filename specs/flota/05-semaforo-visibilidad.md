@@ -641,6 +641,14 @@ activa SOLO `admin_tenant`: mientras la pregunta 1 esté abierta, `operador` y
     El contador de exenciones queda declarado como pendiente de ingesta real (pregunta 10);
     acá solo se ejercita su render con tendencia sobre el valor que el pipeline ya emite.
 - [ ] (P2) Minutos del dueño en el panel ≤5/día (§10) — CONDICIONADO a la pregunta 6: el enum cerrado de `client_metric` (§4.6) no trae tipo de tiempo-en-panel; el AC se activa con el mecanismo que fije la respuesta y se mide con el piloto — oráculo: producción [AC-FSEM-23]
+  - Revisado el 16-ago-2026: a diferencia de AC-FSEM-14 (que sí tenía mitad de software
+    construible), acá no hay nada que construir todavía. La pregunta 6 no solo desbloquea el
+    enum de `client_metric` — fija el MECANISMO mismo de la medición (¿tiempo de sesión en el
+    panel? ¿un evento por vista abierta/cerrada? ¿ambos?), y sin esa decisión cualquier
+    instrumentación sería una apuesta sobre una superficie que el maestro no especifica.
+    Escribir código ahora sería inventar el mecanismo, no medirlo. El AC queda anotado en
+    `packages/metodo/acs-bloqueados-flota.txt` para que ninguna tanda del motor se gaste en
+    él hasta que exista la respuesta a la pregunta 6.
 - [ ] (P2) E2e autenticado del panel cross-tenant de e-auto — CONDICIONADO a la pregunta 2 (autenticación y montaje): navegar al panel, lista por tenant con estado semafórico y detalle de un tenant mostrando SOLO lo que `control` contiene — oráculo: CI [AC-FSEM-24]
 - [ ] (P2) BLOQUEADO por la Pregunta al dueño 12 — «hints re-mostrados = bug» (§10, telemetría de producto): el concepto de hint no existe en ninguna de las 9 specs del conjunto y el enum CERRADO de `client_metric` (§4.6) no trae tipo para medirlo (misma situación que AC-FSEM-23); este módulo, dueño de la telemetría de producto y del panel §10, la reclama para que la obligación no quede huérfana y NO construye hints, ni amplía el enum, ni inventa una superficie de guía hasta la respuesta. Resuelta, el AC se reescribe ANTES de implementarse con su oráculo (fuente de la métrica + indicador en el panel §10, con «re-mostrado» como condición de alerta) — oráculo: producción (condicionado a la Pregunta 12) [AC-FSEM-25]
 
