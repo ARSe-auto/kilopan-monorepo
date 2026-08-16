@@ -42,6 +42,7 @@ import { vaciarOutboxAjeno } from "../../cliente/outbox-multiusuario.ts";
 import { siguienteSecuenciaDispositivo } from "../../cliente/secuencia-dispositivo.ts";
 import { capturarFoto } from "../../cliente/camara.ts";
 import { capturarGps } from "../../cliente/gps.ts";
+import { registrarToque, alCambiarTeclado, completarFlujo } from "../../cliente/toques-flujo.ts";
 
 // La tarjeta de la parada de entrega (F4) [AC-FRUT-22, AC-FPOD-01] — KR-29, §4.2, §5.2 F4,
 // §5.3, §4.7, §7.6.
@@ -364,6 +365,10 @@ export default function TarjetaDeEntrega({
    * silencio y la entrega salía igual.
    */
   function deshacerToque() {
+    // El deshacer TAMBIÉN cuesta un toque real del operario [AC-FPOD-14] (§5.3: «toques-hasta-
+    // completar», no toques del último intento) — la parada vuelve a `entrega-en-curso` y el
+    // conteo sigue sumando hasta el próximo cierre real.
+    registrarToque("entrega_pod");
     setRecorrido((r) => deshacerCaptura(r, selloDelAparato()).recorrido);
   }
 
@@ -379,7 +384,17 @@ export default function TarjetaDeEntrega({
   }
 
   function entregado() {
-    setRecorrido((r) => entregar(r, selloDelAparato(), evidencias));
+    setRecorrido((r) => {
+      const nuevo = entregar(r, selloDelAparato(), evidencias);
+      // El flujo COMPLETÓ acá, no en el toque [AC-FPOD-14] (§5.3) — mismo criterio que
+      // `bandeja/page.tsx::guardar` (AC-FRUT-19): `completarFlujo` suma TODOS los toques
+      // acumulados desde el «Llegué» de esta parada, incluidos los de un intento que se
+      // corrigió. `entregar` devuelve la MISMA referencia si el candado del dominio no dejó
+      // cerrar la parada (p. ej. evidencia todavía pendiente en un reintento) — ese no-op
+      // NO es un flujo completado, y flushearlo igual dejaría un cero falso en el métrico.
+      if (nuevo !== r) void completarFlujo("entrega_pod");
+      return nuevo;
+    });
   }
 
   // La evidencia que ESTA parada exige [AC-FPOD-02]: pendientes primero, y hasta que no quede
@@ -416,14 +431,22 @@ export default function TarjetaDeEntrega({
           motivoId: motivoPorItem[it.id]!,
         };
       });
-    setRecorrido((r) => entregarParcial(r, ajustes, selloDelAparato(), evidencias));
+    setRecorrido((r) => {
+      const nuevo = entregarParcial(r, ajustes, selloDelAparato(), evidencias);
+      if (nuevo !== r) void completarFlujo("entrega_pod"); // [AC-FPOD-14]
+      return nuevo;
+    });
     volverAElegir();
   }
 
   // Variante no entregado [AC-FPOD-02]: motivo + confirmar, 3 acciones exactas.
   function confirmarNoEntregado() {
     if (motivoNoEntrega === null) return;
-    setRecorrido((r) => noEntregar(r, motivoNoEntrega, selloDelAparato()));
+    setRecorrido((r) => {
+      const nuevo = noEntregar(r, motivoNoEntrega, selloDelAparato());
+      if (nuevo !== r) void completarFlujo("entrega_pod"); // [AC-FPOD-14]
+      return nuevo;
+    });
     volverAElegir();
   }
 
@@ -440,9 +463,11 @@ export default function TarjetaDeEntrega({
   // rechaza el cierre si falta el encuadre exigido —acá solo se ofrece o no el paso, el candado
   // real vive en `dejarEnPunto`/`exigeEncuadre`.
   function confirmarDejadoEnPunto() {
-    setRecorrido((r) =>
-      dejarEnPunto(r, selloDelAparato(), { encuadreCapturado, bultosMaxSinReceptor }, evidencias),
-    );
+    setRecorrido((r) => {
+      const nuevo = dejarEnPunto(r, selloDelAparato(), { encuadreCapturado, bultosMaxSinReceptor }, evidencias);
+      if (nuevo !== r) void completarFlujo("entrega_pod"); // [AC-FPOD-14]
+      return nuevo;
+    });
     volverAElegir();
   }
 
@@ -550,7 +575,13 @@ export default function TarjetaDeEntrega({
       {candado !== null && candado.abierta && !recorrido.llegada && (
         <section data-testid="candado-abierto" style={bloque}>
           <p style={cuerpo}>El manifiesto de la carga está confirmado. Podés empezar la entrega.</p>
-          <BotonPrimario testid="llegue" onClick={() => setRecorrido(llegar)}>
+          <BotonPrimario
+            testid="llegue"
+            onClick={() => {
+              registrarToque("entrega_pod"); // [AC-FPOD-14]
+              setRecorrido(llegar);
+            }}
+          >
             Llegué
           </BotonPrimario>
         </section>
@@ -568,7 +599,10 @@ export default function TarjetaDeEntrega({
                 <BotonPrimario
                   key={req.id}
                   testid={`requisito-${req.id}`}
-                  onClick={() => capturarEvidencia(req.id, req.tipo)}
+                  onClick={() => {
+                    registrarToque("entrega_pod"); // [AC-FPOD-14]
+                    void capturarEvidencia(req.id, req.tipo);
+                  }}
                 >
                   {ETIQUETA_DE_EVIDENCIA[req.tipo]}
                 </BotonPrimario>
@@ -577,7 +611,13 @@ export default function TarjetaDeEntrega({
           ) : (
             <>
               <p style={cuerpo}>Entrega abierta.</p>
-              <BotonPrimario testid="entregado" onClick={entregado}>
+              <BotonPrimario
+                testid="entregado"
+                onClick={() => {
+                  registrarToque("entrega_pod"); // [AC-FPOD-14]
+                  entregado();
+                }}
+              >
                 Entregado
               </BotonPrimario>
 
@@ -593,7 +633,11 @@ export default function TarjetaDeEntrega({
                     <div data-testid={`cantidad-item-${it.id}`}>
                       <TecladoNumerico
                         valor={cantidades[it.id] ?? ""}
-                        onCambiar={(v) => setCantidades((prev) => ({ ...prev, [it.id]: v }))}
+                        onCambiar={(v) => {
+                          // Campo de teclado propio = 1 acción (§5.3) [AC-FPOD-14].
+                          alCambiarTeclado("entrega_pod", cantidades[it.id] ?? "", v);
+                          setCantidades((prev) => ({ ...prev, [it.id]: v }));
+                        }}
                       />
                     </div>
                     {cantidades[it.id] !== undefined && cantidades[it.id] !== "" && (
@@ -601,9 +645,10 @@ export default function TarjetaDeEntrega({
                         <SelectorUnToque
                           opciones={motivos.map((m) => ({ valor: m.id, etiqueta: m.etiqueta }))}
                           valor={motivoPorItem[it.id] ?? null}
-                          onCambiar={(motivoId) =>
-                            setMotivoPorItem((prev) => ({ ...prev, [it.id]: motivoId }))
-                          }
+                          onCambiar={(motivoId) => {
+                            registrarToque("entrega_pod"); // [AC-FPOD-14]
+                            setMotivoPorItem((prev) => ({ ...prev, [it.id]: motivoId }));
+                          }}
                         />
                       </div>
                     )}
@@ -617,7 +662,13 @@ export default function TarjetaDeEntrega({
                     cantidades[it.id] !== "" &&
                     motivoPorItem[it.id] !== undefined,
                 ) && (
-                  <BotonPrimario testid="confirmar-parcial" onClick={confirmarParcial}>
+                  <BotonPrimario
+                    testid="confirmar-parcial"
+                    onClick={() => {
+                      registrarToque("entrega_pod"); // [AC-FPOD-14]
+                      confirmarParcial();
+                    }}
+                  >
                     Confirmar entrega parcial
                   </BotonPrimario>
                 )}
@@ -626,7 +677,10 @@ export default function TarjetaDeEntrega({
               <BotonPrimario
                 testid="modo-dejado-en-punto"
                 variante="neutro"
-                onClick={() => setModo("dejado_en_punto")}
+                onClick={() => {
+                  registrarToque("entrega_pod"); // [AC-FPOD-14]
+                  setModo("dejado_en_punto");
+                }}
               >
                 Dejado en punto
               </BotonPrimario>
@@ -636,7 +690,14 @@ export default function TarjetaDeEntrega({
           {/* «No pude entregar» se ofrece SIEMPRE, con evidencia pendiente o sin ella: el
               requisito es evidencia DE LA ENTREGA y una parada fallida no tiene ninguna que
               dar — el local cerrado no firma (§4.2, §7.6). */}
-          <BotonPrimario testid="modo-no-entregado" variante="neutro" onClick={() => setModo("no_entregado")}>
+          <BotonPrimario
+            testid="modo-no-entregado"
+            variante="neutro"
+            onClick={() => {
+              registrarToque("entrega_pod"); // [AC-FPOD-14]
+              setModo("no_entregado");
+            }}
+          >
             No pude entregar
           </BotonPrimario>
         </section>
@@ -649,14 +710,30 @@ export default function TarjetaDeEntrega({
             <SelectorUnToque
               opciones={motivos.map((m) => ({ valor: m.id, etiqueta: m.etiqueta }))}
               valor={motivoNoEntrega}
-              onCambiar={setMotivoNoEntrega}
+              onCambiar={(motivoId) => {
+                registrarToque("entrega_pod"); // [AC-FPOD-14]
+                setMotivoNoEntrega(motivoId);
+              }}
             />
           </div>
-          <BotonPrimario testid="volver-a-elegir" variante="neutro" onClick={volverAElegir}>
+          <BotonPrimario
+            testid="volver-a-elegir"
+            variante="neutro"
+            onClick={() => {
+              registrarToque("entrega_pod"); // [AC-FPOD-14]
+              volverAElegir();
+            }}
+          >
             Volver
           </BotonPrimario>
           {motivoNoEntrega !== null && (
-            <BotonPrimario testid="confirmar-no-entregado" onClick={confirmarNoEntregado}>
+            <BotonPrimario
+              testid="confirmar-no-entregado"
+              onClick={() => {
+                registrarToque("entrega_pod"); // [AC-FPOD-14]
+                confirmarNoEntregado();
+              }}
+            >
               Confirmar
             </BotonPrimario>
           )}
@@ -668,15 +745,34 @@ export default function TarjetaDeEntrega({
       {candado !== null && candado.abierta && recorrido.llegada && modo === "dejado_en_punto" && parada !== null && (
         <section data-testid="modo-dejado-en-punto-panel" style={bloque}>
           {exigeEncuadre(parada, bultosMaxSinReceptor) && !encuadreCapturado && (
-            <BotonPrimario testid="encuadrar-dejado-en-punto" onClick={encuadrar}>
+            <BotonPrimario
+              testid="encuadrar-dejado-en-punto"
+              onClick={() => {
+                registrarToque("entrega_pod"); // [AC-FPOD-14]
+                void encuadrar();
+              }}
+            >
               Encuadrar bultos
             </BotonPrimario>
           )}
-          <BotonPrimario testid="volver-a-elegir" variante="neutro" onClick={volverAElegir}>
+          <BotonPrimario
+            testid="volver-a-elegir"
+            variante="neutro"
+            onClick={() => {
+              registrarToque("entrega_pod"); // [AC-FPOD-14]
+              volverAElegir();
+            }}
+          >
             Volver
           </BotonPrimario>
           {(!exigeEncuadre(parada, bultosMaxSinReceptor) || encuadreCapturado) && (
-            <BotonPrimario testid="confirmar-dejado-en-punto" onClick={confirmarDejadoEnPunto}>
+            <BotonPrimario
+              testid="confirmar-dejado-en-punto"
+              onClick={() => {
+                registrarToque("entrega_pod"); // [AC-FPOD-14]
+                confirmarDejadoEnPunto();
+              }}
+            >
               Confirmar
             </BotonPrimario>
           )}

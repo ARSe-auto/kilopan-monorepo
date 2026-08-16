@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Route } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { con, bdDeTenant } from "../../../db/flota/conectar.mjs";
 import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
 import { rutDeFixture } from "../../../db/flota/ruts-sinteticos.mjs";
@@ -7,36 +7,33 @@ import { TENANTS } from "./preparar-tenants.mjs";
 import { UNDO } from "../../../packages/nucleo-comun/src/constants.ts";
 
 // Telemetría `toques_flujo` como CONTRATO, el mecanismo GEMELO del e2e que cuenta eventos
-// [AC-FRUT-19] — §5.3, §4.6, §10.
+// [AC-FRUT-19, AC-FPOD-14] — §5.3, §4.6, §10.
 //
 // ─── QUÉ PRUEBA ESTE ARCHIVO, Y QUÉ NO ─────────────────────────────────────────────
 //
-// Que los CUATRO flujos del módulo (alta de encargo F1, publicar día F1, recepción/custodia F2,
-// cierre de ruta F5) manden a `client_metric` una fila `toques_flujo` cuyo `valor_int` es
-// EXACTAMENTE el número de toques que este mismo test contó — la cláusula literal del AC. No
-// vuelve a probar la conducta de negocio de esos flujos (agrupación, DTE gate, ecuación de
-// cierre): eso ya lo cubren AC-FRUT-01/05/07/11, y este archivo solo mira si el toque QUEDÓ
-// REGISTRADO donde el §10 lo va a leer.
+// Que los CINCO flujos del módulo (alta de encargo F1, publicar día F1, recepción/custodia F2,
+// cierre de ruta F5, entrega de terreno F4) manden a `client_metric` una fila `toques_flujo` cuyo
+// `valor_int` es EXACTAMENTE el número de toques que este mismo test contó — la cláusula literal
+// del AC. No vuelve a probar la conducta de negocio de esos flujos (agrupación, DTE gate,
+// ecuación de cierre, bucle de terreno): eso ya lo cubren AC-FRUT-01/05/07/11 y AC-FPOD-01, y
+// este archivo solo mira si el toque QUEDÓ REGISTRADO donde el §10 lo va a leer.
 //
-// ─── EL ENDPOINT DE MÓDULO 04 SE FIXTUREA, TAL COMO PIDE EL TEXTO DEL AC ──────────
+// ─── EL ENDPOINT ES EL REAL, DESDE AC-FPOD-14 ─────────────────────────────────────
 //
-// `POST /api/sync/capturas` hoy solo entiende `capturas` y `recargas` (AC-FPOD-03/13): el
-// aterrizaje genérico de un `metricas[]` en `client_metric` es AC-FPOD-14, del módulo 04, y
-// todavía no existe. El cliente (`cliente/toques-flujo.ts::completarFlujo`) ya manda el `metricas`
-// del §4.6 por ESE MISMO endpoint —mismo POST, mismo formato snake_case que `capturas`/
-// `recargas`— porque el AC pide literalmente «el MISMO endpoint de sync». Lo que este archivo
-// FIXTUREA es la mitad que falta: intercepta esa llamada con Playwright, hace el INSERT en
-// `client_metric` que AC-FPOD-14 hará de verdad el día que exista, y confirma 2xx — igual que la
-// pantalla «Listos para salir» (del módulo 02, AC-FRUT-05) se fixturea en el e2e de este mismo
-// módulo. El día que AC-FPOD-14 aterrice, este fixture se borra y el mismo test sigue probando
-// lo mismo contra el servidor real.
+// `POST /api/sync/capturas` ya entiende `metricas[]` (AC-FPOD-14, `servidor/metricas-sync.ts`),
+// igual que ya entendía `capturas`/`recargas` (AC-FPOD-03/13). Hasta este AC este archivo
+// fixtureaba el aterrizaje con `page.route` —el aterrizaje genérico todavía no existía—; ahora
+// el mismo POST que manda `cliente/toques-flujo.ts::completarFlujo` aterriza de verdad, y este
+// test deja de fixturear nada: ejerce el servidor real, igual que `pod-feliz.spec.ts` ejerce el
+// bucle de terreno contra el servidor real.
 //
-// ─── POR QUÉ CUATRO VEHÍCULOS Y NO UNO ─────────────────────────────────────────────
+// ─── POR QUÉ CINCO VEHÍCULOS Y NO UNO ──────────────────────────────────────────────
 //
-// Publicar día, recepción de carga y cierre de ruta necesitan cada uno su propia ruta en un
-// estado distinto (sin publicar / publicada con parada de carga / publicada y ya cuadrada). Un
-// solo vehículo forzaría a los tres flujos a compartir una ruta que ningún estado real tiene, y
-// el fixture terminaría probando su propio andamiaje en vez del contrato del AC.
+// Publicar día, recepción de carga, cierre de ruta y entrega de terreno necesitan cada uno su
+// propia ruta en un estado distinto (sin publicar / publicada con parada de carga / publicada y
+// ya cuadrada / publicada con el sub-manifiesto de su parada de carga confirmado). Un solo
+// vehículo forzaría a los flujos a compartir una ruta que ningún estado real tiene, y el fixture
+// terminaría probando su propio andamiaje en vez del contrato del AC.
 
 // El tenant de los HECHOS, como en carga.spec.ts y cierre-ruta.spec.ts: esta suite deja un
 // manifiesto (append-only, §7.4) y no puede compartir el tenant por defecto sin romper la
@@ -52,10 +49,12 @@ const DESTINO = "Sucursal de los toques";
 const PATENTE_PUBLICAR = "KLPQ19";
 const PATENTE_CARGA = "KLPQ20";
 const PATENTE_CIERRE = "KLPQ21";
+const PATENTE_ENTREGA = "KLPQ22";
 
 let empresaId = "";
 let destinoId = "";
 let rutaCierreId = "";
+let paradaEntregaId = "";
 
 test.beforeAll(async () => {
   await con(BD_A, async (c: Conexion) => {
@@ -183,6 +182,44 @@ test.beforeAll(async () => {
        values ($1, $2, $3, $3)`,
       [manifiestoCierre!.id, itemDeclarado!.id, 6],
     );
+
+    // El vehículo de la entrega de terreno [AC-FPOD-14]: ruta PUBLICADA con su sub-manifiesto YA
+    // confirmado en el andén (el candado de F4 está abierto desde el primer render, mismo estado
+    // previo que `pod-feliz.spec.ts::rutaDeTresEntregas` usa para el camino feliz).
+    const [vEntrega] = await c.sql<{ id: string }>(
+      `insert into vehiculos (patente, tipo) values ($1, 'furgon')
+         on conflict (tenant_id, patente) do update set tipo = excluded.tipo
+       returning id::text as id`,
+      [PATENTE_ENTREGA],
+    );
+    const [rEntrega] = await c.sql<{ id: string }>(
+      `insert into rutas (nombre, vehiculo_id, publicada_en, version)
+       values ('Ruta de los toques', $1, now(), 1) returning id::text as id`,
+      [vEntrega!.id],
+    );
+    const [cargaEntrega] = await c.sql<{ id: string }>(
+      "insert into paradas (ruta_id, tipo, orden, destino_id) values ($1, 'carga', 1, $2) returning id::text as id",
+      [rEntrega!.id, destinoId],
+    );
+    const [paradaEntrega] = await c.sql<{ id: string }>(
+      "insert into paradas (ruta_id, tipo, orden, destino_id) values ($1, 'entrega', 2, $2) returning id::text as id",
+      [rEntrega!.id, destinoId],
+    );
+    paradaEntregaId = paradaEntrega!.id;
+    const [encargoEntrega] = await c.sql<{ id: string }>(
+      "insert into encargos (empresa_cliente_id, destino_id, bultos) values ($1, $2, $3) returning id::text as id",
+      [empresaId, destinoId, 8],
+    );
+    await c.sql("insert into items (parada_id, encargo_id, qty_planificada) values ($1, $2, $3)", [
+      paradaEntrega!.id,
+      encargoEntrega!.id,
+      8,
+    ]);
+    await c.sql(
+      `insert into manifiestos (parada_id, empresa_cliente_id, ts_dispositivo, tz_offset_min)
+       values ($1, $2, now(), -240)`,
+      [cargaEntrega!.id, empresaId],
+    );
   });
 });
 
@@ -222,42 +259,6 @@ function contadorPorFlujo(page: Page) {
   };
 }
 
-/**
- * El FIXTURE del endpoint del módulo 04 (AC-FPOD-14, todavía sin construir): intercepta el POST
- * a `/api/sync/capturas`, y si el lote trae `metricas` —lo único que `completarFlujo` manda—
- * hace el INSERT en `client_metric` que el motor de sync hará de verdad el día que exista.
- * Cualquier otro tráfico al mismo endpoint (que este archivo no genera) sigue de largo.
- */
-async function fixturearEndpointDeSync(page: Page) {
-  await page.route("**/api/sync/capturas", async (route: Route) => {
-    let cuerpo: { metricas?: unknown } = {};
-    try {
-      cuerpo = JSON.parse(route.request().postData() ?? "{}") as { metricas?: unknown };
-    } catch {
-      cuerpo = {};
-    }
-    if (!Array.isArray(cuerpo.metricas) || cuerpo.metricas.length === 0) {
-      await route.continue();
-      return;
-    }
-    await con(BD_A, async (c: Conexion) => {
-      for (const m of cuerpo.metricas as Record<string, unknown>[]) {
-        await c.sql(
-          `insert into client_metric (tipo, flujo, valor_int, ts, tz_offset_min, client_uuid)
-           values ($1, $2, $3, $4, $5, $6::uuid)
-           on conflict (tenant_id, client_uuid) do nothing`,
-          [m.tipo, m.flujo, m.valor_int, m.ts, m.tz_offset_min, m.client_uuid],
-        );
-      }
-    });
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ acuses: [], acuses_recarga: [] }),
-    });
-  });
-}
-
 /** La última fila `toques_flujo` de ese flujo — la que ESTE test acaba de producir. */
 async function ultimoValorDe(flujo: string): Promise<number | null> {
   const filas = await con(BD_A, (c: Conexion) =>
@@ -279,11 +280,10 @@ function esperarMetrica(page: Page) {
   );
 }
 
-test("[AC-FRUT-19] los cuatro flujos emiten `toques_flujo`, y el conteo coincide con el que este e2e contó", async ({
+test("[AC-FRUT-19, AC-FPOD-14] los cinco flujos emiten `toques_flujo`, y el conteo coincide con el que este e2e contó", async ({
   page,
 }) => {
   await sesionDe(page, SECRETO);
-  await fixturearEndpointDeSync(page);
   const c = contadorPorFlujo(page);
 
   // ─── Fase 1 · alta de encargo (F1) [AC-FRUT-01] ──────────────────────────────
@@ -342,9 +342,26 @@ test("[AC-FRUT-19] los cuatro flujos emiten `toques_flujo`, y el conteo coincide
 
   expect(await ultimoValorDe("cierre_ruta")).toBe(c.de("cierre_ruta"));
 
-  // Y el resumen: los cuatro flujos, cada uno con un toque real medido y ninguno en cero — un
+  // ─── Fase 5 · entrega en terreno, camino feliz (F4) [AC-FPOD-01, AC-FPOD-14] ─────
+  await page.goto(`${EN_A}/entrega?parada=${paradaEntregaId}`);
+  await expect(page.getByTestId("parada-actual")).toBeVisible();
+  const metricaEntrega = esperarMetrica(page);
+  await c.tocar("entrega_pod", "llegue");
+  await c.tocar("entrega_pod", "entregado");
+  await expect(page.getByTestId("banda-undo")).toBeVisible();
+  await metricaEntrega;
+
+  expect(await ultimoValorDe("entrega_pod")).toBe(c.de("entrega_pod"));
+
+  // Y el resumen: los cinco flujos, cada uno con un toque real medido y ninguno en cero — un
   // contador que no midió nada sería una fila vacía que el §10 no puede promediar.
-  for (const flujo of ["alta_encargo", "publicar_dia", "recepcion_custodia", "cierre_ruta"]) {
+  for (const flujo of [
+    "alta_encargo",
+    "publicar_dia",
+    "recepcion_custodia",
+    "cierre_ruta",
+    "entrega_pod",
+  ]) {
     expect(c.de(flujo), `el flujo ${flujo} no registró ningún toque`).toBeGreaterThan(0);
   }
 });

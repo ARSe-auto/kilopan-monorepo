@@ -20,9 +20,8 @@ import { metricaDeToques, type FlujoDeToques } from "../dominio/toques-flujo.ts"
 //
 // Mismo criterio que `cliente/outbox.ts::replayar` (§5.7: «las capturas jamás muestran
 // rechazo»): si el lote no llega, no hay nada que el operario pueda decidir. El aterrizaje real
-// de `metricas` en `client_metric` es del motor de sync (AC-FPOD-14, módulo 04, todavía sin
-// construir) — hasta que exista, este envío no hace nada en producción y no lo necesita: el
-// formato ya es el definitivo, mismo endpoint, mismo POST que hoy recibe `capturas`/`recargas`.
+// de `metricas` en `client_metric` es `servidor/metricas-sync.ts::aterrizarMetricas` (AC-FPOD-14),
+// wireado en el MISMO endpoint que ya recibe `capturas`/`recargas`.
 
 const PREFIJO = "flota:toques:";
 

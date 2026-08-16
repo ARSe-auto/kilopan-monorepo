@@ -6,6 +6,11 @@ import {
   capturaDeRecargaBienFormada,
   type RecargaCapturaEntrante,
 } from "../../../../servidor/recarga-sync.ts";
+import {
+  aterrizarMetricas,
+  metricaBienFormada,
+  type MetricaEntrante,
+} from "../../../../servidor/metricas-sync.ts";
 import { exigirClaseCaptura } from "../../../../servidor/clasificacion-tablas.ts";
 
 // El endpoint de sync de capturas del POD [AC-FPOD-03] — §4.2, §0 (fila HTTP), §4.6, §5.2 F4.
@@ -56,6 +61,21 @@ function secuenciaLegible(valor: unknown): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
+/** La métrica que trae el `metricas` del cuerpo [AC-FPOD-14] — el gemelo de `leer`/`leerRecarga`
+ *  para la telemetría del cliente (§4.6): mismas columnas snake_case que `client_metric`, el
+ *  mismo formato que ya arma `dominio/toques-flujo.ts::metricaDeToques`. */
+function leerMetrica(cruda: CapturaCruda): Partial<MetricaEntrante> {
+  const ts = cruda.ts === undefined ? null : new Date(String(cruda.ts));
+  return {
+    clientUuid: cruda.client_uuid === undefined ? undefined : String(cruda.client_uuid),
+    tipo: cruda.tipo === undefined ? undefined : (String(cruda.tipo) as MetricaEntrante["tipo"]),
+    flujo: cruda.flujo === undefined || cruda.flujo === null ? null : String(cruda.flujo),
+    valorInt: cruda.valor_int === undefined ? undefined : Number(cruda.valor_int),
+    tsDispositivo: ts ?? undefined,
+    tzOffsetMin: cruda.tz_offset_min === undefined ? undefined : Number(cruda.tz_offset_min),
+  };
+}
+
 /** El cierre de recarga que trae el `recargas` del cuerpo [AC-FPOD-13] — el gemelo de `leer`
  *  para la cola de recarga, sin `costo_clp`: el flujo del chofer no lo tiene (§4.8). */
 function leerRecarga(cruda: CapturaCruda): Partial<RecargaCapturaEntrante> {
@@ -102,17 +122,18 @@ export async function POST(peticion: Request) {
     cuerpo = {};
   }
 
-  // `capturas` (POD) y `recargas` [AC-FPOD-13] viajan en el MISMO cuerpo, y basta con que UNA de
-  // las dos venga: un lote que solo vacía la cola de recarga no tiene por qué mandar `capturas`
-  // vacío para no rebotar.
+  // `capturas` (POD), `recargas` [AC-FPOD-13] y `metricas` [AC-FPOD-14] viajan en el MISMO
+  // cuerpo, y basta con que UNA de las tres venga: un lote que solo vacía la cola de telemetría
+  // no tiene por qué mandar `capturas` vacío para no rebotar.
   const capturasProvistas = cuerpo.capturas !== undefined;
   const recargasProvistas = cuerpo.recargas !== undefined;
-  if (!capturasProvistas && !recargasProvistas) {
+  const metricasProvistas = cuerpo.metricas !== undefined;
+  if (!capturasProvistas && !recargasProvistas && !metricasProvistas) {
     return Response.json(
       {
         error: "lote_invalido",
         mensaje:
-          "El replay manda la cola en `capturas` y/o `recargas` (§4.7): una lista, aunque tenga una sola.",
+          "El replay manda la cola en `capturas`, `recargas` y/o `metricas` (§4.7): una lista, aunque tenga una sola.",
       },
       { status: 422 },
     );
@@ -126,6 +147,12 @@ export async function POST(peticion: Request) {
   if (recargasProvistas && !Array.isArray(cuerpo.recargas)) {
     return Response.json(
       { error: "lote_invalido", mensaje: "`recargas` viaja como lista (§4.7)." },
+      { status: 422 },
+    );
+  }
+  if (metricasProvistas && !Array.isArray(cuerpo.metricas)) {
+    return Response.json(
+      { error: "lote_invalido", mensaje: "`metricas` viaja como lista (§4.7)." },
       { status: 422 },
     );
   }
@@ -155,6 +182,19 @@ export async function POST(peticion: Request) {
     );
   }
 
+  const metricasCrudas = Array.isArray(cuerpo.metricas) ? (cuerpo.metricas as CapturaCruda[]) : [];
+  const metricasLeidas = metricasCrudas.map(leerMetrica);
+  if (!metricasLeidas.every(metricaBienFormada)) {
+    return Response.json(
+      {
+        error: "metrica_mal_formada",
+        mensaje:
+          "Toda métrica viaja con `client_uuid`, `tipo` del catálogo, `valor_int` entero y el doble reloj (§0, §4.6).",
+      },
+      { status: 422 },
+    );
+  }
+
   // La huella del enrolamiento que capturó el lote [AC-FPOD-09] — §4.7. Ausente o mal formada ⇒
   // `null`, y el hecho se atribuye a la sesión que lo trae: NO es motivo de rebote, porque el
   // 99 % de los lotes los manda quien los capturó y una versión vieja de la PWA no manda el campo.
@@ -178,5 +218,15 @@ export async function POST(peticion: Request) {
       ? []
       : await aterrizarRecargas(g.acto.pool, g.acto.sesion, recargasLeidas as RecargaCapturaEntrante[]);
 
-  return Response.json({ acuses, acuses_recarga: acusesRecarga }, { status: 200 });
+  // La telemetría [AC-FPOD-14] — ídem, mismo endpoint, mismo POST: `metricaBienFormada` ya filtró
+  // lo que no es CAPTURA real, así que lo que llega acá aterriza sin rebote (§4.2).
+  const acusesMetricas =
+    metricasLeidas.length === 0
+      ? []
+      : await aterrizarMetricas(g.acto.pool, g.acto.sesion, metricasLeidas as MetricaEntrante[]);
+
+  return Response.json(
+    { acuses, acuses_recarga: acusesRecarga, acuses_metricas: acusesMetricas },
+    { status: 200 },
+  );
 }

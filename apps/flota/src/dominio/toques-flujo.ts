@@ -16,7 +16,15 @@
 // `client_metric` — misma convención que `cliente/outbox.ts::paraElCable`). Así se prueba sin
 // navegador y sin red.
 
-export type FlujoDeToques = "alta_encargo" | "publicar_dia" | "recepcion_custodia" | "cierre_ruta";
+// `entrega_pod` (F4, AC-FPOD-14) es el mismo mecanismo aplicado al bucle de terreno del módulo
+// 04: la parada de entrega también es un flujo con toques-hasta-completar, y el §5.3 no reserva
+// la convención a los flujos del módulo 03.
+export type FlujoDeToques =
+  | "alta_encargo"
+  | "publicar_dia"
+  | "recepcion_custodia"
+  | "cierre_ruta"
+  | "entrega_pod";
 
 /** La fila de `client_metric` tal como viaja por el cable — mismas columnas del DDL (0002). */
 export type MetricaToquesFlujoCruda = {
