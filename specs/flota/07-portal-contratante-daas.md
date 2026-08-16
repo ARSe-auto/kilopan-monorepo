@@ -244,13 +244,29 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
       «Encargos» cuenta 2 (nunca el 3° de la vecina), «Liquidación» cuenta 1 (nunca el de
       la vecina), «Hoy» resume 2 de hoy — 8/8 verdes.
       `bash packages/metodo/scripts/check.sh --full --app=flota` en verde.
-- [ ] (P1) Ciclo del encargo solicitado: creado desde el portal nace `solicitado` (0
+- [x] (P1) Ciclo del encargo solicitado: creado desde el portal nace `solicitado` (0
       filas en estados posteriores); POST de un encargo inválido desde la pantalla
       «Nuevo» (p. ej. sin destino, o bultos fuera de 1–500 — §4.5) ⇒ 422 con error
       tipado y 0 filas en BD (planificación rebota, §4.2); el cliente puede editarlo
       mientras siga `solicitado`; tras la aceptación/programación del operador, PATCH
       del cliente ⇒ 422 tipado y 0 cambios en BD, y la UI ya no ofrece edición
-      (§3.E1.10, §4.5, §4.2) — oráculo: CI [AC-FPOR-08]
+      (§3.E1.10, §4.5, §4.2) — oráculo: CI [AC-FPOR-08]. Probado:
+      `POST`/`PATCH /cliente/api/encargos*` reusan `crearEncargo`/`editarEncargo`
+      (`servidor/encargos.ts`) con guardia del rol `cliente` — nace `solicitado` con la
+      `empresa_cliente_id` de la sesión, y la ventana de edición la cierra la MISMA BD que
+      usa el operador (AC-FRUT-03), entrando por un namespace distinto. UI:
+      `cliente/nuevo/page.tsx` (alta) y el botón «Corregir» en `cliente/encargos/page.tsx`,
+      presente únicamente en la fila cuyo `estado === "solicitado"` — ausencia del control,
+      no un `disabled` que igual se ve. `e2e/portal-encargos-alta.spec.ts` (6 tests, sesión
+      real de rol `cliente`): POST sin destino y con bultos fuera de 1–500 ⇒ 422 tipado y 0
+      filas; POST válido nace `solicitado`; corrección aceptada mientras sigue `solicitado`;
+      tras aceptación del operador (estampada directo por SQL, acto del operador es
+      AC-FRUT-03) PATCH del cliente ⇒ 422 `ya_aceptado` y 0 cambios; y la UI real —
+      navegador con sesión en IndexedDB— muestra «Corregir» en la fila `solicitado` y no en
+      la `aceptado`, filtrando por `data-id` porque la empresa del fixture ya trae otros
+      encargos `solicitado` de tests previos del mismo archivo. `pnpm check:full --app=flota`
+      en verde (18 OK, 1 saltado que no aplica a flota) y
+      `npx playwright test e2e/portal-encargos-alta.spec.ts` 6/6 en PRIMER PLANO.
 - [ ] (P2) Importar CSV — solo lo derivable del maestro como gate: ningún registro
       inválido del archivo crea encargos (cero filas espurias); un import íntegramente
       inválido ⇒ 422 con error tipado y 0 filas (planificación rebota, jamás degrada —

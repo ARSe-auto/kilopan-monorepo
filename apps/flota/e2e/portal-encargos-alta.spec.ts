@@ -223,11 +223,11 @@ test("[AC-FPOR-08] la UI ofrece «Corregir» solo en el encargo `solicitado`, nu
   await page.goto(`${ORIGEN}/cliente/encargos`);
   await expect(page.getByTestId("lista-encargos")).toBeVisible();
 
-  const filaSolicitada = page.locator(`[data-testid="encargo-item"][data-estado="solicitado"]`);
-  const filaAceptada = page.locator(`[data-testid="encargo-item"][data-estado="aceptado"]`);
+  // Filtrado por id: los tests anteriores de este archivo comparten la MISMA empresaId y ya
+  // dejaron sus propios encargos `solicitado`, así que contar por `data-estado` a secas
+  // arrastra esos ajenos — el AC exige la fila DE ESTE encargo, no «alguna solicitado».
+  const filaSolicitada = page.locator(`[data-testid="encargo-item"][data-id="${solicitado!.id}"]`);
+  const filaAceptada = page.locator(`[data-testid="encargo-item"][data-id="${aceptado!.id}"]`);
   await expect(filaSolicitada.getByTestId("corregir-encargo")).toHaveCount(1);
   await expect(filaAceptada.getByTestId("corregir-encargo")).toHaveCount(0);
-
-  void solicitado;
-  void aceptado;
 });

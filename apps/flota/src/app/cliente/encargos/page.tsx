@@ -55,7 +55,7 @@ export default function PortalEncargos() {
       {encargos && encargos.length > 0 && (
         <ul data-testid="lista-encargos" style={lista}>
           {encargos.map((e) => (
-            <li key={e.id} data-testid="encargo-item" data-estado={e.estado} style={tarjeta}>
+            <li key={e.id} data-testid="encargo-item" data-estado={e.estado} data-id={e.id} style={tarjeta}>
               <span style={cuerpo}>{ETIQUETA_ESTADO[e.estado] ?? e.estado}</span>
               <span style={{ ...pie, color: superficie.textoDim }}>
                 {e.bultos} bultos · {fechaEsCl(new Date(`${e.fecha_servicio}T12:00:00`))}
