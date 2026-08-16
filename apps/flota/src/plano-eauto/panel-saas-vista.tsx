@@ -9,6 +9,7 @@ import type {
   FilaEevdTendenciaTenant,
   SaludPlataforma,
 } from "../dominio/panel-saas.ts";
+import type { ColaAlCierre } from "../dominio/telemetria-semaforo.ts";
 import { FORMATOS } from "../../../../packages/nucleo-comun/src/constants.ts";
 
 // Panel interno SaaS de e-auto (spec 05 §3, maestro §10) [AC-FSEM-22].
@@ -18,6 +19,11 @@ import { FORMATOS } from "../../../../packages/nucleo-comun/src/constants.ts";
 // Cero fetch, cero cliente de base de datos. No está montado bajo ninguna ruta de `app/`
 // todavía — sin URL, no hay caso de cruce que declarar en `rutas/manifiesto.json`; el montaje
 // real llega con AC-FSEM-24 (pregunta 2).
+//
+// La sección `panel-saas-cola-cierre` es de [AC-FSEM-14] (spec 05 §5, «Telemetría del propio
+// módulo»): pinta `dominio/telemetria-semaforo.ts::ColaAlCierre` con el mismo criterio de
+// fixtures-contra-componente que el resto de esta vista — no necesita el montaje autenticado de
+// AC-FSEM-24 para EXISTIR como código, solo para su e2e navegado real.
 
 const numero = new Intl.NumberFormat(FORMATOS.locale);
 const porcentaje = new Intl.NumberFormat(FORMATOS.locale, { style: "percent", maximumFractionDigits: 1 });
@@ -33,18 +39,26 @@ function celdaHoras(valor: number | null): string {
   return valor === null ? "pendiente" : `${horas.format(valor)} h`;
 }
 
+function celdaConteo(valor: number | null): string {
+  // Mismo criterio NULL-declarado que el resto del panel: ventana vacía es "pendiente", jamás
+  // un cero inventado que se confunda con "cerró el día sin cola" (AC-FSEM-14).
+  return valor === null ? "pendiente" : numero.format(valor);
+}
+
 export function PanelSaasVista({
   eevdPorTenant,
   embudo,
   salud,
   calidad,
   exenciones,
+  colaAlCierre,
 }: {
   eevdPorTenant: FilaEevdTendenciaTenant[];
   embudo: EmbudoActivacion;
   salud: SaludPlataforma;
   calidad: CalidadNorte;
   exenciones: ContadorExenciones;
+  colaAlCierre: ColaAlCierre;
 }) {
   return (
     <div data-testid="panel-saas" style={{ display: "grid", gap: layout.espacio.entreTarjetas }}>
@@ -142,6 +156,41 @@ export function PanelSaasVista({
         <dd data-testid="panel-saas-exenciones-valor" style={{ margin: 0 }}>
           {numero.format(exenciones.valorActual)}
         </dd>
+      </section>
+
+      <section
+        data-testid="panel-saas-cola-cierre"
+        style={{
+          display: "grid",
+          gap: layout.espacio.entreControles,
+          padding: layout.espacio.entreControles,
+          borderRadius: layout.esquina.tarjeta,
+          background: superficie.tarjeta,
+          borderLeft: colaAlCierre.creciente ? `6px solid ${colores.error}` : undefined,
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <strong>Cola al cierre del día</strong>
+          {/* Texto SIEMPRE junto al color, mismo criterio AA que la sección de exenciones
+           *  (AC-FSEM-12): la bandera roja no se comunica solo con el borde [AC-FSEM-14]. */}
+          {colaAlCierre.creciente ? (
+            <span data-testid="panel-saas-cola-cierre-bandera">Tendencia creciente</span>
+          ) : colaAlCierre.tiendeACero ? (
+            <span data-testid="panel-saas-cola-cierre-tiende-a-cero">Tiende a cero</span>
+          ) : null}
+        </div>
+        <dl style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: layout.espacio.entreControles, margin: 0 }}>
+          <div>
+            <dt>Último cierre</dt>
+            <dd data-testid="panel-saas-cola-cierre-ultimo">{celdaConteo(colaAlCierre.pendientesUltimoCierre)}</dd>
+          </div>
+          <div>
+            <dt>Tendencia</dt>
+            <dd data-testid="panel-saas-cola-cierre-tendencia">
+              {colaAlCierre.tendencia.length === 0 ? "pendiente" : colaAlCierre.tendencia.map((n) => numero.format(n)).join(" → ")}
+            </dd>
+          </div>
+        </dl>
       </section>
     </div>
   );
