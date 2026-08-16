@@ -6,11 +6,14 @@ commit (`feat(flota/modulo): descripción [AC-XX-YY]`, §9.2). **Exactamente un 
 por AC** y **ningún AC de las specs falta** (cualquiera de las dos cosas pone el gate en
 rojo). TODOS los ítems parten en `[ ]`: nada está hecho.
 
-Reparto por módulo (suma 197): 00 = 28 · 01 = 21 · 02 = 22 · 03 = 22 · 04 = 24 ·
-05 = 25 · 06 = 15 · 07 = 17 · 08 = 23. Los dos ACs por sobre los 195 originales nacen
-de la firma de la lista congelada de criterios KiloRuta el 08-ago-2026 (AC-FTEN-18):
-AC-FVEH-22 (KR-41, cierre forzado del turno) y AC-FRUT-22 (KR-29, candado
-entrega←manifiesto).
+Reparto por módulo (suma 203, contado de `specs/flota/*.md`): 00 = 28 · 01 = 21 ·
+02 = 22 · 03 = 24 · 04 = 24 · 05 = 25 · 06 = 15 · 07 = 17 · 08 = 27. Los ACs por sobre
+los 195 originales nacen de la firma de la lista congelada de criterios KiloRuta el
+08-ago-2026 (AC-FTEN-18) —AC-FVEH-22 (KR-41, cierre forzado del turno) y AC-FRUT-22
+(KR-29, candado entrega←manifiesto)— y de PARTIR ACs a medias, que es la regla cuando
+uno cierra sobre una parte: AC-FMIG-24 salió de AC-FMIG-10, y AC-FMIG-25/26/27 de
+AC-FMIG-18. Partir sube el conteo a propósito: esconder el resto adentro de un `[x]`
+es lo que dejó 21 ACs abiertos invisibles el 26-jul-2026.
 
 **Precondiciones de proceso (criterio de entrada de E1, §9.1 — NO son ítems de este
 plan y el motor no puede saltárselas):** (0) hito 0 entregado (esqueleto +
@@ -321,7 +324,13 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
   PROBADO: test de invariante schema_migrations en wizard-onboarding.test.mjs + gate-flujo-por-datos.mjs + gate-seeds-alarm-thermal.mjs (ver nota completa en la spec). check.sh --full --app=flota: VERDE.
 - [ ] (P2) Wizard y primera parada validados EN VIVO por Alexis (oráculo humano — DONE-adopción, no bloquea) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-16]
 - [ ] (P2) Embudo de activación en el panel SaaS: alta→primera entrega real con evidencia p50 <4 h, p90 <24 h (oráculo producción) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-17]
-- [ ] (P1) PARCIAL: B y C sembrados (`db/flota/seeds/tenant-b.mjs`, `tenant-c.mjs`) y el caso de rebote de fila cruzada CONSTRUIDO (`db/flota/seeds/centinelas.mjs` + `suite-bd/seeds-fila-cruzada.test.mjs`, barrido de huella de BD, tests verdes). Falta A (parte bloqueada por esquema: `otd_comprometido_pct`), rutas/manifiestos/DTE/andén/reintento/cierre de B, liquidaciones y agenda de A, memoria EEVD y el e2e HTTP del camino dorado A/B/C. Seeds A/B/C EXACTOS según §10 (EV48, empresas y conceptos, terminología extrema de B, C contraído) con centinelas únicos por tenant, RUTs irreales y memoria de cálculo EEVD; fila cruzada ⇒ rojo — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-18]
+- [x] (P1) Tenants B «Rutapan» y C «Demo Mi Flota» sembrados desde `tenant_template` (`db/flota/seeds/tenant-b.mjs`, `tenant-c.mjs`) con centinelas únicos por tenant (`seeds/centinelas.mjs`, disjuntos y ninguno subcadena de otro, 5 mutantes en el gate rápido) y el caso de rebote de FILA CRUZADA con oráculo real: `suite-bd/seeds-fila-cruzada.test.mjs` barre la huella de las columnas de texto del CATÁLOGO de la base vecina (§9.3.2: el 404 no alcanza), con control positivo y fila plantada que lo pone rojo. El tenant A, la operación de B, la memoria EEVD y el e2e HTTP se partieron a AC-FMIG-25/26/27 — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-18]
+  PROBADO: `centinelas-de-seeds.test.mjs` 5/5 y las 3 suites de seeds verdes en serie contra el
+  cluster de flota (`--test-concurrency=1`: dos provisiones simultáneas desde la plantilla chocan
+  en el catálogo de Postgres). check.sh --full --app=flota: VERDE.
+- [ ] (P1) Tenant A «e-auto DaaS» entero (3 EV48, 6 usuarios, 3 empresas con sus conceptos, 25 destinos, agenda con recarga AC nocturna, no-entrega/parcial/devolución/descuadre, liquidaciones cerrada/disputada/pagada) con su centinela y el barrido de cruce extendido a A; `otd_comprometido_pct` BLOQUEADO por esquema (columna inexistente; el motor no toca migraciones) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-25]
+- [ ] (P1) Operación del tenant B: 2 rutas de madrugada (12 y 9 paradas) con términos renombrados, manifiestos con DTE ya emitido, encargo de andén, reintento y cierre con ecuación cuadrada; cierre que no cuadra o manifiesto sin DTE ⇒ rojo — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-26]
+- [ ] (P1) Memoria de cálculo del EEVD esperado de A y B versionada junto a los seeds (la consume AC-FMIG-23 sin recalcular) + e2e HTTP del camino dorado A/B/C con fila cruzada ⇒ rojo por 404 Y por huella de BD; depende de AC-FMIG-25 y AC-FMIG-26 — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-27]
 - [ ] (P1) Gate CI de performance de terreno: presupuesto Lighthouse + frame-timing en los e2e de apertura/POD/recepción + test de feedback táctil simulado — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-19]
 - [ ] (P1) Proxy CI bloqueante de VoiceOver: nombre accesible + rol correcto + orden de foco que completa los 3 flujos por navegación secuencial — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-20]
 - [ ] (P1) «Una acción primaria por pantalla» asertada en e2e/snapshots del hito + profundidad ≤2 verificada mecánicamente sobre el manifest bajo el covering array — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-21]
