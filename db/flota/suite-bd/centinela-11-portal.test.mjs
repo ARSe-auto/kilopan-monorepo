@@ -164,13 +164,11 @@ before(async () => {
   tenant = await provisionar(SLUG, { recrear: true });
   migrador = await conectar(tenant.bd, { usuario: ROL_MIGRADOR });
 
-  // `control` es la AUTORIDAD del modo (modo.ts): el alta real la hace `altaTenant`/el wizard
-  // del hito 08, acá se inserta directo porque lo que se prueba es la CONMUTACIÓN, no el alta
-  // (eso ya lo prueba AC-FPOR-01).
-  await control.sql("insert into tenants (slug, bd, modo) values ($1, $2, 'mi_flota')", [
-    SLUG,
-    tenant.bd,
-  ]);
+  // `provisionar()` YA dio de alta el tenant en `control.tenants` con su modo [AC-FPOR-01]:
+  // el INSERT manual que había acá rebotaba con duplicate key sobre `tenants_slug_key` desde
+  // que las tres ramas se unieron (16-ago). Lo que esta suite prueba es la CONMUTACIÓN, no el
+  // alta —eso es de AC-FPOR-01—, así que basta con dejar el modo de partida en `mi_flota`.
+  await control.sql("update tenants set modo = 'mi_flota' where slug = $1", [SLUG]);
 
   // La empresa implícita nace del trigger de `0039_empresa_implicita.sql` cuando `tenant_info`
   // tiene RUT y razón social propios (§4.5) — la provisión de test no los siembra porque en

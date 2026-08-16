@@ -74,6 +74,7 @@ export const VALIDOS = {
   "76.999.999-K": "el EMISOR de la factura ya emitida que ampara la liquidación cerrada del tenant A (AC-FMIG-25): es la flota misma facturándole a su contratante, y por eso no puede ser ninguno de los RUTs de empresa cliente ya declarados — el folio se REGISTRA como `reference_document`, jamás se genera (art. 97 N°4 CT), y sin un emisor propio el seed estaría diciendo que la farmacia se factura a sí misma. Dígito verificador DERIVADO por módulo 11, no elegido: cuerpo 76999999 ⇒ suma ponderada 276, resto 1, dv 11−1 = 10 = K",
   "76.543.210-3": "la empresa cliente del rol `cliente` en el covering array entitlements × rol del manifest (AC-FMIG-21): ese rol exige `empresa_cliente_id` con FK real y la suite necesita la suya, propia y no prestada. Dígito verificador DERIVADO por módulo 11: cuerpo 76543210 ⇒ suma ponderada 118, resto 8, dv 11−8 = 3",
   "19.500.000-K": "la empresa del detalle de encargo con evidencia del portal (AC-FPOR-11), propia y no prestada: el merge de las tres ramas dejó a `portal-encargo-detalle.spec.ts` y a `voiceover-proxy-3-flujos.spec.ts` reclamando el MISMO índice 39 — cada suite siembra su persona y la segunda en correr moría con duplicate key",
+  "76.111.222-8": "la empresa a la que se le intenta pactar un OTD fuera de rango (AC-FTAR-13), propia y no prestada: el pgTAP 0036 la usa DOS veces para los dos bordes del CHECK —49 y 101— y ninguna de las dos llega a crear fila, que es justamente lo que ese test comprueba",
 };
 
 /**
