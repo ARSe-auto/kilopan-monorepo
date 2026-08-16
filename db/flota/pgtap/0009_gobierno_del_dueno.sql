@@ -64,6 +64,9 @@ select is(
     -- test sin que falte ni sobre nada.
     'gobierno.documento_cargado',
     'gobierno.documento_eliminado',
+    -- La aceptación del DPA en términos del tenant [AC-FMIG-22] — §3.E1.15, §7.8: acto del
+    -- dueño (solo `admin_tenant`), misma familia que el resto del plano de control.
+    'gobierno.dpa_aceptado',
     'gobierno.invitacion_emitida',
     'gobierno.invitacion_pausada',
     'gobierno.invitacion_reanudada',
@@ -86,7 +89,7 @@ select is(
     'gobierno.vehiculo_editado',
     'gobierno.vehiculo_reactivado'
   ],
-  'catálogo de eventos de gobierno: los veinte actos, sin uno de menos'
+  'catálogo de eventos de gobierno: los veintiún actos, sin uno de menos'
 );
 
 -- Y cada uno con su descripción escrita: un catálogo de códigos sin texto es un panel de
@@ -94,7 +97,7 @@ select is(
 select is(
   (select count(*)::int from evento_tipo
     where codigo like 'gobierno.%' and length(btrim(descripcion)) > 0),
-  20, 'cada tipo de evento de gobierno trae su descripción en es-CL'
+  21, 'cada tipo de evento de gobierno trae su descripción en es-CL'
 );
 
 select finish();

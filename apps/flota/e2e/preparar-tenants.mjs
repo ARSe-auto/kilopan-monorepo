@@ -89,6 +89,12 @@ export const TENANTS = [
   // vacío) — mismo motivo que separó `funciones` de `ruteo_activo`: un plan propio no puede
   // compartir tenant con la suite que muta `tenant_feature_overrides` a cada rato.
   { slug: "pantalla_primaria", estado: "activo" },
+  // Base PROPIA para el DPA en términos del tenant [AC-FMIG-22]: la aceptación escribe
+  // `dpa_aceptaciones` (con su `auditar()` a `audit_trail`) y un evento `gobierno.dpa_aceptado`
+  // — compartir `gobierno` arriesgaría que esa suite, que limpia identidad completa en su
+  // `beforeAll`, corriera a mitad de la aceptación de esta y dejara un `usuario_id` colgando.
+  // Va al final por la misma razón que el resto de las bases dedicadas.
+  { slug: "dpa", estado: "activo" },
 ];
 
 /** Subdominio que jamás se registra. Nombrarlo acá evita que el test lo invente distinto. */

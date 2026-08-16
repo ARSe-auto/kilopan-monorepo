@@ -305,6 +305,19 @@
       }
     },
     {
+      "ruta": "/api/gobierno/dpa",
+      "archivo": "src/app/api/gobierno/dpa/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "El DPA en términos del tenant [AC-FMIG-22], plano de control exclusivo del dueño (§5.4, §3.E1.15). Sin parámetro de ruta: no hay id de recurso — la versión vigente sale de `packages/miga/src/dpa.ts` (DPA_VERSION), igual para todo tenant, y lo único que varía por tenant es SI ya la aceptó. El GET expone el texto del documento y el estado de aceptación de ESTE tenant; el POST inserta en `dpa_aceptaciones` (tenant_id por default `tenant_actual()`, con CHECK) y jamás recibe un id ajeno que pudiera aceptar en nombre de otro tenant. El caso genérico va sin credencial y la guardia contesta 404 pelado antes de mirar el cuerpo; el barrido de AC-FIDN-12 prueba el 403 con rol distinto de `admin_tenant` sobre esta misma ruta con CERO filas nuevas."
+      }
+    },
+    {
       "ruta": "/api/gobierno/funciones",
       "archivo": "src/app/api/gobierno/funciones/route.ts",
       "metodos": [
@@ -1229,6 +1242,18 @@
       "cruce": {
         "tipo": "sin_recurso",
         "nota": "Pantalla del dueño (F-A y F-C del §5.4). No recibe identificador por URL: todo lo que hace pasa por /api/gobierno/**, que ya tiene sus propios casos declarados, y el tenant sale del ruteo. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y acá pesa porque el HTML servido no puede traer ni el slug ni la base del vecino antes siquiera de que haya sesión: sin credencial la pantalla no pinta datos de nadie."
+      }
+    },
+    {
+      "ruta": "/panel/dpa",
+      "archivo": "src/app/panel/dpa/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de solo lectura sobre el shell [AC-FMIG-22]: no recibe identificador por URL, y todo lo que muta (la aceptación) pasa por `POST /api/gobierno/dpa`, que ya tiene su propio caso declarado y su propia guardia de rol. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y el HTML servido no puede traer el estado de aceptación del vecino antes de que el GET del endpoint resuelva contra la base correcta."
       }
     },
     {

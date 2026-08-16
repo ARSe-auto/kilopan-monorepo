@@ -34,6 +34,9 @@ export const TABLAS_DE_OPERACION = [
  *  y ese acto es append-only. Quien amparó o bajó una carga se queda — es justamente el dato que
  *  hace que la vía sea explícita y no un override anónimo. `limpiarFixture` los excluye. */
 export const TABLAS_DE_IDENTIDAD = [
+  // Cuelga de `usuarios` igual que `codigos_puente` [AC-FMIG-22]: va antes o el borrado de
+  // usuarios rebota "violates foreign key constraint".
+  "dpa_aceptaciones",
   "codigos_puente",
   "solicitudes_acceso",
   "invitaciones",
