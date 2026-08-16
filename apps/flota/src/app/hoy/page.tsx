@@ -1,4 +1,4 @@
-import { tipografia } from "@kilopan/miga/tokens.ts";
+import { tipografia, superficie } from "@kilopan/miga/tokens.ts";
 import { tarjetasNivelCero } from "../../dominio/semaforo.ts";
 import { seedA, seedC, seedVacio } from "../../dominio/semaforo-fixtures.ts";
 import { filasPeekDeDominio, type FilaPeek } from "../../dominio/peek-n1.ts";
@@ -46,7 +46,17 @@ export default async function Hoy({
       <h1 style={{ fontSize: tipografia.display.tamano, fontWeight: tipografia.display.peso, margin: 0 }}>Hoy</h1>
       <nav data-testid="manifest-modulos" aria-label="Módulos">
         {modulos.map((m) => (
-          <a key={m.clave} data-testid="modulo-nav" data-modulo={m.clave} href={m.ruta}>
+          // `color` explícito y no el del user-agent: sin él, en modo oscuro WebKit le da a un
+          // `<a>` su lavanda de sistema (#9e9eff) mientras el fondo de la página sigue claro, y
+          // el contraste cae a 2.38 — axe lo reporta y el gate se pone rojo por una pantalla que
+          // nadie tocó. Mismo token que ya usa la nav del portal (`cliente/layout.tsx`).
+          <a
+            key={m.clave}
+            data-testid="modulo-nav"
+            data-modulo={m.clave}
+            href={m.ruta}
+            style={{ color: superficie.texto }}
+          >
             {m.titulo}
           </a>
         ))}
