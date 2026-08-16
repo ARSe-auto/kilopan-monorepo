@@ -65,6 +65,8 @@ export const VALIDOS = {
   "5.772.157-K": "la dueña del Detalle N2 del «Hoy» (AC-FSEM-05), propia y no prestada: compartía el índice 18 con pod-secuencia-hueco.spec.ts — mismo hallazgo del 12-ago-2026 que los de arriba",
   "6.180.340-8": "el chofer de la foto y el GPS degradados de F4 (AC-FPOD-12), propio y no prestado: compartía el índice 20 con pod-evidencia-sha256.spec.ts — mismo hallazgo del 12-ago-2026 que los de arriba",
   "76.543.219-7": "la empresa cliente del drill-down línea→evidencia (AC-FTAR-07): rango 76.xxx de persona jurídica, propia y no prestada — la suite necesita SU propia empresa contratante para sembrar tarifa y encargo sin pisar la de otro módulo",
+  "19.283.746-4": "el cliente del detalle de encargo con evidencia (AC-FPOR-11), propio y no prestado: los índices 9 y 10 que la suite pedía originalmente ya eran de pod-variantes.spec.ts y pod-offline.spec.ts — gate-fixtures-exclusivos.mjs lo atajó antes de llegar a producción",
+  "76.445.588-6": "la empresa contratante del detalle de encargo con evidencia (AC-FPOR-11), propia y no prestada: rango 76.xxx de persona jurídica, mismo motivo que el RUT de arriba",
 };
 
 /**

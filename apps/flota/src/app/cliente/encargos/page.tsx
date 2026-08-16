@@ -2,29 +2,69 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { BotonPrimario, EstadoCargando, EstadoError, EstadoVacio } from "@kilopan/miga/componentes/index.tsx";
-import { tipografia, superficie, grilla } from "@kilopan/miga/tokens.ts";
+import { tipografia, superficie, grilla, enfasis } from "@kilopan/miga/tokens.ts";
 import { semantico } from "@kilopan/miga/estructura.ts";
-import { fechaEsCl } from "../../../../../../packages/nucleo-comun/src/fechas.ts";
+import { fechaEsCl, horaEsCl } from "../../../../../../packages/nucleo-comun/src/fechas.ts";
 import { pedir } from "../../../cliente/aparato.ts";
 
 // «Encargos», la segunda pantalla del portal [AC-FPOR-07] — spec 07 §2.2.
 //
 // LO QUE ESTA LISTA ES: estado/resultado de los encargos propios, confinados por
 // `empresa_cliente_id` en `encargosDelCliente` (`servidor/portal-cliente.ts`) — jamás el orden
-// global de la ruta ni paradas de terceros, que el §3.E1.10 prohíbe con esas palabras. LO QUE NO
-// ES TODAVÍA: el drill-down a la evidencia de cada entrega (foto/firma/GPS) es AC-FPOR-11,
-// abierto — esta pantalla lista, no abre ficha.
+// global de la ruta ni paradas de terceros, que el §3.E1.10 prohíbe con esas palabras. El
+// drill-down a la evidencia de cada entrega (foto/firma) es AC-FPOR-11, abajo: el id viaja como
+// parámetro de CONSULTA (`?id=`), mismo criterio que `/cliente/liquidaciones?id=` (AC-FPOR-10)
+// — esta página no abre ninguna BD por su cuenta, solo pide `pedir()`; el confinamiento entero
+// vive en `/cliente/api/encargos/[id]`.
 //
-// LA CORRECCIÓN [AC-FPOR-08] vive acá y no en una pantalla propia: el §3.E1.10 dice «editable
+// LA CORRECCIÓN [AC-FPOR-08] vive en la LISTA y no en el detalle: el §3.E1.10 dice «editable
 // SOLO hasta la aceptación», y la forma de que la UI «ya no ofrece edición» tras la aceptación
 // es que el botón de corregir exista únicamente en la fila cuyo `estado === "solicitado"` — no
 // un `disabled` que igual se ve, sino la ausencia del control. El servidor (`PATCH
 // /cliente/api/encargos/[id]`, `editarEncargo`) es la guardia real; esto es la conveniencia.
 type EncargoDelCliente = { id: string; estado: string; fecha_servicio: string; bultos: number; creado_en: string };
 
+type EvidenciaDeEncargo = { tipo: string; capturada_en: string; sha256: string | null };
+
+type ResultadoDeEncargo = {
+  resultado: string;
+  metodo_entrega: string | null;
+  motivo_etiqueta: string | null;
+  event_time: string;
+  evidencias: EvidenciaDeEncargo[];
+};
+
 const ETIQUETA_ESTADO: Record<string, string> = { solicitado: "Solicitado", aceptado: "Aceptado" };
 
+const ETIQUETA_RESULTADO: Record<string, string> = {
+  exito: "Entregado",
+  parcial: "Entrega parcial",
+  fallo: "No entregado",
+};
+
+const ETIQUETA_EVIDENCIA: Record<string, string> = {
+  firma: "Firma",
+  foto: "Foto",
+  lectura: "Lectura",
+  indicador_visual: "Indicador visual",
+  archivo_logger: "Registro adjunto",
+  documento: "Documento",
+  pin_destinatario: "PIN del destinatario",
+  escaneo_codigo: "Código escaneado",
+};
+
 export default function PortalEncargos() {
+  const [id, setId] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    setId(new URLSearchParams(window.location.search).get("id"));
+  }, []);
+
+  if (id === undefined) return null;
+  if (id === null) return <ListaEncargos />;
+  return <DetalleEncargo id={id} />;
+}
+
+function ListaEncargos() {
   const [encargos, setEncargos] = useState<EncargoDelCliente[] | undefined>(undefined);
   const [error, setError] = useState(false);
   const [enEdicion, setEnEdicion] = useState<string | null>(null);
@@ -56,10 +96,16 @@ export default function PortalEncargos() {
         <ul data-testid="lista-encargos" style={lista}>
           {encargos.map((e) => (
             <li key={e.id} data-testid="encargo-item" data-estado={e.estado} data-id={e.id} style={tarjeta}>
-              <span style={cuerpo}>{ETIQUETA_ESTADO[e.estado] ?? e.estado}</span>
-              <span style={{ ...pie, color: superficie.textoDim }}>
-                {e.bultos} bultos · {fechaEsCl(new Date(`${e.fecha_servicio}T12:00:00`))}
-              </span>
+              <a
+                data-testid="detalle-encargo"
+                href={`/cliente/encargos?id=${e.id}`}
+                style={{ ...filaEnlace, textDecoration: "none" }}
+              >
+                <span style={cuerpo}>{ETIQUETA_ESTADO[e.estado] ?? e.estado}</span>
+                <span style={{ ...pie, color: superficie.textoDim }}>
+                  {e.bultos} bultos · {fechaEsCl(new Date(`${e.fecha_servicio}T12:00:00`))}
+                </span>
+              </a>
               {e.estado === "solicitado" && (
                 enEdicion === e.id ? (
                   <EdicionDeEncargo
@@ -85,6 +131,114 @@ export default function PortalEncargos() {
           ))}
         </ul>
       )}
+    </main>
+  );
+}
+
+function DetalleEncargo({ id }: { id: string }) {
+  const [encargo, setEncargo] = useState<EncargoDelCliente | null | undefined>(undefined);
+  const [resultado, setResultado] = useState<ResultadoDeEncargo | null>(null);
+  const [error, setError] = useState(false);
+
+  const cargar = useCallback(async () => {
+    setError(false);
+    const respuesta = await pedir(`/cliente/api/encargos/${id}`).catch(() => null);
+    if (!respuesta) return setError(true);
+    if (!respuesta.ok) return setEncargo(null);
+    const cuerpo = (await respuesta.json()) as { encargo: EncargoDelCliente; resultado: ResultadoDeEncargo | null };
+    setEncargo(cuerpo.encargo);
+    setResultado(cuerpo.resultado);
+    return undefined;
+  }, [id]);
+
+  useEffect(() => {
+    void cargar();
+  }, [cargar]);
+
+  if (error) {
+    return (
+      <main data-testid="portal-encargo-detalle">
+        <h1 style={titulo}>Encargo</h1>
+        <EstadoError mensaje="No se pudo cargar el encargo. Revisá tu conexión." alReintentar={() => void cargar()} />
+      </main>
+    );
+  }
+  if (encargo === undefined) {
+    return (
+      <main data-testid="portal-encargo-detalle">
+        <h1 style={titulo}>Encargo</h1>
+        <EstadoCargando filas={4} />
+      </main>
+    );
+  }
+  if (encargo === null) {
+    return (
+      <main data-testid="portal-encargo-detalle">
+        <h1 style={titulo}>Encargo</h1>
+        <EstadoVacio mensaje="Este encargo no existe." />
+      </main>
+    );
+  }
+
+  return (
+    <main data-testid="portal-encargo-detalle">
+      <a data-testid="volver-encargos" href="/cliente/encargos" style={{ ...pie, color: superficie.textoDim }}>
+        ← Todos tus encargos
+      </a>
+      <h1 style={titulo}>Encargo</h1>
+
+      <section data-testid="cabecera-encargo-cliente" style={bloque}>
+        <p data-testid="estado-encargo-cliente" style={{ ...cuerpo, margin: 0, fontWeight: enfasis.medio }}>
+          {ETIQUETA_ESTADO[encargo.estado] ?? encargo.estado}
+        </p>
+        <p style={{ ...pie, margin: 0, color: superficie.textoDim }}>
+          {encargo.bultos} bultos · {fechaEsCl(new Date(`${encargo.fecha_servicio}T12:00:00`))}
+        </p>
+      </section>
+
+      <section data-testid="resultado-encargo-cliente" style={{ ...bloque, ...tarjeta }}>
+        {!resultado ? (
+          <EstadoVacio mensaje="Todavía no hay resultado de entrega para este encargo." />
+        ) : (
+          <div style={{ display: "grid", gap: semantico.espacio.entreControles }}>
+            <p data-testid="encargo-resultado" style={{ ...cuerpo, margin: 0, fontWeight: enfasis.medio }}>
+              {ETIQUETA_RESULTADO[resultado.resultado] ?? resultado.resultado}
+              {resultado.metodo_entrega === "dejado_en_punto" && " — dejado en punto"}
+            </p>
+            {resultado.motivo_etiqueta && (
+              <p data-testid="encargo-motivo" style={{ ...pie, margin: 0, color: superficie.textoDim }}>
+                Motivo: {resultado.motivo_etiqueta}
+              </p>
+            )}
+            <p style={{ ...pie, margin: 0, color: superficie.textoDim }}>
+              {fechaEsCl(new Date(resultado.event_time))} {horaEsCl(new Date(resultado.event_time))}
+            </p>
+            {resultado.evidencias.length === 0 ? (
+              <p style={{ ...pie, margin: 0, color: superficie.textoDim }}>Sin foto ni firma capturada.</p>
+            ) : (
+              <ul
+                data-testid="evidencias-encargo-cliente"
+                style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}
+              >
+                {resultado.evidencias.map((ev, i) => (
+                  <li key={i} data-testid="evidencia-encargo-cliente" style={{ ...pie, color: superficie.texto }}>
+                    {ETIQUETA_EVIDENCIA[ev.tipo] ?? ev.tipo} — {fechaEsCl(new Date(ev.capturada_en))}{" "}
+                    {horaEsCl(new Date(ev.capturada_en))}
+                    {ev.sha256 && (
+                      <>
+                        {" "}
+                        · <code data-testid="evidencia-sha256" style={{ fontSize: tipografia.pie.tamano }}>
+                          {ev.sha256.slice(0, 12)}…
+                        </code>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </section>
     </main>
   );
 }
@@ -190,3 +344,9 @@ const campoEdicion = {
   background: superficie.fondo,
   color: superficie.texto,
 };
+const filaEnlace = {
+  display: "flex",
+  flexDirection: "column" as const,
+  gap: 4,
+};
+const bloque = { display: "grid", gap: semantico.espacio.entreControles, marginTop: semantico.espacio.entreTarjetas };

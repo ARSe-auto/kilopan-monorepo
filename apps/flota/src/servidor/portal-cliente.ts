@@ -76,6 +76,76 @@ export async function encargosDelCliente(pool: Pool, sesion: Sesion): Promise<En
   });
 }
 
+// ─── Resultado y evidencia de un encargo propio [AC-FPOR-11] — spec 07 §2.2, §4.6 ────────────
+
+export type EvidenciaDeEncargoCliente = { tipo: string; capturada_en: string; sha256: string | null };
+
+export type ResultadoDeEncargoCliente = {
+  resultado: string;
+  metodo_entrega: string | null;
+  motivo_etiqueta: string | null;
+  event_time: string;
+  evidencias: EvidenciaDeEncargoCliente[];
+};
+
+/** El resultado (`exito|fallo|parcial`, §4.5) y la evidencia asociada de un encargo propio, o
+ *  `null` si todavía no tiene una entrega CERRADA (el POD no llegó, o el llamador está mirando
+ *  un id que no es suyo — `encargoDelCliente` ya cerró esa puerta antes de llegar acá, pero el
+ *  JOIN explícito contra `encargos` REPITE el filtro por la misma razón que el resto del
+ *  archivo: `flota_admin` hace bypass de RLS, cabecera del archivo). Lee la fila VIGENTE de
+ *  `entregas_pod` (`cerrada and supersede_id is null`, el índice write-once de la 0055) — nunca
+ *  una corrección superseded, que dejaría de ser la conclusión vigente.
+ *
+ *  La evidencia cuelga de la PARADA, no del encargo (`evidence.objeto_id = parada_id`, mismo
+ *  camino que `evidenciaDeLineaDelCliente`): una parada consolidada puede juntar encargos de
+ *  varias empresas, pero la evidencia de esa entrega es la MISMA foto/firma para todos —
+ *  compartirla acá no es fuga de datos de terceros, es la evidencia de esta propia entrega. Lo
+ *  que este SELECT NO trae, a propósito, es cualquier columna de `paradas` (el orden de la
+ *  ruta) o de `reading` (curvas de SOC): el §3.E1.10 las prohíbe con esas palabras, y la forma
+ *  de que la prohibición sea estructural es que la consulta ni siquiera las toque. */
+export async function resultadoDelEncargoCliente(
+  pool: Pool,
+  sesion: Sesion,
+  encargoId: string,
+): Promise<ResultadoDeEncargoCliente | null> {
+  return enLectura(pool, sesion, async (c) => {
+    const { rows } = await c.query<{
+      resultado: string;
+      metodo_entrega: string | null;
+      parada_id: string;
+      event_time: string;
+      motivo_etiqueta: string | null;
+    }>(
+      `select ep.resultado::text as resultado, ep.metodo_entrega,
+              ep.parada_id::text as parada_id, ep.event_time::text as event_time,
+              m.etiqueta as motivo_etiqueta
+         from entregas_pod ep
+         join encargos e on e.id = ep.encargo_id and e.empresa_cliente_id = $2
+         left join motivos m on m.id = ep.motivo_id
+        where ep.encargo_id = $1 and ep.cerrada and ep.supersede_id is null`,
+      [encargoId, sesion.empresaClienteId],
+    );
+    const pod = rows[0];
+    if (!pod) return null;
+
+    const { rows: evidencias } = await c.query<EvidenciaDeEncargoCliente>(
+      `select tipo::text as tipo, capturada_en::text as capturada_en, encode(sha256, 'hex') as sha256
+         from evidence
+        where objeto_tabla = 'paradas' and objeto_id = $1
+        order by capturada_en`,
+      [pod.parada_id],
+    );
+
+    return {
+      resultado: pod.resultado,
+      metodo_entrega: pod.metodo_entrega,
+      motivo_etiqueta: pod.motivo_etiqueta,
+      event_time: pod.event_time,
+      evidencias,
+    };
+  });
+}
+
 export type LineaDeLiquidacionCliente = {
   id: string;
   liquidacion_id: string;

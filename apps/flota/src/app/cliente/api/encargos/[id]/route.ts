@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { sesionDelTenant, esUuid, noExiste } from "../../../../../servidor/gobierno.ts";
-import { encargoDelCliente } from "../../../../../servidor/portal-cliente.ts";
+import { encargoDelCliente, resultadoDelEncargoCliente } from "../../../../../servidor/portal-cliente.ts";
 import { editarEncargo } from "../../../../../servidor/encargos.ts";
 
 // El encargo propio, dentro del namespace del portal [AC-FPOR-06] — spec 07 §2, §9.3
@@ -8,6 +8,12 @@ import { editarEncargo } from "../../../../../servidor/encargos.ts";
 // misma familia que `SIN_ACCESO` en `/api/liquidaciones/[id]`, aplicado acá porque este panel
 // es EXCLUSIVO del contratante. Sin sesión, o encargo que no existe, o de otra empresa (RLS de
 // `encargos`, 0040): 404 pelado — las tres se ven igual (§0, centinela 2).
+//
+// El GET además trae el `resultado` (`exito|fallo|parcial`) y la evidencia asociada del
+// detalle con evidencia [AC-FPOR-11] — spec 07 §2.2, §4.6: `null` mientras el encargo no tenga
+// una entrega CERRADA. `resultadoDelEncargoCliente` confina por su cuenta (misma razón que
+// `encargoDelCliente`, `flota_admin` hace bypass de RLS), así que no hace falta un segundo 404
+// — un encargo ajeno ya murió arriba, en el `noExiste()` de `encargoDelCliente`.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -28,7 +34,8 @@ export async function GET(_peticion: Request, contexto: { params: Promise<{ id: 
   const encargo = await encargoDelCliente(g.acto.pool, g.acto.sesion, id);
   if (!encargo) return noExiste();
 
-  return Response.json({ encargo });
+  const resultado = await resultadoDelEncargoCliente(g.acto.pool, g.acto.sesion, id);
+  return Response.json({ encargo, resultado });
 }
 
 // El contratante corrige su encargo, y SOLO hasta la aceptación [AC-FPOR-08] — spec 07 §2.3,
