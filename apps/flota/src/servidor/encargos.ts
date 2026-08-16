@@ -566,6 +566,112 @@ export async function importarEncargos(
   }, sesion);
 }
 
+// ─── Importación CSV del portal del contratante [AC-FPOR-09] — spec 07 §3.E1.10, §4.2 ──────
+//
+// ─── POR QUÉ NO ES LA MISMA FUNCIÓN QUE EL F1 DE LA BANDEJA ─────────────────────────
+//
+// `importarEncargos` (arriba) resuelve la EMPRESA por columna del archivo porque el operador
+// importa para VARIAS empresas a la vez. El contratante importa para UNA sola —la suya— y esa
+// empresa sale de `sesion.empresaClienteId`, jamás del archivo: igual que `crearEncargo` con el
+// alta individual (AC-FPOR-08), mandarla en el CSV y usarla sería confiar en el cliente para lo
+// único que la sesión ya sabe con certeza. Por eso el archivo del portal trae DOS columnas, no
+// tres, y por eso cada fila nace `solicitado` a mano —el default de la tabla es `aceptado`
+// (0036), correcto para el operador y equivocado acá (§3.E1.10, §4.5)—, en vez de aceptado como
+// hace el F1.
+//
+// La granularidad todo-o-nada es la MISMA elección provisional que AC-FRUT-02, por la misma
+// razón (se puede deshacer con un clic) y ligada a la MISMA pregunta sin responder —la 4 de esta
+// spec, hermana de la 6 de la spec 03—, así que un lote mixto rebota entero mientras no se
+// conteste. El AC solo pide lo invariante bajo las dos semánticas: cero filas espurias y 422
+// tipado.
+
+export type FilaImportadaCliente = FilaImportada;
+
+export type ImportacionCliente =
+  | { tipo: "ok"; creados: number; repetidos: number }
+  | { tipo: "archivo_vacio" }
+  | { tipo: "faltan_columnas"; columnas: string[] }
+  | { tipo: "filas_invalidas"; filas: FilaImportadaCliente[] };
+
+/** Las columnas del CSV del portal: sin `empresa`, porque el contratante solo importa para la
+ *  SUYA (§3.E1.10). */
+export const COLUMNAS_DEL_CSV_CLIENTE = ["destino", "bultos"] as const;
+
+export async function importarEncargosCliente(
+  pool: Pool,
+  sesion: Sesion,
+  empresaClienteId: string,
+  texto: string,
+): Promise<ImportacionCliente> {
+  const lectura = leerCsv(texto, [...COLUMNAS_DEL_CSV_CLIENTE]);
+  if (lectura.tipo === "vacio") return { tipo: "archivo_vacio" };
+  if (lectura.tipo === "faltan_columnas") return { tipo: "faltan_columnas", columnas: lectura.columnas };
+
+  return enActo(pool, async (c) => {
+    const { rows: destinos } = await c.query<{ id: string; nombre: string }>(
+      "select id::text as id, nombre from destinos",
+    );
+    const porDestino = new Map(destinos.map((d) => [d.nombre.toLowerCase(), d.id] as const));
+
+    const malas: FilaImportadaCliente[] = [];
+    const buenas: { destinoId: string; bultos: number; clientUuid: string }[] = [];
+
+    lectura.filas.forEach((fila, i) => {
+      // +2: la primera línea es el encabezado y los humanos cuentan desde uno, igual que en el
+      // import del F1.
+      const linea = i + 2;
+      const destinoId = porDestino.get((fila.destino ?? "").toLowerCase());
+      if (!destinoId) {
+        malas.push({ linea, error: "destino_no_existe", detalle: fila.destino ?? "" });
+        return;
+      }
+      const bultos = Number(fila.bultos);
+      if (!Number.isInteger(bultos) || bultos < 1 || bultos > 500) {
+        malas.push({ linea, error: "bultos_fuera_de_rango", detalle: fila.bultos ?? "" });
+        return;
+      }
+      // Derivado del contenido de la fila y de la EMPRESA (a diferencia del F1, que no la
+      // necesita en la clave porque ya viene en cada fila del archivo): dos empresas del mismo
+      // tenant subiendo la fila «Centro,30» no pueden colisionar en el mismo client_uuid.
+      buenas.push({
+        destinoId,
+        bultos,
+        clientUuid: uuidDeterminista(`portal|${empresaClienteId}|${destinoId}|${bultos}|${linea}`),
+      });
+    });
+
+    // Todo-o-nada, provisional (pregunta 4): la transacción se deshace sola al devolver el
+    // rebote, así que ninguna de las buenas queda escrita.
+    if (malas.length > 0) return { tipo: "filas_invalidas", filas: malas };
+
+    let creados = 0;
+    let repetidos = 0;
+    for (const fila of buenas) {
+      const { rows } = await c.query<{ id: string }>(
+        `insert into encargos
+           (empresa_cliente_id, destino_id, bultos, estado, client_uuid, creado_por_usuario_id)
+         values ($1, $2, $3, 'solicitado'::encargo_estado, $4, $5)
+           on conflict (tenant_id, client_uuid) do nothing
+         returning id::text as id`,
+        [empresaClienteId, fila.destinoId, fila.bultos, fila.clientUuid, sesion.usuarioId],
+      );
+      if (!rows[0]) {
+        repetidos++;
+        continue;
+      }
+      creados++;
+      await registrarEvento(c, {
+        codigo: EVENTOS_OPERACION.encargo_creado,
+        objetoTabla: "encargos",
+        objetoId: rows[0].id,
+        sesion,
+        payload: { bultos: fila.bultos, estado: "solicitado", origen: "importacion_csv_portal" },
+      });
+    }
+    return { tipo: "ok", creados, repetidos };
+  }, sesion);
+}
+
 // ─── «Duplicar encargos de ayer» [AC-FRUT-17] — §5.2-F1, §3.E1.5, §9.3.1 ────────────
 //
 // ─── ES UNA VÍA MASIVA SEPARADA DEL CSV, Y NO POR PROLIJIDAD ────────────────────────

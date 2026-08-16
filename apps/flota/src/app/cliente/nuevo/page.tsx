@@ -6,13 +6,16 @@ import { tipografia, superficie, grilla } from "@kilopan/miga/tokens.ts";
 import { semantico } from "@kilopan/miga/estructura.ts";
 import { pedir } from "../../../cliente/aparato.ts";
 
-// «Nuevo / Importar CSV», la tercera pantalla del portal [AC-FPOR-07, AC-FPOR-08] — spec 07
-// §2.3.
+// «Nuevo / Importar CSV», la tercera pantalla del portal [AC-FPOR-07, AC-FPOR-08, AC-FPOR-09] —
+// spec 07 §2.3.
 //
-// El §3.E1.10 trata esto como UNA sola pantalla con dos vías de alta, no dos pantallas. Acá va
-// la primera —el encargo individual, que nace `solicitado` (§4.5) y es editable SOLO hasta que
-// el operador lo acepte (§3.E1.10)—; la de importar CSV es AC-FPOR-09, todavía abierto y
-// PROVISIONAL a la Pregunta al dueño 4.
+// El §3.E1.10 trata esto como UNA sola pantalla con dos vías de alta, no dos pantallas. La
+// primera es el encargo individual, que nace `solicitado` (§4.5) y es editable SOLO hasta que
+// el operador lo acepte (§3.E1.10). La segunda es el import CSV [AC-FPOR-09]: todo-o-nada
+// PROVISIONAL a la Pregunta al dueño 4 (un lote mixto rebota entero mientras no se responda) y
+// deshabilitado sin conexión mostrando el estado obligatorio del §5.7 — es PLANIFICACIÓN
+// (§4.2), así que la acción se apaga en vez de encolarse: no hay nada que sincronizar después,
+// solo un archivo que se puede volver a subir cuando vuelva la red.
 //
 // Es PLANIFICACIÓN (§4.2): el 422 tipado del servidor es la guardia real y ESTE formulario no
 // la reemplaza, solo evita el viaje redondo cuando ya se sabe la respuesta (mismo patrón que
@@ -24,6 +27,56 @@ export default function PortalNuevo() {
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creado, setCreado] = useState(false);
+
+  // «Sin conexión se deshabilita mostrando el estado obligatorio de §5.7» [AC-FPOR-09]. Arranca
+  // en `true` (asumir conectado hasta saber lo contrario, mismo criterio que `ChipEstadoConexion`)
+  // y se corrige apenas monta, para no depender de qué valor trae `navigator.onLine` en el
+  // primer render del servidor.
+  const [online, setOnline] = useState(true);
+  useEffect(() => {
+    setOnline(navigator.onLine);
+    const marcarOnline = () => setOnline(true);
+    const marcarOffline = () => setOnline(false);
+    window.addEventListener("online", marcarOnline);
+    window.addEventListener("offline", marcarOffline);
+    return () => {
+      window.removeEventListener("online", marcarOnline);
+      window.removeEventListener("offline", marcarOffline);
+    };
+  }, []);
+
+  const [archivoCsv, setArchivoCsv] = useState<File | null>(null);
+  const [importandoCsv, setImportandoCsv] = useState(false);
+  const [errorCsv, setErrorCsv] = useState<string | null>(null);
+  const [filasInvalidas, setFilasInvalidas] = useState<{ linea: number; error: string; detalle: string }[]>([]);
+  const [resultadoCsv, setResultadoCsv] = useState<{ creados: number; repetidos: number } | null>(null);
+
+  async function importarCsv() {
+    if (!archivoCsv) return;
+    setImportandoCsv(true);
+    setErrorCsv(null);
+    setFilasInvalidas([]);
+    setResultadoCsv(null);
+    const texto = await archivoCsv.text();
+    const respuesta = await pedir("/cliente/api/encargos/importar", {
+      method: "POST",
+      headers: { "content-type": "text/csv" },
+      body: texto,
+    }).catch(() => null);
+    setImportandoCsv(false);
+    if (!respuesta?.ok) {
+      const cuerpo = (await respuesta?.json().catch(() => ({}))) as
+        | { mensaje?: string; filas?: { linea: number; error: string; detalle: string }[] }
+        | undefined;
+      setError(null);
+      setErrorCsv(cuerpo?.mensaje ?? "No se pudo importar el archivo. Revisá tu conexión e intentá de nuevo.");
+      setFilasInvalidas(cuerpo?.filas ?? []);
+      return;
+    }
+    const cuerpo = (await respuesta.json()) as { creados: number; repetidos: number };
+    setArchivoCsv(null);
+    setResultadoCsv(cuerpo);
+  }
 
   const cargarDestinos = useCallback(async () => {
     const respuesta = await pedir("/api/destinos").catch(() => null);
@@ -115,6 +168,57 @@ export default function PortalNuevo() {
       <section data-testid="importar-csv" style={tarjeta}>
         <h2 style={subtitulo}>Importar CSV</h2>
         <p style={cuerpo}>Subí un archivo con varios encargos a la vez. Cada fila nace en estado «Solicitado».</p>
+
+        {!online && (
+          <p data-testid="csv-sin-conexion" role="status" style={{ ...pie, color: "#B45309" }}>
+            Sin conexión — la importación necesita red. Volvé a intentarlo cuando se recupere.
+          </p>
+        )}
+
+        <label style={etiqueta} htmlFor="csv-archivo">Archivo CSV (columnas: destino, bultos)</label>
+        <input
+          id="csv-archivo"
+          data-testid="csv-archivo"
+          type="file"
+          accept=".csv,text/csv"
+          disabled={!online || importandoCsv}
+          onChange={(e) => {
+            setArchivoCsv(e.target.files?.[0] ?? null);
+            setErrorCsv(null);
+            setFilasInvalidas([]);
+            setResultadoCsv(null);
+          }}
+          style={campo}
+        />
+
+        {errorCsv && (
+          <div data-testid="csv-error">
+            <EstadoError mensaje={errorCsv} alReintentar={() => setErrorCsv(null)} />
+            {filasInvalidas.length > 0 && (
+              <ul data-testid="csv-filas-invalidas" style={{ margin: 0, paddingLeft: grilla.base }}>
+                {filasInvalidas.map((f) => (
+                  <li key={f.linea} style={pie}>
+                    Línea {f.linea}: {f.error} ({f.detalle})
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {resultadoCsv && (
+          <p data-testid="csv-importado" role="status" style={{ ...pie, color: superficie.texto }}>
+            Se importaron {resultadoCsv.creados} encargo(s). Los vas a ver en «Encargos» como «Solicitado».
+          </p>
+        )}
+
+        <BotonPrimario
+          testid="importar-csv-boton"
+          disabled={!online || !archivoCsv || importandoCsv}
+          onClick={() => void importarCsv()}
+        >
+          {importandoCsv ? "Importando…" : "Importar"}
+        </BotonPrimario>
       </section>
     </main>
   );

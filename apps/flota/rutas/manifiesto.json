@@ -1128,6 +1128,18 @@
       }
     },
     {
+      "ruta": "/cliente/api/encargos/importar",
+      "archivo": "src/app/cliente/api/encargos/importar/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Import CSV del portal del contratante [AC-FPOR-09] — sin identificador por URL, y la `empresa_cliente_id` con la que se inserta cada fila sale SIEMPRE de `sesion.empresaClienteId` (mismo candado que `/cliente/api/encargos` POST, AC-FPOR-08), jamás de una columna del archivo. Contra el vecino B, el host de A resuelve el pool y la sesión de A (AC-FTEN-05); ninguna fila del CSV que suba A puede nacer con la empresa de B, y RLS (`empresa_del_cliente`, 0040) confina igual la escritura aunque el servidor tuviera un bug."
+      }
+    },
+    {
       "ruta": "/cliente/api/evidencias/[id]",
       "archivo": "src/app/cliente/api/evidencias/[id]/route.ts",
       "metodos": [

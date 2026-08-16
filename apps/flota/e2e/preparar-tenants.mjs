@@ -96,6 +96,13 @@ export const TENANTS = [
   // compartida `plan_features` ni la del vecino. Compartir base con otra suite del portal
   // dejaría versiones selladas o un `plan_id` que no son de nadie.
   { slug: "preset_modo", estado: "activo" },
+  // Base PROPIA para el import CSV del portal del contratante [AC-FPOR-09].
+  //
+  // Misma razón que `portal_encargos_alta`: sella `config_version` DIRECTO con
+  // `crear_config_version()` para encender `portal_contratante`, y esta suite además crea
+  // encargos por lote (import bueno, replay, lote mixto) que otra suite del portal no puede
+  // compartir sin arrastrar filas de una importación ajena en sus conteos.
+  { slug: "portal_importar_csv", estado: "activo" },
 ];
 
 /** Subdominio que jamás se registra. Nombrarlo acá evita que el test lo invente distinto. */

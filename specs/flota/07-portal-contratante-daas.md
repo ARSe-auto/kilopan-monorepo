@@ -267,7 +267,7 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
       encargos `solicitado` de tests previos del mismo archivo. `pnpm check:full --app=flota`
       en verde (18 OK, 1 saltado que no aplica a flota) y
       `npx playwright test e2e/portal-encargos-alta.spec.ts` 6/6 en PRIMER PLANO.
-- [ ] (P2) Importar CSV — solo lo derivable del maestro como gate: ningún registro
+- [x] (P2) Importar CSV — solo lo derivable del maestro como gate: ningún registro
       inválido del archivo crea encargos (cero filas espurias); un import íntegramente
       inválido ⇒ 422 con error tipado y 0 filas (planificación rebota, jamás degrada —
       §4.2); todo encargo creado por el import nace `solicitado` (§3.E1.10); sin
@@ -276,7 +276,23 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
       hasta que se responda (el maestro no cierra la atomicidad del lote): en un lote
       mixto las filas válidas crean encargos y las inválidas rebotan con error tipado
       por fila visible para el cliente (§3.E1.10, §4.2, §5.7) — oráculo: CI
-      [AC-FPOR-09]
+      [AC-FPOR-09]. Probado: `importarEncargosCliente` (servidor/encargos.ts) —
+      hermana de `importarEncargos` del F1 (AC-FRUT-02) pero con la empresa SIEMPRE
+      saliendo de `sesion.empresaClienteId` (jamás de una columna del CSV, mismo
+      candado que el alta individual AC-FPOR-08) y cada fila naciendo `solicitado` a
+      mano, no del default `aceptado` de la tabla (0036). Todo-o-nada, misma elección
+      provisional que AC-FRUT-02 y ligada a la MISMA pregunta (la 4, hermana de la 6 de
+      la spec 03). Ruta `POST /cliente/api/encargos/importar`, declarada en
+      `rutas/manifiesto.json` (`sin_recurso`). UI: sección «Importar CSV» de
+      `cliente/nuevo/page.tsx` — input de archivo y botón deshabilitados con
+      `navigator.onLine` + eventos `online`/`offline` (§5.7), banner
+      `csv-sin-conexion` mientras dura. `e2e/portal-importar-csv.spec.ts` 8/8 en
+      PRIMER PLANO: CSV bueno crea `solicitado`, replay no duplica, íntegramente
+      inválido ⇒ 422 con 0 filas, lote mixto no deja entrar la fila mala (invariante
+      bajo cualquier semántica de la pregunta 4), columnas faltantes, archivo vacío,
+      la empresa nunca sale del CSV, y offline real (`context().setOffline`)
+      deshabilita el control en la UI real con sesión de navegador.
+      `bash packages/metodo/scripts/check.sh --full --app=flota` en verde.
 - [x] (P1) Liquidación con disputa: la pantalla lista las liquidaciones de SU empresa
       (abierta→cerrada→pagada) línea por línea; disputa por línea con motivo tipado
       dentro de la ventana de 7 días ⇒ disputa registrada y visible; fuera de la
