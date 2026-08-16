@@ -487,6 +487,42 @@ activa SOLO `admin_tenant`: mientras la pregunta 1 esté abierta, `operador` y
     AC queda anotado en `packages/metodo/acs-bloqueados-flota.txt` para que el motor no gaste
     tandas en un ítem que ninguna cantidad de código cierra.
 - [ ] (P2) Validación en vivo del hito: revisión adversarial del hito (e) sin hallazgos críticos sobre el semáforo (datos malformados, doble-tap en ack/resolve, red cortada a mitad de drill-down, tenant A contra B); Alexis valida con capturas el camino dorado: tarjeta SLA demostrable con la farmacia del seed A, tablero del tenant B con terminología extrema, semáforo del tenant C en `mi_flota` — oráculo: humano [AC-FSEM-15]
+  - Revisión adversarial de código hecha esta vuelta, contra las 4 rutas del módulo y sus
+    funciones de servidor (`servidor/review-queue.ts`, `src/app/api/semaforo/**`):
+    **doble-tap** en `reconocer`/`resolver`/`reasignar` es imposible de ganar por el segundo
+    toque — el UPDATE lleva el estado de origen en el WHERE (`estado='nueva'`,
+    `estado='reconocida'`, `estado<>'resuelta'` respectivamente) y la BD serializa, no un
+    SELECT-luego-UPDATE separado (ya probado 422/0-filas por AC-FSEM-04/05/20); **datos
+    malformados**: cuerpo ausente o JSON roto en `resolver`/`reasignar` cae en catch y se trata
+    como campo vacío (422 tipado, nunca 500), IDs no-UUID rebotan 404 antes de tocar la BD
+    (`esUuid`); **tenant A contra B**: los tres WHERE llevan `tenant_id = tenant_actual()`, así
+    que una excepción de otro tenant es 404 por construcción, ya cubierto de punta a punta por
+    la suite A-contra-B autogenerada de AC-FSEM-09. Sin hallazgos críticos en este perímetro.
+    **Hallazgo real, no crítico pero bloqueante para la validación de Alexis:** ninguno de los
+    tres botones del camino dorado está conectado al servidor que esta misma revisión
+    verificó. `GET /api/semaforo/digest` sigue sirviendo literales de `semaforo-fixtures.ts`
+    (comentario propio del route: «la evaluación real de `signal_rule` … sigue sin existir») en
+    vez de evaluar `signal_rule`/`paradas`/`eventos`/`client_metric` reales — el wiring que
+    AC-FSEM-07/08/11/16-19 declaran explícitamente diferido nunca recibió un AC de seguimiento
+    en este documento. Y en el cliente, «Reconocer» (`hoy/peek-n1.tsx`) y «Reconocer»/«Resolver»
+    (`hoy/excepciones/detalle-n2-vista.tsx`) mutan estado LOCAL de React nada más — el propio
+    comentario del componente lo declara («transiciona ESTE demo localmente … sin llamar al
+    servidor») — y nunca invocan `POST .../reconocer|resolver`, aunque esos endpoints existen y
+    están probados por su cuenta en `e2e/peek-n1.spec.ts`/`e2e/detalle-n2.spec.ts`. Efecto
+    concreto: hoy, Alexis navegando el camino dorado autenticado vería la tarjeta SLA de la
+    farmacia seed A y el tablero B/mi_flota-C, pero SIEMPRE los mismos literales del fixture
+    (no lo que hay realmente en la BD de cada tenant), y tocar «Reconocer»/«Resolver» parecería
+    funcionar sin persistir nada — la captura no sería del sistema real. **Red cortada a mitad
+    de drill-down**: no hay `error.tsx` propio bajo `hoy/` ni `hoy/excepciones/` — un corte
+    entre el peek y «Ver detalle» (N2 es RSC) cae al error genérico de Next, no a un estado
+    propio de Miga; no es una pérdida de dato ni un hueco de seguridad, pero tampoco es la
+    experiencia degradada que el resto del módulo sí construye para offline (AC-FSEM-06).
+    Ninguno de los dos huecos es de este AC (es de revisión, no de construcción) ni de otro ya
+    cerrado — no tienen AC dueño en el documento. AC-FSEM-15 queda anotado en
+    `packages/metodo/acs-bloqueados-flota.txt`: su mitad de revisión adversarial ya se hizo, y
+    validar el camino dorado con Alexis ANTES de que exista el wiring reportaría capturas de
+    fixtures, no del producto — quien decide cuándo abrir el AC de wiring y cuándo recién
+    entonces pedirle las capturas a Alexis es una decisión de persona, no del motor.
 - [x] (P1) Dominio Flota/energía EV (partición de AC-FSEM-08 por §9.2) consumiendo las proyecciones del módulo 02 (fórmula única del §0 — este módulo no la re-especifica): SOC proyectado al fin del bloque < reserva+5 pp ⇒ amarillo; SOC actual < consumo estimado del tramo restante ⇒ rojo (fixture: SOC 20% con consumo restante proyectado equivalente a 30%); retorno proyectado <15% ⇒ rojo (fixture: retorno proyectado 10%); «no quedó enchufado» a la hora límite ⇒ rojo — el fixture fija la fila de `parametros` de la hora límite explícitamente; su default seed sigue en la pregunta 5c — oráculo: CI [AC-FSEM-16]
   - Probado: `dominio/semaforo-flota-ev.test.ts` (10/10) contra `dominio/semaforo-flota-ev.ts`,
     función pura `evaluarFlotaEv` — sin migración nueva: la fila `signal_rule` con histéresis
