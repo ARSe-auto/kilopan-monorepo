@@ -142,8 +142,9 @@ export async function liquidacionDelCliente(
 }
 
 /** La pantalla «Liquidación» del portal [AC-FPOR-07] — spec 07 §2.4: SOLO las cabeceras (sin
- *  líneas — el drill-down línea→evidencia de esta lista es AC-FPOR-10, todavía abierto), de la
- *  empresa de la sesión, más recientes primero. */
+ *  líneas — el drill-down línea→evidencia y la disputa por línea, con id `?id=`, son
+ *  `liquidacionDelCliente` arriba, AC-FPOR-10), de la empresa de la sesión, más recientes
+ *  primero. */
 export async function liquidacionesDelCliente(
   pool: Pool,
   sesion: Sesion,

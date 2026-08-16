@@ -387,7 +387,18 @@ test("[AC-FPOR-10] disputar una línea desde la UI real, con motivo y nota", asy
   await expect(fila.getByTestId("linea-disputada-cliente")).toContainText("La entrega no coincide con lo facturado");
 });
 
-test("[AC-FPOR-10] sin sesión, la liquidación de otro tenant no existe: 404 pelado", async ({ request }) => {
-  const r = await request.get(`/cliente/api/liquidaciones/${liqDentroId}`);
-  expect(r.status()).toBe(404);
+test("[AC-FPOR-10] sin sesión, la liquidación propia tampoco existe: 404 pelado", async () => {
+  // El fixture `request` de Playwright hereda el `baseURL` del config (`ruteo_activo`, un
+  // tenant SIN `portal_contratante` encendido): pegarle ahí daría 403 de módulo apagado
+  // (AC-FPOR-04) y no probaría nada de `sesionDelTenant` — el mismo error que documenta
+  // `cruce-tenant.spec.ts` (AC-FTEN-26). Por eso este contexto apunta a ORIGEN, el tenant de
+  // ESTA suite, donde `sellarPortalOn()` ya lo encendió: acá un 404 sin cabecera `authorization`
+  // es de verdad el candado «sin sesión» de `sesionDelTenant`, no el del módulo.
+  const ctx = await playwrightRequest.newContext({ baseURL: ORIGEN });
+  try {
+    const r = await ctx.get(`/cliente/api/liquidaciones/${liqDentroId}`);
+    expect(r.status()).toBe(404);
+  } finally {
+    await ctx.dispose();
+  }
 });

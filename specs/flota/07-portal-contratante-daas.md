@@ -277,7 +277,7 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
       mixto las filas válidas crean encargos y las inválidas rebotan con error tipado
       por fila visible para el cliente (§3.E1.10, §4.2, §5.7) — oráculo: CI
       [AC-FPOR-09]
-- [ ] (P1) Liquidación con disputa: la pantalla lista las liquidaciones de SU empresa
+- [x] (P1) Liquidación con disputa: la pantalla lista las liquidaciones de SU empresa
       (abierta→cerrada→pagada) línea por línea; disputa por línea con motivo tipado
       dentro de la ventana de 7 días ⇒ disputa registrada y visible; fuera de la
       ventana o con motivo fuera del catálogo ⇒ 422 tipado y 0 filas — t0 PROVISIONAL
@@ -285,7 +285,16 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
       liquidación a `cerrada` (el maestro fija solo la duración, §0; sujeto a la
       Pregunta al dueño 3, ajustable en UNA constante); drill-down línea→evidencia a 1
       clic; e2e contra el seed A (trae 1 liquidación disputada por línea) (§3.E1.9,
-      §0, §10) — oráculo: CI [AC-FPOR-10]
+      §0, §10) — oráculo: CI [AC-FPOR-10]. Probado: el motor entero ya vivía en la BD
+      desde AC-FTAR-06/07 (`disputar_linea()` 0066, vistas 0067); esta vuelta cerró la
+      superficie HTTP del portal (`/cliente/api/motivos-disputa`,
+      `/cliente/api/liquidacion-lineas/[id]/{disputa,evidencia}`) y la pantalla
+      `cliente/liquidaciones` con `?id=` (lista de líneas, drill-down a 1 clic,
+      formulario de disputa con idempotencia por `client_uuid`).
+      `e2e/portal-liquidacion-disputa.spec.ts` 9/9 en PRIMER PLANO (camino dorado,
+      replay/doble-tap, los tres 422 tipados del §4.2, 404 de línea inexistente, UI
+      real con sesión de navegador, y sin sesión ⇒ 404). `manifiesto.json` con sus
+      casos de cruce; `pnpm check:full --app=flota` en verde.
 - [ ] (P2) Encargos con evidencia: el detalle de un encargo propio muestra estado,
       resultado (exito|fallo|parcial) y la evidencia asociada (`evidence` §4.6, binarios
       referenciados por sha256), sin exponer el orden global de la ruta, paradas de
