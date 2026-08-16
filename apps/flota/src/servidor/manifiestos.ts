@@ -600,6 +600,12 @@ export type Bajada = { tipo: "ok" } | { tipo: "item_no_existe" } | { tipo: "falt
  * operario con un camión que sale a las cinco encuentra la salida por su cuenta: confirma con un
  * folio inventado, y ahí sí la app produjo un dato falso. Con ella, la mercadería se baja, queda
  * escrito quién lo hizo y por qué, y el camión sale legal.
+ *
+ * La bajada además DESASIGNA el ítem [AC-FRUT-24]: la mercadería sigue en el andén, no es una
+ * entrega fallida, así que su encargo NO cierra `no_entregado` — vuelve a la bandeja del día y es
+ * re-planificable el mismo día, sin `reintento_de` (ese patrón es para cuando el camión SALIÓ). La
+ * fila de `items` no se borra —`manifiesto_items` la referencia y es append-only (§7.4)— se marca
+ * `desasignado_en`, y el trigger de la 0070 hace el resto.
  */
 export async function bajarDelManifiesto(
   pool: Pool,
@@ -615,16 +621,24 @@ export async function bajarDelManifiesto(
     pool,
     async (c) => {
       // Igual que amparar: la bajada es un ACTO con su autor, no una columna que se edita. Es
-      // lo que hace cierto el «emite evento y auditoría» del §7.3 sin depender de nadie.
-      const { rows: acto } = await c.query<{ id: string }>(
-        `insert into manifiesto_item_documento (manifiesto_item_id, bajado_motivo, actor_id)
-         select $1, $2, $3
-           from manifiesto_items where id = $1
-           on conflict (tenant_id, manifiesto_item_id) do nothing
-         returning id::text as id`,
+      // lo que hace cierto el «emite evento y auditoría» del §7.3 sin depender de nadie. El
+      // `item_id` viaja en el mismo `with` para desasignarlo en la misma transacción, sin una
+      // segunda ida y vuelta que dejaría un instante con el acto escrito y el ítem todavía vivo.
+      const { rows: acto } = await c.query<{ id: string; itemId: string }>(
+        `with baja as (
+           insert into manifiesto_item_documento (manifiesto_item_id, bajado_motivo, actor_id)
+           select $1, $2, $3
+             from manifiesto_items where id = $1
+             on conflict (tenant_id, manifiesto_item_id) do nothing
+           returning id, manifiesto_item_id
+         )
+         select b.id::text as id, mi.item_id::text as "itemId"
+           from baja b join manifiesto_items mi on mi.id = b.manifiesto_item_id`,
         [manifiestoItemId, motivo.trim(), sesion.usuarioId],
       );
       if (!acto[0]) return { tipo: "item_no_existe" };
+
+      await c.query("update items set desasignado_en = now() where id = $1", [acto[0].itemId]);
 
       await registrarEvento(c, {
         codigo: EVENTOS_OPERACION.manifiesto_item_bajado,

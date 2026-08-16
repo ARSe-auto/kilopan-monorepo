@@ -588,6 +588,134 @@ test("[AC-FRUT-08] bajar del manifiesto es EXPLÍCITO: exige motivo y deja event
   });
 });
 
+// ─── El ítem bajado desasigna su encargo, sin borrarlo [AC-FRUT-24] — §3.E1.10, §4.5, §7.4 ──
+//
+// La sub-decisión de Alexis del 11-ago-2026: bajar del manifiesto es un contratiempo operativo
+// (la mercadería sigue en el andén), no una entrega fallida. El encargo NO cierra `no_entregado`;
+// vuelve a la bandeja del día y es re-planificable el MISMO día, sin `reintento_de` — y el
+// manifiesto conserva su historia completa, porque la fila de `items` no se borra, se marca.
+
+test("[AC-FRUT-24] bajar del manifiesto desasigna el encargo y lo devuelve a la bandeja, "
+  + "re-planificable sin `reintento_de`, con la historia intacta", async ({ request }) => {
+  const fixture = await con(BD_A, async (c: Conexion) => {
+    const [r] = await c.sql<{ id: string }>(
+      `insert into rutas (nombre, publicada_en, version)
+       values ('Ruta del ítem desasignado', now(), 1) returning id::text as id`,
+    );
+    const [d] = await c.sql<{ id: string }>("select id::text as id from destinos limit 1");
+    const [p] = await c.sql<{ id: string }>(
+      "insert into paradas (ruta_id, tipo, orden, destino_id) values ($1, 'carga', 1, $2) returning id::text as id",
+      [r!.id, d!.id],
+    );
+    const [e] = await c.sql<{ id: string }>(
+      "insert into encargos (empresa_cliente_id, destino_id, bultos) values ($1, $2, 5) returning id::text as id",
+      [panaderia, d!.id],
+    );
+    const [i] = await c.sql<{ id: string }>(
+      "insert into items (parada_id, encargo_id, qty_planificada) values ($1, $2, 5) returning id::text as id",
+      [p!.id, e!.id],
+    );
+    return { encargoId: e!.id, itemId: i!.id, paradaId: p!.id };
+  });
+  const { encargoId, itemId, paradaId } = fixture;
+
+  const { declarado } = (await (
+    await request.get(`${EN_A}/api/paradas/${paradaId}/manifiesto`, { headers: comoOperador })
+  ).json()) as { declarado: { item_id: string; empresa_cliente_id: string }[] };
+
+  await request.post(`${EN_A}/api/paradas/${paradaId}/manifiesto`, {
+    headers: comoOperador,
+    data: {
+      empresa_cliente_id: panaderia,
+      client_uuid: crypto.randomUUID(),
+      ts_dispositivo: new Date().toISOString(),
+      tz_offset_min: -240,
+      conteos: declarado
+        .filter((d) => d.item_id === itemId)
+        .map((d) => ({ item_id: d.item_id, qty_confirmada: 5 })),
+    },
+  });
+
+  const [mi] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ id: string }>("select id::text as id from manifiesto_items where item_id = $1", [itemId]),
+  );
+  const manifiestoItemId = mi!.id;
+
+  await con(BD_A, async (c: Conexion) => {
+    const [antes] = await c.sql<{ estado: string }>(
+      "select estado::text as estado from encargos where id = $1",
+      [encargoId],
+    );
+    expect(antes!.estado).toBe("asignado");
+  });
+
+  const bajado = await request.post(`${EN_A}/api/manifiesto-items/${manifiestoItemId}/bajar`, {
+    headers: comoOperador,
+    data: { motivo: "Sin guía del emisor: se baja del camión de la madrugada" },
+  });
+  expect(bajado.ok()).toBe(true);
+
+  await con(BD_A, async (c: Conexion) => {
+    // (a) el encargo NO cierra `no_entregado`: vuelve a la bandeja.
+    const [encargo] = await c.sql<{ estado: string; reintento_de: string | null }>(
+      "select estado::text as estado, reintento_de::text as reintento_de from encargos where id = $1",
+      [encargoId],
+    );
+    expect(encargo!.estado).toBe("aceptado");
+    expect(encargo!.reintento_de).toBeNull();
+
+    // (c) el manifiesto conserva su historia: la fila de `items` sigue existiendo, marcada.
+    const [item] = await c.sql<{ n: string; desasignado: boolean }>(
+      "select count(*)::text as n, (desasignado_en is not null) as desasignado from items "
+        + "where id = $1 group by desasignado_en",
+      [itemId],
+    );
+    expect(item!.n).toBe("1");
+    expect(item!.desasignado).toBe(true);
+
+    const [manifiestoItem] = await c.sql<{ n: string }>(
+      "select count(*)::text as n from manifiesto_items where id = $1",
+      [manifiestoItemId],
+    );
+    expect(manifiestoItem!.n).toBe("1");
+  });
+
+  // (b) se re-asigna a OTRA ruta del mismo día, sin crear fila con `reintento_de`.
+  const otraRuta = await con(BD_A, (c: Conexion) =>
+    c
+      .sql<{ id: string }>("insert into rutas (nombre) values ('Segunda ruta del día') returning id::text as id")
+      .then((rows) => rows[0]!.id),
+  );
+
+  const reasignado = await request.post(`${EN_A}/api/rutas/${otraRuta}/asignar`, {
+    headers: comoOperador,
+    data: { encargos: [encargoId] },
+  });
+  expect(reasignado.ok()).toBe(true);
+  expect(((await reasignado.json()) as { items: number }).items).toBe(1);
+
+  await con(BD_A, async (c: Conexion) => {
+    const [encargo] = await c.sql<{ estado: string; reintento_de: string | null; n: string }>(
+      `select estado::text as estado, reintento_de::text as reintento_de,
+              (select count(*)::text from encargos where id = $1) as n
+         from encargos where id = $1`,
+      [encargoId],
+    );
+    expect(encargo!.estado).toBe("asignado");
+    expect(encargo!.reintento_de).toBeNull();
+    expect(encargo!.n).toBe("1");
+
+    const [items] = await c.sql<{ total: string; vivos: string }>(
+      `select count(*)::text as total,
+              count(*) filter (where desasignado_en is null)::text as vivos
+         from items where encargo_id = $1`,
+      [encargoId],
+    );
+    expect(items!.total).toBe("2");
+    expect(items!.vivos).toBe("1");
+  });
+});
+
 test("[AC-FRUT-08] un tipo de documento que el SII no define no entra", async ({ request }) => {
   const itemId = await unItemAConfirmar(request);
   const rebote = await request.post(`${EN_A}/api/manifiesto-items/${itemId}/documento`, {
