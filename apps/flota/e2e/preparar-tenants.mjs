@@ -103,6 +103,14 @@ export const TENANTS = [
   // encargos por lote (import bueno, replay, lote mixto) que otra suite del portal no puede
   // compartir sin arrastrar filas de una importación ajena en sus conteos.
   { slug: "portal_importar_csv", estado: "activo" },
+  // Base PROPIA para el detalle de encargo con resultado y evidencia del portal [AC-FPOR-11].
+  //
+  // Misma razón que sus hermanas del portal: sella `config_version` DIRECTO con
+  // `crear_config_version()` para encender `portal_contratante`, y esta suite además siembra
+  // una RUTA con una parada de un TERCERO (mismo `orden`, mismo `ruta_id`) para probar que el
+  // detalle del encargo propio jamás la expone — compartir base con otra suite del portal
+  // dejaría entregas/evidencia de un fixture ajeno colgando de esa misma ruta.
+  { slug: "portal_encargo_detalle", estado: "activo" },
 ];
 
 /** Subdominio que jamás se registra. Nombrarlo acá evita que el test lo invente distinto. */

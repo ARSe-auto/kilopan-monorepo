@@ -311,10 +311,24 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
       replay/doble-tap, los tres 422 tipados del §4.2, 404 de línea inexistente, UI
       real con sesión de navegador, y sin sesión ⇒ 404). `manifiesto.json` con sus
       casos de cruce; `pnpm check:full --app=flota` en verde.
-- [ ] (P2) Encargos con evidencia: el detalle de un encargo propio muestra estado,
+- [x] (P2) Encargos con evidencia: el detalle de un encargo propio muestra estado,
       resultado (exito|fallo|parcial) y la evidencia asociada (`evidence` §4.6, binarios
       referenciados por sha256), sin exponer el orden global de la ruta, paradas de
-      terceros ni curvas de SOC (§3.E1.10, §4.6) — oráculo: CI [AC-FPOR-11]
+      terceros ni curvas de SOC (§3.E1.10, §4.6) — oráculo: CI [AC-FPOR-11]. Probado:
+      `resultadoDelEncargoCliente` (`servidor/portal-cliente.ts`) lee la fila VIGENTE de
+      `entregas_pod` (cerrada, sin supersede) del encargo y la evidencia colgada de su
+      parada, confinado por `empresa_cliente_id` de la sesión — devuelve `null` sin
+      entrega y, con ella, `{resultado, metodo_entrega, motivo_etiqueta, event_time,
+      evidencias}` con cada evidencia `{tipo, capturada_en, sha256}`, cero columnas de
+      `orden`/`ruta_id`/`parada_id`/SOC. `GET /cliente/api/encargos/[id]` (AC-FPOR-06) lo
+      suma al payload; UI en `/cliente/encargos?id=` (mismo criterio `?id=` que
+      AC-FPOR-10) con estado vacío cuando aún no hay entrega. `e2e/portal-encargo-detalle.spec.ts`
+      5/5 en PRIMER PLANO: resultado `null` sin entrega, éxito con dos evidencias (una con
+      sha256, una sin binario), fallo con `motivo_etiqueta`, ninguno de los tres cuerpos
+      expone la parada de un TERCERO en la MISMA ruta ni su `orden`, la lista enlaza al
+      detalle y el detalle real (sesión de navegador) muestra estado/resultado/evidencia,
+      y el estado vacío accionable sin entrega. `bash packages/metodo/scripts/check.sh
+      --full --app=flota` en verde (18 OK, 1 saltado que no aplica a flota).
 - [ ] (P2) GUI del portal conforme a plataforma — gate GUI aplicado al portal; los
       sub-checks se reportan como ítems verificables INDIVIDUALES para que un rojo
       localice: (a) las 4 pantallas nacen con los 4 estados obligatorios (vacío
