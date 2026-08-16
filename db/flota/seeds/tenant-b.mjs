@@ -12,10 +12,9 @@
 // exige un flujo de negocio completo que este AC no alcanzó a construir en la misma sesión: las
 // 2 rutas de madrugada (12 y 9 paradas), los manifiestos firmados con DTE, el encargo creado en
 // andén, el reintento y el cierre con ecuación cuadrada.
-import { randomUUID } from "node:crypto";
-import pg from "pg";
-import { con, urlDe } from "../conectar.mjs";
+import { con } from "../conectar.mjs";
 import { pasoUnoEmpresaYVertical } from "../wizard-onboarding.mjs";
+import { CENTINELAS, poolDelTenant, sesionDe, sembrarActorAdmin } from "./comun.mjs";
 import { crearVehiculo, editarVehiculo } from "../../../apps/flota/src/servidor/vehiculos.ts";
 import { guardarTema } from "../../../apps/flota/src/servidor/tema.ts";
 import { guardarTermino } from "../../../apps/flota/src/servidor/terminologia.ts";
@@ -28,53 +27,15 @@ import { guardarTermino } from "../../../apps/flota/src/servidor/terminologia.ts
 const RUT_ACTOR_ADMIN = "11.111.111-1";
 const RUT_CHOFER_1 = "12.345.678-5";
 const RUT_CHOFER_2 = "7.654.321-6";
-const RUTS_PANADERIAS = ["76.111.111-6", "77.222.222-K", "76.543.219-7", "78.333.333-4"];
+const RUTS_PANADERIAS = ["76.111.111-6", "77.222.222-K", "76.543.219-7", "78.333.333-3"];
 
 /** Centinela ÚNICO por tenant (§10, §9.3.2): cadena que NO aparece en ningún otro tenant, así
- *  que si un e2e cross-tenant la ve en la respuesta de otro, el rebote lo delata. */
-export const CENTINELA_B = "CENTINELA-RUTAPAN-B7f2";
+ *  que si un e2e cross-tenant la ve en la respuesta de otro, el rebote lo delata. Vive en el
+ *  registro de `seeds/comun.mjs`, que además VERIFICA que los tres centinelas sean disjuntos —
+ *  si el de un tenant fuera subcadena del de otro, el barrido de huella daría cruce siempre. */
+export const CENTINELA_B = CENTINELAS.b;
 
 export const EV48 = { capacidad_bultos: 90, bateria_wh: 41860 };
-
-function poolDelTenant(tenant) {
-  return new pg.Pool({ connectionString: urlDe(tenant.bd, { usuario: tenant.rol, clave: tenant.clave }) });
-}
-
-function sesionDe(actor, rol) {
-  return {
-    dispositivoId: actor.dispositivoId,
-    personaId: actor.personaId,
-    usuarioId: actor.usuarioId,
-    rol,
-    isStandalone: true,
-    storagePersisted: true,
-    empresaClienteId: null,
-  };
-}
-
-/** El actor `admin_tenant` que ejecuta la siembra — mismo patrón que
- *  `sembrarActorAdminDelWizard` de `wizard-onboarding.mjs` (AC-FMIG-14), con RUT y nombre
- *  propios de este seed para no confundirse en una auditoría con el actor del wizard genérico. */
-async function sembrarActorAdmin(bd) {
-  return con(bd, async ({ sql }) => {
-    const [persona] = await sql(
-      "insert into personas (rut, nombre) values ($1, $2) returning id::text as id",
-      [RUT_ACTOR_ADMIN, `Dueña de la operación (seed ${CENTINELA_B})`],
-    );
-    const [usuario] = await sql(
-      "insert into usuarios (persona_id, rol) values ($1, 'admin_tenant') returning id::text as id",
-      [persona.id],
-    );
-    const [dispositivo] = await sql(
-      `insert into dispositivos
-         (tipo, persona_id, secreto_hash, enrolado_por, enrolado_en, is_standalone, storage_persisted)
-       values ('personal', $1, $2, $3, now(), true, true)
-       returning id::text as id`,
-      [persona.id, `hash-del-actor-admin-${CENTINELA_B}`, usuario.id],
-    );
-    return { personaId: persona.id, usuarioId: usuario.id, dispositivoId: dispositivo.id };
-  });
-}
 
 /** Los 7 `term_key` de `TERMINOLOGIA_BASE_ES_CL` (packages/miga/src/terminologia.ts), llevados
  *  al LARGO MÁXIMO que el CHECK `tenant_terminology_largo_por_tipo` acepta por tipo
@@ -106,7 +67,7 @@ const TERMINOS_EXTREMOS_B = [
  */
 export async function sembrarTenantB(slug = "rutapan_demo", { recrear = false } = {}) {
   const tenant = await pasoUnoEmpresaYVertical(slug, { vertical: "panaderia", modo: "daas", recrear });
-  const actorAdmin = await sembrarActorAdmin(tenant.bd);
+  const actorAdmin = await sembrarActorAdmin(tenant.bd, RUT_ACTOR_ADMIN, CENTINELA_B);
   const sesionAdmin = sesionDe(actorAdmin, "admin_tenant");
   const pool = poolDelTenant(tenant);
 
