@@ -47,7 +47,9 @@ export default function ArmarRutas() {
   const cargar = useCallback(async () => {
     const [e, v] = await Promise.all([
       pedir("/api/encargos").catch(() => null),
-      pedir("/api/vehiculos").catch(() => null),
+      // `operativo=1`: asignar un vehículo a una ruta es lo que el §5.4 le deja leer al
+      // operador [AC-FMIG-09] — no gestión del catálogo, no pasa por el candado de Vehículos.
+      pedir("/api/vehiculos?operativo=1").catch(() => null),
     ]);
     if (!e?.ok || !v?.ok) return setError("No se pudo leer la bandeja. Revisá tu conexión.");
     setEncargos(((await e.json()) as { encargos: Encargo[] }).encargos);

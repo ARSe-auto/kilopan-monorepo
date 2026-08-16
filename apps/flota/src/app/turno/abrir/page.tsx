@@ -79,7 +79,9 @@ export default function AbrirTurno() {
   const contadorCarga = useContadorDeToques();
 
   const cargar = useCallback(async () => {
-    const respuesta = await pedir("/api/vehiculos").catch(() => null);
+    // `operativo=1`: elegir el vehículo del turno es app mínima [AC-FMIG-09] — §5.5, no
+    // gestión del catálogo, así que no pasa por el candado de la Vehículos apagada.
+    const respuesta = await pedir("/api/vehiculos?operativo=1").catch(() => null);
     if (!respuesta?.ok) return setError("No se pudo leer la flota. Revisá tu conexión.");
     const { vehiculos: lista } = (await respuesta.json()) as { vehiculos: Vehiculo[] };
     setVehiculos(lista.filter((v) => v.activo));

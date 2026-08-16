@@ -51,7 +51,9 @@ export default function Agenda() {
 
   useEffect(() => {
     void (async () => {
-      const respuesta = await pedir("/api/vehiculos").catch(() => null);
+      // `operativo=1`: la agenda elige un vehículo ya existente [AC-FMIG-09] — §5.5, no
+      // gestiona el catálogo, así que no pasa por el candado de la Vehículos apagada.
+      const respuesta = await pedir("/api/vehiculos?operativo=1").catch(() => null);
       if (!respuesta?.ok) return setError("No se pudo leer la flota.");
       const { vehiculos: lista } = (await respuesta.json()) as { vehiculos: Vehiculo[] };
       setVehiculos(lista);

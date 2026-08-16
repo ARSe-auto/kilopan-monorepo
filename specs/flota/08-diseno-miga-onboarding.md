@@ -305,7 +305,23 @@ reales en seeds/fixtures (§10, §7.8):
   permitido, ON con feature en plan sella `config_version` nueva, y la pantalla real
   (locked-state + upsell fuera de plan, apagar habilitado siempre)—. 5/5 verdes.
   `check.sh --full --app=flota`: VERDE.
-- [ ] (P1) Regla de contracción (§5.5, §0): manifest de navegación computado server-side (entitlements × rol) en el bootstrap; toggle OFF ⇒ manifest sin el módulo, la PWA no lo renderiza (sin huecos, candados ni parpadeo) y sus endpoints de planificación/lectura responden 403; degradación de captura: sync de captura 2xx SIEMPRE — captura hecha con el módulo recién apagado y turno abierto entra con flag `modulo_apagado` + Por revisar según `turno.config_version_id` (§4.2); app mínima todo-OFF = abrir turno → paradas → cerrar turno sigue siendo producto completo (e2e) — oráculo: CI [AC-FMIG-09]
+- [x] (P1) Regla de contracción (§5.5, §0): manifest de navegación computado server-side (entitlements × rol) en el bootstrap; toggle OFF ⇒ manifest sin el módulo, la PWA no lo renderiza (sin huecos, candados ni parpadeo) y sus endpoints de planificación/lectura responden 403; degradación de captura: sync de captura 2xx SIEMPRE — captura hecha con el módulo recién apagado y turno abierto entra con flag `modulo_apagado` + Por revisar según `turno.config_version_id` (§4.2); app mínima todo-OFF = abrir turno → paradas → cerrar turno sigue siendo producto completo (e2e) — oráculo: CI [AC-FMIG-09]
+  PROBADO: `servidor/manifiesto.ts` (`manifiestoDeNavegacion`) + `GET /api/manifiesto` sirven el
+  catálogo de módulos ENCENDIDOS de la config vigente; `page.tsx` (Inicio) lo consume real, con
+  los 4 estados de Miga. `GET /api/vehiculos` 403 con `modulo_vehiculos` apagado — pero SOLO en
+  su uso de GESTIÓN: se descubrió corriendo el gate `--full` completo (no solo el e2e nuevo) que
+  el guard ciego rompía turno/abrir, carga, agenda y rutas —los cuatro eligen un vehículo YA
+  EXISTENTE para una acción de terreno, no administran el catálogo— porque son el MISMO endpoint
+  y la mayoría de los tenants del fixture nunca sellaron `modulo_vehiculos=true` (default
+  OFF). Se agregó `?operativo=1` para esos cuatro llamadores, que no pasa por el candado; el
+  candado real de gestión sigue en `POST/PATCH/DELETE /api/gobierno/vehiculos*`, sin excepción.
+  e2e `contraccion-manifest.spec.ts` (tenant propio, sella `config_version` directo): manifest
+  con/sin el módulo, 403 en lectura y planificación con cero filas, ambos vuelven a andar
+  encendido, y la secuencia app-mínima (abrir turno → captura → cerrar turno) en 2xx con
+  `modulo_vehiculos`+`modulo_encargos` apagados. `esqueleto.spec.ts` (hito 0) se corrigió para
+  visitar Inicio con una SESIÓN real de un tenant sin módulos (antes probaba un visitante
+  anónimo, que ahora 404 correctamente en vez de mostrar el vacío — el manifest exige sesión).
+  536/536 e2e de `apps/flota` + `check.sh --full --app=flota`: VERDE.
 - [ ] (P1) Los 4 estados obligatorios existen como componentes ÚNICOS de Miga y las pantallas de este módulo (wizard, panel white-label, «Funciones») los entregan: vacío accionable / skeleton <50 ms con spinner solo >400 ms / error es-CL con recuperación / sin conexión con contador REAL de cola del outbox; caso de rebote: las capturas JAMÁS muestran rechazo — el estado de error de captura no existe en la UI de terreno, solo «por sincronizar» (§5.7, §4.2, §5.2 F4) — oráculo: CI [AC-FMIG-10]
 - [ ] (P1) Gate axe+Lighthouse bloqueante sobre las pantallas del hito (§5.7): contraste 4.5:1 texto, 3:1 UI y 7:1 en cifra operativa y semáforos; targets §0 verificados; foco visible; cero `aria-label` vacíos; PWA iOS: manifest standalone, `viewport-fit=cover` + safe-areas, `touch-action: manipulation`, inputs ≥16 px; caso de rebote: cualquier violación ⇒ build rojo — oráculo: CI [AC-FMIG-11]
 - [ ] (P2) VoiceOver completa de punta a punta los flujos de apertura, POD y recepción (§5.7), con todo estado comunicado por texto además de color (§5.1); dueño humano nombrado: **Alexis** — checklist DONE-adopción que JAMÁS bloquea al loop (§9.2, §10); complementa y NO sustituye el proxy CI bloqueante de AC-FMIG-20 (§5.7 enumera VoiceOver dentro del gate de CI) — oráculo: humano [AC-FMIG-12]
