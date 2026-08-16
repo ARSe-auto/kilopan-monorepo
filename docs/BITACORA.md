@@ -2296,3 +2296,34 @@ en `finally` no existe para quien murió antes del finally.
 Pendiente de arnés: el job `gate-flota` del CI quedó escrito y comiteado en la rama efímera
 `ci/gate-flota` (local); publicarla para ensayarla exige un push manual que el arnés de esta
 sesión tiene denegado. El e2e móvil de FLOTA en CI sigue en backlog.
+
+
+## 15-Aug-2026 20:45 — El reparto de familias era una intención, no una configuración
+
+Cierre de la sesión de supervisión: **153 de 202 ACs**, los tres motores vivos y en su carril.
+Dos defectos del arnés atajados, y ninguno de los dos habría salido de mirar verdes y pausas.
+
+**El motor 1 no tenía filtro.** `KILOPAN_FAMILIAS` es una lista de INCLUSIÓN —un regex que el
+id del AC tiene que MATCHEAR (`loop.sh:92`)— y no existe forma de escribir «todo salvo FMIG y
+FPOR». El motor 1 corría sin la variable, así que el reparto solo protegía a los motores 2 y 3
+de invadir; nada impedía invadirlos a ellos. Resultado medido antes de atajarlo: duplicó
+AC-FPOR-01 y AC-FPOR-02 con implementaciones DISTINTAS de las del motor 2, y murió atascado
+(«SIN AVANCE ×2») en AC-FPOR-03, que el motor 2 ya había pasado. Y no era un riesgo
+decreciente: en su plan quedaban 38 ítems abiertos de familias ajenas contra 22 propios, con el
+plan ordenado por prioridad y no por familia.
+
+**Lo que hace grave a esa duplicación no es el gasto, es que git la une sin conflicto.** Las dos
+implementaciones viven en archivos distintos: el merge sale limpio, el AC queda marcado cerrado
+y en el árbol quedan dos caminos de alta de tenant. Se descubre semanas después. La divergencia
+TEXTUAL entre las tres ramas, medida con un merge de prueba real, es de apenas 3 conflictos
+(plan, spec 07, ruts-sinteticos): el peligro del paralelismo no está donde git avisa.
+
+**Regla que deja:** con N motores, el reparto del trabajo es tan obligatorio como el aislamiento
+de la base de datos — y hay que VERIFICARLO ejecutando, no leyendo el lanzador. Si una familia
+nueva no entra al regex de nadie, se queda sin construir y ningún gate se pone rojo.
+
+Instrumental de la jornada: el vigía sobre `pg_stat_activity` (que le puso nombre a la
+«conexión fantasma»: el pool ocioso de `pg`), el merge de prueba en worktree desechable para
+medir divergencia sin tocar las ramas vivas, y el conteo de ACs por UNIÓN de las tres ramas —
+cada motor ve un estado distinto del mismo plan, así que el avance real no está en ninguna rama
+sola. La máquina nunca fue el límite: SoC ~55 °C y carga ~3,8 con los tres corriendo en un M4.
