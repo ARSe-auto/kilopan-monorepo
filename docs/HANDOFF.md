@@ -1,10 +1,10 @@
-# HANDOFF — tres motores vivos y construyendo (15-Ago-2026 22:55)
+# HANDOFF — tres motores vivos y construyendo (16-Ago-2026 01:20)
 
 > **Arrancá con Fable 5 y esfuerzo max** (pedido explícito de Alexis a las 16:45).
 >
 > **LO PRIMERO: los TRES motores están VIVOS y sanos.** Nada que destrabar al arrancar.
 > El motor 3, que el traspaso anterior dejó aparcado, lleva construyendo desde las 16:41.
-> **162 de 203 ACs cerrados · faltan 41.**
+> **171 de 203 ACs cerrados · faltan 32.**
 >
 > Los tres worktrees tienen archivos sin comitear: es el WIP de los agentes en su AC actual,
 > **no lo commitees vos** — lo cierra cada motor con su propio commit al terminar.
@@ -15,8 +15,8 @@
 |---|---|---|---|
 | worktree | `~/kilopan-monorepo-flota` | `~/kilopan-monorepo-flota2` | `~/kilopan-monorepo-flota3` |
 | rama | `flota/specs-e1` | `flota/motor2` (+22) | `flota/motor3` (+20) |
-| familias | `^AC-(FIDN\|FPOD\|FRUT\|FSEM\|FTAR\|FTEN\|FVEH)-` | `^AC-FPOR-` | `^AC-FMIG-` |
-| faltan | **19** | **8** | **14** |
+| familias | `^AC-(FIDN\|FPOD\|FRUT\|FSEM\|FTEN\|FVEH)-` | `^AC-(FPOR\|FTAR)-` | `^AC-FMIG-` |
+| faltan | **10** (cedió FTAR) | **10** (FPOR+FTAR) | **12** |
 | Postgres | 54331 (`~/.flota-pg`) | 54332 (`~/.flota-pg-2`) | 54333 (`~/.flota-pg-3`) |
 | e2e | 3311 | 3312 | 3313 |
 | lanzador | `~/bin/arrancar-motor1.sh` | `~/bin/arrancar-motor2.sh` | `~/bin/arrancar-motor3.sh` |
@@ -65,9 +65,35 @@ pasar, revisá primero el texto del ítem antes de sospechar del código**:
   distinguen de trabajo pendiente. Pasadas a pasado en `f6feaf5` — ojo: «hacía falta» TAMBIÉN
   matchea el gate; hay que reformular («hubo que»), no solo conjugar.
 
-**Proporción del día: 2 pausas del arnés, 2 del AC.** El diagnóstico primero sigue siendo
+A las 00:07 el motor 2 repitió el MISMO defecto del id (ahora con `[AC-FTEN-22]` al cierre del
+ítem de AC-FPOR-16, arreglado en `507d4eb`). Dos veces el mismo error en el mismo archivo: el
+prompt de build merece la regla explícita — **la frase que cierra un ítem lleva SU id, y toda
+referencia a otro AC va antes**.
+
+**4. La pila de stashes es del REPOSITORIO, no del worktree — y frenó a los TRES (00:13–00:50).**
+`refs/stash` se comparte entre worktrees: los tres motores empujan a la MISMA pila, así que
+crece al triple y el tope los pausa casi a la vez (rc 8, «demasiados stashes»). **Era el único
+recurso con estado sin aislar** cuando se montó el tercer motor: BD, puertos y familias sí lo
+están. Los 41 stashes se archivaron como ramas `wip/*` —recuperables con
+`git checkout wip/<nombre>`— y el tope pasó de 40 a 120 en las TRES ramas (`20ef3e1` y sus
+cherry-picks `0808a45` y `7acadbf`). Margen actual: 41/120.
+
+Dos cosas que dejó, y que valen más que el número:
+- **El supervisor del motor 3 quemó sus 3 reanudaciones automáticas** contra esta causa.
+  Reanudar no arregla una condición que sigue presente; cuando el motivo de la pausa NO sea del
+  HEAD (stashes, infra, disco), atenderla a mano de inmediato en vez de dejar que el supervisor
+  la desgaste. Con el motor 1 se hizo así —un vigía esperando el marcador— y no gastó ninguna.
+- **No se puede editar el worktree de un builder vivo ni para arreglarle esto**: el loop
+  stashea el árbol sucio al arrancar, así que el propio arreglo se iría al stash y sumaría uno
+  más. Hay que esperar a que pause.
+
+**Proporción del día: 5 pausas del arnés, 3 del AC.** El diagnóstico primero sigue siendo
 obligatorio, pero «siempre es el arnés» ya no es cierto. Vale evaluar que el prompt de build
-advierta las dos reglas de redacción de arriba: se pagan con una tanda cortada cada vez.
+advierta las reglas de redacción de arriba: se pagan con una tanda cortada cada vez.
+
+**Pendiente de raíz (necesita el sí de Alexis):** subir el tope es un parche que se repetirá
+cada ~80 stashes. El arreglo real es que el loop archive su stash como rama y lo SAQUE de la
+pila, y para eso `git stash drop` tiene que dejar de estar denegado en el sobre de permisos.
 
 ## Deudas — lo que hay que hacer, en orden
 
@@ -83,10 +109,16 @@ elegir UNA de cada par a conciencia:
 **(b) El fix del gate quedó con dos formas**: `desalta()` (motor 2, en `provisionar.mjs`) y
 `desregistrar.mjs` (motores 2 y 3). Unificar en el mismo merge.
 
-**(c) Desbalance: el motor 2 termina ~4 h antes que el 1.** Cuando llegue a AC-FPOR-17,
-pasarle una familia del motor 1 —FSEM o FPOD son las más separables— editando el regex de
-`~/bin/arrancar-motor2.sh` Y quitándola de `~/bin/arrancar-motor1.sh`; toma efecto al
-relanzarse. Sin eso quedará ocioso mientras el 1 sigue ~4 h más.
+**(c) Desbalance — HECHO el 16-ago 01:20, pero vigilalo de nuevo.** Se le cedió **FTAR** al
+motor 2 (le quedaban 4 FPOR contra 16 del motor 1): `~/bin/arrancar-motor2.sh` pasó a
+`^AC-(FPOR|FTAR)-` y FTAR se quitó **en el mismo momento** de `~/bin/arrancar-motor1.sh`.
+Reparto resultante 10 y 10; toma efecto en el próximo relanzamiento de cada motor.
+
+Las dos ediciones van SIEMPRE juntas: agregar una familia a un motor sin quitarla del otro es
+exactamente el defecto que costó dos ACs duplicados hoy. Se eligió FTAR porque estaba LIBRE (el
+motor 1 acababa de entrar en FSEM, con 6 por delante). **Si el motor 2 vuelve a vaciarse, ceder
+la siguiente familia libre por el mismo camino** — y verificar el reparto con un grep de prueba
+sobre ids reales antes de dar por bueno el regex.
 
 **(d) El job `gate-flota` del CI está escrito y comiteado, sin publicar.** Rama local
 `ci/gate-flota` (`acbf99b`): instala PostgreSQL 18 del PGDG, provisiona el cluster desde cero y
