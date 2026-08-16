@@ -6,13 +6,13 @@ commit (`feat(flota/modulo): descripción [AC-XX-YY]`, §9.2). **Exactamente un 
 por AC** y **ningún AC de las specs falta** (cualquiera de las dos cosas pone el gate en
 rojo). TODOS los ítems parten en `[ ]`: nada está hecho.
 
-Reparto por módulo (suma 203, contado de `specs/flota/*.md`): 00 = 28 · 01 = 21 ·
-02 = 22 · 03 = 24 · 04 = 24 · 05 = 25 · 06 = 15 · 07 = 17 · 08 = 27. Los ACs por sobre
+Reparto por módulo (suma 204, contado de `specs/flota/*.md`): 00 = 28 · 01 = 21 ·
+02 = 22 · 03 = 24 · 04 = 24 · 05 = 25 · 06 = 15 · 07 = 17 · 08 = 28. Los ACs por sobre
 los 195 originales nacen de la firma de la lista congelada de criterios KiloRuta el
 08-ago-2026 (AC-FTEN-18) —AC-FVEH-22 (KR-41, cierre forzado del turno) y AC-FRUT-22
 (KR-29, candado entrega←manifiesto)— y de PARTIR ACs a medias, que es la regla cuando
-uno cierra sobre una parte: AC-FMIG-24 salió de AC-FMIG-10, y AC-FMIG-25/26/27 de
-AC-FMIG-18. Partir sube el conteo a propósito: esconder el resto adentro de un `[x]`
+uno cierra sobre una parte: AC-FMIG-24 salió de AC-FMIG-10, AC-FMIG-25/26/27 de
+AC-FMIG-18 y AC-FMIG-28 de AC-FMIG-23. Partir sube el conteo a propósito: esconder el resto adentro de un `[x]`
 es lo que dejó 21 ACs abiertos invisibles el 26-jul-2026.
 
 **Precondiciones de proceso (criterio de entrada de E1, §9.1 — NO son ítems de este
@@ -45,8 +45,8 @@ sobre todos los anteriores.
 verificable; la cláusula pendiente se cierra al responder la pregunta indicada de SU
 spec): AC-FIDN-01 (p. 8), AC-FIDN-03 (p. 5/10), AC-FIDN-06 (p. 9), AC-FIDN-11 (p. 7),
 AC-FIDN-15 (p. 8), AC-FIDN-18 (p. 7 — BLOQUEADO entero), AC-FMIG-06 (p. 11), AC-FMIG-15
-(p. 10), AC-FMIG-22 (p. 12), AC-FMIG-23 (p. 4 de la spec 04 — numerador fuera del gate
-hasta la respuesta), AC-FPOR-09 (p. 4), AC-FPOR-10 (p. 3), AC-FRUT-02 (p. 6),
+(p. 10), AC-FMIG-22 (p. 12), AC-FMIG-28 (p. 4 de la spec 04 — el numerador, partido de
+AC-FMIG-23, que cerró sobre el denominador), AC-FPOR-09 (p. 4), AC-FPOR-10 (p. 3), AC-FRUT-02 (p. 6),
 AC-FRUT-21 (p. 9), AC-FSEM-05 (p. 9), AC-FSEM-07 (p. 5), AC-FSEM-08 (p. 5), AC-FSEM-09
 (p. 1), AC-FSEM-10 (p. 2), AC-FSEM-11 (p. 3/5), AC-FSEM-13 (p. 8), AC-FSEM-14 (p. 6),
 AC-FSEM-16 (p. 5), AC-FSEM-17 (p. 11), AC-FSEM-19 (p. 4/5), AC-FSEM-21 (p. 8 —
@@ -341,7 +341,14 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 - [x] (P1) DPA en términos del tenant (§3.E1.15/§7.8): artefacto VERSIONADO del repo con secciones mínimas (partes, objeto, encargado/responsable, subencargados, seguridad, devolución/supresión y portabilidad `pg_dump`), servido en los términos sin CSS libre, alcanzable ≤2 niveles, versión vigente por tenant y aceptación del `admin_tenant` en audit_trail (rol distinto ⇒ 403); texto y momento BLOQUEADOS por la pregunta 12 — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-22]
   PROBADO: `dpa.test.ts` + `dpa.spec.ts` (5/5) + migración `0067_dpa_del_tenant.sql`.
   `check.sh --full --app=flota`: VERDE (verde-20260816-065445).
-- [ ] (P1) Test de fixture de la EEVD del DONE-software (§10): valor esperado HARDCODEADO con memoria de cálculo versionada junto a los seeds A/B, comparado contra la vista `eevd_semanal` del módulo 02 (AC-FVEH-20); denominador computable hoy, numerador BLOQUEADO por la pregunta 4 de la spec 04 — mientras siga abierta el test no entra al gate — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-23]
+- [x] (P1) Test de fixture de la EEVD del DONE-software (§10) sobre el DENOMINADOR: valor esperado HARDCODEADO con memoria de cálculo versionada junto a los seeds A/B, comparado contra la vista `eevd_semanal` del módulo 02 (AC-FVEH-20), con mutante vivo que lo pone rojo. El numerador y el `eevd` completo se partieron a AC-FMIG-28, que sigue bloqueado por la pregunta 4 de la spec 04 — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-23]
+  PROBADO: `db/flota/suite-bd/eevd-fixture.test.mjs` (4 verdes + 1 `skip` que es AC-FMIG-28):
+  siembra A y B enteros desde `tenant_template` y COMPARA `eevd_semanal` contra
+  `seeds/eevd-esperado.mjs` (1 y 2 vehículos-día) sin recalcular nada; caso de rebote como
+  mutante vivo en los dos tenants — un turno plantado 30 días atrás sube el denominador real y
+  pone ROJA la comparación, y el `rollback` (`turnos` es append-only) la devuelve a verde.
+  `check.sh --full --app=flota`: VERDE.
+- [ ] (P1) NUMERADOR de la EEVD y valor `eevd` completo contra la memoria de cálculo (mitad partida de AC-FMIG-23): quitar el `skip` del test de fixture y asertar `entregas_con_evidencia`/`eevd`; BLOQUEADO por la pregunta 4 de la spec 04 — `entrega.con_evidencia` no está en `EVENTOS_OPERACION` y el numerador es 0 por ausencia de catálogo — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-28]
 - [ ] (P1) El wizard de onboarding entrega los mismos 4 estados de Miga sin reinventarlos (mitad partida de AC-FMIG-10; depende de AC-FMIG-14, que construye el wizard) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-24]
 
 ---
