@@ -650,6 +650,28 @@ activa SOLO `admin_tenant`: mientras la pregunta 1 esté abierta, `operador` y
     `packages/metodo/acs-bloqueados-flota.txt` para que ninguna tanda del motor se gaste en
     él hasta que exista la respuesta a la pregunta 6.
 - [ ] (P2) E2e autenticado del panel cross-tenant de e-auto — CONDICIONADO a la pregunta 2 (autenticación y montaje): navegar al panel, lista por tenant con estado semafórico y detalle de un tenant mostrando SOLO lo que `control` contiene — oráculo: CI [AC-FSEM-24]
+  - Revisado el 16-ago-2026: no queda mitad construible, y por una razón distinta a la de
+    AC-FSEM-23. Acá la mitad de software YA está construida y verde — el render por tenant
+    con estado semafórico y los agregados de `control` es AC-FSEM-10
+    (`dominio/plano-eauto.ts` + `plano-eauto/tablero-cross-tenant.tsx`, 7/7) y el panel §10
+    es AC-FSEM-22 (`dominio/panel-saas.ts` + `plano-eauto/panel-saas-vista.tsx`, 14/14),
+    ambos contra fixtures de `control` y con el centinela 14 a nivel de vista. Lo que este
+    AC agrega sobre eso es EXACTAMENTE lo que la pregunta 2 bloquea, y nada más: el
+    **montaje** (una URL en `app/`) y la **autenticación** de e-auto. Ninguna de las dos se
+    puede derivar: el enum de roles es FIJO y por-tenant (`ROLES` en
+    `packages/nucleo-comun/src/constants.ts`; §0/§4.3 «los packs de vertical NO crean
+    roles») y no existe rol de plataforma, así que `guardia()` —la puerta de todas las
+    rutas del módulo (AC-FSEM-09)— no tiene sujeto a quien dejar pasar; y el maestro
+    describe el CONTENIDO del panel (§5.6 «Vista e-auto», §10 «Panel interno SaaS») sin
+    decir jamás dónde vive ni cómo entra su dueño.
+    Montarlo hoy sobre fixtures y sin sesión —el patrón `?seed=` de `hoy/page.tsx`— no
+    sirve como sustituto: (1) no cerraría el AC, cuyo texto pide el e2e AUTENTICADO;
+    (2) inventaría la URL que la pregunta 2 pregunta, y con ella el caso de cruce del
+    `manifiesto.json` de una ruta cuya semántica de aislamiento nadie fijó; (3) dejaría el
+    tablero cross-tenant servido sin sesión, que es justo lo que §4.1-prohibido y §7.2
+    custodian. Sería congelar en el gate una decisión del dueño, no adelantar trabajo.
+    El AC queda anotado en `packages/metodo/acs-bloqueados-flota.txt` para que ninguna
+    tanda del motor se gaste en él hasta que exista la respuesta a la pregunta 2.
 - [ ] (P2) BLOQUEADO por la Pregunta al dueño 12 — «hints re-mostrados = bug» (§10, telemetría de producto): el concepto de hint no existe en ninguna de las 9 specs del conjunto y el enum CERRADO de `client_metric` (§4.6) no trae tipo para medirlo (misma situación que AC-FSEM-23); este módulo, dueño de la telemetría de producto y del panel §10, la reclama para que la obligación no quede huérfana y NO construye hints, ni amplía el enum, ni inventa una superficie de guía hasta la respuesta. Resuelta, el AC se reescribe ANTES de implementarse con su oráculo (fuente de la métrica + indicador en el panel §10, con «re-mostrado» como condición de alerta) — oráculo: producción (condicionado a la Pregunta 12) [AC-FSEM-25]
 
 ## Dependencias
