@@ -42,3 +42,9 @@ apps/flota/.next-e2e/
 apps/flota/playwright-report/
 apps/flota/test-results/
 apps/flota/blob-report/
+
+# Pipeline nightly del k6 «ráfaga matinal» [AC-FPOD-15]: dist propio de rafaga-matinal.sh y
+# el resumen de la corrida (si alguien fija K6_RESUMEN_PATH dentro del repo a mano) — el
+# workflow nightly lo sube como artefacto de GitHub Actions, nunca lo comitea.
+apps/flota/.next-rafaga-matinal/
+rafaga-matinal-resumen.generado.json

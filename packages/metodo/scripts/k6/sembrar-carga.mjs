@@ -13,7 +13,7 @@
 // ejercería el volumen de filas que el §0 pide simular (2.000 turnos abiertos, 2.000 rutas
 // vivas) — mediría el caché del planificador de Postgres, no la capacidad real.
 import { provisionar } from "../../../../db/flota/provisionar.mjs";
-import { con, bdDeTenant } from "../../../../db/flota/conectar.mjs";
+import { con, bdDeTenant, BD_CONTROL } from "../../../../db/flota/conectar.mjs";
 import { borrarRolDeApp } from "../../../../db/flota/rol-app.mjs";
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -38,7 +38,7 @@ export async function sembrarCarga(slug, dataset, { recrear = true } = {}) {
   await provisionar(slug, { recrear });
   const bd = bdDeTenant(slug);
 
-  return con(bd, async ({ sql }) => {
+  const resultado = await con(bd, async ({ sql }) => {
     const [empresa] = await sql(
       `insert into empresas_cliente (rut, razon_social) values ('11.111.111-1', 'k6 ráfaga matinal — laboratorio')
          on conflict (tenant_id, rut) do update set razon_social = excluded.razon_social
@@ -124,11 +124,30 @@ export async function sembrarCarga(slug, dataset, { recrear = true } = {}) {
 
     return { slug, bd, empresaId: empresa.id, destinoId: destino.id, configVersionId: config.id, manifiesto };
   });
+
+  // El ruteo por subdominio SOLO conoce lo que está en `control.tenants` (§4.1,
+  // `apps/flota/src/servidor/ruteo.ts::resolverHost`) — no basta con que `t_<slug>` exista, el
+  // servidor real (el que golpea el k6) tiene que poder resolver `<slug>.<dominio>` hasta esa
+  // BD. Sin esta fila, el bootstrap y el sync del k6 devolverían 404 de subdominio desconocido
+  // y el pipeline mediría el ruteo, no la capacidad (§0). Mismo patrón que
+  // `apps/flota/e2e/preparar-tenants.mjs`. `estado` queda en su default ('activo'): el
+  // laboratorio nace operativo.
+  await con(BD_CONTROL, ({ sql }) =>
+    sql(
+      `insert into tenants (slug, bd) values ($1, $2)
+       on conflict (slug) do update set bd = excluded.bd, estado = 'activo'`,
+      [slug, bd],
+    ),
+  );
+
+  return resultado;
 }
 
 /** Deja SOLO la identidad del tenant (`provisionar` con `recrear:true` la vacía igual); esto
- *  además borra el rol de app, que `provisionar` no toca. Simétrico a `preparar-tenants.mjs`. */
+ *  además borra el rol de app y la fila de `control.tenants` que registra el sembrado (arriba),
+ *  que `provisionar` no toca. Simétrico a `preparar-tenants.mjs`. */
 export async function limpiarLaboratorio(slug = SLUG_LABORATORIO) {
+  await con(BD_CONTROL, ({ sql }) => sql("delete from tenants where slug = $1", [slug]));
   await con("postgres", ({ sql }) => sql(`drop database if exists ${bdDeTenant(slug)} with (force)`));
   await borrarRolDeApp(slug);
 }
@@ -138,14 +157,21 @@ function esModuloPrincipal() {
 }
 
 if (esModuloPrincipal()) {
-  const rutaDataset = new URL("./dataset-sintetico.generado.json", import.meta.url).pathname;
-  const dataset = JSON.parse(readFileSync(rutaDataset, "utf8"));
-  const rutaManifiesto =
-    process.env.K6_MANIFIESTO_PATH ?? join(tmpdir(), `k6-flota-manifiesto-${SLUG_LABORATORIO}.json`);
+  // `limpiar` es el otro extremo del ciclo que `rafaga-matinal.sh` orquesta: sembrar antes del
+  // k6, limpiar en su `trap` de salida, pase lo que pase con la corrida (AC-FPOD-15).
+  if (process.argv[2] === "limpiar") {
+    await limpiarLaboratorio();
+    console.log(`sembrar-carga: laboratorio ${SLUG_LABORATORIO} limpiado`);
+  } else {
+    const rutaDataset = new URL("./dataset-sintetico.generado.json", import.meta.url).pathname;
+    const dataset = JSON.parse(readFileSync(rutaDataset, "utf8"));
+    const rutaManifiesto =
+      process.env.K6_MANIFIESTO_PATH ?? join(tmpdir(), `k6-flota-manifiesto-${SLUG_LABORATORIO}.json`);
 
-  const resultado = await sembrarCarga(SLUG_LABORATORIO, dataset);
-  writeFileSync(rutaManifiesto, JSON.stringify(resultado.manifiesto));
-  console.log(
-    `sembrar-carga: ${resultado.manifiesto.length} dispositivos sembrados en ${resultado.bd} · manifiesto en ${rutaManifiesto}`,
-  );
+    const resultado = await sembrarCarga(SLUG_LABORATORIO, dataset);
+    writeFileSync(rutaManifiesto, JSON.stringify(resultado.manifiesto));
+    console.log(
+      `sembrar-carga: ${resultado.manifiesto.length} dispositivos sembrados en ${resultado.bd} · manifiesto en ${rutaManifiesto}`,
+    );
+  }
 }
