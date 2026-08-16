@@ -1,10 +1,10 @@
-# HANDOFF — tres motores vivos y construyendo (15-Ago-2026 20:50)
+# HANDOFF — tres motores vivos y construyendo (15-Ago-2026 22:55)
 
 > **Arrancá con Fable 5 y esfuerzo max** (pedido explícito de Alexis a las 16:45).
 >
 > **LO PRIMERO: los TRES motores están VIVOS y sanos.** Nada que destrabar al arrancar.
 > El motor 3, que el traspaso anterior dejó aparcado, lleva construyendo desde las 16:41.
-> **155 de 202 ACs cerrados · faltan 47.**
+> **162 de 203 ACs cerrados · faltan 41.**
 >
 > Los tres worktrees tienen archivos sin comitear: es el WIP de los agentes en su AC actual,
 > **no lo commitees vos** — lo cierra cada motor con su propio commit al terminar.
@@ -14,9 +14,9 @@
 | | motor 1 | motor 2 | motor 3 |
 |---|---|---|---|
 | worktree | `~/kilopan-monorepo-flota` | `~/kilopan-monorepo-flota2` | `~/kilopan-monorepo-flota3` |
-| rama | `flota/specs-e1` | `flota/motor2` (+17) | `flota/motor3` (+16) |
+| rama | `flota/specs-e1` | `flota/motor2` (+22) | `flota/motor3` (+20) |
 | familias | `^AC-(FIDN\|FPOD\|FRUT\|FSEM\|FTAR\|FTEN\|FVEH)-` | `^AC-FPOR-` | `^AC-FMIG-` |
-| faltan | **20** | **11** | **16** |
+| faltan | **19** | **8** | **14** |
 | Postgres | 54331 (`~/.flota-pg`) | 54332 (`~/.flota-pg-2`) | 54333 (`~/.flota-pg-3`) |
 | e2e | 3311 | 3312 | 3313 |
 | lanzador | `~/bin/arrancar-motor1.sh` | `~/bin/arrancar-motor2.sh` | `~/bin/arrancar-motor3.sh` |
@@ -50,14 +50,24 @@ sus siete familias) + su supervisor apuntado ahí; verificado: tras relanzarse e
 familia propia. **Si nace una familia nueva hay que agregarla a ese regex** — un motor que no la
 reclama la deja sin construir, y eso no sale en ningún rojo.
 
-**3. Una pausa que NO era del arnés (20:12, motor 2) — cómo se ve una legítima.** El gate
-rechazó el cierre de AC-FPOR-06 con «AC-FTEN-26 definido en dos specs». Causa: el id de un ítem
-es su ÚLTIMO corchete (convención del repo, `gate_specs.mjs:65`), y ese ítem puso su id al
-principio y terminó con una CITA a `[AC-FTEN-26]`; el gate la leyó como segunda definición.
-Sin eso, dos ACs habrían compartido id y el conteo habría mentido (198 contados vs 199
-definidos). Arreglado en `8bf8c94` haciendo que el ítem cierre con su id en la spec y en el
-plan. **Proporción del día: 2 pausas del arnés, 1 del AC** — el diagnóstico primero sigue
-siendo obligatorio, pero «siempre es el arnés» ya no es cierto.
+**3. Las pausas legítimas de hoy fueron TODAS del gate de specs, y del mismo tipo: texto mal
+formado, no código roto.** En las dos el AC estaba hecho y verde; lo que falló fue cómo quedó
+escrito el ítem. Son baratas de arreglar y cuestan una pausa entera, así que **si vuelve a
+pasar, revisá primero el texto del ítem antes de sospechar del código**:
+
+- **20:12, motor 2** — «AC-FTEN-26 definido en dos specs». El id de un ítem es su ÚLTIMO
+  corchete (`gate_specs.mjs:65`); ese ítem puso el suyo al principio y terminó con una CITA a
+  `[AC-FTEN-26]`, que el gate leyó como segunda definición. Sin eso, dos ACs habrían compartido
+  id y el conteo habría mentido (198 contados vs 199 definidos). Arreglado en `8bf8c94`.
+- **22:16, motor 1** — «AC-FRUT-24 marcado [x] pero su texto dice "falta"». El AC estaba
+  probado (migración 0070, pgTAP 11/11, e2e 22/22); las dos frases eran del DIAGNÓSTICO
+  escritas en presente («hace falta marcarla», «lo que falta es que la dispare»), y así no se
+  distinguen de trabajo pendiente. Pasadas a pasado en `f6feaf5` — ojo: «hacía falta» TAMBIÉN
+  matchea el gate; hay que reformular («hubo que»), no solo conjugar.
+
+**Proporción del día: 2 pausas del arnés, 2 del AC.** El diagnóstico primero sigue siendo
+obligatorio, pero «siempre es el arnés» ya no es cierto. Vale evaluar que el prompt de build
+advierta las dos reglas de redacción de arriba: se pagan con una tanda cortada cada vez.
 
 ## Deudas — lo que hay que hacer, en orden
 
@@ -97,7 +107,8 @@ arrancan solos. `launchctl` está denegado en el arnés; pedirle el sí.
 - **No empujar a mano `flota/motor2` / `flota/motor3`**: el watchdog de cada motor publica solo
   lo verificado, y cada push dispara el CI.
 - **Lock `e2e-flota`** antes de cualquier e2e manual.
-- **Diagnóstico antes de reconstruir**: hoy fueron 2 de 2 defectos del arnés, cero de los ACs.
+- **Diagnóstico antes de reconstruir**: hoy, 2 pausas del arnés y 2 del AC (detalle arriba).
+  Ninguna se resolvió reconstruyendo: las cuatro se arreglaron leyendo el fallo exacto.
 - Gasto: tres motores ≈ el triple de tokens/hora. La máquina no es el límite (SoC ~55 °C,
   carga ~3,8 en un M4): el límite es la cuota.
 
