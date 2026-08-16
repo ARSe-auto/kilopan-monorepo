@@ -352,7 +352,23 @@ reales en seeds/fixtures (§10, §7.8):
   fuera de catálogo sin base a medio provisionar, y `completo()` de punta a punta (vehículo +
   chofer aprobado + encargo + parada publicada + primera parada `done`) muy por debajo del
   techo. `check.sh --full --app=flota`: VERDE (verde-20260815-234019).
-- [ ] (P1) Activar un vertical = INSERT de filas, cero migraciones (§2 métrica 4): provisionar por wizard los tenants del seed §10 con sus `vertical_template` deja `schema_migrations` idéntico antes/después (cero migraciones ejecutadas) — precondición anclada a lo que el maestro SÍ obliga: los 3 tenants del seed §10 (B = panadería, único vertical nombrado en §9.1; la elección de verticales del paso 1 para A y C queda BLOQUEADA por la Pregunta al dueño n.º 10) — y el flujo del operario queda armado POR DATOS (`stop_requirement` desde `cargo_type`; grep: cero condicionales por vertical en la UI — §4.6, §4.9); caso de rebote: ningún seed/wizard E1 inserta `alarm_rule`, `thermal_profile`, ni `stop_requirements` de tipo `pin_destinatario` o `escaneo_codigo` (solo-DDL en E1 — §4.9, §5.2 F4, §3.E3); test que falla si aparecen — oráculo: CI [AC-FMIG-15]
+- [x] (P1) Activar un vertical = INSERT de filas, cero migraciones (§2 métrica 4): provisionar por wizard los tenants del seed §10 con sus `vertical_template` deja `schema_migrations` idéntico antes/después (cero migraciones ejecutadas) — precondición anclada a lo que el maestro SÍ obliga: los 3 tenants del seed §10 (B = panadería, único vertical nombrado en §9.1; la elección de verticales del paso 1 para A y C queda BLOQUEADA por la Pregunta al dueño n.º 10) — y el flujo del operario queda armado POR DATOS (`stop_requirement` desde `cargo_type`; grep: cero condicionales por vertical en la UI — §4.6, §4.9); caso de rebote: ningún seed/wizard E1 inserta `alarm_rule`, `thermal_profile`, ni `stop_requirements` de tipo `pin_destinatario` o `escaneo_codigo` (solo-DDL en E1 — §4.9, §5.2 F4, §3.E3); test que falla si aparecen — oráculo: CI [AC-FMIG-15]
+  PROBADO: los tres oráculos del texto, los tres nuevos. (1) `db/flota/suite-bd/
+  wizard-onboarding.test.mjs` — test «activar el vertical panadería = INSERT de filas»: corre
+  `pasoUnoEmpresaYVertical` (paso 1 del wizard) sobre el único vertical vivo de E1 (panadería,
+  B del seed §10 — A y C siguen bloqueados por la Pregunta al dueño 10) y compara
+  `schema_migrations` del tenant recién nacido, fila a fila (`version`+`sha256`), contra el de
+  `tenant_template`: IDÉNTICO, contra cluster real. (2) `db/flota/gate-flujo-por-datos.mjs`
+  (+ 12 mutantes en su `.test.mjs`, cableado en `gate.sh`) — gate estático que lee el catálogo
+  VIVO de verticales desde `VERTICALES_DEMO` (wizard-onboarding.mjs) y falla si algún archivo de
+  `apps/flota/src/{app,dominio,servidor}` compara contra el NOMBRE de un vertical (`===`,
+  `switch`/`case`); hoy VERDE porque la derivación real vive en `derivarRequisitos`
+  (servidor/rutas.ts) copiando `cargo_type_requirement` → `stop_requirement`, sin ramificar.
+  (3) `db/flota/gate-seeds-alarm-thermal.mjs` (+ 10 mutantes, cableado en `gate.sh`) — gancho
+  nuevo para `alarm_rule`/`thermal_profile` (los ganchos `pin_destinatario`/`escaneo_codigo` ya
+  tenían sus propios gates gemelos, AC-FRUT-20/AC-FPOD-17): falla si algún seed o el wizard hace
+  `insert into` cualquiera de las dos tablas DDL-only, y falla también si el DDL las pierde
+  (verde vacuo evitado). `check.sh --full --app=flota`: VERDE (verde-20260816-000401).
 - [ ] (P2) Wizard y primera parada validados EN VIVO por Alexis (DONE-adopción, §10); checklist con dueño humano nombrado que JAMÁS bloquea al loop (§9.2) — oráculo: humano [AC-FMIG-16]
 - [ ] (P2) Embudo de activación medido en el panel interno SaaS (§10, módulo 05): tiempo alta→primera entrega real con evidencia p50 <4 h y p90 <24 h (§2 métrica 2) — oráculo: producción [AC-FMIG-17]
 - [ ] (P1) Seeds de los 3 tenants exactamente según §10 — A «e-auto DaaS» (3 EV48 de 90 bultos/41.860 Wh, 6 usuarios, 3 empresas con sus conceptos y `otd_comprometido_pct=95` en la farmacia, 25 destinos, agenda con recarga AC nocturna, 1 no-entrega + 1 parcial + 1 devolución + 1 descuadre clasificado, liquidaciones cerrada/disputada/pagada), B «Rutapan» (2 EV48, 4 panaderías, rutas de madrugada de 12 y 9 paradas, manifiestos con DTEs, 1 encargo de andén, 1 reintento, cierre cuadrado, terminología al máximo largo, tema propio) y C «Demo Mi Flota» (mi_flota, navegación contraída, 1 día con PODs y semáforo) — con cadenas centinela ÚNICAS por tenant, RUTs sintácticamente válidos pero irreales (cero datos personales reales, §7.8) y la memoria de cálculo del valor EEVD esperado para el test de fixture contra `eevd_semanal` (§10 DONE-software); caso de rebote: e2e del camino dorado A/B/C corre sobre estos seeds y una fila cruzada entre tenants ⇒ rojo (§10, §9.3.2) — oráculo: CI [AC-FMIG-18]

@@ -6,7 +6,7 @@
 // `--full`, igual que `provisionar.test.mjs`, del que este archivo es vecino directo.
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
-import { con, bdDeTenant } from "../conectar.mjs";
+import { con, bdDeTenant, BD_PLANTILLA } from "../conectar.mjs";
 import { pasoUnoEmpresaYVertical, VERTICALES_DEMO, completo } from "../wizard-onboarding.mjs";
 import { desregistrar } from "./desregistrar.mjs";
 
@@ -68,6 +68,39 @@ test("[AC-FMIG-14] caso de rebote: vertical fuera del catálogo E1 no crea ningu
     sql("select exists(select 1 from pg_database where datname = $1) as existe", [bdDeTenant(slugRebote)]),
   );
   assert.equal(existe, false, "un vertical inválido no puede dejar una base a medio provisionar");
+});
+
+test("[AC-FMIG-15] activar el vertical panadería = INSERT de filas: schema_migrations queda IDÉNTICO al de tenant_template", async () => {
+  // §2 métrica 4: «activar un vertical = INSERT de filas, cero migraciones». El «antes» es
+  // `tenant_template` —el origen del que `CREATE DATABASE … TEMPLATE` copia— y el «después» es
+  // el tenant recién nacido tras el paso 1 completo (provisión + siembra de `vertical_template`).
+  // Si activar el vertical hubiera ejecutado —o dejado pendiente— una sola migración de más,
+  // las dos listas dejarían de coincidir.
+  const filasPlantilla = await con(BD_PLANTILLA, ({ sql }) =>
+    sql("select version, sha256 from schema_migrations order by version"),
+  );
+  assert.ok(filasPlantilla.length > 0, "tenant_template no tiene schema_migrations — nada que comparar");
+
+  const r = await pasoUnoEmpresaYVertical(`${SLUG}_activar`, {
+    vertical: "panaderia",
+    modo: "daas",
+    recrear: true,
+  });
+  const filasTenant = await con(r.bd, ({ sql }) =>
+    sql("select version, sha256 from schema_migrations order by version"),
+  );
+
+  assert.deepEqual(
+    filasTenant,
+    filasPlantilla,
+    "activar el vertical panadería tocó schema_migrations: dejó de ser un INSERT puro (§2 métrica 4)",
+  );
+
+  // El positivo, para que el before/after no sea vacuo: la fila del vertical SÍ quedó sembrada.
+  const [fila] = await con(r.bd, ({ sql }) =>
+    sql("select vertical from vertical_template where vertical = $1", ["panaderia"]),
+  );
+  assert.ok(fila, "el vertical no quedó sembrado — el before/after sería trivialmente idéntico");
 });
 
 test("[AC-FMIG-14] wizard completo: los 4 pasos de punta a punta, bajo el techo de 15 min del §3.E1.13", async () => {

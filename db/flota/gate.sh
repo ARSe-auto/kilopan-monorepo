@@ -93,6 +93,18 @@ paso "seeds: nadie siembra el gancho pin_destinatario, y sigue vivo en el DDL (�
 paso "seeds: nadie siembra el gancho escaneo_codigo, y sigue vivo en el DDL (§4.9, §3.E3)" \
   node db/flota/gate-seeds-escaneo-codigo.mjs
 
+# `thermal_profile`/`alarm_rule` son DDL-only en E1 (§4.9): esquema sí, seeds no. Los gates de
+# arriba miran el enum de evidencia; este mira las dos TABLAS del gancho de frío — ningún seed ni
+# el wizard puede insertarles una fila. [AC-FMIG-15]
+paso "seeds: nadie siembra alarm_rule ni thermal_profile, y siguen vivas en el DDL (§4.9)" \
+  node db/flota/gate-seeds-alarm-thermal.mjs
+
+# «El flujo del operario se arma POR DATOS» (§4.6) no es solo diseño de hoy: sin este gate,
+# nada impide que mañana alguien escriba `if (vertical === 'panaderia')` en una pantalla y
+# convierta «activar un vertical» de vuelta en código en vez de filas (§2 métrica 4). [AC-FMIG-15]
+paso "flujo por datos: cero condicionales por el nombre de un vertical en la UI (§4.6, §4.9)" \
+  node db/flota/gate-flujo-por-datos.mjs
+
 # «Archivo PICT versionado; agregar un flag sin regenerarlo ⇒ gate rojo» (§9.2): recalcula el
 # covering array 2-way desde covering-array-parada.pict y lo compara contra el .json comiteado
 # que el e2e de la pantalla de parada ejerce. [AC-FPOD-18]
