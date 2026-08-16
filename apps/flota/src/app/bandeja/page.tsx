@@ -11,6 +11,7 @@ import {
 import { tipografia, superficie, grilla, semantico as colorSemantico, enfasis } from "@kilopan/miga/tokens.ts";
 import { semantico, componente } from "@kilopan/miga/estructura.ts";
 import { pedir } from "../../cliente/aparato.ts";
+import { registrarToque, alCambiarTeclado, completarFlujo } from "../../cliente/toques-flujo.ts";
 import { fechaEsCl } from "../../../../../packages/nucleo-comun/src/fechas.ts";
 
 // La bandeja de encargos (F1) [AC-FRUT-01] — §3.E1.5, §5.2-F1, §5.3, §5.7.
@@ -98,6 +99,9 @@ export default function Bandeja() {
       return setRebote(cuerpo.mensaje ?? "No se pudo guardar el encargo.");
     }
     setBultos("");
+    // El flujo COMPLETÓ acá, no en el clic: un rebote de bultos que se corrige le costó al
+    // operario los toques de las dos pasadas, y `completarFlujo` los suma todos (§5.3) [AC-FRUT-19].
+    void completarFlujo("alta_encargo");
     await cargar();
     return undefined;
   }
@@ -121,7 +125,10 @@ export default function Bandeja() {
               type="button"
               data-testid={`empresa-${e.razon_social}`}
               aria-pressed={empresa === e.id}
-              onClick={() => setEmpresa(e.id)}
+              onClick={() => {
+                registrarToque("alta_encargo");
+                setEmpresa(e.id);
+              }}
               style={empresa === e.id ? chipMarcado : chip}
             >
               {empresa === e.id ? "✓ " : ""}
@@ -141,7 +148,10 @@ export default function Bandeja() {
               type="button"
               data-testid={`destino-${d.nombre}`}
               aria-pressed={destino === d.id}
-              onClick={() => setDestino(d.id)}
+              onClick={() => {
+                registrarToque("alta_encargo");
+                setDestino(d.id);
+              }}
               style={destino === d.id ? chipMarcado : chip}
             >
               {destino === d.id ? "✓ " : ""}
@@ -153,7 +163,13 @@ export default function Bandeja() {
         <h2 style={subtitulo}>¿Cuántos bultos?</h2>
         <CifraGrande valor={bultos === "" ? "—" : bultos} unidad="bultos" />
         <div data-testid="teclado-bultos">
-          <TecladoNumerico valor={bultos} onCambiar={setBultos} />
+          <TecladoNumerico
+            valor={bultos}
+            onCambiar={(v) => {
+              alCambiarTeclado("alta_encargo", bultos, v);
+              setBultos(v);
+            }}
+          />
         </div>
 
         {rebote && (
@@ -161,7 +177,14 @@ export default function Bandeja() {
             {rebote}
           </p>
         )}
-        <BotonPrimario testid="guardar-encargo" disabled={!listo} onClick={() => void guardar()}>
+        <BotonPrimario
+          testid="guardar-encargo"
+          disabled={!listo}
+          onClick={() => {
+            registrarToque("alta_encargo");
+            void guardar();
+          }}
+        >
           Agregar a la bandeja
         </BotonPrimario>
       </section>

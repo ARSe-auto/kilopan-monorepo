@@ -12,6 +12,7 @@ import { tipografia, superficie, grilla, enfasis, semantico as colorSemantico } 
 import { semantico, componente } from "@kilopan/miga/estructura.ts";
 import { UNDO } from "../../../../../packages/nucleo-comun/src/constants.ts";
 import { pedir } from "../../cliente/aparato.ts";
+import { registrarToque, alCambiarTeclado, completarFlujo } from "../../cliente/toques-flujo.ts";
 
 // La recepción de carga en el andén (F2) [AC-FRUT-07] — §5.2 F2, §5.3, §0, §4.7, §7.6.
 //
@@ -132,6 +133,9 @@ export default function RecepcionDeCarga() {
         }),
       }).catch(() => null);
       setConfirmadas((previas) => ({ ...previas, [empresaId]: "listo" }));
+      // El flujo «recepcion_custodia» [AC-FRUT-19] CIERRA acá, cuando la ventana de undo pasó y
+      // la captura viajó — no al tocar «Conforme», que todavía se puede deshacer (§4.7).
+      void completarFlujo("recepcion_custodia");
     }, UNDO.ventana_ms);
 
     (window as unknown as Record<string, number>)[`undo-${empresaId}`] = enviar;
@@ -159,9 +163,24 @@ export default function RecepcionDeCarga() {
               pie en el andén con las manos ocupadas (§5.7, §0). */}
           <CifraGrande valor={pin === "" ? "—" : "•".repeat(pin.length)} />
           <div data-testid="teclado-pin">
-            <TecladoNumerico valor={pin} onCambiar={setPin} />
+            <TecladoNumerico
+              valor={pin}
+              onCambiar={(v) => {
+                // Telemetría `toques_flujo` del §5.3 [AC-FRUT-19]: el PIN es teclado propio = 1
+                // acción, sea cual sea su cantidad de dígitos.
+                alCambiarTeclado("recepcion_custodia", pin, v);
+                setPin(v);
+              }}
+            />
           </div>
-          <BotonPrimario testid="continuar-pin" disabled={pin.length < 4} onClick={() => setPaso("vehiculo")}>
+          <BotonPrimario
+            testid="continuar-pin"
+            disabled={pin.length < 4}
+            onClick={() => {
+              registrarToque("recepcion_custodia");
+              setPaso("vehiculo");
+            }}
+          >
             Continuar
           </BotonPrimario>
         </section>
@@ -176,7 +195,10 @@ export default function RecepcionDeCarga() {
                 key={v.id}
                 type="button"
                 data-testid={`vehiculo-${v.patente}`}
-                onClick={() => void abrirVehiculo(v.id)}
+                onClick={() => {
+                  registrarToque("recepcion_custodia");
+                  void abrirVehiculo(v.id);
+                }}
                 style={chip}
               >
                 {v.patente}
@@ -219,7 +241,13 @@ export default function RecepcionDeCarga() {
 
                 {estado === undefined && ajustando !== empresaId && (
                   <>
-                    <BotonPrimario testid={`conforme-${empresaId}`} onClick={() => void conforme(empresaId, items)}>
+                    <BotonPrimario
+                      testid={`conforme-${empresaId}`}
+                      onClick={() => {
+                        registrarToque("recepcion_custodia");
+                        void conforme(empresaId, items);
+                      }}
+                    >
                       Conforme
                     </BotonPrimario>
                     {/* La discrepancia se registra EN el punto (§5.2 F2). Mandarla a otra
@@ -238,7 +266,12 @@ export default function RecepcionDeCarga() {
                   <div data-testid={`teclado-conteo-${empresaId}`}>
                     <TecladoNumerico
                       valor={contado[items[0]!.item_id] ?? ""}
-                      onCambiar={(v) => setContado((previos) => ({ ...previos, [items[0]!.item_id]: v }))}
+                      onCambiar={(v) => {
+                        // «4 · el conteo real, tecleado en el punto» del §5.3 [AC-FRUT-19]:
+                        // teclado propio = 1 acción, sea cual sea su cantidad de dígitos.
+                        alCambiarTeclado("recepcion_custodia", contado[items[0]!.item_id] ?? "", v);
+                        setContado((previos) => ({ ...previos, [items[0]!.item_id]: v }));
+                      }}
                     />
                     <BotonPrimario testid={`listo-conteo-${empresaId}`} onClick={() => setAjustando(null)}>
                       Listo

@@ -11,6 +11,7 @@ import {
 import { tipografia, superficie, grilla, enfasis } from "@kilopan/miga/tokens.ts";
 import { semantico } from "@kilopan/miga/estructura.ts";
 import { pedir } from "../../../cliente/aparato.ts";
+import { registrarToque, completarFlujo } from "../../../cliente/toques-flujo.ts";
 import {
   diferenciaDe,
   puedeCerrar,
@@ -96,6 +97,7 @@ export default function CierreDeRuta({ rutaId }: { rutaId: string }) {
 
   /** La clasificación táctil, en el cliente: se ve al instante y todavía no viajó nada. */
   function asignar(empresaId: string, destino: (typeof DESTINOS_DEL_DESCUADRE)[number]) {
+    registrarToque("cierre_ruta"); // §5.3 [AC-FRUT-19]
     setRenglones((previos) =>
       (previos ?? []).map((r) =>
         r.empresa_cliente_id === empresaId ? { ...clasificar(r, destino), diferencia: 0 } : r,
@@ -121,6 +123,8 @@ export default function CierreDeRuta({ rutaId }: { rutaId: string }) {
     }).catch(() => null);
     if (!respuesta?.ok) return setError("No se pudo cerrar la ruta. Volvé a intentar.");
     setCerrada(true);
+    // El flujo «cierre_ruta» [AC-FRUT-19] CIERRA acá, con la ruta ya reconciliada.
+    void completarFlujo("cierre_ruta");
     return undefined;
   }
 
@@ -205,9 +209,10 @@ export default function CierreDeRuta({ rutaId }: { rutaId: string }) {
                   <SelectorUnToque
                     opciones={motivos.map((m) => ({ valor: m.id, etiqueta: m.etiqueta }))}
                     valor={motivoElegido[r.empresa_cliente_id] ?? null}
-                    onCambiar={(motivoId) =>
-                      setMotivoElegido((previos) => ({ ...previos, [r.empresa_cliente_id]: motivoId }))
-                    }
+                    onCambiar={(motivoId) => {
+                      registrarToque("cierre_ruta"); // el tercer toque del §5.3 [AC-FRUT-19]
+                      setMotivoElegido((previos) => ({ ...previos, [r.empresa_cliente_id]: motivoId }));
+                    }}
                   />
                 </div>
               )}
@@ -219,7 +224,13 @@ export default function CierreDeRuta({ rutaId }: { rutaId: string }) {
       {/* El botón NO EXISTE mientras no cuadre NI mientras falte un motivo de devolución.
           Deshabilitado sería la misma prohibición dicha peor: se ve, se toca, y no pasa nada. */}
       {cuadrada && lista.every((r) => r.devuelto === 0 || motivoElegido[r.empresa_cliente_id]) && (
-        <BotonPrimario testid="cerrar-ruta" onClick={() => void cerrar()}>
+        <BotonPrimario
+          testid="cerrar-ruta"
+          onClick={() => {
+            registrarToque("cierre_ruta");
+            void cerrar();
+          }}
+        >
           Cerrar la ruta
         </BotonPrimario>
       )}

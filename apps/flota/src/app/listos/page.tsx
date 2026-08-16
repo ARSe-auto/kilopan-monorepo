@@ -5,6 +5,7 @@ import { BotonPrimario, EstadoVacio, EstadoError, EstadoCargando } from "@kilopa
 import { tipografia, superficie, grilla, semantico as colorSemantico, enfasis } from "@kilopan/miga/tokens.ts";
 import { semantico } from "@kilopan/miga/estructura.ts";
 import { pedir } from "../../cliente/aparato.ts";
+import { registrarToque, completarFlujo } from "../../cliente/toques-flujo.ts";
 import { fechaEsCl, horaEsCl } from "../../../../../packages/nucleo-comun/src/fechas.ts";
 
 // El tablero «Listos para salir» (F1) [AC-FVEH-12] — §5.2-F1, §3.E1.12, §5.7, §5.1.
@@ -81,7 +82,12 @@ export default function ListosParaSalir() {
         ? `Día publicado: ${cuerpo.paradas} paradas.`
         : (cuerpo.mensaje ?? "No se pudo publicar el día."),
     }));
-    if (respuesta?.ok) await cargar();
+    // El flujo «publicar_dia» [AC-FRUT-19] CIERRA acá: es el último toque de la secuencia
+    // canónica bandeja → armar rutas → «Listos para salir» → publicar (§5.2-F1, §5.3).
+    if (respuesta?.ok) {
+      void completarFlujo("publicar_dia");
+      await cargar();
+    }
   }
 
   useEffect(() => {
@@ -167,7 +173,10 @@ export default function ListosParaSalir() {
             {porVehiculo.get(v.vehiculo_id) && (
               <BotonPrimario
                 testid={`publicar-dia-${v.patente}`}
-                onClick={() => void publicar(porVehiculo.get(v.vehiculo_id)!.id, v.vehiculo_id)}
+                onClick={() => {
+                  registrarToque("publicar_dia");
+                  void publicar(porVehiculo.get(v.vehiculo_id)!.id, v.vehiculo_id);
+                }}
               >
                 Publicar el día
               </BotonPrimario>

@@ -100,6 +100,8 @@ export function rutDeFixture(indice) {
 // el TERCERO cuya presencia en el mismo tenant hace que la prueba pruebe algo.
 VALIDOS["18.777.333-4"] = "titular del export ARCO en db/flota/suite-bd/arco.test.mjs [AC-FIDN-15]";
 VALIDOS["19.888.444-8"] = "el TERCERO del export ARCO: ni una cadena suya puede salir en el JSON de la titular [AC-FIDN-15]";
+VALIDOS["21.987.654-8"] = "quien mide los toques en apps/flota/e2e/toques-flujo.spec.ts (AC-FRUT-19), propia y no prestada: la suite corre los cuatro flujos del módulo contra el tenant `hechos` y deja un manifiesto append-only, así que necesita su propia persona";
+VALIDOS["76.987.654-5"] = "la empresa cliente de apps/flota/e2e/toques-flujo.spec.ts (AC-FRUT-19), propia y no prestada: rango 76.xxx de persona jurídica";
 
 export const INVALIDOS_A_PROPOSITO = {
   "12.345.678-9": "el canónico con el dígito verificador cambiado: el caso que prueba que el módulo 11 se corre de verdad",

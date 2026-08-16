@@ -5,6 +5,7 @@ import { BotonPrimario, EstadoVacio, EstadoError, EstadoCargando } from "@kilopa
 import { tipografia, superficie, grilla, enfasis } from "@kilopan/miga/tokens.ts";
 import { semantico, componente } from "@kilopan/miga/estructura.ts";
 import { pedir } from "../../cliente/aparato.ts";
+import { registrarToque } from "../../cliente/toques-flujo.ts";
 
 // Armar rutas (F1, fase 2) [AC-FRUT-05] — §5.2-F1, §5.3, §5.7, §3.E1.5.
 //
@@ -109,11 +110,16 @@ export default function ArmarRutas() {
                   type="button"
                   data-testid={`encargo-${e.id}`}
                   aria-pressed={marcado}
-                  onClick={() =>
+                  onClick={() => {
+                    // Telemetría `toques_flujo` del §5.3 [AC-FRUT-19]: «publicar_dia» recorre
+                    // esta pantalla, «Listos para salir» y el botón de publicar — el contador
+                    // vive en sessionStorage (`cliente/toques-flujo.ts`) para sobrevivir a la
+                    // navegación entre las tres.
+                    registrarToque("publicar_dia");
                     setElegidos((previos) =>
                       marcado ? previos.filter((i) => i !== e.id) : [...previos, e.id],
-                    )
-                  }
+                    );
+                  }}
                   style={marcado ? filaMarcada : fila}
                 >
                   {/* Jamás solo color (§5.7): el ✓ dice lo mismo que el fondo. */}
@@ -132,7 +138,10 @@ export default function ArmarRutas() {
                 type="button"
                 data-testid={`vehiculo-${v.patente}`}
                 aria-pressed={vehiculo === v.id}
-                onClick={() => setVehiculo(v.id)}
+                onClick={() => {
+                  registrarToque("publicar_dia");
+                  setVehiculo(v.id);
+                }}
                 style={vehiculo === v.id ? chipMarcado : chip}
               >
                 {vehiculo === v.id ? "✓ " : ""}
@@ -144,7 +153,10 @@ export default function ArmarRutas() {
           <BotonPrimario
             testid="armar-ruta"
             disabled={elegidos.length === 0 || vehiculo === null}
-            onClick={() => void armar()}
+            onClick={() => {
+              registrarToque("publicar_dia");
+              void armar();
+            }}
           >
             Armar la ruta
           </BotonPrimario>
@@ -169,7 +181,12 @@ export default function ArmarRutas() {
               ))}
             </article>
           ))}
-          <a data-testid="ir-a-listos" href="/listos" style={enlace}>
+          <a
+            data-testid="ir-a-listos"
+            href="/listos"
+            style={enlace}
+            onClick={() => registrarToque("publicar_dia")}
+          >
             Ver si están listos para salir
           </a>
         </section>
