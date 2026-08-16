@@ -337,12 +337,27 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
       `audit_trail` con su antes/después exactos. `pnpm --filter flota exec playwright
       test e2e/modo.spec.ts e2e/gobierno.spec.ts` en PRIMER PLANO (20/20) y
       `bash packages/metodo/scripts/check.sh --full --app=flota` en verde.
-- [ ] (P1) Semántica del preset: la conmutación cambia el entitlement efectivo
+- [x] (P1) Semántica del preset: la conmutación cambia el entitlement efectivo
       (`override ?? plan`, §4.4) del grupo DaaS SIN mutar `plan_features` (fila
       compartida por los tenants del plan) ni filas de otro tenant, y rige recién en
       el próximo bootstrap (§3, §4.4, §5.5; el congelamiento por turno de
       `config_version_id` lo manda §5.5/§4.4 y su verificación pertenece al módulo
-      dueño de `turnos` — aquí no se abre turno) — oráculo: CI [AC-FPOR-16]
+      dueño de `turnos` — aquí no se abre turno) — oráculo: CI [AC-FPOR-16]. Probado:
+      la fórmula cruda (`entitlement_efectivo`, recorte→override→plan) ya la ejercía
+      `db/flota/suite-bd/control.test.mjs` [AC-FTEN-22]; faltaba probar el efecto por
+      el camino REAL de la app —`conmutarModo`/`PATCH /api/gobierno/modo`, el mismo de
+      AC-FPOR-15— acotado al propio tenant, y la congelación del §4.4. Nuevo
+      `e2e/preset-modo.spec.ts`: un plan propio con las 4 features del contratante y un
+      tenant vecino (control-only, `estado='suspendido'` para no entrar en el barrido
+      del exportador) que comparte ese plan — conmutar a `mi_flota` apaga las 4 en el
+      propio y dice ON en el vecino, y `plan_features` queda con las mismas filas
+      antes/después; y sellando `config_version` con `crear_config_version()` antes y
+      después de conmutar (sin abrir turno), la versión YA sellada queda con el valor
+      viejo —append-only— y solo la sellada DESPUÉS ve el cambio, mientras que
+      `entitlement_efectivo()` en `control` ya lo refleja de inmediato (la distinción
+      que hace cierto «rige recién en el próximo bootstrap»). `npx playwright test
+      e2e/preset-modo.spec.ts` 2/2 en PRIMER PLANO y
+      `bash packages/metodo/scripts/check.sh --full --app=flota` en verde.
 - [ ] (P1) Empresa implícita en mi_flota — efecto observable (el trigger es del
       módulo 03, §4.5; aquí solo se aserta su efecto): un tenant recién provisionado
       en modo `mi_flota` tiene exactamente UNA `empresa_cliente` — la implícita, la

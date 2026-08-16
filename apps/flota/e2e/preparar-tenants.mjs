@@ -87,6 +87,15 @@ export const TENANTS = [
   // la ventana de 7 días» sin mover el reloj del servidor — compartir base con otra suite del
   // portal dejaría liquidaciones cerradas o eventos retrasados que no son de nadie.
   { slug: "portal_liquidacion_disputa", estado: "activo" },
+  // Base PROPIA para la semántica del preset del selector de modo [AC-FPOR-16].
+  //
+  // Necesita, igual que `portal_cliente`, sellar `config_version` DIRECTO con
+  // `crear_config_version()` —dos veces, antes y después de conmutar, para demostrar que la
+  // primera queda congelada (append-only) y solo la segunda ve el cambio— y ADEMÁS registra un
+  // plan y un tenant vecino propios en `control` para probar que conmutar no mueve la fila
+  // compartida `plan_features` ni la del vecino. Compartir base con otra suite del portal
+  // dejaría versiones selladas o un `plan_id` que no son de nadie.
+  { slug: "preset_modo", estado: "activo" },
 ];
 
 /** Subdominio que jamás se registra. Nombrarlo acá evita que el test lo invente distinto. */
