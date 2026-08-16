@@ -5,6 +5,7 @@ import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
 import { rutDeFixture } from "../../../db/flota/ruts-sinteticos.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
 import { TACTIL } from "../../../packages/nucleo-comun/src/constants.ts";
+import { PUERTO_E2E } from "./puerto.ts";
 
 // Peek N1 [AC-FSEM-04] — §2.2, §2.4 de la spec 05.
 //
@@ -19,7 +20,7 @@ import { TACTIL } from "../../../packages/nucleo-comun/src/constants.ts";
 //       para probar el mecanismo de verdad. Se prueba con HTTP crudo (mismo patrón que
 //       `gobierno.spec.ts`) porque la identidad del tenant se juega en la cabecera `Host`.
 
-const PUERTO = 3311;
+const PUERTO = PUERTO_E2E;
 const DOMINIO = "localhost";
 const T = TENANTS.find((t) => t.slug === "hechos")!;
 const BD = bdDeTenant(T.slug);

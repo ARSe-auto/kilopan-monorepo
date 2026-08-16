@@ -3,6 +3,7 @@ import { request as pedir } from "node:http";
 import { con, BD_CONTROL, bdDeTenant } from "../../../db/flota/conectar.mjs";
 import { componer, tenantsRegistrados, POOL_POR_TENANT } from "../../../db/flota/pgbouncer.mjs";
 import { TENANTS, SLUG_INEXISTENTE } from "./preparar-tenants.mjs";
+import { PUERTO_E2E } from "./puerto.ts";
 
 // AC-FTEN-05 — ruteo subdominio → lookup en `control` → pool de SU base.
 //
@@ -16,7 +17,7 @@ import { TENANTS, SLUG_INEXISTENTE } from "./preparar-tenants.mjs";
 // El servidor lo levanta el `webServer` de Playwright: es el MISMO `servidor.mjs` que corre
 // en producción, con su build de producción. No hay simulación de nada.
 
-const PUERTO = 3311;
+const PUERTO = PUERTO_E2E;
 // El mismo dominio base que `playwright.config.ts` le pasa al servidor. Un valor distinto
 // acá haría que cada request diera 404 y el test estaría verde por la razón equivocada.
 const DOMINIO = "localhost";

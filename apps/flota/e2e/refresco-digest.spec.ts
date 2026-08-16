@@ -6,6 +6,7 @@ import { SEMAFORO } from "../../../packages/nucleo-comun/src/constants.ts";
 import { con, bdDeTenant } from "../../../db/flota/conectar.mjs";
 import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
 import { rutDeFixture } from "../../../db/flota/ruts-sinteticos.mjs";
+import { PUERTO_E2E } from "./puerto.ts";
 
 // Refresco degradable del digest [AC-FSEM-06] — spec 05 §2.6, §4.
 //
@@ -29,7 +30,7 @@ import { rutDeFixture } from "../../../db/flota/ruts-sinteticos.mjs";
 // tres mitades corren con el secreto de una dueña REAL enrolada acá — sin él, la guardia
 // respondería 404 pelado y ninguna de las tres probaría lo que dice probar.
 
-const PUERTO = 3311;
+const PUERTO = PUERTO_E2E;
 const DOMINIO = "localhost";
 const SLUG = "ruteo_activo";
 const HOST = `${SLUG}.${DOMINIO}:${PUERTO}`;

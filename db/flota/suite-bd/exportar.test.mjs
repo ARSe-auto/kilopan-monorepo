@@ -50,11 +50,13 @@ before(async () => {
   }
   await migrar();
   await limpiar();
+  // `provisionar()` da de alta el tenant en `control.tenants` [AC-FPOR-01]: ya no hace falta
+  // un INSERT manual acá (y uno lo pisaría con un duplicate key sobre `tenants_slug_key`).
   tenant = await provisionar(SLUG, { recrear: true });
   control = await conectar(BD_CONTROL);
   [{ id: idTenantEnControl }] = await control.sql(
-    "insert into tenants (slug, bd) values ($1, $2) returning id::text as id",
-    [SLUG, tenant.bd],
+    "select id::text as id from tenants where slug = $1",
+    [SLUG],
   );
 
   // Fixture de actividad DENTRO de la ventana, con `record_time` forzado: el doble reloj del

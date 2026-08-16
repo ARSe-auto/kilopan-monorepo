@@ -90,6 +90,16 @@ export async function conmutarModo(acto: Acto, modo: Modo): Promise<CambioDeModo
       const { rows } = await c.query<{ n: string }>(
         "select count(*)::text as n from empresas_cliente",
       );
+      // `tenant_info` no lleva el trigger genérico `auditar()` (solo el de la empresa
+      // implícita, 0039) — engancharlo pedía una migración, y el esquema es de sesión
+      // supervisada (AGENTS.md). Se escribe a mano, mismo patrón que `soporte.ts`
+      // (`registrarAcceso`) para lo que tampoco cuelga de ese trigger. AC-FPOR-15 exige
+      // «cada conmutación a audit_trail»: sin esta línea, el acto solo queda en `eventos`.
+      await c.query(
+        `insert into audit_trail (tabla, registro_id, operacion, antes, despues)
+         values ('tenant_info', $1::uuid, 'UPDATE', $2::jsonb, $3::jsonb)`,
+        [info[0]!.id, JSON.stringify({ modo: anterior }), JSON.stringify({ modo })],
+      );
       await registrarEvento(c, {
         codigo: EVENTOS.modo_conmutado,
         objetoTabla: "tenant_info",

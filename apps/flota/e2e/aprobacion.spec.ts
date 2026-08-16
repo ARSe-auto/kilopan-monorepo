@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { abrir, parDelAparato, hashDeSecreto } from "../src/dominio/secretos.ts";
 import { codigoNuevo, hashDeCodigo, expiraEn } from "../src/dominio/invitaciones.ts";
 import { aprobar, rechazar, retirarSobre } from "../src/servidor/aprobacion.ts";
-import { con, bdDeTenant, CLUSTER_LOCAL, ROL_MIGRADOR } from "../../../db/flota/conectar.mjs";
+import { con, bdDeTenant, ROL_MIGRADOR, destinoDelCluster } from "../../../db/flota/conectar.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
 
 // La aprobación del dueño contra la base de verdad [AC-FIDN-04] — §4.3, §5.4 F-C.
@@ -52,8 +52,8 @@ async function solicitudPendiente(rol: string, rut: string, nombre = "Quien soli
 
 test.beforeAll(async () => {
   pool = new Pool({
-    host: CLUSTER_LOCAL.host,
-    port: CLUSTER_LOCAL.puerto,
+    host: destinoDelCluster().host,
+    port: Number(destinoDelCluster().puerto),
     database: BD_A,
     user: ROL_MIGRADOR,
   });

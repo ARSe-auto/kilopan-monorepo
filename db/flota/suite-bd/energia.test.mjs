@@ -11,7 +11,7 @@
 // calcula sobre esta misma tabla— no tendría de dónde salir.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { provisionar } from "../provisionar.mjs";
+import { provisionar, desalta } from "../provisionar.mjs";
 import { borrarRolDeApp } from "../rol-app.mjs";
 import { con, conectar, ROL_MIGRADOR, bdDeTenant } from "../conectar.mjs";
 
@@ -36,6 +36,9 @@ async function comoRol(rol, fn) {
 }
 
 async function limpiar() {
+  // Complemento del alta en `control.tenants` [AC-FPOR-01]: sin esto, la fila sobrevive al
+  // DROP DATABASE y el job exportador la reporta huérfana en la corrida siguiente.
+  await desalta(SLUG);
   await con("postgres", ({ sql }) => sql(`drop database if exists ${bdDeTenant(SLUG)} with (force)`));
   await borrarRolDeApp(SLUG);
 }

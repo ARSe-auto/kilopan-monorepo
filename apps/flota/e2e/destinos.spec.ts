@@ -4,6 +4,7 @@ import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
 import { VALIDOS } from "../../../db/flota/ruts-sinteticos.mjs";
 import { limpiarFixture, limpiarBandeja } from "./limpiar.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
+import { origenDe } from "./puerto.ts";
 
 // Un destino SIN coordenadas opera igual que uno con ellas [AC-FRUT-15] — §4.5, §7.6, §3.E2.
 //
@@ -194,7 +195,7 @@ test("[AC-FRUT-15] la pantalla de armado muestra el destino sin coordenadas como
     void guardar();
   }, SECRETO);
 
-  await page.goto(`http://${A.slug}.localhost:3311/rutas`);
+  await page.goto(`${origenDe(A.slug)}/rutas`);
   await expect(page.getByTestId("armar-rutas")).toBeVisible();
 
   // Se elige por NOMBRE, que es lo que el operador conoce. Un destino que apareciera atenuado,

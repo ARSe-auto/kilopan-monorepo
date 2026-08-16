@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { volcarTenant, restaurarEn, volcadoIncluye } from "../offboarding.mjs";
 import { migrar } from "../migrar.mjs";
-import { provisionar } from "../provisionar.mjs";
+import { provisionar, desalta } from "../provisionar.mjs";
 import { borrarRolDeApp } from "../rol-app.mjs";
 import { con, conectar, ROL_MIGRADOR, bdDeTenant } from "../conectar.mjs";
 
@@ -31,6 +31,9 @@ let carpeta;
 let volcado;
 
 async function limpiar() {
+  // Complemento del alta en `control.tenants` [AC-FPOR-01]: sin esto, la fila sobrevive al
+  // DROP DATABASE y el job exportador la reporta huérfana en la corrida siguiente.
+  await desalta(SLUG);
   await con("postgres", async ({ sql }) => {
     await sql(`drop database if exists ${bdDeTenant(SLUG)} with (force)`);
     await sql(`drop database if exists ${RESTAURADA} with (force)`);

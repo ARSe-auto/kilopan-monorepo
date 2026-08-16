@@ -23,7 +23,10 @@
 import { createServer } from "node:http";
 import next from "next";
 import { resolverHost } from "./src/servidor/ruteo.ts";
-import { respuestaSinTenant, respuestaSuspendido } from "./src/servidor/paginas-estado.ts";
+import { respuestaSinTenant, respuestaSuspendido, respuestaPortalApagado } from "./src/servidor/paginas-estado.ts";
+import { esRutaDelPortalCliente } from "./src/dominio/portal-ruta.ts";
+import { portalClienteEncendido } from "./src/servidor/portal.ts";
+import { poolDe } from "./src/servidor/conexion.ts";
 
 const dev = process.env.NODE_ENV !== "production";
 const puerto = Number(process.env.PORT || 3310);
@@ -58,6 +61,18 @@ createServer(async (req, res) => {
     // tenant mandando una cabecera y todo el aislamiento del §4.1 se caería por ahí.
     req.headers["x-flota-tenant-slug"] = veredicto.slug;
     req.headers["x-flota-tenant-bd"] = veredicto.bd;
+
+    // El portal del contratante [AC-FPOR-04] — spec 07 §1: apagado (mi_flota u override) ⇒
+    // 403 en TODA ruta `/cliente/*`, antes de que Next vea el request. Mismo motivo que el
+    // 404/503 de arriba (comentario de cabecera): un Server Component no puede fijar el
+    // status, así que el candado no puede vivir en un layout.
+    if (esRutaDelPortalCliente(req.url)) {
+      const pool = poolDe(veredicto.bd);
+      if (!(await portalClienteEncendido(pool, veredicto.slug))) {
+        return await responder(res, respuestaPortalApagado());
+      }
+    }
+
     await atender(req, res);
   } catch (error) {
     // Un fallo del plano de control no puede terminar sirviendo la base de nadie: si no se

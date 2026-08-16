@@ -5,6 +5,7 @@ import { VALIDOS } from "../../../db/flota/ruts-sinteticos.mjs";
 import { limpiarFixture, limpiarBandeja } from "./limpiar.mjs";
 import { registrarBaseline } from "./baseline-acciones.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
+import { PUERTO_E2E } from "./puerto.ts";
 
 // Armar y publicar el día en ≤15 clics, y los tres rebotes de planificación [AC-FRUT-05]
 // — §5.2-F1, §5.3, §4.2, §4.5, §9.3.5.
@@ -25,7 +26,7 @@ import { TENANTS } from "./preparar-tenants.mjs";
 
 const A = TENANTS.filter((t) => t.estado === "activo")[0]!;
 const BD_A = bdDeTenant(A.slug);
-const EN_A = `http://${A.slug}.localhost:3311`;
+const EN_A = `http://${A.slug}.localhost:${PUERTO_E2E}`;
 type Conexion = { sql: <T = Record<string, string>>(t: string, p?: unknown[]) => Promise<T[]> };
 
 const RUT_OPERADOR = Object.keys(VALIDOS)[1]!;

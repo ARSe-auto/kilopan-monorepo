@@ -7,6 +7,7 @@ import { registrarBaseline } from "./baseline-acciones.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
 import { CIFRA_OPERATIVA, RELOJ, UNDO } from "../../../packages/nucleo-comun/src/constants.ts";
 import { createHash } from "node:crypto";
+import { PUERTO_E2E } from "./puerto.ts";
 
 // La recepción de carga en el andén (F2) [AC-FRUT-07] — §5.2 F2, §5.3, §0, §4.7, §7.6.
 //
@@ -34,7 +35,7 @@ import { createHash } from "node:crypto";
 // las demás — que fue exactamente lo que pasó.
 const A = TENANTS.find((t) => t.slug === "hechos")!;
 const BD_A = bdDeTenant(A.slug);
-const EN_A = `http://${A.slug}.localhost:3311`;
+const EN_A = `http://${A.slug}.localhost:${PUERTO_E2E}`;
 type Conexion = { sql: <T = Record<string, string>>(t: string, p?: unknown[]) => Promise<T[]> };
 
 const SECRETO = secretoNuevo();

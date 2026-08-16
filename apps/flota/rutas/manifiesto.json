@@ -1114,6 +1114,212 @@
       }
     },
     {
+      "ruta": "/cliente",
+      "archivo": "src/app/cliente/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Raíz del namespace del portal del contratante (§3.E1.10) [AC-FPOR-04]. No recibe identificador por URL, así que el cruce que aplica es el genérico —identidad de B por los canales falsificables (host propio de A + cabeceras de tenant apuntando a B)—, PERO acá pesa distinto que en el resto del panel: antes de que Next vea el request, `servidor.mjs` ya decidió 403 si el portal está apagado para el tenant resuelto por el HOST, nunca por una cabecera. Contra el vecino B, el host de A resuelve el pool de A (AC-FTEN-05) y el entitlement que se consulta es el de A — la respuesta jamás depende de lo que A haya mandado sobre B."
+      }
+    },
+    {
+      "ruta": "/cliente/api/encargos",
+      "archivo": "src/app/cliente/api/encargos/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "GET: la lista de encargos propios [AC-FPOR-07], sin cambios. POST: el alta del contratante [AC-FPOR-08] — sin identificador por URL, y el `empresa_cliente_id` con el que se inserta sale SIEMPRE de `sesion.empresaClienteId`, jamás del body (a diferencia de `/api/encargos` del operador, que sí lo recibe porque elige entre varias). Contra el vecino B, el host de A resuelve el pool y la sesión de A (AC-FTEN-05); no hay ningún campo de la petición que pueda hacer que la fila nazca con la empresa de B."
+      }
+    },
+    {
+      "ruta": "/cliente/api/encargos/[id]",
+      "archivo": "src/app/cliente/api/encargos/[id]/route.ts",
+      "metodos": [
+        "GET",
+        "PATCH"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "encargos",
+          "columna": "id"
+        },
+        "nota": "GET ya probado en AC-FPOR-06. PATCH: la corrección del contratante, solo hasta la aceptación [AC-FPOR-08] — `editarEncargo` (servidor/encargos.ts, AC-FRUT-03) da 404 (`no_existe`) igual para un id de otro tenant que para uno inexistente, y 404 también (`no_es_de_su_creador`) para un encargo de OTRO usuario de la MISMA empresa, así que ni siquiera dentro del propio tenant se enumera de quién es cada fila. Contra un tenant vecino el id de B ni está en esta base (§4.1). Contrato 404 y BD de B sin cambios."
+      }
+    },
+    {
+      "ruta": "/cliente/api/encargos/importar",
+      "archivo": "src/app/cliente/api/encargos/importar/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Import CSV del portal del contratante [AC-FPOR-09] — sin identificador por URL, y la `empresa_cliente_id` con la que se inserta cada fila sale SIEMPRE de `sesion.empresaClienteId` (mismo candado que `/cliente/api/encargos` POST, AC-FPOR-08), jamás de una columna del archivo. Contra el vecino B, el host de A resuelve el pool y la sesión de A (AC-FTEN-05); ninguna fila del CSV que suba A puede nacer con la empresa de B, y RLS (`empresa_del_cliente`, 0040) confina igual la escritura aunque el servidor tuviera un bug."
+      }
+    },
+    {
+      "ruta": "/cliente/api/evidencias/[id]",
+      "archivo": "src/app/cliente/api/evidencias/[id]/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "evidence",
+          "columna": "id"
+        },
+        "nota": "Una evidencia (`evidence`, §4.6) del contratante [AC-FPOR-06]. Sin columna de empresa propia, se confina por JOIN contra `paradas` (RLS de 0040, por sus ítems) — el join es la garantía, no un `where` que se pueda olvidar. Contra un tenant vecino el id de B ni siquiera está en esta base. Contrato 404 y BD de B sin cambios."
+      }
+    },
+    {
+      "ruta": "/cliente/api/liquidacion-lineas/[id]",
+      "archivo": "src/app/cliente/api/liquidacion-lineas/[id]/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "liquidacion_lineas",
+          "columna": "id"
+        },
+        "nota": "Una línea de liquidación del contratante, leída vía `liquidacion_lineas_cliente` (0067) [AC-FPOR-06]. RLS de `liquidacion_lineas` (0063) confina por `empresa_cliente_id`; trae cada monto CLP de la línea — exactamente lo que el §3.E1.10 reserva a SU empresa, cruzando además el límite de tenant. Contrato 404 y BD de B sin cambios."
+      }
+    },
+    {
+      "ruta": "/cliente/api/liquidacion-lineas/[id]/disputa",
+      "archivo": "src/app/cliente/api/liquidacion-lineas/[id]/disputa/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "liquidacion_lineas",
+          "columna": "id"
+        },
+        "nota": "La disputa por línea del contratante [AC-FPOR-10]. `disputarLineaDelCliente` (servidor/portal-cliente.ts) filtra `liquidacion_lineas_cliente where id = $1 and empresa_cliente_id = $2` A MANO antes de invocar `disputar_linea()` (0066) — necesario porque el pool conecta como `flota_admin` (`rolbypassrls=true`) y la RLS de la función nunca se evalúa sobre esta conexión (cabecera de `portal-cliente.ts`). Contra un id de la empresa vecina o de otro tenant, el filtro no encuentra fila: 404 y CERO escritura — el POST MUTA (`disputa_estado`, evento `liquidacion_linea.disputada`) y por eso este caso enciende además el comparador de huella de la BD de B: una disputa escrita en el vecino no se puede deshacer (E1 no construye resolución, spec 06 Pregunta 4) y contaminaría su registro de reclamo."
+      }
+    },
+    {
+      "ruta": "/cliente/api/liquidacion-lineas/[id]/evidencia",
+      "archivo": "src/app/cliente/api/liquidacion-lineas/[id]/evidencia/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "liquidacion_lineas",
+          "columna": "id"
+        },
+        "nota": "El drill-down línea→evidencia del contratante [AC-FPOR-10], gemelo confinado de `/api/liquidacion-lineas/[id]/evidencia` del operador (AC-FTAR-07). `evidenciaDeLineaDelCliente` confirma PRIMERO que la línea es de la empresa de la sesión vía `liquidacion_lineas_cliente` (mismo filtro explícito que el resto de este archivo, RLS no evaluada por `flota_admin`) y solo entonces lee `entregas_pod`/`evidence`. Contra un id de la empresa vecina o de otro tenant, el filtro inicial no encuentra fila: 404 y BD de B sin cambios."
+      }
+    },
+    {
+      "ruta": "/cliente/api/liquidaciones",
+      "archivo": "src/app/cliente/api/liquidaciones/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La lista de cabeceras de liquidación propias del portal [AC-FPOR-07]. Mismo argumento que `/cliente/api/encargos`: sin identificador, confinada por `empresa_cliente_id` de la sesión dentro de `liquidacionesDelCliente` sobre `liquidacion_cliente` (0067) — la vía sancionada del §4.3. Nada que un vecino B pueda mandar en la petición cambia de qué tenant sale la sesión."
+      }
+    },
+    {
+      "ruta": "/cliente/api/liquidaciones/[id]",
+      "archivo": "src/app/cliente/api/liquidaciones/[id]/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "liquidaciones",
+          "columna": "id"
+        },
+        "nota": "La liquidación del contratante con sus líneas, leída vía `liquidacion_cliente`/`liquidacion_lineas_cliente` (0067) [AC-FPOR-06]. RLS de `liquidaciones` (0063) confina por `empresa_cliente_id`; trae el período y cada monto CLP de sus líneas, cruzando además el límite de tenant. Contrato 404 y BD de B sin cambios."
+      }
+    },
+    {
+      "ruta": "/cliente/api/motivos-disputa",
+      "archivo": "src/app/cliente/api/motivos-disputa/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "El catálogo de motivos de disputa [AC-FPOR-10] — filtrado por `estado_asociado = 'liquidacion_linea_disputada'`, jamás el catálogo de no-entrega del terreno. Sin identificador por URL; `motivos` es una tabla del TENANT (no de la empresa contratante), así que no hay cruce intra-tenant que probar acá — el host de A resuelve el pool de A (AC-FTEN-05) y el catálogo que sale es siempre el del tenant de la sesión."
+      }
+    },
+    {
+      "ruta": "/cliente/encargos",
+      "archivo": "src/app/cliente/encargos/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La pantalla «Encargos» del portal [AC-FPOR-07]. El Server Component no lee sesión ni datos de negocio — es un shell «use client» que pide `/cliente/api/encargos` con `pedir()` (la credencial del aparato). El candado de módulo (AC-FPOR-04, servidor.mjs) ya cierra el namespace por HOST antes de que Next reciba el request; contra el vecino B no hay nada que este archivo pueda filtrar mal, porque no filtra nada — reenvía lo que la API ya confinó."
+      }
+    },
+    {
+      "ruta": "/cliente/liquidaciones",
+      "archivo": "src/app/cliente/liquidaciones/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La pantalla «Liquidación» del portal [AC-FPOR-07]. Mismo shell que «Encargos»: Server Component sin sesión ni datos propios, «use client» que pide `/cliente/api/liquidaciones`. Nada que filtrar mal acá — el candado y la confinación viven antes."
+      }
+    },
+    {
+      "ruta": "/cliente/nuevo",
+      "archivo": "src/app/cliente/nuevo/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La pantalla «Nuevo / Importar CSV» del portal [AC-FPOR-07]. Server Component ESTÁTICO: sin fetch, sin sesión, sin dato de ningún tenant — la mutación de alta (AC-FPOR-08) y el import (AC-FPOR-09) todavía no existen. Nada que un vecino B pueda cruzar contra algo que no lee ni escribe nada."
+      }
+    },
+    {
       "ruta": "/entrega",
       "archivo": "src/app/entrega/page.tsx",
       "metodos": [

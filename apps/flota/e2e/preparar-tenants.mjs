@@ -51,6 +51,79 @@ export const TENANTS = [
   // usuarios (`admin_tenant` ⇄ `operador`) y deja passkeys registradas, y compartir la base
   // de `gobierno` le movería el rol a la dueña que esa suite da por fija en su `beforeAll`.
   { slug: "transferencia", estado: "activo" },
+  // Base PROPIA para el gate HTTP del portal del contratante [AC-FPOR-04].
+  //
+  // La suite sella `config_version` DIRECTO con `crear_config_version()` para fijar el
+  // entitlement `portal_contratante` en ON y en OFF —el sembrado real vía `plan_features`/
+  // overrides es del hito (g), que todavía no existe (mismo motivo que `manifest.ts` fija sus
+  // entitlements por fixture)—, y `config_version` es APPEND-ONLY: compartiendo la base del
+  // primer activo, la versión que otra suite ya selló seguiría siendo la vigente y esta suite
+  // no podría demostrar el ON después del OFF dentro de la MISMA base.
+  { slug: "portal_cliente", estado: "activo" },
+  // Base PROPIA para la suite de aislamiento intra-tenant del portal [AC-FPOR-06].
+  //
+  // Necesita, igual que `portal_cliente`, sellar `config_version` DIRECTO con
+  // `crear_config_version()` para encender `portal_contratante` — y por la misma razón NO
+  // puede compartir la base de `portal_cliente`: esa suite deja el entitlement en su último
+  // `sellarEntitlement(true)` de OFF→ON, pero conviene que cada suite controle su propio
+  // sellado en vez de depender del orden en que Playwright corra los archivos.
+  { slug: "portal_aislamiento", estado: "activo" },
+  // Base PROPIA para el e2e de navegador del manifest del portal [AC-FPOR-07].
+  //
+  // A diferencia de `portal_aislamiento` y `portal_cliente` (HTTP crudo con `playwrightRequest`),
+  // esta suite navega con `page.goto()` real —la sesión vive en el IndexedDB del navegador, mismo
+  // mecanismo que `pod-feliz.spec.ts`— y necesita recorrer las CUATRO pantallas sin que otra
+  // suite haya dejado el tenant en un estado distinto a mitad de la corrida.
+  { slug: "portal_manifest", estado: "activo" },
+  // Base PROPIA para el ciclo del encargo solicitado del portal [AC-FPOR-08].
+  //
+  // Misma razón que `portal_aislamiento`/`portal_manifest`: sella `config_version` DIRECTO con
+  // `crear_config_version()` para encender `portal_contratante`, y esta suite además ACEPTA
+  // encargos a mitad de corrida (transición `solicitado → aceptado`, la que cierra la ventana
+  // de edición del §3.E1.10) — compartir base con otra suite del portal dejaría encargos
+  // aceptados a medio camino que no son de nadie.
+  { slug: "portal_encargos_alta", estado: "activo" },
+  // Base PROPIA para la disputa de liquidación por línea del portal [AC-FPOR-10].
+  //
+  // Misma razón que `portal_encargos_alta`: sella `config_version` DIRECTO con
+  // `crear_config_version()` para encender `portal_contratante`, y esta suite además CIERRA
+  // liquidaciones y les RETRASA el evento `liquidacion.cerrada` para fabricar el caso «fuera de
+  // la ventana de 7 días» sin mover el reloj del servidor — compartir base con otra suite del
+  // portal dejaría liquidaciones cerradas o eventos retrasados que no son de nadie.
+  { slug: "portal_liquidacion_disputa", estado: "activo" },
+  // Base PROPIA para la semántica del preset del selector de modo [AC-FPOR-16].
+  //
+  // Necesita, igual que `portal_cliente`, sellar `config_version` DIRECTO con
+  // `crear_config_version()` —dos veces, antes y después de conmutar, para demostrar que la
+  // primera queda congelada (append-only) y solo la segunda ve el cambio— y ADEMÁS registra un
+  // plan y un tenant vecino propios en `control` para probar que conmutar no mueve la fila
+  // compartida `plan_features` ni la del vecino. Compartir base con otra suite del portal
+  // dejaría versiones selladas o un `plan_id` que no son de nadie.
+  { slug: "preset_modo", estado: "activo" },
+  // Base PROPIA para el import CSV del portal del contratante [AC-FPOR-09].
+  //
+  // Misma razón que `portal_encargos_alta`: sella `config_version` DIRECTO con
+  // `crear_config_version()` para encender `portal_contratante`, y esta suite además crea
+  // encargos por lote (import bueno, replay, lote mixto) que otra suite del portal no puede
+  // compartir sin arrastrar filas de una importación ajena en sus conteos.
+  { slug: "portal_importar_csv", estado: "activo" },
+  // Base PROPIA para el detalle de encargo con resultado y evidencia del portal [AC-FPOR-11].
+  //
+  // Misma razón que sus hermanas del portal: sella `config_version` DIRECTO con
+  // `crear_config_version()` para encender `portal_contratante`, y esta suite además siembra
+  // una RUTA con una parada de un TERCERO (mismo `orden`, mismo `ruta_id`) para probar que el
+  // detalle del encargo propio jamás la expone — compartir base con otra suite del portal
+  // dejaría entregas/evidencia de un fixture ajeno colgando de esa misma ruta.
+  { slug: "portal_encargo_detalle", estado: "activo" },
+  // Base PROPIA para el gate GUI por sub-checks del portal [AC-FPOR-12].
+  //
+  // Misma razón que sus hermanas del portal: sella `config_version` DIRECTO con
+  // `crear_config_version()` para encender `portal_contratante`, y esta suite además navega
+  // las CUATRO pantallas con sesión de navegador real —doble terminología, claro/oscuro,
+  // offline— para dos empresas (A con datos, B vacía). Compartir base con otra suite del
+  // portal dejaría encargos/liquidaciones ajenos contaminando el vacío accionable de B o el
+  // contenido esperado de A.
+  { slug: "portal_aa_estados", estado: "activo" },
 ];
 
 /** Subdominio que jamás se registra. Nombrarlo acá evita que el test lo invente distinto. */
@@ -230,6 +303,14 @@ async function sembrarIdentidadDelVecino(slug) {
       [empresaDelVecino.id],
     );
     await sql("select devengar_entrega($1, $2)", [podDelVecino.id, liquidacionDelVecino.id]);
+    // Y una EVIDENCIA colgada de esa misma parada [AC-FPOR-06]: `/cliente/api/evidencias/[id]`
+    // es de tipo recurso y el caso del centinela 2 saca de acá el id REAL con el que A intenta
+    // leer una foto o firma del vecino desde su propio portal.
+    await sql(
+      `insert into evidence (tipo, objeto_tabla, objeto_id, capturada_en, tz_offset_min)
+       values ('foto', 'paradas', $1, now(), -240)`,
+      [paradaDelVecino.id],
+    );
   });
 }
 

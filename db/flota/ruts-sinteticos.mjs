@@ -67,6 +67,8 @@ export const VALIDOS = {
   "76.543.219-7": "la empresa cliente del drill-down línea→evidencia (AC-FTAR-07): rango 76.xxx de persona jurídica, propia y no prestada — la suite necesita SU propia empresa contratante para sembrar tarifa y encargo sin pisar la de otro módulo",
   "76.222.333-3": "la empresa cliente de la contracción sin pérdida de filas del módulo de tarifas (AC-FTAR-12): rango 76.xxx de persona jurídica, propia y no prestada — la suite necesita SU propia empresa para sembrar tarifa+zona+recargo+liquidación+línea sin pisar la de AC-FTAR-07 ni de AC-FTAR-10",
   "6.396.828-5": "el operario C de la transferencia de propiedad con passkey (AC-FIDN-13), propio y no prestado: la ceremonia muta el rol de A y de C en el mismo acto (admin_tenant ⇄ operador/chofer), así que el tercer operario necesita su propia identidad para no pisar el rol que otra suite da por fijo",
+  "19.283.746-4": "el cliente del detalle de encargo con evidencia (AC-FPOR-11), propio y no prestado: los índices 9 y 10 que la suite pedía originalmente ya eran de pod-variantes.spec.ts y pod-offline.spec.ts — gate-fixtures-exclusivos.mjs lo atajó antes de llegar a producción",
+  "76.445.588-6": "la empresa contratante del detalle de encargo con evidencia (AC-FPOR-11), propia y no prestada: rango 76.xxx de persona jurídica, mismo motivo que el RUT de arriba",
 };
 
 /**

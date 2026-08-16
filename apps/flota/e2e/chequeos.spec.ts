@@ -5,6 +5,7 @@ import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
 import { VALIDOS } from "../../../db/flota/ruts-sinteticos.mjs";
 import { limpiarFixture } from "./limpiar.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
+import { PUERTO_E2E } from "./puerto.ts";
 
 // Chequeos pre/post OK-por-defecto y el ciclo del defecto [AC-FVEH-04] — §4.2, §5.2-F3/F5,
 // §7.6, §6, §9.3 centinelas 1 y 4.
@@ -31,7 +32,7 @@ const A = TENANTS.find((t) => t.slug === "hechos")!;
 const BD_A = bdDeTenant(A.slug);
 /** El host del tenant propio. `baseURL` apunta al primer activo, así que las peticiones de esta
  *  suite van con URL absoluta: el ruteo por subdominio (AC-FTEN-05) es quien elige la base. */
-const EN_HECHOS = `http://${A.slug}.localhost:3311`;
+const EN_HECHOS = `http://${A.slug}.localhost:${PUERTO_E2E}`;
 type Conexion = { sql: <T = Record<string, string>>(t: string, p?: unknown[]) => Promise<T[]> };
 
 const RUT_CHOFER = Object.keys(VALIDOS)[2]!;

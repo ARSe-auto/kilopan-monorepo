@@ -1,11 +1,12 @@
 import { test, expect, type Page } from "@playwright/test";
 import { Pool } from "pg";
-import { con, bdDeTenant, CLUSTER_LOCAL, ROL_MIGRADOR } from "../../../db/flota/conectar.mjs";
+import { con, bdDeTenant, ROL_MIGRADOR, destinoDelCluster } from "../../../db/flota/conectar.mjs";
 import { rutDeFixture } from "../../../db/flota/ruts-sinteticos.mjs";
 import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
 import { fijarPin } from "../src/servidor/pin.ts";
 import { TENANTS } from "./preparar-tenants.mjs";
 import { UNDO } from "../../../packages/nucleo-comun/src/constants.ts";
+import { PUERTO_E2E } from "./puerto.ts";
 
 // El centinela 9 del §9.3 (§4.7), ejercido sobre el dispositivo de ANDÉN [AC-FIDN-07] — §4.3,
 // §5.4 F-D.
@@ -32,7 +33,7 @@ import { UNDO } from "../../../packages/nucleo-comun/src/constants.ts";
 
 const A = TENANTS.find((t) => t.slug === "hechos")!;
 const BD_A = bdDeTenant(A.slug);
-const EN_A = `http://${A.slug}.localhost:3311`;
+const EN_A = `http://${A.slug}.localhost:${PUERTO_E2E}`;
 type Conexion = { sql: <T = Record<string, string>>(t: string, p?: unknown[]) => Promise<T[]> };
 
 const RUT_OPERARIO_A = rutDeFixture(24);
@@ -49,8 +50,8 @@ const usuarios: Record<string, string> = {};
 
 test.beforeAll(async () => {
   pool = new Pool({
-    host: CLUSTER_LOCAL.host,
-    port: CLUSTER_LOCAL.puerto,
+    host: destinoDelCluster().host,
+    port: Number(destinoDelCluster().puerto),
     database: BD_A,
     user: ROL_MIGRADOR,
   });

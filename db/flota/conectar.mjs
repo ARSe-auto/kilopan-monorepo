@@ -72,6 +72,25 @@ function baseDelEntorno() {
   return `postgres://${CLUSTER_LOCAL.superusuario}@${CLUSTER_LOCAL.host}:${CLUSTER_LOCAL.puerto}/postgres`;
 }
 
+/**
+ * Host, puerto y usuario EFECTIVOS del cluster: los de `FLOTA_DATABASE_URL` si está definida, y
+ * si no los del cluster local.
+ *
+ * Existe porque `pg_dump` y `psql` reciben el destino por BANDERAS y no por cadena de conexión:
+ * quien las arma leyendo `CLUSTER_LOCAL` a mano queda clavado al 54331 aunque el entorno diga
+ * otra cosa. Con dos motores —cada uno con su cluster— eso significaba que el segundo volcaba y
+ * restauraba en las bases del PRIMERO sin que nada lo delatara (12-ago-2026: la suite de
+ * tenancy del worktree 2 falló con «t_gate_offb does not exist» contra el 54331).
+ */
+export function destinoDelCluster() {
+  const u = new URL(baseDelEntorno());
+  return {
+    host: u.hostname || CLUSTER_LOCAL.host,
+    puerto: u.port || String(CLUSTER_LOCAL.puerto),
+    usuario: decodeURIComponent(u.username) || CLUSTER_LOCAL.superusuario,
+  };
+}
+
 /** Cadena de conexión a una base concreta del cluster, con el rol que se pida. */
 export function urlDe(bd, { usuario, clave } = {}) {
   const base = new URL(baseDelEntorno());

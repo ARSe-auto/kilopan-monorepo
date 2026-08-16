@@ -5,6 +5,7 @@ import { codigoNuevo, hashDeCodigo } from "../src/dominio/invitaciones.ts";
 import { expiraEn } from "../src/dominio/invitaciones.ts";
 import { VALIDOS, INVALIDOS_A_PROPOSITO } from "../../../db/flota/ruts-sinteticos.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
+import { PUERTO_E2E } from "./puerto.ts";
 
 // El RUT en la pantalla y en el servidor [AC-FIDN-17] — §0, §4.2, §4.3, §5.4 F-B.
 //
@@ -20,7 +21,7 @@ import { TENANTS } from "./preparar-tenants.mjs";
 // Los RUTs salen de la lista congelada de AC-FIDN-21 y no de la cabeza: acá se necesita uno
 // que el módulo 11 RECHACE, y esa lista ya declara cuáles son y por qué.
 
-const PUERTO = 3311;
+const PUERTO = PUERTO_E2E;
 const A = TENANTS.filter((t) => t.estado === "activo")[0]!;
 const BD_A = bdDeTenant(A.slug);
 type Conexion = { sql: <T = Record<string, string>>(t: string, p?: unknown[]) => Promise<T[]> };

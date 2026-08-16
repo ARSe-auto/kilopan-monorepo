@@ -105,4 +105,8 @@ export const FEATURES = {
   // El módulo de encargos, rutas y custodia. Apagarlo NO rebota una captura de terreno: la
   // marca con `modulo_apagado` y la deja entrar [AC-FRUT-10] (§0, §5.5).
   modulo_encargos: "modulo_encargos",
+  // El namespace `/cliente/*`, el `feature_lookup_key` que `modo_recorte` apaga en `mi_flota`
+  // (db/migraciones-flota/control/0003_modo_como_preset.sql) [AC-FPOR-04]. El portal es 100%
+  // planificación/lectura: apagado ⇒ 403 en TODA ruta del namespace, jamás el flag de captura.
+  portal_contratante: "portal_contratante",
 } as const;

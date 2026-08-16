@@ -26,9 +26,24 @@ const MUTA = new Set(["POST", "PUT", "PATCH", "DELETE"]);
  */
 const LINEA_MANUAL = [/\blineas?\b/i, /linea[-_]?manual/i, /crear[-_]?linea/i, /agregar[-_]?linea/i];
 
+/**
+ * La disputa por línea [AC-FTAR-06, AC-FPOR-10] MUTA `liquidacion_lineas` — pero NO crea ni
+ * edita el hecho de la línea (evidencia, monto, concepto): escribe SOLO las columnas
+ * `disputa_*` sobre una línea que YA existe, vía `disputar_linea()` (0066), una función
+ * distinta de `devengar_entrega()` con su propia guardia (RLS de `aplicar_rls_de_empresa`,
+ * ventana de 7 días, catálogo de motivos). El §7.5 que este test vigila es «ninguna línea nace
+ * fuera del devengo» — una disputa no hace nacer ninguna línea, así que no es el caso que la
+ * regla prohíbe. Sin esta excepción, CUALQUIER mutación futura sobre una línea existente
+ * (disputa, o lo que venga después) quedaría bloqueada por el mismo patrón de nombre.
+ */
+const NO_ES_LINEA_MANUAL = [/\/disputa$/];
+
 test("[AC-FTAR-04] el manifiesto no declara NINGUNA ruta que MUTE una línea de liquidación a mano", () => {
   const sospechosas = MANIFIESTO.rutas.filter(
-    (r) => r.metodos.some((m) => MUTA.has(m)) && LINEA_MANUAL.some((p) => p.test(r.ruta)),
+    (r) =>
+      r.metodos.some((m) => MUTA.has(m)) &&
+      LINEA_MANUAL.some((p) => p.test(r.ruta)) &&
+      !NO_ES_LINEA_MANUAL.some((p) => p.test(r.ruta)),
   );
   assert.deepEqual(
     sospechosas.map((r) => r.ruta),
@@ -74,4 +89,22 @@ test("[AC-FTAR-04] el drill-down línea→evidencia (GET) no dispararía el gate
   const rutaFutura = "/api/liquidaciones/[id]/lineas/[lineaId]/evidencia";
   assert.ok(LINEA_MANUAL.some((p) => p.test(rutaFutura)), "el patrón de nombre sí matchea");
   assert.ok(!MUTA.has("GET"), "pero GET no está en el set de métodos que mutan");
+});
+
+test("[AC-FTAR-04] la excepción de /disputa es angosta: no perdona una ruta de línea manual disfrazada", () => {
+  // La excepción de arriba SOLO exime el sufijo exacto `/disputa` — una ruta que intentara
+  // colarse con un nombre parecido (o la propia ruta de disputa expuesta SIN ese sufijo) sigue
+  // cayendo en el gate. Sin este test, ensanchar `NO_ES_LINEA_MANUAL` por error (p. ej. a
+  // `/disputa.*/`) pasaría en silencio.
+  for (const ruta of [
+    "/cliente/api/liquidacion-lineas/[id]",
+    "/cliente/api/liquidacion-lineas/[id]/disputa-y-editar",
+    "/api/liquidaciones/[id]/lineas",
+  ]) {
+    const sospechosa =
+      MUTA.has("POST") &&
+      LINEA_MANUAL.some((p) => p.test(ruta)) &&
+      !NO_ES_LINEA_MANUAL.some((p) => p.test(ruta));
+    assert.ok(sospechosa, `«${ruta}» debería seguir cayendo en el gate con método POST`);
+  }
 });

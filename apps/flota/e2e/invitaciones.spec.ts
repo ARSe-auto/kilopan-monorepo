@@ -3,6 +3,7 @@ import { request as pedir } from "node:http";
 import { con, bdDeTenant } from "../../../db/flota/conectar.mjs";
 import { codigoNuevo, hashDeCodigo, expiraEn } from "../src/dominio/invitaciones.ts";
 import { TENANTS } from "./preparar-tenants.mjs";
+import { PUERTO_E2E } from "./puerto.ts";
 
 // F-B del §5.4 contra el servidor y la base de verdad [AC-FIDN-03].
 //
@@ -15,7 +16,7 @@ import { TENANTS } from "./preparar-tenants.mjs";
 // Todo con `node:http` y contra el `servidor.mjs` de producción, igual que el resto del e2e:
 // la identidad del tenant se juega en la cabecera `Host`.
 
-const PUERTO = 3311;
+const PUERTO = PUERTO_E2E;
 const DOMINIO = "localhost";
 const A = TENANTS.filter((t) => t.estado === "activo")[0]!;
 const BD_A = bdDeTenant(A.slug);

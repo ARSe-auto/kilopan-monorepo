@@ -162,7 +162,11 @@ test("[AC-FTEN-04] el registro de tenants no deja que la BD y el slug diverjan",
     "insert into planes (lookup_key, nombre, limite_vehiculos) values ('gate_partida', 'Partida', 1) " +
       "on conflict (lookup_key) do update set nombre = excluded.nombre returning id::text as id",
   );
-  await control.sql("delete from tenants where slug like 'gate_%'");
+  // Acotado a SU propio slug, no a 'gate_%' entero: desde que `provisionar()` también da de
+  // alta en `control.tenants` [AC-FPOR-01], ese comodín se llevaría por delante tenants vivos
+  // de OTRAS suites (p. ej. `gate_a`/`gate_b`, que el gate deja registrados a propósito) y el
+  // DELETE rebotaría contra `agregados_tecnicos_tenant_id_fkey` en vez de limpiar lo suyo.
+  await control.sql("delete from tenants where slug = 'gate_ctrl'");
 
   await control.sql(
     "insert into tenants (slug, bd, plan_id) values ($1, $2, $3)",
@@ -180,7 +184,7 @@ test("[AC-FTEN-04] el registro de tenants no deja que la BD y el slug diverjan",
     { code: "23514" },
   );
 
-  await control.sql("delete from tenants where slug like 'gate_%'");
+  await control.sql("delete from tenants where slug = 'gate_ctrl'");
 });
 
 test("[AC-FTEN-04] un override de feature sin motivo escrito no entra", async () => {

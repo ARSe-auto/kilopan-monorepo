@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { Pool } from "pg";
-import { con, bdDeTenant, CLUSTER_LOCAL, ROL_MIGRADOR } from "../../../db/flota/conectar.mjs";
+import { con, bdDeTenant, ROL_MIGRADOR, destinoDelCluster } from "../../../db/flota/conectar.mjs";
 import { codigoNuevo, hashDeCodigo, expiraEn } from "../src/dominio/invitaciones.ts";
 import { aprobar } from "../src/servidor/aprobacion.ts";
 import { resolverSesion } from "../src/servidor/sesion.ts";
@@ -39,7 +39,7 @@ let codigo = "";
 let duenaId = "";
 
 test.beforeAll(async () => {
-  pool = new Pool({ host: CLUSTER_LOCAL.host, port: CLUSTER_LOCAL.puerto, database: BD_A, user: ROL_MIGRADOR });
+  pool = new Pool({ host: destinoDelCluster().host, port: Number(destinoDelCluster().puerto), database: BD_A, user: ROL_MIGRADOR });
   codigo = codigoNuevo();
   await con(BD_A, async (c: Conexion) => {
     // `client_metric` NO se limpia: es CAPTURA y append-only (§7.4), y el DELETE rebota 42501

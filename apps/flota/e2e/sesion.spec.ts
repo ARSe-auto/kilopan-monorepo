@@ -7,10 +7,11 @@ import { clasificar, flagDe, revisionDe } from "../src/dominio/revocacion.ts";
 import { codigoNuevo, hashDeCodigo, expiraEn } from "../src/dominio/invitaciones.ts";
 import { aprobar } from "../src/servidor/aprobacion.ts";
 import { revocarDispositivo } from "../src/servidor/sesion.ts";
-import { con, bdDeTenant, CLUSTER_LOCAL, ROL_MIGRADOR } from "../../../db/flota/conectar.mjs";
+import { con, bdDeTenant, ROL_MIGRADOR, destinoDelCluster } from "../../../db/flota/conectar.mjs";
 import { provisionar } from "../../../db/flota/provisionar.mjs";
 import { borrarRolDeApp } from "../../../db/flota/rol-app.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
+import { PUERTO_E2E } from "./puerto.ts";
 
 // Revocación con efecto inmediato, por HTTP [AC-FIDN-09] — §4.3, §5.4 F-F, centinela 4.
 //
@@ -22,7 +23,7 @@ import { TENANTS } from "./preparar-tenants.mjs";
 // de sync nace en el módulo 04 (hito e): acá está la clasificación, el flag, la fila de
 // revisión y el evento, que son lo que ese endpoint va a escribir cuando exista.
 
-const PUERTO = 3311;
+const PUERTO = PUERTO_E2E;
 const DOMINIO = "localhost";
 const A = TENANTS.filter((t) => t.estado === "activo")[0]!;
 const BD_A = bdDeTenant(A.slug);
@@ -60,8 +61,8 @@ function pedirSesion(autorizacion: string | null, host = `${A.slug}.${DOMINIO}:$
 
 test.beforeAll(async () => {
   pool = new Pool({
-    host: CLUSTER_LOCAL.host,
-    port: CLUSTER_LOCAL.puerto,
+    host: destinoDelCluster().host,
+    port: Number(destinoDelCluster().puerto),
     database: BD_A,
     user: ROL_MIGRADOR,
   });

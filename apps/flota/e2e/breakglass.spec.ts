@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { Pool } from "pg";
 import { abrir, vigente, avisoReconocido } from "../src/servidor/breakglass.ts";
-import { con, bdDeTenant, BD_CONTROL, CLUSTER_LOCAL, ROL_MIGRADOR } from "../../../db/flota/conectar.mjs";
+import { con, bdDeTenant, BD_CONTROL, ROL_MIGRADOR, destinoDelCluster } from "../../../db/flota/conectar.mjs";
 import { provisionar } from "../../../db/flota/provisionar.mjs";
 import { borrarRolDeApp } from "../../../db/flota/rol-app.mjs";
 
@@ -27,8 +27,8 @@ const PLATAFORMA_B = "segunda-persona@kiloruta";
 
 test.beforeAll(async () => {
   await provisionar(SLUG, { recrear: true });
-  control = new Pool({ host: CLUSTER_LOCAL.host, port: CLUSTER_LOCAL.puerto, database: BD_CONTROL, user: ROL_MIGRADOR });
-  tenant = new Pool({ host: CLUSTER_LOCAL.host, port: CLUSTER_LOCAL.puerto, database: BD, user: ROL_MIGRADOR });
+  control = new Pool({ host: destinoDelCluster().host, port: Number(destinoDelCluster().puerto), database: BD_CONTROL, user: ROL_MIGRADOR });
+  tenant = new Pool({ host: destinoDelCluster().host, port: Number(destinoDelCluster().puerto), database: BD, user: ROL_MIGRADOR });
 
   const [t] = await con(BD_CONTROL, (c: Conexion) =>
     c.sql<{ id: string }>(
