@@ -146,8 +146,17 @@ export default async function Page({
 
   // `bultos_max_sin_receptor` (§4.4): fila única, y `null` si el tenant no lo sembró (Pregunta
   // al dueño 1 de la spec 04, sin responder) — `dejarEnPunto` lo trata como «sin umbral».
+  //
+  // Y sale de `parametros_operativos`, NO de `parametros` [AC-FTAR-17] — §4.8. Esta es la
+  // pantalla del chofer, y el §4.8 dice que el terreno no ve montos. En `parametros` el dinero
+  // (`tarifa_kwh_clp`, `precio_diesel_litro_clp`) vive en la MISMA fila que la configuración que
+  // el terreno sí necesita, así que la RLS de dinero —que esconde filas enteras— lo dejaría sin
+  // la fórmula de energía del §0; la 0073 lo resolvió por estructura, con una vista que
+  // simplemente no trae las dos columnas de plata. Leer la tabla acá volvería a poner el dinero
+  // a un `select *` de distancia de la pantalla del terreno: la vista no es una preferencia de
+  // estilo, es dónde termina el alcance de esta consulta.
   const { rows: parametrosFilas } = await pool.query<{ bultos_max_sin_receptor: number | null }>(
-    "select bultos_max_sin_receptor from parametros limit 1",
+    "select bultos_max_sin_receptor from parametros_operativos limit 1",
   );
 
   // El candado de CADA parada, en la primera carga [AC-FPOD-03] — §4.2, §4.4 (R7), §3.E1.7.

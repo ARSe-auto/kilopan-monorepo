@@ -152,6 +152,14 @@ paso "RUTs sembrados: solo los de la lista congelada de fixtures (§7.8, §10)" 
 paso "dinero: cero aritmética monetaria fuera de la BD (§4.8, §7.5)" \
   node db/flota/gate-dinero-en-la-bd.mjs
 
+# El §4.8 otra vez, del otro lado: `parametros` mezcla plata con la configuración del terreno en
+# la MISMA fila, así que ni la RLS de dinero ni un `revoke` por columna la pueden defender (la
+# primera lo dejaría sin la fórmula de energía del §0; el segundo mira el rol de Postgres, que es
+# uno por tenant). La 0073 lo resolvió con la vista `parametros_operativos`, y lo único que puede
+# verificar que el terreno la CONSUMA es un gate estático. [AC-FTAR-17]
+paso "dinero invisible: el terreno lee \`parametros_operativos\`, no la tabla (§4.8)" \
+  node db/flota/gate-terreno-sin-parametros.mjs
+
 paso "linter de migraciones: las cinco exigencias de toda tabla de dominio (§4.2, §9.2)" \
   node db/flota/lint-migraciones.mjs
 
