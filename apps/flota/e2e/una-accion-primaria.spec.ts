@@ -29,13 +29,19 @@ import { FEATURES } from "../src/servidor/config.ts";
 // AC-FIDN-02 — no es "panel white-label" ni "«Funciones»", los dos nombres literales del texto
 // de este AC — así que tampoco entra acá.
 //
-// EL FIXTURE de `/panel/funciones` cubre un plan con las TRES features del catálogo completo
-// (`documentos_vencidos_bloquean`, `modulo_vehiculos`, `certificaciones_vencidas_bloquean`), CON
-// un override explícito en OFF sobre cada una: `entitlement_efectivo` es `override ?? plan`
-// (0002_entitlements_efectivos.sql), así que estar en el plan SIN override ya resuelve
-// `habilitada=true` — el estado "apagada-y-en-plan" que ofrece "Encender" exige el override. Así
-// la pantalla muestra sus TRES "Encender" a la vez, y el chequeo se ejerce sobre más de una
-// instancia real de la misma acción — no sobre un caso vacío que pasaría por accidente.
+// EL FIXTURE de `/panel/funciones` cubre un plan con TODAS las features de `FEATURES`
+// (`config.ts`), CON un override explícito en OFF sobre cada una: `entitlement_efectivo` es
+// `override ?? plan` (0002_entitlements_efectivos.sql), así que estar en el plan SIN override ya
+// resuelve `habilitada=true` — el estado "apagada-y-en-plan" que ofrece "Encender" exige el
+// override. Así la pantalla muestra un "Encender" por feature a la vez, y el chequeo se ejerce
+// sobre más de una instancia real de la misma acción — no sobre un caso vacío que pasaría por
+// accidente. El conteo esperado se DERIVA de lo que el propio fixture alcanzó a sembrar (el
+// `rowCount` del insert en `plan_features`), no de un literal: el catálogo de `features` crece con
+// el producto —la 0009 le sumó las cuatro claves del grupo DaaS, [AC-FTAR-18]— y un literal
+// convertiría cada feature nueva en un rojo de AC-FMIG-21 que no dice nada sobre la regla de "una
+// acción primaria por pantalla". Lo que este AC exige —y lo que se sigue asertando abajo,
+// intacto— es que N instancias de la MISMA acción sean UN tipo, no N; para eso hace falta que
+// sean varias, no que sean exactamente tres.
 // `/panel/terminologia` no necesita fixture de plan: sus botones son `variante="neutro"` con los
 // datos base (`TERMINOLOGIA_BASE_ES_CL`).
 //
@@ -52,6 +58,12 @@ const sql = <F = Record<string, string>>(texto: string, params?: unknown[]) =>
   con(BD, (c: Conexion) => c.sql<F>(texto, params));
 
 const SECRETO = secretoNuevo();
+/** Cuántos "Encender" tiene que pintar `/panel/funciones`: exactamente uno por fila que el
+ *  fixture ALCANZÓ a meter en el plan. No es `Object.values(FEATURES).length`: el insert es
+ *  `select … from features where lookup_key = any(…)`, así que una clave que `config.ts` nombra
+ *  pero que ninguna migración sembró todavía en el catálogo de `control` (hoy, `modulo_encargos`)
+ *  no produce fila ni botón. Se llena en el `beforeAll` con el `rowCount` real. */
+let ESPERADOS = 0;
 let control: Pool;
 let tenantId = "";
 let planId = "";
@@ -83,28 +95,29 @@ test.beforeAll(async () => {
   ]);
   tenantId = t[0]!.id;
 
-  // Un plan que cubre LAS TRES features de `FEATURES` (config.ts) — por LOOKUP_KEY explícito,
+  // Un plan que cubre TODAS las features de `FEATURES` (config.ts) — por LOOKUP_KEY explícito,
   // no "todo lo que haya hoy en `features`": esa tabla es COMPARTIDA entre todas las bases del
   // cluster de e2e, y otra suite puede dejar filas propias ahí (p. ej. `gate.*` de
   // `db/flota/suite-bd/control.test.mjs`) — un `select … from features` sin filtro las
   // arrastraría al plan de este fixture y el conteo de "Encender" dejaría de ser determinista.
-  // Las tres nacen apagadas (AC-FVEH-03, AC-FVEH-14, AC-FMIG-09), así que estando las tres EN
-  // el plan, las tres quedan "apagada-y-en-plan" — el estado que pinta "Encender" en acento.
+  // Todas nacen apagadas (AC-FVEH-03, AC-FVEH-14, AC-FMIG-09, AC-FPOR-04, AC-FTAR-18), así que
+  // estando todas EN el plan quedan "apagada-y-en-plan" — el estado que pinta "Encender" en acento.
   const { rows: plan } = await control.query<{ id: string }>(
     `insert into planes (lookup_key, nombre) values ('plan-del-fixture-primaria', 'Plan del fixture')
      returning id::text as id`,
   );
   planId = plan[0]!.id;
-  await control.query(
+  const sembradas = await control.query(
     `insert into plan_features (plan_id, feature_id) select $1, id from features where lookup_key = any($2::text[])`,
     [planId, Object.values(FEATURES)],
   );
+  ESPERADOS = sembradas.rowCount ?? 0;
   await control.query("update tenants set plan_id = $2 where id = $1", [tenantId, planId]);
 
   // `entitlement_efectivo` es LITERAL (`override ?? plan`, 0002_entitlements_efectivos.sql): estar
   // EN el plan y sin override ya resuelve `habilitada=true` — no alcanza con el plan para que la
   // pantalla ofrezca "Encender". El estado "apagada-y-en-plan" que este fixture necesita exige un
-  // override explícito en OFF sobre las tres, encima del plan.
+  // override explícito en OFF sobre todas, encima del plan.
   await control.query(
     `insert into tenant_feature_overrides (tenant_id, feature_id, enabled, motivo)
      select $1, id, false, 'apagada a propósito por el fixture de AC-FMIG-21: sin este override, override ?? plan resuelve habilitada=true por estar en el plan, y la pantalla no ofrecería Encender'
@@ -157,7 +170,7 @@ async function botonesVisibles(page: Page): Promise<BotonVisible[]> {
   );
 }
 
-test("[AC-FMIG-21] /panel/funciones: tres 'Encender' simultáneos son UN tipo de acción, no tres", async ({
+test("[AC-FMIG-21] /panel/funciones: varios 'Encender' simultáneos son UN tipo de acción, no N", async ({
   page,
 }) => {
   await sesionDe(page);
@@ -165,7 +178,12 @@ test("[AC-FMIG-21] /panel/funciones: tres 'Encender' simultáneos son UN tipo de
 
   const botones = await botonesVisibles(page);
   const encender = botones.filter((b) => b.testid.startsWith("encender-"));
-  expect(encender.length, "el fixture cubre las 3 features: tienen que estar las 3 'Encender'").toBe(3);
+  // Varias, o el caso no se ejerce: con un solo "Encender" la unicidad pasaría por accidente.
+  expect(ESPERADOS, "el fixture tiene que sembrar MÁS DE UNA feature o no hay caso").toBeGreaterThan(1);
+  expect(
+    encender.length,
+    `el fixture cubre las ${ESPERADOS} features de FEATURES: tienen que estar sus ${ESPERADOS} 'Encender'`,
+  ).toBe(ESPERADOS);
 
   const tipos = tiposDeAccionPrimaria(botones);
   expect(tipos, `tipos de acción primaria en /panel/funciones: ${tipos.join(", ")}`).toEqual(["encender"]);
