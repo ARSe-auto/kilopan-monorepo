@@ -744,7 +744,7 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       la propia migración (`-- pii: exenta <tabla>.<columna> — <razón>`), son de UNA columna y
       no de la tabla entera, y el gate las CUENTA e imprime; hoy son cero — oráculo: CI
       [AC-FIDN-14]
-- [ ] (P2) Export ARCO por persona: entrega los datos personales de UNA persona (fila
+- [x] (P2) Export ARCO por persona: entrega los datos personales de UNA persona (fila
       de `personas` + sus vínculos de usuario y dispositivos) sin incluir datos de
       terceros; el acceso queda en la bitácora de accesos del admin (§3.E1.15, §7.8).
       El maestro NO fija quién lo acciona (§3.E1.15 solo dice «export ARCO»; bajo la
@@ -758,7 +758,8 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       `gobierno.arco_exportado` en `evento_tipo`), la ruta declarada `recurso` con
       `ids_de_b: {tabla: "personas", columna: "id"}` en `apps/flota/rutas/manifiesto.json`,
       7 unitarios en `apps/flota/src/dominio/arco.test.ts` y 4 contra el cluster en
-      `db/flota/suite-bd/arco.test.mjs`.
+      `db/flota/suite-bd/arco.test.mjs`, más el catálogo cerrado de
+      `db/flota/pgtap/0009_gobierno_del_dueno.sql` (veintitrés actos, contados a mano).
       **«SIN DATOS DE TERCEROS» NO SE RESUELVE CON UN `where persona_id = $1`, Y ESA ES LA
       MITAD DEL AC.** Un aparato de la titular lleva `enrolado_por`, que es el usuario del
       DUEÑO que lo dio de alta: un dato de un tercero viviendo en una fila propia, que el

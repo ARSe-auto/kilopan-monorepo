@@ -109,6 +109,19 @@ test("[AC-FIDN-15] un campo vedado en la salida aborta, aunque la fila sea de la
   assert.deepEqual(camposVedadosEn({ usuarios: [conHash] }), ["usuarios[0].pin_hash"]);
 });
 
+test("[AC-FIDN-15] los campos de TERCEROS y las credenciales están nombrados en la lista", () => {
+  // El recorrido de acá abajo prueba que el guardián ve lo que la lista dice, pero no que la
+  // lista diga lo que tiene que decir: borrar `enrolado_por` de `CAMPOS_VEDADOS` lo dejaría
+  // verde igual, y ese campo es EXACTAMENTE el dato de tercero que vive en una fila propia y
+  // que el filtro por `persona_id` jamás va a ver. Por eso los nombres van clavados acá.
+  for (const campo of ["enrolado_por", "resuelta_por", "actor_id", "creada_por"]) {
+    assert.ok(CAMPOS_VEDADOS.includes(campo), `«${campo}» es un dato de un TERCERO y salió de la lista`);
+  }
+  for (const credencial of ["pin_hash", "secreto_hash", "token_hash", "huella_dispositivo"]) {
+    assert.ok(CAMPOS_VEDADOS.includes(credencial), `«${credencial}» es una credencial y salió de la lista`);
+  }
+});
+
 test("[AC-FIDN-15] el guardián mira CADA campo vedado, a cualquier profundidad", () => {
   for (const campo of CAMPOS_VEDADOS) {
     assert.deepEqual(

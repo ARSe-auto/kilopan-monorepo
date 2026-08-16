@@ -93,7 +93,7 @@ select is(
     'gobierno.vehiculo_editado',
     'gobierno.vehiculo_reactivado'
   ],
-  'catálogo de eventos de gobierno: los veintidós actos, sin uno de menos'
+  'catálogo de eventos de gobierno: los veintitrés actos, sin uno de menos'
 );
 
 -- Y cada uno con su descripción escrita: un catálogo de códigos sin texto es un panel de
@@ -101,7 +101,10 @@ select is(
 select is(
   (select count(*)::int from evento_tipo
     where codigo like 'gobierno.%' and length(btrim(descripcion)) > 0),
-  22, 'cada tipo de evento de gobierno trae su descripción en es-CL'
+  -- Veintitrés desde que la 0069 sembró `gobierno.arco_exportado` [AC-FIDN-15]: el número va
+  -- a mano y no `= count(array)` a propósito — un catálogo que crece solo es un catálogo al
+  -- que alguien le agregó un acto del dueño sin que nadie lo mirara.
+  23, 'cada tipo de evento de gobierno trae su descripción en es-CL'
 );
 
 select finish();
