@@ -71,6 +71,14 @@ export const TENANTS = [
   // mecanismo que `pod-feliz.spec.ts`— y necesita recorrer las CUATRO pantallas sin que otra
   // suite haya dejado el tenant en un estado distinto a mitad de la corrida.
   { slug: "portal_manifest", estado: "activo" },
+  // Base PROPIA para el ciclo del encargo solicitado del portal [AC-FPOR-08].
+  //
+  // Misma razón que `portal_aislamiento`/`portal_manifest`: sella `config_version` DIRECTO con
+  // `crear_config_version()` para encender `portal_contratante`, y esta suite además ACEPTA
+  // encargos a mitad de corrida (transición `solicitado → aceptado`, la que cierra la ventana
+  // de edición del §3.E1.10) — compartir base con otra suite del portal dejaría encargos
+  // aceptados a medio camino que no son de nadie.
+  { slug: "portal_encargos_alta", estado: "activo" },
 ];
 
 /** Subdominio que jamás se registra. Nombrarlo acá evita que el test lo invente distinto. */

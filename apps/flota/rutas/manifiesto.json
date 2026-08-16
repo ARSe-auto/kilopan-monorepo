@@ -1099,19 +1099,21 @@
       "ruta": "/cliente/api/encargos",
       "archivo": "src/app/cliente/api/encargos/route.ts",
       "metodos": [
-        "GET"
+        "GET",
+        "POST"
       ],
       "params": [],
       "cruce": {
         "tipo": "sin_recurso",
-        "nota": "La lista de encargos propios del portal [AC-FPOR-07]. Sin identificador por URL: la confinación es 100% por `empresa_cliente_id` de la SESIÓN dentro de `encargosDelCliente` (servidor/portal-cliente.ts), no por nada que llegue en la petición. Contra el vecino B, el host de A resuelve el pool de A (AC-FTEN-05) y la sesión que abre B en su propio subdominio no tiene forma de apuntar esta consulta a la empresa de A — no hay parámetro que falsificar."
+        "nota": "GET: la lista de encargos propios [AC-FPOR-07], sin cambios. POST: el alta del contratante [AC-FPOR-08] — sin identificador por URL, y el `empresa_cliente_id` con el que se inserta sale SIEMPRE de `sesion.empresaClienteId`, jamás del body (a diferencia de `/api/encargos` del operador, que sí lo recibe porque elige entre varias). Contra el vecino B, el host de A resuelve el pool y la sesión de A (AC-FTEN-05); no hay ningún campo de la petición que pueda hacer que la fila nazca con la empresa de B."
       }
     },
     {
       "ruta": "/cliente/api/encargos/[id]",
       "archivo": "src/app/cliente/api/encargos/[id]/route.ts",
       "metodos": [
-        "GET"
+        "GET",
+        "PATCH"
       ],
       "params": [
         "id"
@@ -1122,7 +1124,7 @@
           "tabla": "encargos",
           "columna": "id"
         },
-        "nota": "El encargo del contratante, ahora leído desde el namespace del portal [AC-FPOR-06]. RLS de `encargos` (0040) confina por `empresa_cliente_id`; contra un tenant vecino el id de B ni siquiera está en esta base (§4.1). Contrato 404 y BD de B sin cambios."
+        "nota": "GET ya probado en AC-FPOR-06. PATCH: la corrección del contratante, solo hasta la aceptación [AC-FPOR-08] — `editarEncargo` (servidor/encargos.ts, AC-FRUT-03) da 404 (`no_existe`) igual para un id de otro tenant que para uno inexistente, y 404 también (`no_es_de_su_creador`) para un encargo de OTRO usuario de la MISMA empresa, así que ni siquiera dentro del propio tenant se enumera de quién es cada fila. Contra un tenant vecino el id de B ni está en esta base (§4.1). Contrato 404 y BD de B sin cambios."
       }
     },
     {
