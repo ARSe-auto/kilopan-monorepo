@@ -1,14 +1,15 @@
 import type { Pool } from "pg";
-import { enLectura } from "./gobierno.ts";
+import { enActo, enLectura } from "./gobierno.ts";
 import type { Sesion } from "./sesion.ts";
 import { entitlementVigente, FEATURES } from "./config.ts";
+import type { TipoDeDte } from "./manifiestos.ts";
 
 // Lectura de liquidaciones y su drill-down línea→evidencia [AC-FTAR-07] — spec 06 §9, §3.E1.9.
 //
-// SOLO LECTURA. El devengo (AC-FTAR-03), la máquina de estados (AC-FTAR-05) y la disputa
-// (AC-FTAR-06) ya existen en la BD; este módulo no agrega ninguna mutación nueva, solo las
-// dos consultas que la pantalla del operador/admin necesita: la liquidación con sus líneas, y
-// la evidencia completa de UNA línea.
+// Casi todo acá es LECTURA. El devengo (AC-FTAR-03), la máquina de estados (AC-FTAR-05) y la
+// disputa (AC-FTAR-06) viven en la BD; de este módulo salen las dos consultas que la pantalla
+// del operador/admin necesita —la liquidación con sus líneas y la evidencia completa de UNA
+// línea— y UNA sola mutación, el registro manual del folio del DTE (AC-FTAR-16, al final).
 //
 // ─── POR QUÉ SOLO `entrega_pod` TRAE DETALLE ─────────────────────────────────────────────
 //
@@ -78,6 +79,16 @@ export type LineaDeLiquidacion = {
   creado_en: string;
 };
 
+/** El DTE de un tercero que ampara la liquidación, o `null` mientras nadie registró el folio
+ *  [AC-FTAR-16]. La app lo REGISTRA y lo muestra; jamás lo emite (§7.3, art. 97 N°4 CT). */
+export type FolioDeLiquidacion = {
+  id: string;
+  tipo: string;
+  folio: string;
+  emisor: string;
+  fecha: string | null;
+};
+
 export type LiquidacionConLineas = {
   id: string;
   estado: string;
@@ -85,6 +96,7 @@ export type LiquidacionConLineas = {
   periodo_fin: string;
   empresa_razon_social: string;
   empresa_rut: string;
+  documento: FolioDeLiquidacion | null;
   lineas: LineaDeLiquidacion[];
 };
 
@@ -103,18 +115,40 @@ export async function liquidacionConLineas(
       periodo_fin: string;
       empresa_razon_social: string;
       empresa_rut: string;
+      documento_id: string | null;
+      documento_tipo: string | null;
+      documento_folio: string | null;
+      documento_emisor: string | null;
+      documento_fecha: string | null;
     }>(
+      // El folio se lee desde el drill-down [AC-FTAR-16]: `left join` porque la asociación es
+      // nullable por diseño (§4.6, «asociación nullable al folio registrado») — una liquidación
+      // sin folio registrado es el estado normal, no un dato faltante.
       `select l.id::text as id, l.estado,
               to_char(l.periodo_inicio, 'YYYY-MM-DD') as periodo_inicio,
               to_char(l.periodo_fin, 'YYYY-MM-DD') as periodo_fin,
-              e.razon_social as empresa_razon_social, e.rut as empresa_rut
+              e.razon_social as empresa_razon_social, e.rut as empresa_rut,
+              rd.id::text as documento_id, rd.tipo::text as documento_tipo,
+              rd.folio as documento_folio, rd.emisor as documento_emisor,
+              to_char(rd.fecha, 'YYYY-MM-DD') as documento_fecha
          from liquidaciones l
          join empresas_cliente e on e.id = l.empresa_cliente_id
+         left join reference_document rd on rd.id = l.reference_document_id
         where l.id = $1`,
       [liquidacionId],
     );
     const fila = cabecera[0];
     if (!fila) return null;
+    const documento: FolioDeLiquidacion | null =
+      fila.documento_id && fila.documento_tipo && fila.documento_folio && fila.documento_emisor
+        ? {
+            id: fila.documento_id,
+            tipo: fila.documento_tipo,
+            folio: fila.documento_folio,
+            emisor: fila.documento_emisor,
+            fecha: fila.documento_fecha,
+          }
+        : null;
 
     const { rows: lineas } = await c.query<LineaDeLiquidacion>(
       `select id::text as id, concepto, cantidad, monto_clp::text as monto_clp,
@@ -126,7 +160,16 @@ export async function liquidacionConLineas(
       [liquidacionId],
     );
 
-    return { ...fila, lineas };
+    return {
+      id: fila.id,
+      estado: fila.estado,
+      periodo_inicio: fila.periodo_inicio,
+      periodo_fin: fila.periodo_fin,
+      empresa_razon_social: fila.empresa_razon_social,
+      empresa_rut: fila.empresa_rut,
+      documento,
+      lineas,
+    };
   });
 }
 
@@ -213,4 +256,120 @@ export async function evidenciaDeLinea(
       },
     };
   });
+}
+
+// ─── El registro MANUAL del folio [AC-FTAR-16] — §7.3, §4.6, §3.E2, art. 97 N°4 CT ──────────
+//
+// ─── LA APP REGISTRA, JAMÁS EMITE ──────────────────────────────────────────────────────────
+//
+// El DTE lo emitió un tercero autorizado por el SII —el software facturador del tenant o el
+// portal del SII— y lo que entra acá son los tres datos que se leen del documento ya emitido:
+// tipo, folio y emisor. Acá no se genera un folio, ni un XML, ni un TED; el grep-gate de
+// AC-FTAR-08 vigila el árbol entero para que la línea que lo rompa no llegue a existir. El
+// camino manual no es un puente hasta que E2 traiga el puerto `EmisorDTE`: es PERMANENTE
+// (§3.E2), porque un tenant que factura desde el portal del SII no va a dejar de hacerlo.
+//
+// ─── POR QUÉ ESTA MUTACIÓN SÍ REBOTA, SI `asociarDocumento` NO ─────────────────────────────
+//
+// `manifiestos.ts::asociarDocumento` es CAPTURA de terreno y por la regla de oro (§4.2) jamás
+// rechaza: el andén a las cuatro de la mañana no puede perder la constancia de que la carga
+// viajó amparada. Esto es lo contrario — una acción ONLINE de operador/admin sobre una
+// liquidación cerrada, con la persona mirando la pantalla— y la clasificación §4.2 de este
+// módulo (spec 06) la pone del lado que REBOTA 422 tipado. Un 422 acá se corrige tecleando de
+// nuevo; un folio equivocado escrito «para no perderlo» queda amparando plata ajena.
+//
+// ─── POR QUÉ SOLO SOBRE `cerrada` ──────────────────────────────────────────────────────────
+//
+// Supuesto operativo DERIVADO (el AC lo dice y la Pregunta 10 lo deja abierta): el seed del §10
+// muestra «1 cerrada con folio registrado» y el pipeline del §3.E2 arranca en `cerrada`. Cerrar
+// es lo que congela líneas y totales (§3.E1.9, 0065), y facturar un monto que todavía puede
+// crecer es emitir por una cifra que no es la final. `pagada` también rebota, por el otro lado:
+// el folio es lo que se cobra, así que llega ANTES del pago — uno que apareciera después sería
+// el folio de otra cosa, y sobrescribir en silencio el que amparó el pago es justo lo que el
+// índice único parcial de la 0072 existe para impedir.
+//
+// ─── EL «0 FILAS» DEL DUPLICADO NO SE CUIDA, SE CONSTRUYE ──────────────────────────────────
+//
+// Toda la mutación es UNA sentencia. `objetivo` es la liquidación elegible con su fila tomada
+// (`for update`); el INSERT del documento cuelga de ella —sin liquidación elegible no nace
+// ninguna fila— y el UPDATE cuelga del INSERT —folio ya registrado, el `on conflict do nothing`
+// no devuelve nada y no hay qué asociar—. Las dos formas del rebote dejan CERO filas escritas
+// porque no hay ninguna rama en la que una escriba y la otra no, y no porque el orden de tres
+// consultas separadas haya quedado bien puesto.
+//
+// El `on conflict do nothing` acá NO es la semántica «creando/ligando» de la custodia: es el
+// detector del duplicado. Ligar sería tomar el documento que ya existe y pegarlo a ESTA
+// liquidación — y ese documento ya ampara otra, que es exactamente lo que el AC llama duplicado.
+//
+// Sin evento append-only: el catálogo `evento_tipo` no tiene código para este acto y sembrarlo
+// es DDL de sesión supervisada (la 0072 dejó solo la columna). El acto igual queda con su antes
+// y su después en `audit_trail`, por el trigger `liquidaciones_auditar` de la 0063.
+
+export type RegistroDeFolio =
+  | { tipo: "ok"; reference_document_id: string }
+  | { tipo: "liquidacion_no_existe" }
+  | { tipo: "estado_no_admite_folio"; estado: string }
+  | { tipo: "folio_duplicado" }
+  | { tipo: "ya_tiene_folio" };
+
+/**
+ * Registra el folio de un DTE ya emitido por un tercero y lo asocia a SU liquidación.
+ *
+ * `liquidacion_no_existe` es 404 (y cubre también el id de otro tenant: cada tenant es su
+ * propia base, §4.1). Los otros tres son 422 con 0 filas escritas.
+ */
+export async function registrarFolioDeLiquidacion(
+  pool: Pool,
+  sesion: Sesion,
+  datos: {
+    liquidacionId: string;
+    tipo: TipoDeDte;
+    folio: string;
+    emisor: string;
+    fecha: string | null;
+  },
+): Promise<RegistroDeFolio> {
+  return enActo(
+    pool,
+    async (c) => {
+      const { rows: asociado } = await c.query<{ id: string }>(
+        `with objetivo as (
+           select id from liquidaciones
+            where id = $1 and estado = 'cerrada' and reference_document_id is null
+              for update
+         ), documento as (
+           insert into reference_document (tipo, folio, emisor, fecha)
+           select $2::dte_tipo, $3, $4, $5::date from objetivo
+             on conflict (tipo, folio, emisor) do nothing
+           returning id
+         )
+         update liquidaciones l
+            set reference_document_id = d.id
+           from documento d
+          where l.id = (select id from objetivo)
+         returning d.id::text as id`,
+        [datos.liquidacionId, datos.tipo, datos.folio.trim(), datos.emisor.trim(), datos.fecha],
+      );
+      if (asociado[0]) return { tipo: "ok", reference_document_id: asociado[0].id };
+
+      // Nada escrito. El POR QUÉ es una lectura de la misma transacción — la mutación ya
+      // decidió, esto solo elige el mensaje que la persona necesita para corregir.
+      const { rows: estado } = await c.query<{
+        estado: string;
+        con_folio: boolean;
+      }>(
+        `select estado, (reference_document_id is not null) as con_folio
+           from liquidaciones where id = $1`,
+        [datos.liquidacionId],
+      );
+      const liquidacion = estado[0];
+      if (!liquidacion) return { tipo: "liquidacion_no_existe" };
+      if (liquidacion.estado !== "cerrada") {
+        return { tipo: "estado_no_admite_folio", estado: liquidacion.estado };
+      }
+      if (liquidacion.con_folio) return { tipo: "ya_tiene_folio" };
+      return { tipo: "folio_duplicado" };
+    },
+    sesion,
+  );
 }

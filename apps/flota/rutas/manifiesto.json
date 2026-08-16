@@ -564,6 +564,24 @@
       }
     },
     {
+      "ruta": "/api/liquidaciones/[id]/folio",
+      "archivo": "src/app/api/liquidaciones/[id]/folio/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "liquidaciones",
+          "columna": "id"
+        },
+        "nota": "El registro manual del folio del DTE sobre la liquidación de B desde una sesión de A [AC-FTAR-16], §7.3, art. 97 N°4 CT: 404 y la BD de B sin cambios. El daño es tributario y no es reversible desde la app: le pega a la liquidación cerrada del vecino el folio de un documento que no es suyo —o que ni existe— y ese folio es lo que su contratante va a recibir como respaldo de cobro (Ley 19.983). No hay ruta de corrección: el índice único parcial de la 0072 hace que la liquidación quede amarrada al PRIMER documento que se le asocie, así que un folio ajeno escrito una vez deja a B sin poder registrar el suyo. Además crea una fila en `reference_document`, que es tabla compartida con custodia, y el `UNIQUE(tipo, folio, emisor)` es global: un folio quemado ahí tampoco se puede volver a registrar. Por eso el caso mira la huella de la BD de B (centinela 2, §9.3.2) y no solo el código de la respuesta — un 404 con la fila escrita sería el peor de los verdes."
+      }
+    },
+    {
       "ruta": "/api/maestras",
       "archivo": "src/app/api/maestras/route.ts",
       "metodos": [

@@ -189,7 +189,31 @@ Rate card en estado **borrador** + volúmenes hipotéticos ⇒ total simulado en
     N°4 CT) y no una aserción más. La mitad de MUTACIÓN de este ítem —registro manual del folio
     sobre liquidación `cerrada`— se partió al AC-FTAR-16 de más abajo, que pide DDL: el motor no
     escribe migraciones y la asociación liquidación↔folio no existe todavía en la BD.
-- [ ] (P1) La app JAMÁS emite DTE — registro MANUAL del folio (§7.3, §4.6, §3.E2; mitad de mutación partida de [AC-FTAR-08], que ya cerró el guardrail estático): el registro MANUAL de folio vía `reference_document(tipo 33|39|52|61, folio, emisor)` opera sobre liquidación `cerrada` (sobre `abierta` ⇒ 422 — supuesto operativo DERIVADO del seed §10 y del pipeline E2 que parte de `cerrada` §3.E2, no mandato del maestro; sujeto a Pregunta 10) y queda como camino paralelo permanente; folio duplicado ⇒ viola `UNIQUE(tipo, folio, emisor)`, 422 y 0 filas; el folio queda ASOCIADO a su liquidación y se lee desde el drill-down (§4.6, sección «Modelo»: «asociación nullable al folio registrado») — BLOQUEADO por DDL de sesión supervisada: falta la asociación liquidación↔`reference_document`, que hoy no existe en ninguna forma (la 0063 creó `liquidaciones` sin ella y la única asociación del árbol es `manifiesto_item_documento`, de custodia). Sin esa columna el endpoint escribiría una fila de `reference_document` huérfana —un folio que no es de ninguna liquidación—, que es exactamente el verde falso que el §9.2 prohíbe. Pide: `liquidaciones.reference_document_id uuid null` + FK compuesta `(tenant_id, reference_document_id)` + índice, o una tabla `liquidacion_documento` con `UNIQUE(tenant_id, liquidacion_id)` si se quiere el acto con su autor y su momento (el precedente exacto es la 0042) — oráculo: CI [AC-FTAR-16]
+- [x] (P1) La app JAMÁS emite DTE — registro MANUAL del folio (§7.3, §4.6, §3.E2; mitad de mutación partida de [AC-FTAR-08], que ya cerró el guardrail estático): el registro MANUAL de folio vía `reference_document(tipo 33|39|52|61, folio, emisor)` opera sobre liquidación `cerrada` (sobre `abierta` ⇒ 422 — supuesto operativo DERIVADO del seed §10 y del pipeline E2 que parte de `cerrada` §3.E2, no mandato del maestro; sujeto a Pregunta 10) y queda como camino paralelo permanente; folio duplicado ⇒ viola `UNIQUE(tipo, folio, emisor)`, 422 y 0 filas; el folio queda ASOCIADO a su liquidación y se lee desde el drill-down (§4.6, sección «Modelo»: «asociación nullable al folio registrado») — oráculo: CI [AC-FTAR-16]
+  - Probado: `registrarFolioDeLiquidacion` (`apps/flota/src/servidor/liquidaciones.ts`) y su puerta
+    `POST /api/liquidaciones/[id]/folio`, sobre la asociación que trajo la migración 0072 (columna,
+    FK COMPUESTA e índice único parcial) — la DDL que tenía bloqueado a este AC y que resolvió la
+    sesión supervisada del 16-ago-2026. La mutación ENTERA es UNA sentencia: `objetivo` toma la
+    liquidación elegible con `for update`, el INSERT del documento cuelga de ella y el UPDATE cuelga
+    del INSERT, así que el «0 filas» de cada rebote es estructural y no depende de que tres consultas
+    separadas hayan quedado en el orden correcto. El `on conflict do nothing` acá es el DETECTOR del
+    duplicado y no la semántica «creando/ligando» de la custodia (`manifiestos.ts::asociarDocumento`,
+    que es captura de terreno y por la regla de oro §4.2 jamás rebota): ligar sería pegarle a ESTA
+    liquidación el papel que ampara otra. `pagada` también rebota 422 —el folio es lo que se cobra,
+    llega ANTES del pago— y sin evento append-only porque `evento_tipo` no tiene código para este
+    acto y sembrarlo es DDL supervisada; el acto igual queda en `audit_trail` por el trigger de la
+    0063. Cubierto por 7 pruebas en `db/flota/suite-bd/folio-de-la-liquidacion.test.mjs` con el rol
+    de APP real (`app_t_<slug>`, NOSUPERUSER, sin BYPASSRLS) contra el cluster: el positivo primero
+    (el folio queda asociado a SU liquidación y se lee desde el drill-down), `abierta` ⇒ 422,
+    `pagada` ⇒ 422, duplicado sobre otra cerrada ⇒ 422 con el documento original amparando UNA sola
+    liquidación, liquidación que ya tiene folio ⇒ 422 sin perder el suyo, id inexistente ⇒ 404, y el
+    catálogo `dte_tipo` afirmado contra el enum de la BD con un 52 de punta a punta (el positivo de
+    arriba es un 33, y un servicio con el tipo cableado pasaría sin esto). Los cuatro rebotes cuentan
+    `reference_document` ANTES y DESPUÉS: es tabla compartida con custodia y su `UNIQUE(tipo, folio,
+    emisor)` es global, así que un folio escrito de más queda quemado para siempre. Caso de cruce
+    declarado en `apps/flota/rutas/manifiesto.json` (recurso sobre `liquidaciones`, con la huella de
+    la BD de B — un 404 con la fila escrita sería el peor de los verdes). `check.sh --full
+    --app=flota` en verde.
 - [x] (P1) Dinero invisible — el patrón probado CON EL ROL DE APP REAL (§4.8, §9.3.10; la mitad DDL se partió al [AC-FTAR-17]): pgTAP que corre bajo `set role app_t_<slug>` —el rol con el que la app habla con la base (LOGIN, NOSUPERUSER, NOBYPASSRLS, cero ownership)— y no bajo el dueño del esquema, contra el que toda RLS es transparente: chofer y `responsable_carga` `SELECT` sobre la tabla de montos ⇒ 0 filas, rol sin declarar ⇒ 0 filas (la falla va hacia el cierre), operador ⇒ >0 (las 0 filas no son una tabla vacía); chofer cierra recarga offline + replay ⇒ sin rebote, misma fila, `costo_clp` NULL a completar por el operador o el trigger desde `parametros.tarifa_kwh_clp`; forma de la política afirmada sobre el CONJUNTO (`RESTRICTIVE`, `FOR SELECT` únicamente, con su `PERMISSIVE` de base) y el inventario de tablas de montos derivado del catálogo por el sufijo `_clp`, con las que aún no la llevan congeladas en una lista exacta que se pone roja si la deuda crece o si se salda sin declararlo — oráculo: CI [AC-FTAR-09]
   - Probado: `db/flota/pgtap/0032_dinero_invisible.sql`, NUEVO en este AC (17 aserciones, verde
     contra el canario). Nace porque la 0016 abría su sección de RLS diciendo «se prueba con
