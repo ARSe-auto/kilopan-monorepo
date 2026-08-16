@@ -27,6 +27,17 @@ let montoClp = 0;
 
 test.beforeAll(async () => {
   await con(BD_A, async (c: Conexion) => {
+    // El módulo 06 ahora se contrae por entitlement [AC-FTAR-18]: sus dos puertas de lectura
+    // contestan 403 si `liquidacion_por_cliente` no está encendido en la config vigente. `A` nace
+    // en `mi_flota` (default de `provisionar()`) y el sembrado real por plan/override es del hito
+    // (g), así que el camino dorado de este AC sella su propio entitlement en ON — mismo mecanismo
+    // que `cruce-tenant.spec.ts` usa para `portal_contratante`, y `config_version` es append-only:
+    // esta versión es la vigente mientras corre esta suite (`workers: 1`, `fullyParallel: false`).
+    await c.sql("select crear_config_version($1, $2::jsonb)", [
+      "e2e AC-FTAR-07 — liquidacion_por_cliente=true para medir el drill-down [AC-FTAR-18]",
+      JSON.stringify({ portal_contratante: true, liquidacion_por_cliente: true }),
+    ]);
+
     const [p] = await c.sql<{ id: string }>(
       "insert into personas (rut, nombre) values ($1, 'Dueña drill-down') returning id::text as id",
       [RUT_DUENA],

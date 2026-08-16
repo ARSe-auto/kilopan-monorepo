@@ -172,6 +172,15 @@ export const TENANTS = [
   // `beforeAll`, corriera a mitad de la aceptación de esta y dejara un `usuario_id` colgando.
   // Va al final por la misma razón que el resto de las bases dedicadas.
   { slug: "dpa", estado: "activo" },
+  // Base PROPIA para la contracción por modo/entitlement del módulo 06 [AC-FTAR-18]: sella
+  // `config_version` DIRECTO con `crear_config_version()` para fijar `liquidacion_por_cliente`
+  // en OFF y en ON —el sembrado real vía `plan_features`/overrides es del hito (g), mismo motivo
+  // que documentan `portal_cliente` y `contraccion`— y `config_version` es APPEND-ONLY. Sobre
+  // `ruteo_activo` el sellado en OFF quedaría como versión vigente para `liquidacion-drill-down`
+  // y `cruce-tenant`, que comparten esa base y necesitan el módulo ENCENDIDO. Va al final por la
+  // misma razón que el resto de las bases dedicadas: media docena de suites toma los dos
+  // primeros activos por índice.
+  { slug: "liquidacion_contraccion", estado: "activo" },
 ];
 
 /** Subdominio que jamás se registra. Nombrarlo acá evita que el test lo invente distinto. */

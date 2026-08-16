@@ -109,6 +109,16 @@ export const FEATURES = {
   // (db/migraciones-flota/control/0003_modo_como_preset.sql) [AC-FPOR-04]. El portal es 100%
   // planificación/lectura: apagado ⇒ 403 en TODA ruta del namespace, jamás el flag de captura.
   portal_contratante: "portal_contratante",
+  // Las otras tres del grupo DaaS [AC-FTAR-18], sembradas en el catálogo de `control` por la
+  // 0009 (`db/migraciones-flota/control/0009_features_del_grupo_daas.sql`). Juntas con
+  // `portal_contratante` son EXACTAMENTE las cuatro filas que `modo_recorte` apaga en
+  // `mi_flota`, y las mismas cuatro claves que el manifest de navegación ya evalúa una por una
+  // (`dominio/manifest.ts`, MODULOS_GRUPO_DAAS, AC-FPOR-03). Escribirlas acá cierra el círculo:
+  // la puerta HTTP del módulo 06 lee el MISMO `lookup_key` que el manifest, así que un módulo
+  // que no aparece en la navegación tampoco contesta por la API.
+  tarifas: "tarifas",
+  liquidacion_por_cliente: "liquidacion_por_cliente",
+  facturacion: "facturacion",
 } as const;
 
 /**

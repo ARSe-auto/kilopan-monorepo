@@ -1,6 +1,7 @@
 import type { Pool } from "pg";
 import { enLectura } from "./gobierno.ts";
 import type { Sesion } from "./sesion.ts";
+import { entitlementVigente, FEATURES } from "./config.ts";
 
 // Lectura de liquidaciones y su drill-down línea→evidencia [AC-FTAR-07] — spec 06 §9, §3.E1.9.
 //
@@ -30,6 +31,39 @@ const ROLES_CON_ACCESO = new Set(["admin_tenant", "operador"]);
 
 export function puedeVerLiquidaciones(rol: string): boolean {
   return ROLES_CON_ACCESO.has(rol);
+}
+
+// ─── La contracción por modo/entitlement de ESTE módulo [AC-FTAR-18] — §3 selector, §5.5, §0 ──
+//
+// El rol y el entitlement responden dos preguntas distintas y por eso conviven: `puedeVerLiquidaciones`
+// dice si ESTA PERSONA puede mirar dinero (§8: el chofer jamás ve CLP), y esto dice si el TENANT
+// compró el módulo. Un admin de un tenant `mi_flota` pasa el primero y tiene que rebotar en el
+// segundo — si no, el módulo estaría «oculto» en la navegación y contestando por la API, que es
+// la forma exacta en que una contracción se vuelve decorativa.
+//
+// ESTRICTO —«sin entrada en el snapshot» cuenta APAGADO— y no `moduloVigenteEncendido`. Es el
+// mismo criterio que ya usan las otras dos puertas del grupo DaaS: `portalClienteEncendido`
+// (`servidor/portal.ts`, AC-FPOR-04) y `modulosNavegables` (`dominio/manifest.ts`, AC-FPOR-03,
+// `entitlements[clave] === true`). El default al revés es el de los MÓDULOS del §5.5, que nacen
+// prendidos porque son el tamaño del producto tal como lo compraron; el grupo DaaS nace apagado
+// porque es lo que un tenant `mi_flota` NO contrató — encenderlo por omisión le pondría las
+// tarifas de sus clientes delante a una flota propia que nunca las tuvo.
+//
+// La feature es `liquidacion_por_cliente` y no `tarifas` porque es la del módulo al que estas dos
+// puertas pertenecen. Para el caso del MODO da lo mismo —`modo_recorte` apaga las cuatro juntas
+// en `mi_flota` (0003)— pero para un override por feature del hito (g) no: apagar «tarifas» no
+// puede cerrar la liquidación que el contratante ya tiene devengada.
+//
+// Conexión suelta y no `enLectura`: `versionVigente` SELLA la primera `config_version` del tenant
+// si todavía no hay ninguna, y esa escritura no cabe en una transacción `read only` (mismo motivo
+// por el que `/api/manifiesto` usa `enActo`). `config_version` no lleva política de fila.
+export async function moduloDeLiquidacionEncendido(pool: Pool, slug: string): Promise<boolean> {
+  const cliente = await pool.connect();
+  try {
+    return await entitlementVigente(cliente, slug, FEATURES.liquidacion_por_cliente);
+  } finally {
+    cliente.release();
+  }
 }
 
 export type LineaDeLiquidacion = {
