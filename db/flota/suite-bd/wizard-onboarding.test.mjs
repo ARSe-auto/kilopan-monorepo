@@ -7,7 +7,7 @@
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { con, bdDeTenant } from "../conectar.mjs";
-import { pasoUnoEmpresaYVertical, VERTICALES_DEMO } from "../wizard-onboarding.mjs";
+import { pasoUnoEmpresaYVertical, VERTICALES_DEMO, completo } from "../wizard-onboarding.mjs";
 import { desregistrar } from "./desregistrar.mjs";
 
 const SLUG = "gate_wizard";
@@ -68,4 +68,20 @@ test("[AC-FMIG-14] caso de rebote: vertical fuera del catálogo E1 no crea ningu
     sql("select exists(select 1 from pg_database where datname = $1) as existe", [bdDeTenant(slugRebote)]),
   );
   assert.equal(existe, false, "un vertical inválido no puede dejar una base a medio provisionar");
+});
+
+test("[AC-FMIG-14] wizard completo: los 4 pasos de punta a punta, bajo el techo de 15 min del §3.E1.13", async () => {
+  const r = await completo(`${SLUG}_completo`, { vertical: "panaderia", modo: "mi_flota", recrear: true });
+
+  assert.equal(r.bd, bdDeTenant(`${SLUG}_completo`));
+  assert.ok(r.vehiculo?.id, "paso 2 no dejó vehículo");
+  assert.ok(r.chofer?.usuarioId, "paso 2 no dejó chofer aprobado");
+  assert.ok(r.encargo?.id, "paso 3 no dejó encargo");
+  assert.ok(r.parada?.id, "paso 3 no dejó parada publicada");
+  assert.equal(r.primeraParadaCompletada, true, "paso 4 no completó la primera parada");
+  assert.equal(r.resultadoDeLaPrimeraParada, "exito");
+  assert.ok(
+    r.ms < 15 * 60 * 1000,
+    `el wizard completo tardó ${(r.ms / 1000).toFixed(1)} s — el §3.E1.13 exige <15 min`,
+  );
 });
