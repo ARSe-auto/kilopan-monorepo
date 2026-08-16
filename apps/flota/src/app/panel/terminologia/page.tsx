@@ -1,7 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Termino, EstadoVacio, EstadoError, EstadoCargando, BotonPrimario } from "@kilopan/miga/componentes/index.tsx";
+import {
+  Termino,
+  EstadoVacio,
+  EstadoError,
+  EstadoCargando,
+  BotonPrimario,
+  useEscaladaDeCarga,
+} from "@kilopan/miga/componentes/index.tsx";
 import { tipografia, superficie, grilla, semantico as colorSemantico, enfasis } from "@kilopan/miga/tokens.ts";
 import { semantico, componente } from "@kilopan/miga/estructura.ts";
 import { TERMINOLOGIA_BASE_ES_CL, type TerminoResuelto } from "@kilopan/miga/terminologia.ts";
@@ -30,6 +37,9 @@ export default function PanelTerminologia() {
   const [errorPorTermino, setErrorPorTermino] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState<string | null>(null);
   const [guardado, setGuardado] = useState<string | null>(null);
+  // AC-FMIG-10 (§5.7): misma escalada de EstadoListado.tsx — skeleton instantáneo, aviso
+  // solo pasados 400 ms sin respuesta.
+  const demorado = useEscaladaDeCarga(!error && !terminos);
 
   const cargar = useCallback(async () => {
     setError(false);
@@ -87,7 +97,7 @@ export default function PanelTerminologia() {
       {error && (
         <EstadoError mensaje="No se pudo leer la terminología. Revisá tu conexión." alReintentar={() => void cargar()} />
       )}
-      {!error && !terminos && <EstadoCargando />}
+      {!error && !terminos && <EstadoCargando avisoDemora={demorado ? "Sigue cargando…" : undefined} />}
       {terminos && Object.keys(terminos).length === 0 && (
         <EstadoVacio mensaje="Este tenant todavía no tiene términos configurados." />
       )}

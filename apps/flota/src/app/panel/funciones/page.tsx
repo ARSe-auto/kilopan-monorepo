@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { EstadoVacio, EstadoError, EstadoCargando, BotonPrimario } from "@kilopan/miga/componentes/index.tsx";
+import {
+  EstadoVacio,
+  EstadoError,
+  EstadoCargando,
+  BotonPrimario,
+  useEscaladaDeCarga,
+} from "@kilopan/miga/componentes/index.tsx";
 import { tipografia, superficie, grilla, semantico as colorSemantico, enfasis } from "@kilopan/miga/tokens.ts";
 import { semantico, componente } from "@kilopan/miga/estructura.ts";
 import { pedir } from "../../../cliente/aparato.ts";
@@ -21,6 +27,9 @@ export default function PanelFunciones() {
   const [error, setError] = useState(false);
   const [moviendo, setMoviendo] = useState<string | null>(null);
   const [rebotePorFuncion, setRebotePorFuncion] = useState<Record<string, string>>({});
+  // AC-FMIG-10 (§5.7): skeleton desde el primer render, y la escalada al aviso recién
+  // pasados los 400 ms — nunca antes, para no parpadear en la carga normal.
+  const demorado = useEscaladaDeCarga(!error && !funciones);
 
   const cargar = useCallback(async () => {
     setError(false);
@@ -67,7 +76,7 @@ export default function PanelFunciones() {
       {error && (
         <EstadoError mensaje="No se pudieron leer las funciones. Revisá tu conexión." alReintentar={() => void cargar()} />
       )}
-      {!error && !funciones && <EstadoCargando />}
+      {!error && !funciones && <EstadoCargando avisoDemora={demorado ? "Sigue cargando…" : undefined} />}
       {funciones && funciones.length === 0 && (
         <EstadoVacio mensaje="Este tenant todavía no tiene funciones en su catálogo." />
       )}

@@ -70,6 +70,12 @@ export const TENANTS = [
   // a mitad de `documentos.spec.ts` (AC-FVEH-18) ni de `vehiculos.spec.ts`, que comparten
   // `ruteo_activo`. Va al final por la misma razón que el resto de las bases dedicadas.
   { slug: "contraccion", estado: "activo" },
+  // Base PROPIA para la escalada única de carga de Miga [AC-FMIG-10]: la suite solo LEE
+  // (GET de `/panel/funciones`, con la respuesta demorada por `page.route`), pero comparte
+  // el mismo `admin_tenant` que `funciones.spec.ts` muta constantemente — un toggle a mitad
+  // de la demora artificial de este test cambiaría qué filas ve y lo haría flaky por una
+  // razón que no tiene nada que ver con el AC. Va al final por la misma razón que el resto.
+  { slug: "miga_estados", estado: "activo" },
 ];
 
 /** Subdominio que jamás se registra. Nombrarlo acá evita que el test lo invente distinto. */

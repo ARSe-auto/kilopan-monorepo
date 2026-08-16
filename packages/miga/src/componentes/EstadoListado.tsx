@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { superficie, semantico, tipografia, grilla, enfasis } from "../tokens.ts";
 import { componente } from "../estructura.ts";
 
@@ -10,25 +13,64 @@ import { componente } from "../estructura.ts";
 // la MISMA en toda la app: si cada listado inventa su propio «no hay nada», el operador
 // aprende a ignorarlos y volvemos al punto de partida.
 
+// AC-FMIG-10 (§5.7): «skeleton <50 ms, spinner solo >400 ms» estaba escrito en la spec pero
+// implementado UNA vez, a mano, adentro de `tarjeta-de-entrega.tsx` (AC-FPOD-22: su propio
+// `useState`+`useEffect`+`setTimeout(…, 400)`). Esa pantalla no es de este módulo y no se
+// toca acá — pero la regla es de PLATAFORMA, no de una pantalla, y una segunda pantalla que
+// la necesite (las de este módulo: panel white-label, «Funciones») no puede volver a
+// escribir el mismo temporizador: por eso pasa a vivir acá, una vez, como el resto de Miga.
+/** A los `umbralMs` de seguir `cargando`, entrega `true` — nunca antes. El skeleton de
+ *  `EstadoCargando` ya está desde el primer render (es CSS, no espera a este hook); esto
+ *  es solo la ESCALADA para la carga que de verdad tarda, así nadie mira un skeleton mudo
+ *  sin saber si sigue vivo. */
+export function useEscaladaDeCarga(cargando: boolean, umbralMs = 400): boolean {
+  const [demorado, setDemorado] = useState(false);
+  useEffect(() => {
+    if (!cargando) {
+      setDemorado(false);
+      return undefined;
+    }
+    const temporizador = window.setTimeout(() => setDemorado(true), umbralMs);
+    return () => window.clearTimeout(temporizador);
+  }, [cargando, umbralMs]);
+  return demorado;
+}
+
 /** Cargando. Skeleton y no un «Cargando…»: ocupa el lugar de lo que viene, así la pantalla
- *  no salta cuando llega el dato — y se distingue de un vacío de un vistazo, sin leer. */
-export function EstadoCargando({ filas = 3 }: { filas?: number }) {
+ *  no salta cuando llega el dato — y se distingue de un vacío de un vistazo, sin leer.
+ *
+ *  `avisoDemora` es la escalada del §5.7 (par de `useEscaladaDeCarga`, arriba): la pantalla
+ *  que quiere el «spinner solo >400 ms» le pasa su propio texto cuando el hook devuelve
+ *  `true`, y nada cuando no — omitido, este componente se comporta exactamente como antes
+ *  de AC-FMIG-10. */
+export function EstadoCargando({ filas = 3, avisoDemora }: { filas?: number; avisoDemora?: string }) {
   return (
-    <div role="status" aria-label="Cargando" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {Array.from({ length: filas }, (_, i) => (
-        <div
-          key={i}
-          style={{
-            // Alto propio del skeleton: reserva el lugar de una fila de listado. No es el
-            // botón primario del §0 aunque hoy coincidan — por eso queda como valor local.
-            height: 56,
-            borderRadius: grilla.radio,
-            background: superficie.hairline,
-            // Sin animación: `prefers-reduced-motion` obligaría a apagarla igual, y un
-            // bloque quieto ya comunica «acá viene algo» sin costar batería en el galpón.
-          }}
-        />
-      ))}
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div role="status" aria-label="Cargando" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {Array.from({ length: filas }, (_, i) => (
+          <div
+            key={i}
+            style={{
+              // Alto propio del skeleton: reserva el lugar de una fila de listado. No es el
+              // botón primario del §0 aunque hoy coincidan — por eso queda como valor local.
+              height: 56,
+              borderRadius: grilla.radio,
+              background: superficie.hairline,
+              // Sin animación: `prefers-reduced-motion` obligaría a apagarla igual, y un
+              // bloque quieto ya comunica «acá viene algo» sin costar batería en el galpón.
+            }}
+          />
+        ))}
+      </div>
+      {avisoDemora !== undefined && (
+        <p
+          role="status"
+          data-testid="aviso-demora-carga"
+          style={{ margin: 0, color: superficie.textoFaint, fontSize: tipografia.pie.tamano, fontWeight: tipografia.pie.peso }}
+        >
+          {avisoDemora}
+        </p>
+      )}
     </div>
   );
 }
