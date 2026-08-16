@@ -111,6 +111,15 @@ export const TENANTS = [
   // detalle del encargo propio jamás la expone — compartir base con otra suite del portal
   // dejaría entregas/evidencia de un fixture ajeno colgando de esa misma ruta.
   { slug: "portal_encargo_detalle", estado: "activo" },
+  // Base PROPIA para el gate GUI por sub-checks del portal [AC-FPOR-12].
+  //
+  // Misma razón que sus hermanas del portal: sella `config_version` DIRECTO con
+  // `crear_config_version()` para encender `portal_contratante`, y esta suite además navega
+  // las CUATRO pantallas con sesión de navegador real —doble terminología, claro/oscuro,
+  // offline— para dos empresas (A con datos, B vacía). Compartir base con otra suite del
+  // portal dejaría encargos/liquidaciones ajenos contaminando el vacío accionable de B o el
+  // contenido esperado de A.
+  { slug: "portal_aa_estados", estado: "activo" },
 ];
 
 /** Subdominio que jamás se registra. Nombrarlo acá evita que el test lo invente distinto. */

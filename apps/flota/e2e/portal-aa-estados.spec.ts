@@ -200,10 +200,10 @@ test.describe("[AC-FPOR-12] carga (skeleton) y error es-CL con recuperación —
     await sesionDe(SECRETO_A)(page);
   });
 
-  for (const [ruta, patronApi] of [
-    ["/cliente", "**/cliente/api/encargos"],
-    ["/cliente/encargos", "**/cliente/api/encargos"],
-    ["/cliente/liquidaciones", "**/cliente/api/liquidaciones"],
+  for (const [ruta, patronApi, testid] of [
+    ["/cliente", "**/cliente/api/encargos", "portal-hoy"],
+    ["/cliente/encargos", "**/cliente/api/encargos", "portal-encargos"],
+    ["/cliente/liquidaciones", "**/cliente/api/liquidaciones", "portal-liquidaciones"],
   ] as const) {
     test(`${ruta}: skeleton durante la carga, error con «Reintentar» que recupera de verdad`, async ({ page }) => {
       let falla = false;
@@ -221,12 +221,19 @@ test.describe("[AC-FPOR-12] carga (skeleton) y error es-CL con recuperación —
       await expect(page.getByRole("status", { name: "Cargando" }).first()).toBeVisible();
       await expect(page.getByRole("status", { name: "Cargando" })).toHaveCount(0, { timeout: 5_000 });
 
+      // El locator se ancla a la pantalla (`getByTestId(testid)`) y no a `page` pelado: Next.js
+      // App Router monta SIEMPRE un `role="alert"` propio (el "route announcer" de accesibilidad,
+      // `__next-route-announcer__`), vacío y ajeno a `EstadoError`, dentro de un shadow root que
+      // `document.querySelectorAll` no ve pero que SÍ cuenta para `getByRole` (que recorre el
+      // árbol de accesibilidad real) — sin este scope, `toHaveCount(0)` nunca baja de 1 aunque
+      // el error de la pantalla ya se resolvió.
+      const pantalla = page.getByTestId(testid);
       falla = true;
       await page.reload();
-      const error = page.getByRole("alert").first();
+      const error = pantalla.getByRole("alert").first();
       await expect(error).toBeVisible({ timeout: 5_000 });
       await error.locator("..").getByRole("button", { name: "Reintentar" }).click();
-      await expect(page.getByRole("alert")).toHaveCount(0, { timeout: 5_000 });
+      await expect(pantalla.getByRole("alert")).toHaveCount(0, { timeout: 5_000 });
     });
   }
 });
