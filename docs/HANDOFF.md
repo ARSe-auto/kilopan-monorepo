@@ -1,19 +1,22 @@
-# HANDOFF — tres motores vivos y construyendo (15-Ago-2026 20:45)
+# HANDOFF — tres motores vivos y construyendo (15-Ago-2026 20:50)
 
 > **Arrancá con Fable 5 y esfuerzo max** (pedido explícito de Alexis a las 16:45).
 >
 > **LO PRIMERO: los TRES motores están VIVOS y sanos.** Nada que destrabar al arrancar.
 > El motor 3, que el traspaso anterior dejó aparcado, lleva construyendo desde las 16:41.
-> **153 de 202 ACs cerrados · faltan 49.**
+> **155 de 202 ACs cerrados · faltan 47.**
+>
+> Los tres worktrees tienen archivos sin comitear: es el WIP de los agentes en su AC actual,
+> **no lo commitees vos** — lo cierra cada motor con su propio commit al terminar.
 
 ## El mapa (verificar vivo antes de afirmar nada)
 
 | | motor 1 | motor 2 | motor 3 |
 |---|---|---|---|
 | worktree | `~/kilopan-monorepo-flota` | `~/kilopan-monorepo-flota2` | `~/kilopan-monorepo-flota3` |
-| rama | `flota/specs-e1` | `flota/motor2` (+16) | `flota/motor3` (+15) |
+| rama | `flota/specs-e1` | `flota/motor2` (+17) | `flota/motor3` (+16) |
 | familias | `^AC-(FIDN\|FPOD\|FRUT\|FSEM\|FTAR\|FTEN\|FVEH)-` | `^AC-FPOR-` | `^AC-FMIG-` |
-| faltan | **21** | **12** | **16** |
+| faltan | **20** | **11** | **16** |
 | Postgres | 54331 (`~/.flota-pg`) | 54332 (`~/.flota-pg-2`) | 54333 (`~/.flota-pg-3`) |
 | e2e | 3311 | 3312 | 3313 |
 | lanzador | `~/bin/arrancar-motor1.sh` | `~/bin/arrancar-motor2.sh` | `~/bin/arrancar-motor3.sh` |
@@ -46,6 +49,15 @@ ACs del motor 2 y se atascó en un tercero. Arreglado con `~/bin/arrancar-motor1
 sus siete familias) + su supervisor apuntado ahí; verificado: tras relanzarse eligió AC-FIDN-13,
 familia propia. **Si nace una familia nueva hay que agregarla a ese regex** — un motor que no la
 reclama la deja sin construir, y eso no sale en ningún rojo.
+
+**3. Una pausa que NO era del arnés (20:12, motor 2) — cómo se ve una legítima.** El gate
+rechazó el cierre de AC-FPOR-06 con «AC-FTEN-26 definido en dos specs». Causa: el id de un ítem
+es su ÚLTIMO corchete (convención del repo, `gate_specs.mjs:65`), y ese ítem puso su id al
+principio y terminó con una CITA a `[AC-FTEN-26]`; el gate la leyó como segunda definición.
+Sin eso, dos ACs habrían compartido id y el conteo habría mentido (198 contados vs 199
+definidos). Arreglado en `8bf8c94` haciendo que el ítem cierre con su id en la spec y en el
+plan. **Proporción del día: 2 pausas del arnés, 1 del AC** — el diagnóstico primero sigue
+siendo obligatorio, pero «siempre es el arnés» ya no es cierto.
 
 ## Deudas — lo que hay que hacer, en orden
 

@@ -2327,3 +2327,10 @@ Instrumental de la jornada: el vigía sobre `pg_stat_activity` (que le puso nomb
 medir divergencia sin tocar las ramas vivas, y el conteo de ACs por UNIÓN de las tres ramas —
 cada motor ve un estado distinto del mismo plan, así que el avance real no está en ninguna rama
 sola. La máquina nunca fue el límite: SoC ~55 °C y carga ~3,8 con los tres corriendo en un M4.
+
+**Cierre 20:50 — 155/202.** Tercera pausa del día, y la primera que NO fue del arnés: el gate
+rechazó el cierre de AC-FPOR-06 porque el ítem terminaba con una CITA a `[AC-FTEN-26]` en vez
+de con su propio id, y el id de un ítem es su ÚLTIMO corchete. El gate leyó una segunda
+definición del AC ajeno; sin él, dos ACs habrían compartido id y el conteo habría mentido (198
+contra 199). Proporción del día: dos pausas del arnés y una del AC — «siempre es el arnés» ya
+no es cierto, así que el diagnóstico antes de tocar el marcador sigue siendo obligatorio.
