@@ -338,7 +338,9 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
   PROBADO: unit de `una-accion-primaria.ts`/`manifiesto-profundidad.ts` + e2e
   `una-accion-primaria.spec.ts` (DOM real) y `profundidad-manifiesto.spec.ts` (covering array
   entitlements × rol contra `GET /api/manifiesto`). `check.sh --full --app=flota`: VERDE.
-- [ ] (P1) DPA en términos del tenant (§3.E1.15/§7.8): artefacto VERSIONADO del repo con secciones mínimas (partes, objeto, encargado/responsable, subencargados, seguridad, devolución/supresión y portabilidad `pg_dump`), servido en los términos sin CSS libre, alcanzable ≤2 niveles, versión vigente por tenant y aceptación del `admin_tenant` en audit_trail (rol distinto ⇒ 403); texto y momento BLOQUEADOS por la pregunta 12 — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-22]
+- [x] (P1) DPA en términos del tenant (§3.E1.15/§7.8): artefacto VERSIONADO del repo con secciones mínimas (partes, objeto, encargado/responsable, subencargados, seguridad, devolución/supresión y portabilidad `pg_dump`), servido en los términos sin CSS libre, alcanzable ≤2 niveles, versión vigente por tenant y aceptación del `admin_tenant` en audit_trail (rol distinto ⇒ 403); texto y momento BLOQUEADOS por la pregunta 12 — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-22]
+  PROBADO: `dpa.test.ts` + `dpa.spec.ts` (5/5) + migración `0067_dpa_del_tenant.sql`.
+  `check.sh --full --app=flota`: VERDE (verde-20260816-065445).
 - [ ] (P1) Test de fixture de la EEVD del DONE-software (§10): valor esperado HARDCODEADO con memoria de cálculo versionada junto a los seeds A/B, comparado contra la vista `eevd_semanal` del módulo 02 (AC-FVEH-20); denominador computable hoy, numerador BLOQUEADO por la pregunta 4 de la spec 04 — mientras siga abierta el test no entra al gate — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-23]
 - [ ] (P1) El wizard de onboarding entrega los mismos 4 estados de Miga sin reinventarlos (mitad partida de AC-FMIG-10; depende de AC-FMIG-14, que construye el wizard) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-24]
 
