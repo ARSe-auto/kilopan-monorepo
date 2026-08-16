@@ -122,6 +122,37 @@ test("[AC-FPOR-08] POST con bultos fuera de 1-500 ⇒ 422 tipado y 0 filas", asy
   }
 });
 
+test("[AC-FPOR-13] doble-tap / reintento con el MISMO client_uuid deja UNA sola fila", async () => {
+  const ctx = await playwrightRequest.newContext({ baseURL: ORIGEN });
+  try {
+    const antes = await contarEncargos();
+    const clientUuid = "b1f2a3c4-0001-4000-8000-000000000001";
+    const body = { destino_id: destinoId, bultos: 12, client_uuid: clientUuid };
+
+    const primero = await ctx.post("/cliente/api/encargos", {
+      headers: await cabecerasDelCliente(),
+      data: body,
+    });
+    expect(primero.status()).toBe(201);
+    const { encargo: encargoUno } = (await primero.json()) as { encargo: { id: string } };
+
+    // El mismo client_uuid que un doble-tap, o un reintento tras un corte de red a mitad del
+    // primer submit, mandarían de nuevo — antes de AC-FPOR-13, `cliente/nuevo/page.tsx` nunca
+    // lo enviaba y cada reintento creaba un encargo NUEVO (columna nullable, UNIQUE que no
+    // deduplica NULL).
+    const segundo = await ctx.post("/cliente/api/encargos", {
+      headers: await cabecerasDelCliente(),
+      data: body,
+    });
+    expect(segundo.status()).toBe(200);
+    const { encargo: encargoDos } = (await segundo.json()) as { encargo: { id: string } };
+    expect(encargoDos.id).toBe(encargoUno.id);
+    expect(await contarEncargos(), "el replay creó una fila de más").toBe(antes + 1);
+  } finally {
+    await ctx.dispose();
+  }
+});
+
 test("[AC-FPOR-08] POST válido nace `solicitado`, jamás `aceptado`", async () => {
   const ctx = await playwrightRequest.newContext({ baseURL: ORIGEN });
   try {
@@ -206,6 +237,47 @@ async function sesionDe(page: Page) {
     void guardar();
   }, SECRETO);
 }
+
+test("[AC-FPOR-13] un rebote de bultos NO cierra el formulario de corrección: el mensaje queda legible", async ({
+  page,
+}) => {
+  const [solicitado] = await con(BD, (c: Conexion) =>
+    c.sql<{ id: string }>(
+      `insert into encargos (empresa_cliente_id, destino_id, bultos, estado)
+       values ($1, $2, 6, 'solicitado')
+       returning id::text as id`,
+      [empresaId, destinoId],
+    ),
+  );
+
+  // El rebote se fabrica por interceptación (§0: la guarda REAL es el 422 del servidor, ya
+  // probado arriba por HTTP puro; lo que este test ejerce es la reacción del CLIENTE ante
+  // CUALQUIER 4xx que no sea `ya_aceptado` — antes de AC-FPOR-13 cerraba el formulario igual).
+  await page.route("**/cliente/api/encargos/*", (route) =>
+    route.fulfill({
+      status: 422,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: "bultos_fuera_de_rango",
+        mensaje: "Los bultos van de 1 a 500. Un cero no es un encargo y más de 500 es un camión entero.",
+      }),
+    }),
+  );
+
+  await sesionDe(page);
+  await page.goto(`${ORIGEN}/cliente/encargos`);
+  const fila = page.locator(`[data-testid="encargo-item"][data-id="${solicitado!.id}"]`);
+  await fila.getByTestId("corregir-encargo").click();
+  await fila.getByTestId("editar-bultos").fill("30");
+  await expect(fila.getByTestId("guardar-encargo")).toBeEnabled();
+  await fila.getByTestId("guardar-encargo").click();
+
+  // Antes de AC-FPOR-13, CUALQUIER mensaje del servidor (no solo «ya_aceptado») cerraba el
+  // formulario en el mismo tick — el usuario nunca alcanzaba a leer por qué falló su corrección.
+  await expect(fila.getByRole("alert")).toContainText("Los bultos van de 1 a 500");
+  await expect(fila.getByTestId("editar-bultos")).toBeVisible();
+  expect((await filaDe(solicitado!.id)).bultos, "el formulario nunca llegó a guardar de verdad").toBe(6);
+});
 
 test("[AC-FPOR-08] la UI ofrece «Corregir» solo en el encargo `solicitado`, nunca en el `aceptado`", async ({
   page,

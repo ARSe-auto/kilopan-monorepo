@@ -30,6 +30,12 @@ export default function PortalNuevo() {
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creado, setCreado] = useState(false);
+  // UN client_uuid por intento de alta [AC-FPOR-13]: doble-tap o reintento tras un corte de red
+  // a mitad del submit reenvían el MISMO valor y `crearEncargo` (on conflict do nothing) devuelve
+  // el encargo ya creado en vez de duplicarlo — mismo patrón que `FormularioDeDisputa`
+  // (cliente/liquidaciones/page.tsx). Se renueva solo tras un alta EXITOSA, para que el próximo
+  // encargo (uno realmente distinto) no colisione con el anterior.
+  const [clientUuid, setClientUuid] = useState(() => crypto.randomUUID());
   // «Sin conexión se deshabilita mostrando el estado obligatorio de §5.7» [AC-FPOR-09,
   // AC-FPOR-12]: extraído a `useConexion()` (`cliente/conexion.ts`) para que las otras 3
   // pantallas del portal no repitan este mismo `useEffect`.
@@ -93,7 +99,7 @@ export default function PortalNuevo() {
     setCreado(false);
     const respuesta = await pedir("/cliente/api/encargos", {
       method: "POST",
-      body: JSON.stringify({ destino_id: destinoId, bultos: bultosNumero }),
+      body: JSON.stringify({ destino_id: destinoId, bultos: bultosNumero, client_uuid: clientUuid }),
     }).catch(() => null);
     setEnviando(false);
     if (!respuesta?.ok) {
@@ -104,6 +110,7 @@ export default function PortalNuevo() {
     setDestinoId("");
     setBultos("");
     setCreado(true);
+    setClientUuid(crypto.randomUUID());
   }
 
   return (

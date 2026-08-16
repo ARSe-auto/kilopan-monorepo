@@ -358,10 +358,68 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
       infraestructura de AC-FMIG-02 (módulo 08, «Theming por filas», aún no
       construida); sin AC-FMIG-02 este ítem no tiene qué consumir — BLOQUEADO, no
       abandonado (§5.1, §9.2) — oráculo: CI [AC-FPOR-18]
-- [ ] (P2) Revisión adversarial del hito «portal» sin hallazgos críticos abiertos:
+- [ ] (P3) Gap de cobertura hallado por AC-FPOR-13: e2e explícito de «empresa X del
+      tenant contra la línea/evidencia de liquidación de la empresa Y» sobre
+      `POST /cliente/api/liquidacion-lineas/[id]/disputa` y
+      `GET /cliente/api/liquidacion-lineas/[id]/evidencia` — el código de
+      `disputarLineaDelCliente`/`evidenciaDeLineaDelCliente`
+      (`servidor/portal-cliente.ts`) ya confirma la propiedad de la línea contra la
+      empresa de la sesión ANTES de mutar/leer (no es un bypass), pero ningún e2e lo
+      demuestra con datos reales entre dos empresas del mismo tenant, a diferencia de
+      `portal-aislamiento.spec.ts` que sí lo hace para los 4 GET del portal — oráculo:
+      CI [AC-FPOR-19]
+- [x] (P2) Revisión adversarial del hito «portal» sin hallazgos críticos abiertos:
       datos malformados, doble-tap, red cortada a mitad de flujo, empresa A viendo lo
       de B, tenant A contra B, covering array; hallazgos → ítems del plan (§9.4) —
       oráculo: humano [AC-FPOR-13]
+  - Revisión de código contra las 6 categorías, sobre TODO el perímetro `/cliente/*` +
+    selector de modo (rutas, `servidor/portal-cliente.ts`, `servidor/portal.ts`,
+    `servidor/gobierno.ts`, `dominio/manifest-cliente.ts`, `dominio/portal-ruta.ts`,
+    las 4 pantallas). **Datos malformados**: JSON roto/cuerpo ausente cae en catch en
+    TODAS las rutas mutadoras; IDs no-UUID rebotan `noExiste()` antes de tocar la BD.
+    **Empresa A viendo lo de B**: cada lectura/mutación filtra explícito por
+    `empresa_cliente_id = sesion.empresaClienteId` (el pool es `flota_admin`, RLS no
+    alcanza) — incluidas las dos rutas anidadas que el AC pide mirar con atención
+    (`liquidacion-lineas/[id]/disputa` y `.../evidencia`: la propiedad de la línea se
+    confirma ANTES de mutar/leer). **Tenant A contra B**: `cruce-tenant.spec.ts`
+    (autogenerada del manifiesto) cubre las 4 lecturas y las 4 mutaciones del portal
+    con comparación de huella de B. **Covering array**: módulo OFF, empresa sin datos,
+    lote CSV mixto — cubiertos por `portal-modulo-apagado`/`portal-aa-estados`/
+    `portal-importar-csv`.spec.ts.
+  - **Hallazgo CRÍTICO, arreglado en este commit**: el alta individual del portal
+    (`cliente/nuevo/page.tsx`) nunca mandaba `client_uuid` — a diferencia de CADA otro
+    formulario mutador del producto (`bandeja`, `turno/abrir`, `turno/cerrar`,
+    `FormularioDeDisputa` de este mismo portal). Como `encargos.client_uuid` es
+    NULLable y `unique(tenant_id, client_uuid)` no deduplica NULL, un doble-tap o un
+    reintento tras un corte de red a mitad del submit creaba un encargo DUPLICADO real
+    y facturable, sin ninguna guarda server-side (solo el `disabled` del botón). Fix:
+    un `client_uuid` por intento (`useState(() => crypto.randomUUID())`), renovado
+    SOLO tras un alta exitosa — mismo patrón que `FormularioDeDisputa`. Test nuevo:
+    `e2e/portal-encargos-alta.spec.ts` («doble-tap / reintento con el MISMO
+    client_uuid deja UNA sola fila»).
+  - **Hallazgo NO crítico, arreglado en este commit**: `EdicionDeEncargo.guardar()`
+    (`cliente/encargos/page.tsx`) cerraba el formulario de corrección ante CUALQUIER
+    422 con `mensaje` (que es prácticamente todos), no solo `ya_aceptado` — el usuario
+    perdía el feedback de por qué falló su corrección (p. ej. bultos fuera de rango)
+    porque el formulario se desmontaba en el mismo tick que aparecía el error. Fix:
+    solo cierra en `error === "ya_aceptado"`. Test nuevo en el mismo e2e («un rebote
+    de bultos NO cierra el formulario de corrección»).
+  - **Hallazgos NO críticos, registrados como ítems nuevos del plan** (§9.4, sin
+    tocar código de otro AC en este commit): (a) `fecha_servicio` nunca se valida
+    como fecha antes del cast `::date` en `crearEncargo`/`editarEncargo`
+    (`servidor/encargos.ts`) — un valor no-fecha sube como 500 no tipado en vez del
+    422 que el resto del código respeta; función COMPARTIDA por el portal y por
+    `bandeja/page.tsx` del operador (AC-FRUT-01/03), así que el fix queda fuera de
+    este AC — nuevo AC-FRUT-25 (spec 03). (b) el mismo patrón de `client_uuid` que
+    esta revisión encontró y cerró en el portal existe TAL CUAL en
+    `bandeja/page.tsx` (`client_uuid: crypto.randomUUID()` generado de nuevo en CADA
+    llamada a `guardar()`, sin `enviando` que desactive el botón): un doble-tap ahí
+    también duplicaría un encargo — mismo AC-FRUT-25. (c) sin caso e2e explícito
+    «empresa X contra la línea/evidencia de empresa Y del mismo tenant» sobre
+    `POST .../disputa` y `GET .../evidencia` — el código está correcto por lectura
+    (sin bypass), es gap de cobertura — nuevo AC-FPOR-19 (este mismo módulo).
+  - Verificación: `bash packages/metodo/scripts/check.sh --full --app=flota` en
+    verde, con los dos e2e nuevos citados corriendo en PRIMER PLANO.
 - [ ] (P2) Piloto A (e-auto DaaS) en producción — umbral del maestro, sin
       ampliaciones (DONE-adopción es definición CERRADA del §10): 7 días de producción
       operando con rutas manuales y ≥90% de entregas con evidencia (los umbrales que

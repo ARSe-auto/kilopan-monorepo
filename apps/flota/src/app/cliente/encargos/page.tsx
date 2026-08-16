@@ -296,14 +296,19 @@ function EdicionDeEncargo({
     }).catch(() => null);
     setEnviando(false);
     if (!respuesta?.ok) {
-      const cuerpo = (await respuesta?.json().catch(() => ({}))) as { mensaje?: string } | undefined;
+      const cuerpo = (await respuesta?.json().catch(() => ({}))) as
+        | { mensaje?: string; error?: string }
+        | undefined;
       setError(
         cuerpo?.mensaje ??
           "No se pudo corregir el encargo. Revisá tu conexión e intentá de nuevo.",
       );
-      // El operador aceptó justo mientras se editaba: `alGuardar` recarga la lista y el
-      // botón «Corregir» desaparece solo, porque el `estado` que vuelve ya no es `solicitado`.
-      if (cuerpo?.mensaje) alGuardar();
+      // Solo cuando el operador aceptó justo mientras se editaba (`ya_aceptado`) tiene sentido
+      // cerrar el formulario: `alGuardar` recarga la lista y el botón «Corregir» desaparece
+      // solo, porque el `estado` que vuelve ya no es `solicitado`. Cualquier OTRO rebote
+      // (bultos, destino, attrs) es un dato que el propio usuario puede corregir en el mismo
+      // formulario — cerrarlo ahí [AC-FPOR-13] le tapaba el mensaje que acababa de leer.
+      if (cuerpo?.error === "ya_aceptado") alGuardar();
       return;
     }
     alGuardar();
