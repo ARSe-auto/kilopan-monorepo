@@ -748,9 +748,30 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       de `personas` + sus vínculos de usuario y dispositivos) sin incluir datos de
       terceros; el acceso queda en la bitácora de accesos del admin (§3.E1.15, §7.8).
       El maestro NO fija quién lo acciona (§3.E1.15 solo dice «export ARCO»; bajo la
-      Ley 21.719 el titular del derecho es la persona): actor, formato y alcance fino
-      pendientes de Preguntas al dueño #8 — el AC queda condicionado a esa respuesta —
-      oráculo: CI [AC-FIDN-15]
+      Ley 21.719 el titular del derecho es la persona) — RESPONDIDA por Alexis el
+      11-ago-2026 (Pregunta 8): lo acciona SOLO `admin_tenant`, formato JSON
+      estructurado (registro: `docs/respuestas-dueno-2026-08-11-spec01-spec03.md`).
+      BLOQUEADO por DDL de sesión supervisada, hallazgo de esta investigación: la
+      bitácora del §3.E1.15 (`auditoriaDeAccesos`, AC-FIDN-12,
+      `apps/flota/src/servidor/gobierno.ts`) lee ÚNICAMENTE `eventos` con código
+      `gobierno.%`, y ese catálogo (`evento_tipo`) se siembra SOLO por migración —
+      0014 en adelante, un `insert into evento_tipo` por AC nuevo de gobierno (mismo
+      patrón que `gobierno.passkey_registrada`/`propiedad_transferida` en
+      `0068_transferencia_de_propiedad.sql`, AC-FIDN-13). Hoy no existe un código
+      `gobierno.arco_exportado`, y sin él `registrarEvento` no tiene con qué escribir
+      el acceso — un export sin esa fila deja de cumplir el propio texto del AC. El
+      motor no escribe migraciones (mismo root cause ya documentado en
+      AC-FTAR-16/17/18 y AC-FPOR-03). Falta, de sesión supervisada: migración nueva
+      con `insert into evento_tipo (codigo, descripcion) values
+      ('gobierno.arco_exportado', …)`. Sembrado eso, el resto es directo: agregar el
+      código a `EVENTOS` en `servidor/gobierno.ts`, una función
+      `exportarArco(pool, sesion, personaId)` que arma el JSON (persona + usuarios +
+      dispositivos de ESA persona, `secreto_hash`/`pin_hash` jamás en claro) dentro de
+      `enActo` + `registrarEvento`, y la ruta
+      `POST /api/gobierno/personas/[id]/arco` con `guardia()` — mismo patrón que
+      `servidor/transferencia.ts` y `app/api/gobierno/transferencia/route.ts` —,
+      registrada en `apps/flota/rutas/manifiesto.json` como `recurso` con
+      `ids_de_b: {tabla: "personas", columna: "id"}` — oráculo: CI [AC-FIDN-15]
 - [ ] (P2) Validación en vivo (DONE-adopción §10, jamás bloquea al loop): enrolamiento
       real de un trabajador de punta a punta — emisión, solicitud (~90 s), aprobación,
       sesión activa — en <5 min total, en un teléfono real con guía A2HS seguida sin
