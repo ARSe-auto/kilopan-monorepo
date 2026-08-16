@@ -30,11 +30,14 @@ import { FEATURES } from "../src/servidor/config.ts";
 // de este AC — así que tampoco entra acá.
 //
 // EL FIXTURE de `/panel/funciones` cubre un plan con las TRES features del catálogo completo
-// (`documentos_vencidos_bloquean`, `modulo_vehiculos`, `certificaciones_vencidas_bloquean`, todas
-// apagadas de fábrica): así la pantalla muestra sus TRES "Encender" a la vez, y el chequeo se
-// ejerce sobre más de una instancia real de la misma acción — no sobre un caso vacío que pasaría
-// por accidente. `/panel/terminologia` no necesita fixture de plan: sus botones son
-// `variante="neutro"` con los datos base (`TERMINOLOGIA_BASE_ES_CL`).
+// (`documentos_vencidos_bloquean`, `modulo_vehiculos`, `certificaciones_vencidas_bloquean`), CON
+// un override explícito en OFF sobre cada una: `entitlement_efectivo` es `override ?? plan`
+// (0002_entitlements_efectivos.sql), así que estar en el plan SIN override ya resuelve
+// `habilitada=true` — el estado "apagada-y-en-plan" que ofrece "Encender" exige el override. Así
+// la pantalla muestra sus TRES "Encender" a la vez, y el chequeo se ejerce sobre más de una
+// instancia real de la misma acción — no sobre un caso vacío que pasaría por accidente.
+// `/panel/terminologia` no necesita fixture de plan: sus botones son `variante="neutro"` con los
+// datos base (`TERMINOLOGIA_BASE_ES_CL`).
 //
 // BASE PROPIA (`pantalla_primaria`): un plan que cubre el catálogo entero no puede compartir
 // tenant con `funciones.spec.ts` (AC-FMIG-08), que sella su propio plan parcial y muta
@@ -97,6 +100,17 @@ test.beforeAll(async () => {
     [planId, Object.values(FEATURES)],
   );
   await control.query("update tenants set plan_id = $2 where id = $1", [tenantId, planId]);
+
+  // `entitlement_efectivo` es LITERAL (`override ?? plan`, 0002_entitlements_efectivos.sql): estar
+  // EN el plan y sin override ya resuelve `habilitada=true` — no alcanza con el plan para que la
+  // pantalla ofrezca "Encender". El estado "apagada-y-en-plan" que este fixture necesita exige un
+  // override explícito en OFF sobre las tres, encima del plan.
+  await control.query(
+    `insert into tenant_feature_overrides (tenant_id, feature_id, enabled, motivo)
+     select $1, id, false, 'apagada a propósito por el fixture de AC-FMIG-21: sin este override, override ?? plan resuelve habilitada=true por estar en el plan, y la pantalla no ofrecería Encender'
+       from features where lookup_key = any($2::text[])`,
+    [tenantId, Object.values(FEATURES)],
+  );
 });
 
 test.afterAll(async () => {

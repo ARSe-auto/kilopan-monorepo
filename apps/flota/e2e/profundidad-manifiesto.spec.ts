@@ -109,7 +109,7 @@ let sesionesPorRol: { rol: string; secreto: string }[] = [];
 test.beforeAll(async () => {
   await limpiarFixture(sql);
   const [empresa] = await sql<{ id: string }>(
-    "insert into empresas_cliente (rut, razon_social) values ('76.543.210-9', 'Empresa del fixture de AC-FMIG-21') returning id::text as id",
+    "insert into empresas_cliente (rut, razon_social) values ('76.543.210-3', 'Empresa del fixture de AC-FMIG-21') returning id::text as id",
   );
   empresaClienteFixtureId = empresa!.id;
   sesionesPorRol = await Promise.all(ROLES.map((rol, indice) => enrolarPorRol(rol, indice)));
