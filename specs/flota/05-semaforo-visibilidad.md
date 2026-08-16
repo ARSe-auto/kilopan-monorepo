@@ -673,6 +673,16 @@ activa SOLO `admin_tenant`: mientras la pregunta 1 esté abierta, `operador` y
     El AC queda anotado en `packages/metodo/acs-bloqueados-flota.txt` para que ninguna
     tanda del motor se gaste en él hasta que exista la respuesta a la pregunta 2.
 - [ ] (P2) BLOQUEADO por la Pregunta al dueño 12 — «hints re-mostrados = bug» (§10, telemetría de producto): el concepto de hint no existe en ninguna de las 9 specs del conjunto y el enum CERRADO de `client_metric` (§4.6) no trae tipo para medirlo (misma situación que AC-FSEM-23); este módulo, dueño de la telemetría de producto y del panel §10, la reclama para que la obligación no quede huérfana y NO construye hints, ni amplía el enum, ni inventa una superficie de guía hasta la respuesta. Resuelta, el AC se reescribe ANTES de implementarse con su oráculo (fuente de la métrica + indicador en el panel §10, con «re-mostrado» como condición de alerta) — oráculo: producción (condicionado a la Pregunta 12) [AC-FSEM-25]
+  - Revisado el 16-ago-2026: sin mitad de software construible, misma clase que AC-FSEM-23
+    y no la de AC-FSEM-14. La pregunta 12 no es solo el tipo que falta en el enum de
+    `client_metric` — es doble: (1) si el hint existe siquiera en E1 (¿guía A2HS del
+    enrolamiento §5.4? ¿demo tocable del wizard §3.E1.13? ¿primeras pasadas de un flujo de
+    terreno?) y (2) si existe, si se cablea como tipo nuevo del enum CERRADO (cambio de
+    esquema que toca los módulos 00-DDL y 04-ingesta) o se deriva de `eventos`. Construir
+    cualquiera de las dos vías hoy sería inventar tanto la superficie de guía como el
+    mecanismo de medición — ninguna de las 9 specs del conjunto la especifica. El AC queda
+    anotado en `packages/metodo/acs-bloqueados-flota.txt` para que ninguna tanda del motor
+    se gaste en él hasta que exista la respuesta a la pregunta 12.
 
 ## Dependencias
 
