@@ -357,7 +357,7 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
       `entitlement_efectivo()` en `control` ya lo refleja de inmediato (la distinción
       que hace cierto «rige recién en el próximo bootstrap»). `npx playwright test
       e2e/preset-modo.spec.ts` 2/2 en PRIMER PLANO y
-      `bash packages/metodo/scripts/check.sh --full --app=flota` en verde.
+      `bash packages/metodo/scripts/check.sh --full --app=flota` en verde. [AC-FPOR-16]
 - [ ] (P1) Empresa implícita en mi_flota — efecto observable (el trigger es del
       módulo 03, §4.5; aquí solo se aserta su efecto): un tenant recién provisionado
       en modo `mi_flota` tiene exactamente UNA `empresa_cliente` — la implícita, la
