@@ -27,3 +27,4 @@
 # ─── De oráculo HUMANO: no se cierran con código, JAMÁS bloquean al loop (§9.2, §10) ──
 AC-FVEH-16   # DONE-adopción: alta real cronometrada en menos de dos minutos y lectura del semáforo sin ayuda. Dueño nombrado: Alexis.
 AC-FRUT-16   # Camino dorado de custodia del piloto B en producción, 14 días con ≥95% de entregas con evidencia. Dueño nombrado: Alexis.
+AC-FPOR-14   # Gemelo del anterior para el piloto A (e-auto DaaS): 7 días de producción con rutas manuales y ≥90% de entregas con evidencia, medidos por Alexis en el panel. Es DONE-adopción del §10 («checklist humana, dueño: Alexis; JAMÁS bloquea al loop»), no DONE-software: no hay nada que construir ni test que lo pueda ejercer — el oráculo son 7 días de operación real. Se quita cuando el piloto A corrió y Alexis leyó el umbral en el panel. (16-ago-2026: el motor lo eligió como si fuera construible; sin esta línea lo habría reintentado en cada tanda.)
