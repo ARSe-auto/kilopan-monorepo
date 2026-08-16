@@ -1,11 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { BotonPrimario, EstadoCargando, EstadoError, EstadoVacio } from "@kilopan/miga/componentes/index.tsx";
-import { tipografia, superficie, grilla, enfasis } from "@kilopan/miga/tokens.ts";
+import { tipografia, grilla, enfasis } from "@kilopan/miga/tokens.ts";
 import { semantico } from "@kilopan/miga/estructura.ts";
 import { fechaEsCl, horaEsCl } from "../../../../../../packages/nucleo-comun/src/fechas.ts";
 import { pedir } from "../../../cliente/aparato.ts";
+import { useConexion } from "../../../cliente/conexion.ts";
+import { TERMINOLOGIA_PORTAL_BASE, resolverTerminologiaPortal, type TerminologiaPortal } from "../../../dominio/portal-terminologia.ts";
+import { TEMA_PORTAL_CSS } from "../tema-portal.ts";
 
 // «Encargos», la segunda pantalla del portal [AC-FPOR-07] — spec 07 §2.2.
 //
@@ -34,14 +38,6 @@ type ResultadoDeEncargo = {
   evidencias: EvidenciaDeEncargo[];
 };
 
-const ETIQUETA_ESTADO: Record<string, string> = { solicitado: "Solicitado", aceptado: "Aceptado" };
-
-const ETIQUETA_RESULTADO: Record<string, string> = {
-  exito: "Entregado",
-  parcial: "Entrega parcial",
-  fallo: "No entregado",
-};
-
 const ETIQUETA_EVIDENCIA: Record<string, string> = {
   firma: "Firma",
   foto: "Foto",
@@ -55,16 +51,20 @@ const ETIQUETA_EVIDENCIA: Record<string, string> = {
 
 export default function PortalEncargos() {
   const [id, setId] = useState<string | null | undefined>(undefined);
+  const online = useConexion();
+  const [terminologia, setTerminologia] = useState<TerminologiaPortal>(TERMINOLOGIA_PORTAL_BASE);
   useEffect(() => {
-    setId(new URLSearchParams(window.location.search).get("id"));
+    const parametros = new URLSearchParams(window.location.search);
+    setId(parametros.get("id"));
+    setTerminologia(resolverTerminologiaPortal(parametros.get("terminologia") ?? undefined));
   }, []);
 
   if (id === undefined) return null;
-  if (id === null) return <ListaEncargos />;
-  return <DetalleEncargo id={id} />;
+  if (id === null) return <ListaEncargos online={online} terminologia={terminologia} />;
+  return <DetalleEncargo id={id} online={online} terminologia={terminologia} />;
 }
 
-function ListaEncargos() {
+function ListaEncargos({ online, terminologia }: { online: boolean; terminologia: TerminologiaPortal }) {
   const [encargos, setEncargos] = useState<EncargoDelCliente[] | undefined>(undefined);
   const [error, setError] = useState(false);
   const [enEdicion, setEnEdicion] = useState<string | null>(null);
@@ -83,13 +83,27 @@ function ListaEncargos() {
   }, [cargar]);
 
   return (
-    <main data-testid="portal-encargos">
+    <main className="portal-superficie" data-testid="portal-encargos" style={pagina}>
+      <style>{TEMA_PORTAL_CSS}</style>
       <h1 style={titulo}>Encargos</h1>
+
+      {!online && (
+        <p data-testid="encargos-sin-conexion" role="status" style={{ ...pie, margin: 0, color: "var(--portal-alerta)", fontWeight: enfasis.fuerte }}>
+          Sin conexión — esta lista puede estar desactualizada.
+        </p>
+      )}
 
       {error && <EstadoError mensaje="No se pudieron cargar tus encargos. Revisá tu conexión." alReintentar={() => void cargar()} />}
       {encargos === undefined && !error && <EstadoCargando filas={4} />}
       {encargos !== undefined && !error && encargos.length === 0 && (
-        <EstadoVacio mensaje="Todavía no tenés encargos. Se crean desde «Nuevo / Importar CSV»." />
+        <EstadoVacio
+          mensaje="Todavía no tenés encargos. Se crean desde «Nuevo / Importar CSV»."
+          accion={
+            <Link href="/cliente/nuevo" data-testid="cta-vacio-encargos" style={enlaceAccion}>
+              Crear un encargo
+            </Link>
+          }
+        />
       )}
 
       {encargos && encargos.length > 0 && (
@@ -101,8 +115,8 @@ function ListaEncargos() {
                 href={`/cliente/encargos?id=${e.id}`}
                 style={{ ...filaEnlace, textDecoration: "none" }}
               >
-                <span style={cuerpo}>{ETIQUETA_ESTADO[e.estado] ?? e.estado}</span>
-                <span style={{ ...pie, color: superficie.textoDim }}>
+                <span style={cuerpo}>{terminologia.estadoEncargo[e.estado as "solicitado" | "aceptado"] ?? e.estado}</span>
+                <span style={{ ...pie, color: "var(--portal-texto-dim)" }}>
                   {e.bultos} bultos · {fechaEsCl(new Date(`${e.fecha_servicio}T12:00:00`))}
                 </span>
               </a>
@@ -135,7 +149,7 @@ function ListaEncargos() {
   );
 }
 
-function DetalleEncargo({ id }: { id: string }) {
+function DetalleEncargo({ id, online, terminologia }: { id: string; online: boolean; terminologia: TerminologiaPortal }) {
   const [encargo, setEncargo] = useState<EncargoDelCliente | null | undefined>(undefined);
   const [resultado, setResultado] = useState<ResultadoDeEncargo | null>(null);
   const [error, setError] = useState(false);
@@ -155,43 +169,57 @@ function DetalleEncargo({ id }: { id: string }) {
     void cargar();
   }, [cargar]);
 
+  const banner = !online && (
+    <p data-testid="encargos-sin-conexion" role="status" style={{ ...pie, margin: 0, color: "var(--portal-alerta)", fontWeight: enfasis.fuerte }}>
+      Sin conexión — este detalle puede estar desactualizado.
+    </p>
+  );
+
   if (error) {
     return (
-      <main data-testid="portal-encargo-detalle">
+      <main className="portal-superficie" data-testid="portal-encargo-detalle" style={pagina}>
+        <style>{TEMA_PORTAL_CSS}</style>
         <h1 style={titulo}>Encargo</h1>
+        {banner}
         <EstadoError mensaje="No se pudo cargar el encargo. Revisá tu conexión." alReintentar={() => void cargar()} />
       </main>
     );
   }
   if (encargo === undefined) {
     return (
-      <main data-testid="portal-encargo-detalle">
+      <main className="portal-superficie" data-testid="portal-encargo-detalle" style={pagina}>
+        <style>{TEMA_PORTAL_CSS}</style>
         <h1 style={titulo}>Encargo</h1>
+        {banner}
         <EstadoCargando filas={4} />
       </main>
     );
   }
   if (encargo === null) {
     return (
-      <main data-testid="portal-encargo-detalle">
+      <main className="portal-superficie" data-testid="portal-encargo-detalle" style={pagina}>
+        <style>{TEMA_PORTAL_CSS}</style>
         <h1 style={titulo}>Encargo</h1>
+        {banner}
         <EstadoVacio mensaje="Este encargo no existe." />
       </main>
     );
   }
 
   return (
-    <main data-testid="portal-encargo-detalle">
-      <a data-testid="volver-encargos" href="/cliente/encargos" style={{ ...pie, color: superficie.textoDim }}>
+    <main className="portal-superficie" data-testid="portal-encargo-detalle" style={pagina}>
+      <style>{TEMA_PORTAL_CSS}</style>
+      <a data-testid="volver-encargos" href="/cliente/encargos" style={{ ...pie, color: "var(--portal-texto-dim)" }}>
         ← Todos tus encargos
       </a>
       <h1 style={titulo}>Encargo</h1>
+      {banner}
 
       <section data-testid="cabecera-encargo-cliente" style={bloque}>
         <p data-testid="estado-encargo-cliente" style={{ ...cuerpo, margin: 0, fontWeight: enfasis.medio }}>
-          {ETIQUETA_ESTADO[encargo.estado] ?? encargo.estado}
+          {terminologia.estadoEncargo[encargo.estado as "solicitado" | "aceptado"] ?? encargo.estado}
         </p>
-        <p style={{ ...pie, margin: 0, color: superficie.textoDim }}>
+        <p style={{ ...pie, margin: 0, color: "var(--portal-texto-dim)" }}>
           {encargo.bultos} bultos · {fechaEsCl(new Date(`${encargo.fecha_servicio}T12:00:00`))}
         </p>
       </section>
@@ -202,26 +230,26 @@ function DetalleEncargo({ id }: { id: string }) {
         ) : (
           <div style={{ display: "grid", gap: semantico.espacio.entreControles }}>
             <p data-testid="encargo-resultado" style={{ ...cuerpo, margin: 0, fontWeight: enfasis.medio }}>
-              {ETIQUETA_RESULTADO[resultado.resultado] ?? resultado.resultado}
+              {terminologia.resultadoEntrega[resultado.resultado as "exito" | "parcial" | "fallo"] ?? resultado.resultado}
               {resultado.metodo_entrega === "dejado_en_punto" && " — dejado en punto"}
             </p>
             {resultado.motivo_etiqueta && (
-              <p data-testid="encargo-motivo" style={{ ...pie, margin: 0, color: superficie.textoDim }}>
+              <p data-testid="encargo-motivo" style={{ ...pie, margin: 0, color: "var(--portal-texto-dim)" }}>
                 Motivo: {resultado.motivo_etiqueta}
               </p>
             )}
-            <p style={{ ...pie, margin: 0, color: superficie.textoDim }}>
+            <p style={{ ...pie, margin: 0, color: "var(--portal-texto-dim)" }}>
               {fechaEsCl(new Date(resultado.event_time))} {horaEsCl(new Date(resultado.event_time))}
             </p>
             {resultado.evidencias.length === 0 ? (
-              <p style={{ ...pie, margin: 0, color: superficie.textoDim }}>Sin foto ni firma capturada.</p>
+              <p style={{ ...pie, margin: 0, color: "var(--portal-texto-dim)" }}>Sin foto ni firma capturada.</p>
             ) : (
               <ul
                 data-testid="evidencias-encargo-cliente"
                 style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}
               >
                 {resultado.evidencias.map((ev, i) => (
-                  <li key={i} data-testid="evidencia-encargo-cliente" style={{ ...pie, color: superficie.texto }}>
+                  <li key={i} data-testid="evidencia-encargo-cliente" style={{ ...pie, color: "var(--portal-texto)" }}>
                     {ETIQUETA_EVIDENCIA[ev.tipo] ?? ev.tipo} — {fechaEsCl(new Date(ev.capturada_en))}{" "}
                     {horaEsCl(new Date(ev.capturada_en))}
                     {ev.sha256 && (
@@ -293,7 +321,7 @@ function EdicionDeEncargo({
         onChange={(ev) => setBultos(ev.target.value)}
         style={campoEdicion}
       />
-      {error && <p role="alert" style={{ ...pie, margin: 0, color: "#B91C1C" }}>{error}</p>}
+      {error && <p role="alert" style={{ ...pie, margin: 0, color: "var(--portal-error)" }}>{error}</p>}
       <div style={{ display: "flex", gap: semantico.espacio.entreControles }}>
         <BotonPrimario testid="guardar-encargo" disabled={!bultosEsValido || enviando} onClick={() => void guardar()}>
           {enviando ? "Guardando…" : "Guardar"}
@@ -306,9 +334,24 @@ function EdicionDeEncargo({
   );
 }
 
+const pagina = { padding: `${grilla.base * 2}px`, minHeight: "100vh" };
 const titulo = { fontSize: tipografia.display.tamano, fontWeight: tipografia.display.peso, margin: 0 };
-const cuerpo = { fontSize: tipografia.cuerpo.tamano, color: superficie.texto };
+const cuerpo = { fontSize: tipografia.cuerpo.tamano, color: "var(--portal-texto)" };
 const pie = { fontSize: tipografia.pie.tamano };
+const enlaceAccion = {
+  display: "inline-flex",
+  alignItems: "center",
+  minHeight: semantico.toque.operativo,
+  padding: "0 20px",
+  borderRadius: grilla.radio,
+  border: "1px solid var(--portal-hairline)",
+  background: "var(--portal-bg-tarjeta)",
+  color: "var(--portal-texto)",
+  fontSize: tipografia.cuerpo.tamano,
+  fontWeight: enfasis.medio,
+  textDecoration: "none",
+  alignSelf: "flex-start",
+} as const;
 const lista = {
   listStyle: "none",
   margin: 0,
@@ -322,16 +365,16 @@ const tarjeta = {
   gap: 4,
   padding: `${grilla.base}px`,
   borderRadius: grilla.radio,
-  background: superficie.tarjeta,
-  border: `1px solid ${superficie.hairline}`,
+  background: "var(--portal-bg-tarjeta)",
+  border: "1px solid var(--portal-hairline)",
 };
 const botonCorregir = {
   minHeight: semantico.toque.operativo,
   padding: "0 16px",
   borderRadius: grilla.radio,
-  border: `1px solid ${superficie.hairline}`,
-  background: superficie.tarjeta,
-  color: superficie.texto,
+  border: "1px solid var(--portal-hairline)",
+  background: "var(--portal-bg-tarjeta)",
+  color: "var(--portal-texto)",
   fontSize: tipografia.pie.tamano,
   alignSelf: "start" as const,
 };
@@ -340,9 +383,9 @@ const campoEdicion = {
   minHeight: semantico.toque.operativo,
   padding: `${grilla.base}px`,
   borderRadius: grilla.radio,
-  border: `1px solid ${superficie.hairline}`,
-  background: superficie.fondo,
-  color: superficie.texto,
+  border: "1px solid var(--portal-hairline)",
+  background: "var(--portal-bg-pagina)",
+  color: "var(--portal-texto)",
 };
 const filaEnlace = {
   display: "flex",

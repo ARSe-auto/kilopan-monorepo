@@ -1,10 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { BotonPrimario, EstadoError } from "@kilopan/miga/componentes/index.tsx";
-import { tipografia, superficie, grilla } from "@kilopan/miga/tokens.ts";
+import { BotonPrimario, EstadoCargando, EstadoError, EstadoVacio } from "@kilopan/miga/componentes/index.tsx";
+import { tipografia, grilla, enfasis } from "@kilopan/miga/tokens.ts";
 import { semantico } from "@kilopan/miga/estructura.ts";
 import { pedir } from "../../../cliente/aparato.ts";
+import { useConexion } from "../../../cliente/conexion.ts";
+import { TERMINOLOGIA_PORTAL_BASE, resolverTerminologiaPortal, type TerminologiaPortal } from "../../../dominio/portal-terminologia.ts";
+import { TEMA_PORTAL_CSS } from "../tema-portal.ts";
 
 // «Nuevo / Importar CSV», la tercera pantalla del portal [AC-FPOR-07, AC-FPOR-08, AC-FPOR-09] —
 // spec 07 §2.3.
@@ -27,22 +30,13 @@ export default function PortalNuevo() {
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creado, setCreado] = useState(false);
-
-  // «Sin conexión se deshabilita mostrando el estado obligatorio de §5.7» [AC-FPOR-09]. Arranca
-  // en `true` (asumir conectado hasta saber lo contrario, mismo criterio que `ChipEstadoConexion`)
-  // y se corrige apenas monta, para no depender de qué valor trae `navigator.onLine` en el
-  // primer render del servidor.
-  const [online, setOnline] = useState(true);
+  // «Sin conexión se deshabilita mostrando el estado obligatorio de §5.7» [AC-FPOR-09,
+  // AC-FPOR-12]: extraído a `useConexion()` (`cliente/conexion.ts`) para que las otras 3
+  // pantallas del portal no repitan este mismo `useEffect`.
+  const online = useConexion();
+  const [terminologia, setTerminologia] = useState<TerminologiaPortal>(TERMINOLOGIA_PORTAL_BASE);
   useEffect(() => {
-    setOnline(navigator.onLine);
-    const marcarOnline = () => setOnline(true);
-    const marcarOffline = () => setOnline(false);
-    window.addEventListener("online", marcarOnline);
-    window.addEventListener("offline", marcarOffline);
-    return () => {
-      window.removeEventListener("online", marcarOnline);
-      window.removeEventListener("offline", marcarOffline);
-    };
+    setTerminologia(resolverTerminologiaPortal(new URLSearchParams(window.location.search).get("terminologia") ?? undefined));
   }, []);
 
   const [archivoCsv, setArchivoCsv] = useState<File | null>(null);
@@ -91,7 +85,7 @@ export default function PortalNuevo() {
 
   const bultosNumero = Number(bultos);
   const bultosEsValido = Number.isInteger(bultosNumero) && bultosNumero >= 1 && bultosNumero <= 500;
-  const puedeEnviar = destinoId !== "" && bultosEsValido && !enviando;
+  const puedeEnviar = online && destinoId !== "" && bultosEsValido && !enviando;
 
   async function crear() {
     setEnviando(true);
@@ -113,64 +107,84 @@ export default function PortalNuevo() {
   }
 
   return (
-    <main data-testid="portal-nuevo">
+    <main className="portal-superficie" data-testid="portal-nuevo" style={pagina}>
+      <style>{TEMA_PORTAL_CSS}</style>
       <h1 style={titulo}>Nuevo / Importar CSV</h1>
 
       <section data-testid="nuevo-encargo" style={tarjeta}>
         <h2 style={subtitulo}>Encargo nuevo</h2>
-        <p style={cuerpo}>Cargá un encargo indicando destino y bultos. Nace en estado «Solicitado».</p>
+        <p style={cuerpo}>
+          Cargá un encargo indicando destino y bultos. Nace en estado «{terminologia.estadoEncargo.solicitado}».
+        </p>
 
-        <label style={etiqueta} htmlFor="nuevo-destino">Destino</label>
-        <select
-          id="nuevo-destino"
-          data-testid="nuevo-destino"
-          value={destinoId}
-          onChange={(e) => setDestinoId(e.target.value)}
-          disabled={destinos === undefined}
-          style={campo}
-        >
-          <option value="">{destinos === undefined ? "Cargando…" : "Elegí un destino"}</option>
-          {destinos?.map((d) => (
-            <option key={d.id} value={d.id}>{d.nombre}</option>
-          ))}
-        </select>
-
-        <label style={etiqueta} htmlFor="nuevo-bultos">Bultos</label>
-        <input
-          id="nuevo-bultos"
-          data-testid="nuevo-bultos"
-          type="number"
-          inputMode="numeric"
-          min={1}
-          max={500}
-          value={bultos}
-          onChange={(e) => setBultos(e.target.value)}
-          style={campo}
-        />
-        {bultos !== "" && !bultosEsValido && (
-          <p data-testid="nuevo-bultos-invalido" style={{ ...pie, color: "#B91C1C" }}>
-            Los bultos van de 1 a 500.
+        {!online && (
+          <p data-testid="nuevo-encargo-sin-conexion" role="status" style={{ ...pie, color: "var(--portal-alerta)", fontWeight: enfasis.fuerte }}>
+            Sin conexión — crear un encargo necesita red. Volvé a intentarlo cuando se recupere.
           </p>
         )}
 
-        {error && <EstadoError mensaje={error} alReintentar={() => setError(null)} />}
-        {creado && (
-          <p data-testid="nuevo-encargo-creado" role="status" style={{ ...pie, color: superficie.texto }}>
-            Encargo creado. Lo vas a ver en «Encargos» como «Solicitado».
-          </p>
-        )}
+        {destinos !== undefined && destinos.length === 0 ? (
+          <EstadoVacio mensaje="No hay destinos configurados todavía. Contactá a tu operador para que agregue uno." />
+        ) : (
+          <>
+            <label style={etiqueta} htmlFor="nuevo-destino">Destino</label>
+            {destinos === undefined ? (
+              <EstadoCargando filas={1} />
+            ) : (
+              <select
+                id="nuevo-destino"
+                data-testid="nuevo-destino"
+                value={destinoId}
+                onChange={(e) => setDestinoId(e.target.value)}
+                style={campo}
+              >
+                <option value="">Elegí un destino</option>
+                {destinos.map((d) => (
+                  <option key={d.id} value={d.id}>{d.nombre}</option>
+                ))}
+              </select>
+            )}
 
-        <BotonPrimario testid="crear-encargo" disabled={!puedeEnviar} onClick={() => void crear()}>
-          {enviando ? "Creando…" : "Crear encargo"}
-        </BotonPrimario>
+            <label style={etiqueta} htmlFor="nuevo-bultos">Bultos</label>
+            <input
+              id="nuevo-bultos"
+              data-testid="nuevo-bultos"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={500}
+              value={bultos}
+              onChange={(e) => setBultos(e.target.value)}
+              style={campo}
+            />
+            {bultos !== "" && !bultosEsValido && (
+              <p data-testid="nuevo-bultos-invalido" style={{ ...pie, color: "var(--portal-error)" }}>
+                Los bultos van de 1 a 500.
+              </p>
+            )}
+
+            {error && <EstadoError mensaje={error} alReintentar={() => setError(null)} />}
+            {creado && (
+              <p data-testid="nuevo-encargo-creado" role="status" style={{ ...pie, color: "var(--portal-texto)" }}>
+                Encargo creado. Lo vas a ver en «Encargos» como «{terminologia.estadoEncargo.solicitado}».
+              </p>
+            )}
+
+            <BotonPrimario testid="crear-encargo" disabled={!puedeEnviar} onClick={() => void crear()}>
+              {enviando ? "Creando…" : "Crear encargo"}
+            </BotonPrimario>
+          </>
+        )}
       </section>
 
       <section data-testid="importar-csv" style={tarjeta}>
         <h2 style={subtitulo}>Importar CSV</h2>
-        <p style={cuerpo}>Subí un archivo con varios encargos a la vez. Cada fila nace en estado «Solicitado».</p>
+        <p style={cuerpo}>
+          Subí un archivo con varios encargos a la vez. Cada fila nace en estado «{terminologia.estadoEncargo.solicitado}».
+        </p>
 
         {!online && (
-          <p data-testid="csv-sin-conexion" role="status" style={{ ...pie, color: "#B45309" }}>
+          <p data-testid="csv-sin-conexion" role="status" style={{ ...pie, color: "var(--portal-alerta)" }}>
             Sin conexión — la importación necesita red. Volvé a intentarlo cuando se recupere.
           </p>
         )}
@@ -207,8 +221,8 @@ export default function PortalNuevo() {
         )}
 
         {resultadoCsv && (
-          <p data-testid="csv-importado" role="status" style={{ ...pie, color: superficie.texto }}>
-            Se importaron {resultadoCsv.creados} encargo(s). Los vas a ver en «Encargos» como «Solicitado».
+          <p data-testid="csv-importado" role="status" style={{ ...pie, color: "var(--portal-texto)" }}>
+            Se importaron {resultadoCsv.creados} encargo(s). Los vas a ver en «Encargos» como «{terminologia.estadoEncargo.solicitado}».
           </p>
         )}
 
@@ -224,26 +238,27 @@ export default function PortalNuevo() {
   );
 }
 
+const pagina = { padding: `${grilla.base * 2}px`, minHeight: "100vh" };
 const titulo = { fontSize: tipografia.display.tamano, fontWeight: tipografia.display.peso, margin: 0 };
 const subtitulo = { fontSize: tipografia.titulo.tamano, fontWeight: tipografia.titulo.peso, margin: 0 };
-const cuerpo = { fontSize: tipografia.cuerpo.tamano, color: superficie.texto, margin: 0 };
+const cuerpo = { fontSize: tipografia.cuerpo.tamano, color: "var(--portal-texto)", margin: 0 };
 const pie = { fontSize: tipografia.pie.tamano, margin: 0 };
-const etiqueta = { fontSize: tipografia.cuerpo.tamano, color: superficie.texto, fontWeight: 600 };
+const etiqueta = { fontSize: tipografia.cuerpo.tamano, color: "var(--portal-texto)", fontWeight: 600 };
 const campo = {
   fontSize: tipografia.cuerpo.tamano,
   minHeight: semantico.toque.operativo,
   padding: `${grilla.base}px`,
   borderRadius: grilla.radio,
-  border: `1px solid ${superficie.hairline}`,
-  background: superficie.tarjeta,
-  color: superficie.texto,
+  border: "1px solid var(--portal-hairline)",
+  background: "var(--portal-bg-tarjeta)",
+  color: "var(--portal-texto)",
 };
 const tarjeta = {
   display: "grid",
   gap: semantico.espacio.entreControles,
   padding: `${grilla.base}px`,
   borderRadius: grilla.radio,
-  background: superficie.tarjeta,
-  border: `1px solid ${superficie.hairline}`,
+  background: "var(--portal-bg-tarjeta)",
+  border: "1px solid var(--portal-hairline)",
   marginTop: semantico.espacio.entreTarjetas,
 };
