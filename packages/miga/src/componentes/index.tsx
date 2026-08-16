@@ -1,6 +1,7 @@
 export { CifraGrande } from "./CifraGrande.tsx";
 export { TecladoNumerico } from "./TecladoNumerico.tsx";
 export { BotonPrimario } from "./BotonPrimario.tsx";
+export { BotonTactil } from "./BotonTactil.tsx";
 export { SelectorUnToque } from "./SelectorUnToque.tsx";
 export { ChipEstadoConexion } from "./ChipEstadoConexion.tsx";
 export { ChipOperador } from "./ChipOperador.tsx";

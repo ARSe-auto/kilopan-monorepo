@@ -8,6 +8,7 @@ import { TENANTS } from "./preparar-tenants.mjs";
 import { CIFRA_OPERATIVA, RELOJ, UNDO } from "../../../packages/nucleo-comun/src/constants.ts";
 import { createHash } from "node:crypto";
 import { PUERTO_E2E } from "./puerto.ts";
+import { medirTransicion, UMBRAL_LATENCIA_MS, UMBRAL_SALTO_FRAME_MS } from "./frame-timing.ts";
 
 // La recepción de carga en el andén (F2) [AC-FRUT-07] — §5.2 F2, §5.3, §0, §4.7, §7.6.
 //
@@ -200,6 +201,37 @@ test("[AC-FRUT-07] recibir conforme entra en el presupuesto del §5.3", async ({
   // El teclado del SISTEMA jamás aparece (§5.7): se verifica sobre el DOM, no de memoria.
   const inputs = await page.evaluate(() => document.querySelectorAll("input, textarea").length);
   expect(inputs, "la pantalla del andén tiene un campo del sistema").toBe(0);
+});
+
+test("[AC-FMIG-19] elegir el vehículo entra a «paso-conteo» en <1s y sin salto de frame — gate CI de terreno", async ({
+  page,
+}) => {
+  await sesionDe(page);
+  await page.goto(`${EN_A}/carga`);
+  await expect(page.getByTestId("recepcion-de-carga")).toBeVisible();
+  await page.getByTestId("teclado-pin").getByRole("button", { name: "1", exact: true }).click();
+  await page.getByTestId("teclado-pin").getByRole("button", { name: "2", exact: true }).click();
+  await page.getByTestId("teclado-pin").getByRole("button", { name: "3", exact: true }).click();
+  await page.getByTestId("teclado-pin").getByRole("button", { name: "4", exact: true }).click();
+  await page.getByTestId("continuar-pin").click();
+
+  // §5.7: "<1s por interacción" y "transiciones 60fps" son gate de CI BLOQUEANTE
+  // (AC-FMIG-19) — proxy de laboratorio sin Lighthouse, mismo precedente que AC-PERF-04.
+  const medicion = await medirTransicion(
+    page,
+    () => page.getByTestId(`vehiculo-${PATENTE}`).click(),
+    () => page.getByTestId("paso-conteo").waitFor({ state: "visible" }),
+  );
+
+  expect(
+    medicion.latenciaMs,
+    `la transición a "paso-conteo" tardó ${medicion.latenciaMs}ms — sobre el techo de ${UMBRAL_LATENCIA_MS}ms del §5.7`,
+  ).toBeLessThan(UMBRAL_LATENCIA_MS);
+  expect(medicion.frames, "no se capturó ni un frame — la medición es vacía").toBeGreaterThan(0);
+  expect(
+    medicion.saltoMaximoMs,
+    `un frame tardó ${medicion.saltoMaximoMs}ms en pintarse tras el anterior — jank sobre el techo de ${UMBRAL_SALTO_FRAME_MS}ms`,
+  ).toBeLessThan(UMBRAL_SALTO_FRAME_MS);
 });
 
 test("[AC-FRUT-07] la cifra operativa cumple la familia canónica del §0", async ({

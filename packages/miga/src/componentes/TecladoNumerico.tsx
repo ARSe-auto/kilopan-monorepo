@@ -1,5 +1,6 @@
 import { tipografia, grilla } from "../tokens.ts";
 import { componente } from "../estructura.ts";
+import { BotonTactil } from "./BotonTactil.tsx";
 
 // Teclado numérico PROPIO — jamás el teclado del sistema (PROMPT_MAESTRO.md §5).
 // El tamaño de tecla sale de `componente.tecla`, que lo toma de la familia canónica del
@@ -90,7 +91,7 @@ export function TecladoNumerico({
         const etiqueta =
           tecla === "," ? (permitirGuion ? "−" : permitirK ? "K" : tecla) : tecla;
         return (
-          <button
+          <BotonTactil
             key={tecla}
             type="button"
             onClick={() => tocar(etiqueta)}
@@ -111,7 +112,7 @@ export function TecladoNumerico({
             }}
           >
             {etiqueta}
-          </button>
+          </BotonTactil>
         );
       })}
     </div>

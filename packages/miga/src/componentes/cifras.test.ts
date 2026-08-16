@@ -22,6 +22,10 @@ const COMPONENTES_CON_CIFRAS = ["CifraGrande.tsx", "TecladoNumerico.tsx"];
 // frase corriente, no en una columna que deba alinearse. Fuera del alcance del AC.
 const COMPONENTES_SIN_CIFRAS = [
   "BotonPrimario.tsx",
+  // AC-FMIG-19: envoltorio del feedback táctil simulado (hundimiento visual al presionar,
+  // §5.7 — no hay Vibration API). Renderiza `children` tal cual, igual que BotonPrimario;
+  // nunca interpola dinero ni peso propio.
+  "BotonTactil.tsx",
   "ChipEstadoConexion.tsx",
   "ChipOperador.tsx",
   "Copyright.tsx",

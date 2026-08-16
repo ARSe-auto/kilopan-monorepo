@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { superficie, semantico, tipografia, grilla, enfasis } from "../tokens.ts";
 import { componente } from "../estructura.ts";
+import { BotonTactil } from "./BotonTactil.tsx";
 
 // AC-H0-11: los cuatro estados obligatorios de todo listado. El defecto que cierran no es
 // estético: hoy un error de red se ve IDÉNTICO a «no hay nada». El maestro lo dice con el
@@ -107,7 +108,7 @@ export function EstadoError({ mensaje, alReintentar }: { mensaje: string; alRein
       >
         {mensaje}
       </p>
-      <button
+      <BotonTactil
         type="button"
         onClick={alReintentar}
         style={{
@@ -124,7 +125,7 @@ export function EstadoError({ mensaje, alReintentar }: { mensaje: string; alRein
         }}
       >
         Reintentar
-      </button>
+      </BotonTactil>
     </div>
   );
 }

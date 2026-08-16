@@ -1,5 +1,6 @@
 import { tipografia, grilla, enfasis } from "../tokens.ts";
 import { componente } from "../estructura.ts";
+import { BotonTactil } from "./BotonTactil.tsx";
 
 // Botón primario full-width, anclado abajo en safe-area (PROMPT_MAESTRO.md §5). El alto
 // mínimo sale de `componente.botonPrimario`, que lo toma de la familia canónica del §0:
@@ -21,7 +22,7 @@ export function BotonPrimario({
   testid?: string;
 }) {
   return (
-    <button
+    <BotonTactil
       type="button"
       data-testid={testid}
       onClick={onClick}
@@ -39,6 +40,6 @@ export function BotonPrimario({
       }}
     >
       {children}
-    </button>
+    </BotonTactil>
   );
 }

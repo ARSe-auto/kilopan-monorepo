@@ -405,7 +405,31 @@ reales en seeds/fixtures (§10, §7.8):
   (el oráculo de AC-FMIG-18) sin cambios entre el antes y el después — con su propio control
   positivo (`antes.length > 0`) para que «sin cambios» no sea vacuo. `check.sh --full
   --app=flota`: VERDE (verde-20260816-033646).
-- [ ] (P1) Gate CI de performance de terreno — §5.7 rotula «gate de CI» los «<1 s por interacción» y «transiciones 60 fps», así que llevan proxy de laboratorio BLOQUEANTE (§9.2: solo lo CI cierra el loop): presupuesto de performance Lighthouse sobre las pantallas del hito y trazas de frame-timing dentro de los e2e de los 3 flujos de terreno (apertura/POD/recepción — pantallas de los módulos 02–04; el gate se define aquí, dueño de §5.7) con umbrales que FALLAN el build al excederse; test de componente de `packages/miga` que FALLA si un control operativo carece del feedback táctil simulado (§5.7 — no hay Vibration API); el seguimiento en producción vive en AC-FMIG-13 como complemento — oráculo: CI [AC-FMIG-19]
+- [x] (P1) Gate CI de performance de terreno — §5.7 rotula «gate de CI» los «<1 s por interacción» y «transiciones 60 fps», así que llevan proxy de laboratorio BLOQUEANTE (§9.2: solo lo CI cierra el loop): presupuesto de performance Lighthouse sobre las pantallas del hito y trazas de frame-timing dentro de los e2e de los 3 flujos de terreno (apertura/POD/recepción — pantallas de los módulos 02–04; el gate se define aquí, dueño de §5.7) con umbrales que FALLAN el build al excederse; test de componente de `packages/miga` que FALLA si un control operativo carece del feedback táctil simulado (§5.7 — no hay Vibration API); el seguimiento en producción vive en AC-FMIG-13 como complemento — oráculo: CI [AC-FMIG-19]
+  PROBADO: (1) «Lighthouse» resuelto sin la dependencia, mismo precedente que AC-PERF-04/AC-FMIG-11
+  (razón completa en `presupuesto-perf.mjs`): `RUTAS_CRITICAS_POR_APP.flota` se extendió con
+  `/panel`, `/panel/funciones` y `/panel/terminologia` —"las pantallas del hito" (g, §9.1.4)—,
+  midiendo el peso JS-gzip contra el presupuesto de 150 KB, con umbral que FALLA el paso
+  `presupuesto de performance` de `check.sh` si se excede; las 4 rutas (+ el shell `/`) miden hoy
+  109-111 KB, dentro del presupuesto. (2) `apps/flota/e2e/frame-timing.ts` es la traza de
+  frame-timing: arranca un contador de `requestAnimationFrame` en la propia página, dispara la
+  interacción y mide la latencia real (click → destino visible, umbral <1000 ms, el número literal
+  del §5.7) y el SALTO máximo entre dos frames consecutivos (umbral <100 ms — la firma de un frame
+  perdido/jank, más robusto en CI headless que promediar fps) — un test nuevo por flujo, cada uno
+  con su propio caso de rebote si el umbral se excede: `apertura.spec.ts` (transición al semáforo
+  tras "continuar-carga"), `pod-feliz.spec.ts` (avance a la parada siguiente tras "entregado"),
+  `carga.spec.ts` (entrada a "paso-conteo" tras elegir el vehículo) — las tres corren en <1s reales
+  (277-525 ms) y sin salto de frame en el e2e móvil 390×844 de `check.sh --full`. (3) El feedback
+  táctil simulado (§5.7, sin Vibration API) se centralizó en `BotonTactil` (packages/miga) —
+  hundimiento visual `scale(0.96)` al presionar/soltar (`onPointerDown`/`onPointerUp`/
+  `onPointerLeave`/`onPointerCancel`) — y los 4 controles operativos existentes del paquete pasan a
+  usarlo (`BotonPrimario`, `TecladoNumerico`, `SelectorUnToque`, el «Reintentar» de
+  `EstadoListado`); `feedback-tactil.test.ts` es el gate de componente: escanea cada `.tsx` de
+  `componentes/` y FALLA si alguno renderiza `<button` sin pasar por `BotonTactil`, con mutante
+  (un `<button>` a mano pone el gate rojo) y control positivo (uno con `BotonTactil` lo deja
+  verde) contra un árbol de juguete — el mismo patrón de `MIGA_COMPONENTES_DIR` que ya usan
+  `cifras.test.ts`/`estructura.test.ts`. `pnpm --filter @kilopan/miga test`: 52/52 verdes.
+  `check.sh --full --app=flota`: VERDE (verde-20260816-041711).
 - [ ] (P1) Proxy CI BLOQUEANTE de VoiceOver — §5.7 la enumera DENTRO del gate axe+Lighthouse («VoiceOver completa apertura/POD/recepción»): reglas axe de nombre accesible y rol correcto en TODOS los controles interactivos de los 3 flujos + verificación automatizada de orden de foco que completa cada flujo por navegación secuencial (apertura, POD, recepción); caso de rebote: control sin nombre accesible, rol incorrecto o flujo incompletable por foco ⇒ build rojo; la pasada VoiceOver real queda como complemento humano en AC-FMIG-12 — oráculo: CI [AC-FMIG-20]
 - [ ] (P1) «Una acción primaria por pantalla» y «máx 2 niveles de profundidad» (§5.1) con oráculo conductual que puede fallar (§5 encabezado; AC-FMIG-01 solo publica las constantes): los e2e/snapshots de las pantallas del hito (wizard, panel white-label, «Funciones») asertan EXACTAMENTE UN botón primario por pantalla (nota de cobertura: en terreno, el e2e de pantalla de parada bajo el covering array §9.2 vive en los módulos 02–04 y aserta el botón primario — la aserción §5.1 es de unicidad, no de mera presencia); chequeo mecánico de profundidad ≤2 sobre el manifest de navegación computado server-side (§5.5 — estructura de datos testeable) para las combinaciones entitlements × rol del covering array §9.2; caso de rebote: manifest con >2 niveles o pantalla con ≠1 botón primario ⇒ test rojo — oráculo: CI [AC-FMIG-21]
 - [ ] (P1) DPA en términos del tenant (§3.E1.15, §7.8 — obligación E1 sin módulo asignado por el maestro; queda aquí, dueño del panel admin white-label y del wizard, hito g): el DPA existe como artefacto VERSIONADO del repo (test CI grep-able de existencia y de secciones mínimas: partes, objeto del tratamiento, encargado/responsable, subencargados, medidas de seguridad, devolución/supresión al término y portabilidad `pg_dump` del §2 métrica 7), se sirve dentro de los términos del tenant sin CSS libre ni build por cliente (§5.1), es alcanzable desde el panel admin dentro de los 2 niveles de profundidad (§5.1) y su versión vigente queda registrada por tenant; la aceptación por el `admin_tenant` escribe `audit_trail` con la versión aceptada (§4.6) y con rol distinto de `admin_tenant` ⇒ 403 y 0 filas (§5.4); textos es-CL, cero strings visibles en inglés (§0). El TEXTO legal y el MOMENTO exacto de la aceptación (paso del wizard vs panel admin) quedan BLOQUEADOS por la Pregunta al dueño 12 — esta spec no los inventa; el AC cierra hoy con la parte estructural y se completa al responderse — oráculo: CI [AC-FMIG-22]
