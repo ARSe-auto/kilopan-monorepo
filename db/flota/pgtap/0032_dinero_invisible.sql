@@ -44,13 +44,15 @@ select cmp_ok(
 -- `aplicar_rls_de_dinero()` a las que faltan (AC-FTAR-17 — el motor no escribe migraciones),
 -- el mismo `bag_eq` se pone rojo hasta que la línea correspondiente salga de acá. Esa doble
 -- rojez es el punto: la deuda no puede crecer en silencio ni quedar saldada sin que se note.
+-- Saldada el 16-ago-2026 (migración 0073): las cuatro tablas de economía pura ya llevan el
+-- patrón. Queda `parametros`, y NO por deuda: ahí el dinero convive en la misma fila con la
+-- configuración que el terreno necesita (`reserva_pct`, `factor_consumo`), así que aplicarle
+-- RLS dejaría al chofer sin la fórmula de energía del §0. Se resolvió por estructura, con la
+-- vista `parametros_operativos` que simplemente no trae las columnas de plata — por eso la
+-- tabla sigue sin política y ESO es lo correcto, no un pendiente.
 create temporary table sin_politica_todavia on commit drop as
 select * from (values
-  ('tarifas'),                 -- §4.5 rate card — precio_clp
-  ('tarifa_zonas'),            -- modificador de zona — monto_clp
-  ('tarifa_recargo_horario'),  -- modificador horario — monto_clp
-  ('liquidacion_lineas'),      -- §3.E1.9 la línea devengada — monto_clp
-  ('parametros')               -- tarifa_kwh_clp / precio_diesel_litro_clp (§4.4)
+  ('parametros')               -- resuelta por vista, no por RLS: ver 0073 y AC-FTAR-17
 ) as t(tabla);
 
 select bag_eq(

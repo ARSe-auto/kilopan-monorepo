@@ -247,9 +247,36 @@ test("[AC-FTAR-10] las cinco tablas del módulo llevan RLS con sus DOS política
       "select polname, polpermissive from pg_policy where polrelid = $1::regclass order by polname",
       [tabla],
     );
-    assert.equal(politicas.length, 2, `${tabla}: se esperaban dos políticas`);
-    assert.equal(politicas.filter((p) => p.polpermissive).length, 1, `${tabla}: falta la base`);
-    assert.equal(politicas.filter((p) => !p.polpermissive).length, 1, `${tabla}: falta la restrictiva`);
+
+    // DOS PATRONES, no uno. Estas tablas llevan el aislamiento por empresa del §9.3.3 —el
+    // cliente ve solo lo suyo— y, desde la migración 0073 [AC-FTAR-17], también el dinero
+    // invisible del §4.8 —el chofer no ve montos—. Son protecciones distintas contra sujetos
+    // distintos y coexisten: contar «dos políticas» daba por sentado que solo existía la
+    // primera, y se ponía rojo justo cuando se agregó la segunda.
+    const nombres = politicas.map((p) => p.polname);
+
+    // El aislamiento por empresa va en las CINCO: es de quién puede ver la fila.
+    for (const esperada of ["empresa_base", "empresa_del_cliente"]) {
+      assert.ok(nombres.includes(esperada), `${tabla}: falta la política ${esperada}`);
+    }
+
+    // El dinero invisible va solo en las que TIENEN montos. `liquidaciones` es la cabecera
+    // —empresa, período, estado— y su plata vive en `liquidacion_lineas`: pedirle la política
+    // de dinero sería pedirle que esconda una columna que no tiene.
+    const conMontos = tabla !== "liquidaciones";
+    for (const esperada of ["dinero_base", "dinero_sin_chofer"]) {
+      assert.equal(
+        nombres.includes(esperada),
+        conMontos,
+        `${tabla}: ${conMontos ? "falta" : "no debería llevar"} la política ${esperada}`,
+      );
+    }
+
+    // Cada patrón aporta UNA permisiva de base y UNA restrictiva que acota: con la permisiva
+    // sola, el sujeto vería todo igual.
+    const esperadas = conMontos ? 2 : 1;
+    assert.equal(politicas.filter((p) => p.polpermissive).length, esperadas, `${tabla}: falta una base`);
+    assert.equal(politicas.filter((p) => !p.polpermissive).length, esperadas, `${tabla}: falta una restrictiva`);
   }
 });
 
@@ -310,11 +337,37 @@ test("[AC-FTAR-10] un cliente SIN empresa declarada no ve nada en NINGUNA de las
   });
 });
 
-test("[AC-FTAR-10] sin rol declarado la política NO estorba: el operador ve las dos empresas", async () => {
+test("[AC-FTAR-10] sin rol declarado: la política de EMPRESA no estorba, la de DINERO falla cerrado", async () => {
+  // Cambió con la migración 0073 [AC-FTAR-17], y el cambio es deliberado. Sobre `tarifas` ahora
+  // conviven DOS familias de RLS que leen GUCs distintos (`gobierno.ts::declararQuienPregunta`):
+  //
+  //   · la de EMPRESA (§9.3.3) no estorba cuando no hay `app.current_empresa`: el operador de la
+  //     casa ve las dos empresas, que es lo que este AC pedía y sigue siendo cierto;
+  //   · la de DINERO (§4.8) falla CERRADO: su política restrictiva exige que `app.current_role`
+  //     esté declarado, así que sin sesión no se ven montos.
+  //
+  // Fallar cerrado es lo correcto y no es una decisión nueva: es la misma semántica que
+  // `energy_entry` lleva desde la 0004. Una consulta sin sesión es, por definición, una que no
+  // pudo demostrar quién pregunta — y el §4.8 dice que ante la duda el monto no se muestra.
   await sinRolDeclarado(async () => {
     const tarifas = await app.sql("select id::text as id from tarifas");
-    const ids = tarifas.map((f) => f.id);
-    assert.ok(ids.includes(id.tarifaSuya) && ids.includes(id.tarifaAjena));
+    assert.deepEqual(
+      tarifas,
+      [],
+      "sin rol declarado se vieron tarifas: la política de dinero del §4.8 debe fallar cerrada",
+    );
+  });
+
+  // Y la de empresa sigue sin estorbar donde el dinero no participa: sobre `liquidaciones`
+  // —cabecera sin montos— el operador sigue viendo las dos empresas, que es lo que este AC
+  // afirmaba desde el principio.
+  await sinRolDeclarado(async () => {
+    const liq = await app.sql("select empresa_cliente_id::text as e from liquidaciones");
+    const empresas = new Set(liq.map((f) => f.e));
+    assert.ok(
+      empresas.has(id.suya) && empresas.has(id.ajena),
+      "el operador sin rol declarado dejó de ver las dos empresas en la cabecera de liquidación",
+    );
   });
 });
 

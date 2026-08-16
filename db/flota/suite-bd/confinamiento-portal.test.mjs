@@ -267,13 +267,26 @@ test("[AC-FPOR-05] un cliente SIN empresa declarada no ve ninguna fila del hito 
   });
 });
 
-test("[AC-FPOR-05] sin rol declarado la política no estorba: el operador ve las dos empresas", async () => {
+test("[AC-FPOR-05] sin rol declarado: la política de EMPRESA no estorba, la de DINERO falla cerrado", async () => {
+  // Gemelo del test de `aislamiento-cliente-modulo-tarifas`, y cambió por la misma razón: desde
+  // la migración 0073 [AC-FTAR-17] las tablas con montos llevan ADEMÁS la RLS de dinero del
+  // §4.8, cuya política restrictiva exige `app.current_role` declarado. Sin sesión no se ven
+  // montos — falla cerrado, igual que `energy_entry` desde la 0004.
   const tarifas = await app.sql("select id::text as id from tarifas");
-  const ids = tarifas.map((f) => f.id);
-  assert.ok(ids.includes(id.tarifaSuya) && ids.includes(id.tarifaAjena));
+  assert.deepEqual(
+    tarifas,
+    [],
+    "sin rol declarado se vieron tarifas: la política de dinero del §4.8 debe fallar cerrada",
+  );
+
+  // La cabecera de liquidación NO lleva montos —viven en `liquidacion_lineas`— así que solo
+  // tiene la política de empresa, y esa sigue sin estorbar: el operador de la casa ve las dos.
   const liquidaciones = await app.sql("select id::text as id from liquidaciones");
   const idsLiq = liquidaciones.map((f) => f.id);
-  assert.ok(idsLiq.includes(id.liqSuya) && idsLiq.includes(id.liqAjena));
+  assert.ok(
+    idsLiq.includes(id.liqSuya) && idsLiq.includes(id.liqAjena),
+    "el operador sin rol declarado dejó de ver las dos empresas en la cabecera de liquidación",
+  );
 });
 
 // ─── Las vistas del §4.3: la vía sancionada para leer liquidación ────────────────────
