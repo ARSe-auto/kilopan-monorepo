@@ -38,6 +38,25 @@ const B = ACTIVOS[1]!;
 const BD_A = bdDeTenant(A.slug);
 const BD_B = bdDeTenant(B.slug);
 
+// El namespace `/cliente/*` [AC-FPOR-06] responde 403 —namespace completo, cualquier id— si
+// `portal_contratante` está apagado (AC-FPOR-04, candado en `servidor.mjs`, ANTES de esta
+// suite). `A` nace en `mi_flota` (default de `provisionar()`, sin el preset daas) y esta suite
+// no logea sesión alguna: sin el sellado de abajo, las cuatro rutas `recurso` del portal
+// darían SIEMPRE 403 por el módulo apagado —nunca 404 por el id de B— y `juzgarCruce` las
+// rechazaría igual (403 está vetado para `tipo: "recurso"`), pero por la razón EQUIVOCADA: no
+// probaría el aislamiento intra-tenant de este AC, probaría un candado que ya cerró AC-FPOR-04.
+// Encender el entitlement DIRECTO (mismo mecanismo que `portal-aislamiento.spec.ts`, hito g
+// todavía no construido) dispara el candado real: sin sesión ⇒ `sesionDelTenant` rebota 404 —
+// el mismo camino que toma cualquier id inventado— y el caso mide lo que el AC promete.
+test.beforeAll(async () => {
+  await con(BD_A, (c: Conexion) =>
+    c.sql("select crear_config_version($1, $2::jsonb)", [
+      "e2e AC-FTEN-26 — portal_contratante=true para medir el 404 real de /cliente/* [AC-FPOR-06]",
+      JSON.stringify({ portal_contratante: true }),
+    ]),
+  );
+});
+
 // `rutas/*.mjs` es JavaScript de operación y no exporta tipos (mismo trato que
 // `db/flota/*.mjs` en `ruteo.spec.ts`): se declara acá la forma que este archivo usa, en vez
 // de dejar que `any` se cuele en las aserciones.

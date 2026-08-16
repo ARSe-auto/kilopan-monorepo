@@ -183,14 +183,42 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
       invariante AC-FVEH-13) como la vía sancionada del §4.3 — RLS de la tabla base
       sigue siendo quien confina, probado con el rol de app real leyendo a través de la
       vista. `pnpm check:full --app=flota` en verde (gate propio de flota: 24 OK).
-- [ ] (P1) Suite HTTP de aislamiento sobre `/cliente/*` (autogenerada del manifiesto de
+- [x] (P1) Suite HTTP de aislamiento sobre `/cliente/*` (autogenerada del manifiesto de
       rutas, §9.2): sesión `cliente` de la empresa X con IDs de recursos de la empresa Y
       (encargos, liquidaciones, líneas, evidencias) ⇒ 404 —jamás 403 revelador—, body
       sin cadenas centinela de Y y BD sin cambios en mutaciones; sesión del tenant A
       contra IDs del tenant B ⇒ 404 y BD de B intacta; el payload de toda respuesta del
       portal cumple schema fijo SIN columnas de economía interna del operador (tarifas
       de terceros, costos de energía, ahorro vs diésel) ni telemetría EV (§0, §9.3.2,
-      §9.3.3, §3.E1.10) — oráculo: CI [AC-FPOR-06]
+      §9.3.3, §3.E1.10) — oráculo: CI [AC-FPOR-06]. Probado: `servidor/portal-cliente.ts`
+      da las cuatro lecturas mínimas del namespace (encargo, liquidación con líneas,
+      línea sola, evidencia), CADA una con `where empresa_cliente_id = $2` A MANO además
+      de `enLectura` — necesario porque el pool conecta como `flota_admin`
+      (`rolbypassrls=true`: la RLS de 0040/0061/0063 nunca se evalúa sobre esta conexión,
+      confirmado con `pg_roles`), así que el filtro explícito es la ÚNICA guardia real,
+      no una redundancia. Las cuatro rutas (`src/app/cliente/api/{encargos,liquidaciones,
+      liquidacion-lineas,evidencias}/[id]/route.ts`) dan 403 con rol de la casa y 404
+      pelado sin sesión / id ajeno — la misma forma para las tres causas (centinela 2).
+      `e2e/portal-aislamiento.spec.ts` (base propia `portal_aislamiento`, dos empresas
+      contratantes X e Y del MISMO tenant): cross-empresa intra-tenant ⇒ 404 sin cadena
+      centinela de Y en ninguna de las cuatro formas, control positivo propio en 2xx,
+      anti-vacuidad (la razón social de Y sí es observable cuando corresponde), rol de la
+      casa ⇒ 403, y el centinela 3 completo — cada respuesta tiene EXACTAMENTE las claves
+      de su tipo, cero columnas del catálogo prohibido (costo, precio diésel, ahorro,
+      batería, autonomía, SOH, SOC, odómetro, `tenant_id`). La mitad tenant-contra-tenant
+      la corre gratis `e2e/cruce-tenant.spec.ts` [AC-FTEN-26] apenas el manifiesto declara
+      el `cruce` de las cuatro rutas como `recurso` con su `ids_de_b`: encontré que esa
+      suite genérica corría contra tenants fixture (`ruteo_activo`/`ruteo_activo_b`) sin
+      `portal_contratante` encendido, así que el candado de módulo (AC-FPOR-04, en
+      `servidor.mjs`, ANTES de Next) daba 403 al namespace ENTERO sin importar el id — un
+      403 vetado para `tipo: "recurso"`, pero por la razón equivocada: no medía el
+      aislamiento de este AC, medía un candado que ya había cerrado otro. Se corrigió
+      sellando `portal_contratante=true` para el tenant A en un `beforeAll` de
+      `cruce-tenant.spec.ts` (mismo mecanismo directo de `crear_config_version` que usa
+      `portal-aislamiento.spec.ts`, hito g todavía no construido) para que el candado real
+      se ejerza: sin sesión, `sesionDelTenant` rebota 404 — el mismo camino que un id
+      inventado. `pnpm --filter flota e2e` 521/521 y
+      `bash packages/metodo/scripts/check.sh --full --app=flota` en verde.
 - [ ] (P1) Manifest del rol `cliente` = exactamente las 4 pantallas (Hoy · Encargos ·
       Nuevo/Importar CSV · Liquidación) bajo `/cliente/*` en la misma PWA; e2e que
       recorre TODO el portal con el usuario `cliente` del seed A y no encuentra rutas
