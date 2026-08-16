@@ -1,7 +1,12 @@
 import { headers } from "next/headers";
-import { guardia } from "../../../../servidor/gobierno.ts";
+import { guardia, enActo } from "../../../../servidor/gobierno.ts";
 import { crearVehiculo } from "../../../../servidor/vehiculos.ts";
 import { MENSAJE_PATENTE, TIPO_LARGO_MAX } from "../../../../dominio/patentes.ts";
+import {
+  FEATURES,
+  moduloVigenteEncendido,
+  moduloApagadoRespuesta,
+} from "../../../../servidor/config.ts";
 
 // El alta de vehículo, que es un acto del dueño [AC-FVEH-01] — §5.4, §9.3 centinela 15.
 //
@@ -20,6 +25,15 @@ export const dynamic = "force-dynamic";
 export async function POST(peticion: Request) {
   const g = await guardia(await headers());
   if (g.tipo === "rebote") return g.respuesta;
+
+  // La regla de contracción [AC-FMIG-09] — §5.5, §0: el alta es PLANIFICACIÓN, así que el
+  // módulo apagado responde 403 — no una patente aceptada que la flota apagada nunca va a ver.
+  const encendido = await enActo(
+    g.acto.pool,
+    (c) => moduloVigenteEncendido(c, g.acto.slug, FEATURES.modulo_vehiculos),
+    g.acto.sesion,
+  );
+  if (!encendido) return moduloApagadoRespuesta();
 
   let cuerpo: { patente?: unknown; tipo?: unknown };
   try {

@@ -65,6 +65,11 @@ export const TENANTS = [
   // (AC-FVEH-03), que también usa ese tenant y esa tabla. Va al final por la misma razón que
   // el resto de las bases dedicadas.
   { slug: "funciones", estado: "activo" },
+  // Base PROPIA para la regla de contracción [AC-FMIG-09]: sella `config_version` propias
+  // (modulo_vehiculos ON/OFF) para probar manifest+403+app mínima sin arriesgar un resellado
+  // a mitad de `documentos.spec.ts` (AC-FVEH-18) ni de `vehiculos.spec.ts`, que comparten
+  // `ruteo_activo`. Va al final por la misma razón que el resto de las bases dedicadas.
+  { slug: "contraccion", estado: "activo" },
 ];
 
 /** Subdominio que jamás se registra. Nombrarlo acá evita que el test lo invente distinto. */
