@@ -358,10 +358,26 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
       que hace cierto «rige recién en el próximo bootstrap»). `npx playwright test
       e2e/preset-modo.spec.ts` 2/2 en PRIMER PLANO y
       `bash packages/metodo/scripts/check.sh --full --app=flota` en verde. [AC-FPOR-16]
-- [ ] (P1) Empresa implícita en mi_flota — efecto observable (el trigger es del
+- [x] (P1) Empresa implícita en mi_flota — efecto observable (el trigger es del
       módulo 03, §4.5; aquí solo se aserta su efecto): un tenant recién provisionado
       en modo `mi_flota` tiene exactamente UNA `empresa_cliente` — la implícita, la
-      propia (§3, §4.5) — oráculo: CI [AC-FPOR-17]
+      propia (§3, §4.5) — oráculo: CI [AC-FPOR-17]. Probado: el efecto se aserta por el
+      camino REAL del alta (`provisionar()`, el servicio que consume el wizard —
+      AC-FPOR-01), no sobre una base rellenada a mano como hace el fixture del centinela
+      11. Faltaban las dos mitades que el alta no escribía: la identidad de la empresa
+      dueña (`rutDeLaEmpresa`/`razonSocial` → `tenant_info`, sin la cual el trigger 0039
+      no crea nada y no rebota) y la RÉPLICA del modo en `tenant_info` (§7.2: el trigger
+      no puede cruzar a `control`) — el alta lo escribía SOLO en `control.tenants`, así
+      que un tenant dado de alta en `daas` nacía con la réplica en su default `mi_flota`
+      y se llevaba una empresa implícita que el §3 no le da. La escritura va después de
+      hornear `tenant_actual()`, porque `empresas_cliente` lleva
+      `check (tenant_id = tenant_actual())`. Nueva
+      `db/flota/suite-bd/empresa-implicita.test.mjs`: alta en `mi_flota` ⇒ exactamente
+      una fila, `implicita`, con el RUT y la razón social del tenant y su `tenant_id`;
+      el mismo alta en `daas` ⇒ cero (la implícita es efecto del MODO, no del alta); la
+      segunda implícita rebota contra el índice parcial `empresas_cliente_una_implicita`;
+      e identidad a medias rebota antes de tocar el cluster. 4/4 en verde y
+      `bash packages/metodo/scripts/check.sh --full --app=flota` en verde.
 
 ## Dependencias
 

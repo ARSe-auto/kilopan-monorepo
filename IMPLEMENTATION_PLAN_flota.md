@@ -288,7 +288,7 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 - [ ] (P2) Piloto A en producción: 7 días con rutas manuales y ≥90% entregas con evidencia, medidos por Alexis en el panel (oráculo producción — DONE-adopción, no bloquea) — spec: specs/flota/07-portal-contratante-daas.md [AC-FPOR-14]
 - [x] (P1) Conmutación de modo SOLO `admin_tenant` (otros ⇒ 403 y 0 filas); cada conmutación a audit_trail — spec: specs/flota/07-portal-contratante-daas.md [AC-FPOR-15]
 - [x] (P1) Semántica del preset: la conmutación cambia el entitlement efectivo SIN mutar plan_features ni filas de otro tenant; rige en el próximo bootstrap — spec: specs/flota/07-portal-contratante-daas.md [AC-FPOR-16]. Probado: e2e/preset-modo.spec.ts 2/2, check.sh --full --app=flota verde.
-- [ ] (P1) Tenant mi_flota recién provisionado tiene EXACTAMENTE UNA empresa_cliente (la implícita, efecto del trigger del módulo 03) — spec: specs/flota/07-portal-contratante-daas.md [AC-FPOR-17]
+- [x] (P1) Tenant mi_flota recién provisionado tiene EXACTAMENTE UNA empresa_cliente (la implícita, efecto del trigger del módulo 03) — spec: specs/flota/07-portal-contratante-daas.md [AC-FPOR-17]. Probado: el alta (`provisionar()`) ahora escribe en `tenant_info` la identidad de la empresa dueña y la RÉPLICA del modo, después de hornear `tenant_actual()`; `db/flota/suite-bd/empresa-implicita.test.mjs` (4/4) asserta una sola fila implícita en `mi_flota`, cero en `daas`, el rebote de la segunda implícita y el de la identidad a medias.
 
 ## Hito (g) — Panel admin white-label (incl. «Funciones»), wizard de onboarding y seeds de los 3 tenants
 

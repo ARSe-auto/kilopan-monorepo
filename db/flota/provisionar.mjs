@@ -224,11 +224,32 @@ export async function desalta(slug) {
  * tocar la base, para que un valor fuera de dominio quede en 0 filas — jamás una CREATE
  * DATABASE a medio camino por un typo en el modo. `esModo`/`MODOS` son los mismos que valida
  * la conmutación (`servidor/modo.ts`, AC-FRUT-14): una sola definición del dominio.
+ *
+ * `rutDeLaEmpresa`/`razonSocial` son la identidad de la EMPRESA dueña de la cuenta — el primer
+ * dato que pide el wizard del alta (§3, «un botón al crear la operación»). Van a `tenant_info`
+ * en el mismo acto que el modo, y ahí el trigger del módulo 03
+ * (`crear_empresa_implicita()`, 0039) hace lo suyo: en `mi_flota` la base queda con EXACTAMENTE
+ * UNA `empresa_cliente`, la propia (§4.5). [AC-FPOR-17]
+ *
+ * Van juntas o no van: con una sola de las dos el trigger no crea nada y no rebota (a
+ * propósito — ver 0039), así que el alta parecería completa y la empresa implícita no existiría.
+ * Un alta SIN identidad es legítima —el tenant existe antes de que el wizard termine de
+ * llenarlo— y su empresa implícita aparece sola en cuanto los datos lleguen, porque el trigger
+ * también corre en UPDATE.
  */
-export async function provisionar(slug, { recrear = false, modo = "mi_flota" } = {}) {
+export async function provisionar(
+  slug,
+  { recrear = false, modo = "mi_flota", rutDeLaEmpresa = null, razonSocial = null } = {},
+) {
   if (!esModo(modo)) {
     throw new Error(
       `modo inválido: «${modo}». control.tenants.modo acepta SOLO ${MODOS.join("|")} (AC-FPOR-01).`,
+    );
+  }
+  if ((rutDeLaEmpresa === null) !== (razonSocial === null)) {
+    throw new Error(
+      "identidad incompleta: `rutDeLaEmpresa` y `razonSocial` van juntas o no van (AC-FPOR-17). " +
+        "Con una sola, el trigger de la empresa implícita no crea nada y no se queja.",
     );
   }
   const bd = bdDeTenant(slug);
@@ -262,6 +283,24 @@ export async function provisionar(slug, { recrear = false, modo = "mi_flota" } =
     await sql(
       `comment on function tenant_actual() is 'Constante de esta base: el tenant ${slug} ` +
         `(${fila.id}), horneado al provisionar (AC-FTEN-02).'`,
+    );
+
+    // MODO E IDENTIDAD DE LA EMPRESA DUEÑA, en ese orden y RECIÉN ACÁ. [AC-FPOR-17]
+    //
+    // `tenant_info.modo` es la RÉPLICA de `control.tenants.modo` (0039): la autoridad vive en
+    // `control` y el §7.2 prohíbe que una consulta del tenant la cruce, así que un trigger que
+    // necesita el modo lo lee de esta copia. Hasta acá el alta escribía el modo SOLO en
+    // `control` y la réplica se quedaba en su default `mi_flota`: un tenant dado de alta en
+    // `daas` nacía con la copia diciendo `mi_flota` y el trigger de la empresa implícita se
+    // disparaba igual. La réplica la escribe quien conmuta — y el alta ES la primera
+    // conmutación.
+    //
+    // Y va DESPUÉS del `create or replace tenant_actual()` de arriba porque el trigger inserta
+    // en `empresas_cliente`, que lleva `check (tenant_id = tenant_actual())`: disparado antes,
+    // la empresa implícita nacería atada al centinela de la plantilla.
+    await sql(
+      "update tenant_info set modo = $1, rut_de_la_empresa = $2, razon_social = $3",
+      [modo, rutDeLaEmpresa, razonSocial],
     );
 
     // ADOPCIÓN DE LO QUE VENÍA EN LA PLANTILLA. Una migración puede sembrar catálogos —el
@@ -445,6 +484,9 @@ async function principal(argv) {
   const [orden, ...resto] = argv;
   const recrear = resto.includes("--recrear");
   const modoArg = resto.find((a) => a.startsWith("--modo="))?.slice("--modo=".length);
+  // La identidad de la empresa dueña, la que hace nacer la empresa implícita [AC-FPOR-17].
+  const rutArg = resto.find((a) => a.startsWith("--rut="))?.slice("--rut=".length);
+  const razonArg = resto.find((a) => a.startsWith("--razon-social="))?.slice("--razon-social=".length);
   const libres = resto.filter((a) => !a.startsWith("--"));
 
   if (orden === "plantilla") {
@@ -459,12 +501,18 @@ async function principal(argv) {
   if (orden === "tenant") {
     if (libres.length === 0) {
       console.error(
-        "provisionar: falta el slug (uso: provisionar.mjs tenant <slug> [--recrear] [--modo=mi_flota|daas])",
+        "provisionar: falta el slug (uso: provisionar.mjs tenant <slug> [--recrear] " +
+          "[--modo=mi_flota|daas] [--rut=<rut de la empresa> --razon-social=<razón social>])",
       );
       return 2;
     }
     for (const slug of libres) {
-      const t = await provisionar(slug, modoArg ? { recrear, modo: modoArg } : { recrear });
+      const t = await provisionar(slug, {
+        recrear,
+        ...(modoArg ? { modo: modoArg } : {}),
+        ...(rutArg === undefined ? {} : { rutDeLaEmpresa: rutArg }),
+        ...(razonArg === undefined ? {} : { razonSocial: razonArg }),
+      });
       console.log(`provisionar: ${t.bd} lista · tenant_info.id = ${t.id} · modo = ${t.modo}`);
     }
     return 0;
