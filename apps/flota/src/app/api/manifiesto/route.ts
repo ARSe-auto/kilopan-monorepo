@@ -19,7 +19,7 @@ export async function GET() {
 
   const items = await enActo(
     g.acto.pool,
-    (c) => manifiestoDeNavegacion(c, g.acto.slug),
+    (c) => manifiestoDeNavegacion(c, g.acto.slug, g.acto.sesion.rol),
     g.acto.sesion,
   );
   return Response.json({ items });

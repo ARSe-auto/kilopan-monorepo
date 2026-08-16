@@ -25,6 +25,7 @@ export function BotonPrimario({
     <BotonTactil
       type="button"
       data-testid={testid}
+      data-variante={variante}
       onClick={onClick}
       disabled={disabled}
       style={{

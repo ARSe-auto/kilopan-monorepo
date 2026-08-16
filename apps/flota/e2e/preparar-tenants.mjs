@@ -76,6 +76,19 @@ export const TENANTS = [
   // de la demora artificial de este test cambiaría qué filas ve y lo haría flaky por una
   // razón que no tiene nada que ver con el AC. Va al final por la misma razón que el resto.
   { slug: "miga_estados", estado: "activo" },
+  // Base PROPIA para el chequeo mecánico de profundidad ≤2 del manifest [AC-FMIG-21]: sella
+  // `config_version` propias (modulo_vehiculos ON/OFF, igual que `contraccion`) y necesita un
+  // usuario POR ROL de `rol_usuario` para recorrer el covering array entitlements × rol contra
+  // `GET /api/manifiesto` — compartir `contraccion` arriesgaría el mismo resellado a mitad de
+  // corrida que ese archivo ya documenta para `documentos.spec.ts`/`vehiculos.spec.ts`. Va al
+  // final por la misma razón que el resto de las bases dedicadas.
+  { slug: "manifiesto_profundidad", estado: "activo" },
+  // Base PROPIA para "una acción primaria por pantalla" [AC-FMIG-21]: necesita un plan que cubra
+  // LAS TRES features del catálogo (para que `/panel/funciones` muestre sus tres "Encender"
+  // simultáneos y el chequeo de unicidad se ejerza sobre más de una fila real, no sobre un caso
+  // vacío) — mismo motivo que separó `funciones` de `ruteo_activo`: un plan propio no puede
+  // compartir tenant con la suite que muta `tenant_feature_overrides` a cada rato.
+  { slug: "pantalla_primaria", estado: "activo" },
 ];
 
 /** Subdominio que jamás se registra. Nombrarlo acá evita que el test lo invente distinto. */
