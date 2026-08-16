@@ -218,7 +218,7 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
       `portal-aislamiento.spec.ts`, hito g todavía no construido) para que el candado real
       se ejerza: sin sesión, `sesionDelTenant` rebota 404 — el mismo camino que un id
       inventado. `pnpm --filter flota e2e` 521/521 y
-      `bash packages/metodo/scripts/check.sh --full --app=flota` en verde.
+      `bash packages/metodo/scripts/check.sh --full --app=flota` en verde. [AC-FPOR-06]
 - [ ] (P1) Manifest del rol `cliente` = exactamente las 4 pantallas (Hoy · Encargos ·
       Nuevo/Importar CSV · Liquidación) bajo `/cliente/*` en la misma PWA; e2e que
       recorre TODO el portal con el usuario `cliente` del seed A y no encuentra rutas
