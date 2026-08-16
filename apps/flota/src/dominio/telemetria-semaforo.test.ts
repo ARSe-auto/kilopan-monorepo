@@ -8,6 +8,7 @@ import {
   metricaDeDigest,
   type CierreDeJornada,
 } from "./telemetria-semaforo.ts";
+import { seedCierresDeJornada } from "./panel-saas-fixtures.ts";
 
 // Telemetría del módulo semáforo hacia el §10 [AC-FSEM-14] — spec 05 §5, maestro §10, §4.6.
 
@@ -126,6 +127,37 @@ test("[AC-FSEM-14] el orden lo pone la función: un payload desordenado rinde la
 test("[AC-FSEM-14] payload imposible: conteo negativo o fraccionario rebota, el panel no lo dibuja", () => {
   assert.throws(() => colaAlCierreDelDia([{ fecha: "2026-08-10", pendientes: -1 }]), /entero/);
   assert.throws(() => colaAlCierreDelDia([{ fecha: "2026-08-10", pendientes: 1.5 }]), /entero/);
+});
+
+test("[AC-FSEM-14] fixture del panel §10: la semana del piloto converge y la sección pinta «Tiende a cero»", () => {
+  // El payload de referencia que la vista recibe por su prop `colaAlCierre`
+  // (`plano-eauto/panel-saas-vista.tsx`, sección `panel-saas-cola-cierre`), ejercido por la
+  // MISMA función que el panel usa. Sin esta prueba el fixture y la sección se creen entre
+  // ellos: la prop existía sin un solo payload de referencia detrás.
+  const cola = colaAlCierreDelDia(seedCierresDeJornada());
+  assert.equal(cola.pendientesUltimoCierre, 0);
+  assert.deepEqual(cola.tendencia, [14, 11, 12, 7, 4, 2, 0]);
+  assert.equal(cola.tiendeACero, true);
+  // La bandera roja del §10 apagada es parte de la aserción, no un descuido: el fixture de
+  // exenciones (AC-FSEM-22) ejercita el caso creciente y este el sano, y la sección se pinta
+  // distinto en cada uno.
+  assert.equal(cola.creciente, false);
+  // El rebote del tercer día sigue DENTRO de la tendencia que el panel dibuja: el §10 pide ver
+  // el camino, no una recta — un agregado que escondiera el 12 estaría maquillando el piloto.
+  assert.ok(cola.tendencia[2]! > cola.tendencia[1]!);
+});
+
+test("[AC-FSEM-14] fixture del panel §10: el fin de semana sin cierre no inventa jornadas ni descoloca la ventana", () => {
+  // 7 cierres para 9 días corridos (8 y 9 de agosto son sábado y domingo). Una ventana que
+  // rellenara el hueco con ceros diría «cerró el día sin cola» dos veces, que es justo la
+  // afirmación falsa que el NULL declarado del resto del panel viene a evitar.
+  const cierres = seedCierresDeJornada();
+  assert.equal(cierres.length, 7);
+  assert.equal(cierres.some((c) => c.fecha === "2026-08-08" || c.fecha === "2026-08-09"), false);
+  assert.deepEqual(
+    colaAlCierreDelDia([...cierres].reverse()).tendencia,
+    colaAlCierreDelDia(cierres).tendencia,
+  );
 });
 
 test("[AC-FSEM-14] la misma jornada dos veces rebota: sería contar un cierre dos veces en la tendencia", () => {

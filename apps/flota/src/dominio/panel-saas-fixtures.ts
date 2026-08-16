@@ -1,4 +1,5 @@
 import type { EevdTendenciaTenantCrudo, EventoSupersedePod, TenantActivacion, TenantSalud } from "./panel-saas.ts";
+import type { CierreDeJornada } from "./telemetria-semaforo.ts";
 
 // Fixtures del Panel interno SaaS de e-auto (spec 05 §3, maestro §10) [AC-FSEM-22].
 //
@@ -104,4 +105,30 @@ export function seedCalidadNorte(): {
  *  «0 exenciones»); el fixture ejercita también el caso creciente para que la bandera se pruebe. */
 export function seedTendenciaExenciones(): number[] {
   return [0, 0, 1, 1];
+}
+
+/** Cola al cierre del día para la sección `panel-saas-cola-cierre` de la vista [AC-FSEM-14] —
+ *  spec 05 §5 («Telemetría del propio módulo»), maestro §10. Mismo criterio que el resto de este
+ *  archivo: el payload que el exportador entregaría, no una consulta.
+ *
+ *  Es UNA serie de plataforma y no una por tenant: la sección del panel muestra la conducta que
+ *  el §10 manda observar en el piloto —¿la cola de `review_queue` cierra el día tendiendo a
+ *  cero?—, y esa pregunta se responde sobre el piloto entero. El desglose por tenant vive en las
+ *  filas de EEVD, que sí son por tenant.
+ *
+ *  La forma es la del piloto de verdad y no una recta bonita: arranca ALTA porque el semáforo
+ *  recién encendido saca a la luz excepciones que nadie estaba revisando, rebota un día
+ *  (12 pendientes tras 11) y recién después converge. Los fines de semana NO aparecen: la
+ *  ventana es la lista de jornadas CERRADAS, no un calendario — y `colaAlCierreDelDia` ordena
+ *  por fecha ISO, así que el hueco no la descoloca. */
+export function seedCierresDeJornada(): CierreDeJornada[] {
+  return [
+    { fecha: "2026-08-03", pendientes: 14 },
+    { fecha: "2026-08-04", pendientes: 11 },
+    { fecha: "2026-08-05", pendientes: 12 },
+    { fecha: "2026-08-06", pendientes: 7 },
+    { fecha: "2026-08-07", pendientes: 4 },
+    { fecha: "2026-08-10", pendientes: 2 },
+    { fecha: "2026-08-11", pendientes: 0 },
+  ];
 }

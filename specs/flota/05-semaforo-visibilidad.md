@@ -466,6 +466,26 @@ activa SOLO `admin_tenant`: mientras la pregunta 1 esté abierta, `operador` y
     --app=flota` verde; `npx playwright test e2e/hoy-nivel-0.spec.ts e2e/semaforo-contraccion.spec.ts`
     en primer plano, 8/8 verde.
 - [ ] (P2) Telemetría del módulo en producción con el piloto: digest del semáforo emitido a telemetría de producto; métrica de cola al cierre del día tendiendo a cero visible en el panel §10 (la medición de minutos del dueño vive en AC-FSEM-23, condicionada a la pregunta 6 — este AC queda completable con el piloto) — oráculo: producción [AC-FSEM-14]
+  - Construido y verde (la mitad de software; el AC sigue ABIERTO porque su oráculo es
+    producción): el digest que llega a «Hoy» emite su latencia a `client_metric` como
+    `latencia_ms` con `flujo='semaforo_digest'` —el enum del §4.6 es CERRADO y ampliarlo es DDL
+    de sesión supervisada, mismo muro que detuvo a AC-FSEM-23 y AC-FSEM-25—, por el MISMO
+    endpoint de sync que ya vacía la cola de POD (`cliente/telemetria-digest.ts` →
+    `servidor/metricas-sync.ts`); se mide el primer digest del montaje y cada refresco manual,
+    NUNCA el poll de fondo, que no es la espera de nadie y serían cientos de filas por turno.
+    `dominio/telemetria-semaforo.test.ts` (16/16) sobre `telemetria-semaforo.ts` y
+    `e2e/telemetria-digest.spec.ts` (2/2, servidor REAL: el `page.route` mira el cuerpo y llama
+    a `continue()`, y la aserción es la fila en la BD por `client_uuid` exacto). La cola al
+    cierre del día se agrega con `colaAlCierreDelDia` —cero inventado jamás: ventana vacía es
+    NULL declarado, una sola jornada no es tendencia, y conteo negativo, fraccionario o jornada
+    repetida rebotan— y se pinta en la sección `panel-saas-cola-cierre` de
+    `plano-eauto/panel-saas-vista.tsx` con el texto siempre junto al color (AA), sobre el
+    payload de referencia `seedCierresDeJornada()` de `panel-saas-fixtures.ts`, mismo criterio
+    de fixtures-contra-vista que AC-FSEM-22 (el montaje autenticado es AC-FSEM-24).
+    Lo ÚNICO que resta es lo que el oráculo dice: la MEDICIÓN con el piloto corriendo
+    (DONE-adopción del §10, dueño nombrado Alexis). Ningún commit puede afirmarla, así que el
+    AC queda anotado en `packages/metodo/acs-bloqueados-flota.txt` para que el motor no gaste
+    tandas en un ítem que ninguna cantidad de código cierra.
 - [ ] (P2) Validación en vivo del hito: revisión adversarial del hito (e) sin hallazgos críticos sobre el semáforo (datos malformados, doble-tap en ack/resolve, red cortada a mitad de drill-down, tenant A contra B); Alexis valida con capturas el camino dorado: tarjeta SLA demostrable con la farmacia del seed A, tablero del tenant B con terminología extrema, semáforo del tenant C en `mi_flota` — oráculo: humano [AC-FSEM-15]
 - [x] (P1) Dominio Flota/energía EV (partición de AC-FSEM-08 por §9.2) consumiendo las proyecciones del módulo 02 (fórmula única del §0 — este módulo no la re-especifica): SOC proyectado al fin del bloque < reserva+5 pp ⇒ amarillo; SOC actual < consumo estimado del tramo restante ⇒ rojo (fixture: SOC 20% con consumo restante proyectado equivalente a 30%); retorno proyectado <15% ⇒ rojo (fixture: retorno proyectado 10%); «no quedó enchufado» a la hora límite ⇒ rojo — el fixture fija la fila de `parametros` de la hora límite explícitamente; su default seed sigue en la pregunta 5c — oráculo: CI [AC-FSEM-16]
   - Probado: `dominio/semaforo-flota-ev.test.ts` (10/10) contra `dominio/semaforo-flota-ev.ts`,
