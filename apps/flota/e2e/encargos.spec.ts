@@ -136,7 +136,7 @@ test("[AC-FRUT-25] `fecha_servicio` que no es una fecha rebota 422 tipado, no 50
   const bueno = await alta(request, { bultos: 5, fecha_servicio: "2026-09-01", client_uuid: randomUUID() });
   expect(bueno.status()).toBe(201);
   const { encargo } = (await bueno.json()) as { encargo: { id: string } };
-  // Se borra: el resto de este archivo asume que TODO lo que queda en la tabla es de HOY (el
+  // Se borra: el resto de este archivo asume que CUANTO queda en la tabla es de HOY (el
   // AC-FRUT-02 de más abajo lo mira global), y esta fila de control es a propósito de otro día.
   await con(BD_A, (c: Conexion) => c.sql("delete from encargos where id = $1", [encargo.id]));
 });

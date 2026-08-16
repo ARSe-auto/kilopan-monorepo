@@ -208,9 +208,30 @@ async function altaEnControl(slug, bd, modo) {
  * la borra — y el job exportador (AC-FTEN-20) la reporta como «registrado en control pero su
  * base no existe» en cada corrida siguiente. `on delete cascade` no alcanza para todo: úsese
  * junto con el DROP DATABASE del fixture, no en su reemplazo.
+ *
+ * BORRA LAS HIJAS PRIMERO, y no es un detalle de implementación (16-ago-2026). Ninguna de las
+ * cuatro tablas de `control` que referencian `tenants(id)` declara `on delete cascade`, así que
+ * un DELETE liso rebota con 23503 en cuanto el job exportador escribió un agregado para ese
+ * tenant — y el exportador corre en CADA gate, antes que las suites. El síntoma es una baja que
+ * funciona sola y falla dentro del gate, que es el más caro de diagnosticar.
  */
+const HIJAS_DE_TENANTS = [
+  "agregados_tecnicos",
+  "tenant_feature_overrides",
+  "invitaciones_tenant",
+  "grants_soporte",
+];
+
 export async function desalta(slug) {
-  await con(BD_CONTROL, ({ sql }) => sql("delete from tenants where slug = $1", [slug]));
+  await con(BD_CONTROL, async ({ sql }) => {
+    for (const hija of HIJAS_DE_TENANTS) {
+      await sql(
+        `delete from ${hija} where tenant_id in (select id from tenants where slug = $1)`,
+        [slug],
+      );
+    }
+    await sql("delete from tenants where slug = $1", [slug]);
+  });
 }
 
 /**
