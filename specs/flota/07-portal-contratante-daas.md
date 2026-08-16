@@ -219,11 +219,31 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
       se ejerza: sin sesión, `sesionDelTenant` rebota 404 — el mismo camino que un id
       inventado. `pnpm --filter flota e2e` 521/521 y
       `bash packages/metodo/scripts/check.sh --full --app=flota` en verde. [AC-FPOR-06]
-- [ ] (P1) Manifest del rol `cliente` = exactamente las 4 pantallas (Hoy · Encargos ·
+- [x] (P1) Manifest del rol `cliente` = exactamente las 4 pantallas (Hoy · Encargos ·
       Nuevo/Importar CSV · Liquidación) bajo `/cliente/*` en la misma PWA; e2e que
       recorre TODO el portal con el usuario `cliente` del seed A y no encuentra rutas
       completas, datos de otra empresa, telemetría EV ni módulos del operador
-      (§3.E1.10, §5.5, §10) — oráculo: CI [AC-FPOR-07]
+      (§3.E1.10, §5.5, §10) — oráculo: CI [AC-FPOR-07]. Probado:
+      `dominio/manifest-cliente.ts` fija las 4 pantallas como constante (a diferencia del
+      manifest del operador, acá no hay entitlement que recortar: el candado es el módulo
+      entero, ya cerrado por AC-FPOR-04) — `manifest-cliente.test.ts` prueba las 4 exactas,
+      su orden y que ninguna clave del operador se cuele. `layout.tsx` renderiza la nav
+      (`data-testid="modulo-nav-cliente"`, deliberadamente distinto del `modulo-nav` del
+      operador) en las 4 pantallas reales: `page.tsx` (Hoy, resumen propio de hoy por
+      estado), `encargos/page.tsx` y `liquidaciones/page.tsx` (listas propias, «use
+      client» + `pedir()` contra los nuevos `GET /cliente/api/{encargos,liquidaciones}`
+      —confinados por `empresa_cliente_id` de la sesión en `servidor/portal-cliente.ts`,
+      mismo patrón que AC-FPOR-06—) y `nuevo/page.tsx` (shell estático: la mutación de
+      alta es AC-FPOR-08 y el import es AC-FPOR-09, los dos todavía abiertos). Las 4 rutas
+      de página más las 2 de API nuevas quedan declaradas en `rutas/manifiesto.json`
+      (`tipo: "sin_recurso"`). `e2e/portal-manifest-cliente.spec.ts` navega con sesión REAL
+      de navegador (secreto en IndexedDB, mismo mecanismo que `pod-feliz.spec.ts`) sobre un
+      tenant `daas` con una empresa vecina del MISMO tenant sembrada aparte: nav = 4 exactas
+      en orden; cada una de las 4 sin `modulo-nav`/`manifest-modulos`/`tarjeta-hoy` del
+      operador y sin telemetría EV (batería/autonomía/odómetro/ahorro/diésel/kWh/SOC/SOH);
+      «Encargos» cuenta 2 (nunca el 3° de la vecina), «Liquidación» cuenta 1 (nunca el de
+      la vecina), «Hoy» resume 2 de hoy — 8/8 verdes.
+      `bash packages/metodo/scripts/check.sh --full --app=flota` en verde.
 - [ ] (P1) Ciclo del encargo solicitado: creado desde el portal nace `solicitado` (0
       filas en estados posteriores); POST de un encargo inválido desde la pantalla
       «Nuevo» (p. ej. sin destino, o bultos fuera de 1–500 — §4.5) ⇒ 422 con error

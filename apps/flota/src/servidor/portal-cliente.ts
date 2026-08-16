@@ -58,6 +58,24 @@ export async function encargoDelCliente(
   });
 }
 
+/** Las pantallas «Hoy» y «Encargos» del portal [AC-FPOR-07] — spec 07 §2.1, §2.2: TODOS los
+ *  encargos de la empresa de la sesión, más recientes primero. Mismo filtro EXPLÍCITO que
+ *  `encargoDelCliente` y por el mismo motivo (`flota_admin` hace bypass de RLS). */
+export async function encargosDelCliente(pool: Pool, sesion: Sesion): Promise<EncargoDelCliente[]> {
+  return enLectura(pool, sesion, async (c) => {
+    const { rows } = await c.query<EncargoDelCliente>(
+      `select id::text as id, empresa_cliente_id::text as empresa_cliente_id,
+              destino_id::text as destino_id, bultos,
+              to_char(fecha_servicio, 'YYYY-MM-DD') as fecha_servicio, estado::text as estado,
+              reintento_de::text as reintento_de, creado_en::text as creado_en
+         from encargos where empresa_cliente_id = $1
+        order by creado_en desc`,
+      [sesion.empresaClienteId],
+    );
+    return rows;
+  });
+}
+
 export type LineaDeLiquidacionCliente = {
   id: string;
   liquidacion_id: string;
@@ -120,6 +138,27 @@ export async function liquidacionDelCliente(
       [id, sesion.empresaClienteId],
     );
     return { ...cabecera, lineas };
+  });
+}
+
+/** La pantalla «Liquidación» del portal [AC-FPOR-07] — spec 07 §2.4: SOLO las cabeceras (sin
+ *  líneas — el drill-down línea→evidencia de esta lista es AC-FPOR-10, todavía abierto), de la
+ *  empresa de la sesión, más recientes primero. */
+export async function liquidacionesDelCliente(
+  pool: Pool,
+  sesion: Sesion,
+): Promise<Omit<LiquidacionDelCliente, "lineas">[]> {
+  return enLectura(pool, sesion, async (c) => {
+    const { rows } = await c.query<Omit<LiquidacionDelCliente, "lineas">>(
+      `select id::text as id, empresa_cliente_id::text as empresa_cliente_id,
+              to_char(periodo_inicio, 'YYYY-MM-DD') as periodo_inicio,
+              to_char(periodo_fin, 'YYYY-MM-DD') as periodo_fin,
+              estado::text as estado, creado_en::text as creado_en
+         from liquidacion_cliente where empresa_cliente_id = $1
+        order by creado_en desc`,
+      [sesion.empresaClienteId],
+    );
+    return rows;
   });
 }
 

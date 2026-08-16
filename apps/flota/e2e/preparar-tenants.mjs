@@ -64,6 +64,13 @@ export const TENANTS = [
   // `sellarEntitlement(true)` de OFF→ON, pero conviene que cada suite controle su propio
   // sellado en vez de depender del orden en que Playwright corra los archivos.
   { slug: "portal_aislamiento", estado: "activo" },
+  // Base PROPIA para el e2e de navegador del manifest del portal [AC-FPOR-07].
+  //
+  // A diferencia de `portal_aislamiento` y `portal_cliente` (HTTP crudo con `playwrightRequest`),
+  // esta suite navega con `page.goto()` real —la sesión vive en el IndexedDB del navegador, mismo
+  // mecanismo que `pod-feliz.spec.ts`— y necesita recorrer las CUATRO pantallas sin que otra
+  // suite haya dejado el tenant en un estado distinto a mitad de la corrida.
+  { slug: "portal_manifest", estado: "activo" },
 ];
 
 /** Subdominio que jamás se registra. Nombrarlo acá evita que el test lo invente distinto. */

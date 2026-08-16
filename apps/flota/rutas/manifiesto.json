@@ -1096,6 +1096,18 @@
       }
     },
     {
+      "ruta": "/cliente/api/encargos",
+      "archivo": "src/app/cliente/api/encargos/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La lista de encargos propios del portal [AC-FPOR-07]. Sin identificador por URL: la confinación es 100% por `empresa_cliente_id` de la SESIÓN dentro de `encargosDelCliente` (servidor/portal-cliente.ts), no por nada que llegue en la petición. Contra el vecino B, el host de A resuelve el pool de A (AC-FTEN-05) y la sesión que abre B en su propio subdominio no tiene forma de apuntar esta consulta a la empresa de A — no hay parámetro que falsificar."
+      }
+    },
+    {
       "ruta": "/cliente/api/encargos/[id]",
       "archivo": "src/app/cliente/api/encargos/[id]/route.ts",
       "metodos": [
@@ -1150,6 +1162,18 @@
       }
     },
     {
+      "ruta": "/cliente/api/liquidaciones",
+      "archivo": "src/app/cliente/api/liquidaciones/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La lista de cabeceras de liquidación propias del portal [AC-FPOR-07]. Mismo argumento que `/cliente/api/encargos`: sin identificador, confinada por `empresa_cliente_id` de la sesión dentro de `liquidacionesDelCliente` sobre `liquidacion_cliente` (0067) — la vía sancionada del §4.3. Nada que un vecino B pueda mandar en la petición cambia de qué tenant sale la sesión."
+      }
+    },
+    {
       "ruta": "/cliente/api/liquidaciones/[id]",
       "archivo": "src/app/cliente/api/liquidaciones/[id]/route.ts",
       "metodos": [
@@ -1165,6 +1189,42 @@
           "columna": "id"
         },
         "nota": "La liquidación del contratante con sus líneas, leída vía `liquidacion_cliente`/`liquidacion_lineas_cliente` (0067) [AC-FPOR-06]. RLS de `liquidaciones` (0063) confina por `empresa_cliente_id`; trae el período y cada monto CLP de sus líneas, cruzando además el límite de tenant. Contrato 404 y BD de B sin cambios."
+      }
+    },
+    {
+      "ruta": "/cliente/encargos",
+      "archivo": "src/app/cliente/encargos/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La pantalla «Encargos» del portal [AC-FPOR-07]. El Server Component no lee sesión ni datos de negocio — es un shell «use client» que pide `/cliente/api/encargos` con `pedir()` (la credencial del aparato). El candado de módulo (AC-FPOR-04, servidor.mjs) ya cierra el namespace por HOST antes de que Next reciba el request; contra el vecino B no hay nada que este archivo pueda filtrar mal, porque no filtra nada — reenvía lo que la API ya confinó."
+      }
+    },
+    {
+      "ruta": "/cliente/liquidaciones",
+      "archivo": "src/app/cliente/liquidaciones/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La pantalla «Liquidación» del portal [AC-FPOR-07]. Mismo shell que «Encargos»: Server Component sin sesión ni datos propios, «use client» que pide `/cliente/api/liquidaciones`. Nada que filtrar mal acá — el candado y la confinación viven antes."
+      }
+    },
+    {
+      "ruta": "/cliente/nuevo",
+      "archivo": "src/app/cliente/nuevo/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La pantalla «Nuevo / Importar CSV» del portal [AC-FPOR-07]. Server Component ESTÁTICO: sin fetch, sin sesión, sin dato de ningún tenant — la mutación de alta (AC-FPOR-08) y el import (AC-FPOR-09) todavía no existen. Nada que un vecino B pueda cruzar contra algo que no lee ni escribe nada."
       }
     },
     {
