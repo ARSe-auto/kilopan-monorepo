@@ -286,7 +286,7 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 - [ ] (P2) Gate GUI del portal por sub-checks: 4 estados, axe, es-CL, tema del tenant + dark, e2e doble terminología, snapshot 375px — spec: specs/flota/07-portal-contratante-daas.md [AC-FPOR-12]
 - [ ] (P2) Revisión adversarial del hito «portal» sin hallazgos críticos abiertos; hallazgos → ítems del plan (oráculo humano) — spec: specs/flota/07-portal-contratante-daas.md [AC-FPOR-13]
 - [ ] (P2) Piloto A en producción: 7 días con rutas manuales y ≥90% entregas con evidencia, medidos por Alexis en el panel (oráculo producción — DONE-adopción, no bloquea) — spec: specs/flota/07-portal-contratante-daas.md [AC-FPOR-14]
-- [ ] (P1) Conmutación de modo SOLO `admin_tenant` (otros ⇒ 403 y 0 filas); cada conmutación a audit_trail — spec: specs/flota/07-portal-contratante-daas.md [AC-FPOR-15]
+- [x] (P1) Conmutación de modo SOLO `admin_tenant` (otros ⇒ 403 y 0 filas); cada conmutación a audit_trail — spec: specs/flota/07-portal-contratante-daas.md [AC-FPOR-15]
 - [ ] (P1) Semántica del preset: la conmutación cambia el entitlement efectivo SIN mutar plan_features ni filas de otro tenant; rige en el próximo bootstrap — spec: specs/flota/07-portal-contratante-daas.md [AC-FPOR-16]
 - [ ] (P1) Tenant mi_flota recién provisionado tiene EXACTAMENTE UNA empresa_cliente (la implícita, efecto del trigger del módulo 03) — spec: specs/flota/07-portal-contratante-daas.md [AC-FPOR-17]
 

@@ -171,3 +171,45 @@ test("[AC-FRUT-14] un modo que no existe rebota 422, y no toca nada", async ({ r
   expect(((await rebote.json()) as { error: string }).error).toBe("modo_desconocido");
   expect(await elInventario()).toEqual(antes);
 });
+
+// El rebote 403 para un rol distinto de `admin_tenant` (y sus 0 filas) ya lo ejerce el barrido
+// genérico de `gobierno.spec.ts` [AC-FIDN-12] sobre cada ruta de `/api/gobierno/*`,
+// `/api/gobierno/modo` incluido (declarado en `rutas/manifiesto.json`) — no se repite acá. Lo
+// que faltaba probar es la otra mitad de [AC-FPOR-15]: que cada conmutación deja rastro en
+// `audit_trail`, no solo en `eventos` (§3, §5.4, §5.5).
+test("[AC-FPOR-15] cada conmutación de modo queda en audit_trail, con su antes y su después", async ({
+  request,
+}) => {
+  // `audit_trail` es append-only (§7.4): no se limpia, se mira la COLA que dejan estas dos
+  // conmutaciones. Es lo que hace que este test valga aunque otras suites hayan escrito antes.
+  const [antes] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ n: string }>("select count(*)::text as n from audit_trail where tabla = 'tenant_info'"),
+  );
+
+  const aDaas = await conmutar(request, "daas");
+  expect(aDaas.ok()).toBe(true);
+  const deVuelta = await conmutar(request, "mi_flota");
+  expect(deVuelta.ok()).toBe(true);
+
+  const filas = await con(BD_A, (c: Conexion) =>
+    c.sql<{ operacion: string; antes: string; despues: string }>(
+      `select operacion, antes::text as antes, despues::text as despues
+         from audit_trail where tabla = 'tenant_info'
+        order by ocurrido_en desc limit 2`,
+    ),
+  );
+  // Las dos filas más nuevas, más nuevo primero: la última conmutación fue mi_flota → daas → mi_flota
+  // así que el orden cronológico ascendente es [daas, mi_flota] vuelto del revés.
+  const [ultima, previa] = filas;
+  expect(ultima!.operacion).toBe("UPDATE");
+  expect(previa!.operacion).toBe("UPDATE");
+  expect(JSON.parse(ultima!.antes)).toEqual({ modo: "daas" });
+  expect(JSON.parse(ultima!.despues)).toEqual({ modo: "mi_flota" });
+  expect(JSON.parse(previa!.antes)).toEqual({ modo: "mi_flota" });
+  expect(JSON.parse(previa!.despues)).toEqual({ modo: "daas" });
+
+  const [despues] = await con(BD_A, (c: Conexion) =>
+    c.sql<{ n: string }>("select count(*)::text as n from audit_trail where tabla = 'tenant_info'"),
+  );
+  expect(Number(despues!.n)).toBe(Number(antes!.n) + 2);
+});

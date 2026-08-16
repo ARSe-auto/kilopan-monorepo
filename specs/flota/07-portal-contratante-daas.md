@@ -319,9 +319,24 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
       §10 fija para el piloto A vía §3.E2), medidos por Alexis en el panel como parte
       de DONE-adopción — JAMÁS bloquea el DONE-software del loop (§10, §3.E2, §9.2) —
       oráculo: producción [AC-FPOR-14]
-- [ ] (P1) Conmutación autorizada y auditada: solo `admin_tenant` conmuta el modo
+- [x] (P1) Conmutación autorizada y auditada: solo `admin_tenant` conmuta el modo
       (cualquier otro rol ⇒ 403 y 0 filas); cada conmutación escribe `audit_trail`
-      (§3, §5.4, §5.5) — oráculo: CI [AC-FPOR-15]
+      (§3, §5.4, §5.5) — oráculo: CI [AC-FPOR-15]. Probado: la mitad de la
+      autorización ya la ejercía `guardia()` (`servidor/gobierno.ts`, ROL_DE_GOBIERNO =
+      `admin_tenant`) que usa `/api/gobierno/modo`, y el barrido genérico de
+      `e2e/gobierno.spec.ts` [AC-FIDN-12] la cubre automáticamente por manifiesto (403 y
+      0 filas para rol no-dueño sobre CADA ruta `/api/gobierno/*`). Faltaba la mitad del
+      `audit_trail`: `tenant_info` no lleva el trigger genérico `auditar()` (solo el de
+      la empresa implícita, 0039) y engancharlo pedía una migración fuera de alcance del
+      motor (AGENTS.md, esquema de sesión supervisada). Se escribió a mano en
+      `conmutarModo` (`servidor/modo.ts`), mismo patrón que `registrarAcceso` de
+      `soporte.ts` para lo que tampoco cuelga de ese trigger — un `insert into
+      audit_trail` con `tabla='tenant_info'`, `operacion='UPDATE'` y el antes/después del
+      modo, en la MISMA transacción que la mutación y el evento. Nuevo test
+      `[AC-FPOR-15]` en `e2e/modo.spec.ts`: dos conmutaciones dejan dos filas nuevas en
+      `audit_trail` con su antes/después exactos. `pnpm --filter flota exec playwright
+      test e2e/modo.spec.ts e2e/gobierno.spec.ts` en PRIMER PLANO (20/20) y
+      `bash packages/metodo/scripts/check.sh --full --app=flota` en verde.
 - [ ] (P1) Semántica del preset: la conmutación cambia el entitlement efectivo
       (`override ?? plan`, §4.4) del grupo DaaS SIN mutar `plan_features` (fila
       compartida por los tenants del plan) ni filas de otro tenant, y rige recién en
