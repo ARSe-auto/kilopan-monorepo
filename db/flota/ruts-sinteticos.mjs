@@ -75,9 +75,9 @@ export const VALIDOS = {
   "76.543.210-3": "la empresa cliente del rol `cliente` en el covering array entitlements × rol del manifest (AC-FMIG-21): ese rol exige `empresa_cliente_id` con FK real y la suite necesita la suya, propia y no prestada. Dígito verificador DERIVADO por módulo 11: cuerpo 76543210 ⇒ suma ponderada 118, resto 8, dv 11−8 = 3",
   "19.500.000-K": "la empresa del detalle de encargo con evidencia del portal (AC-FPOR-11), propia y no prestada: el merge de las tres ramas dejó a `portal-encargo-detalle.spec.ts` y a `voiceover-proxy-3-flujos.spec.ts` reclamando el MISMO índice 39 — cada suite siembra su persona y la segunda en correr moría con duplicate key",
   "9.111.222-1": "la dueña de la contracción por modo/entitlement del módulo de tarifas (AC-FTAR-18), propia y no prestada: la suite sella `config_version` en OFF y en ON sobre su propia base y necesita un `admin_tenant` que ninguna otra suite enrole. Dígito verificador DERIVADO por módulo 11: cuerpo 9111222 ⇒ suma ponderada 54, resto 10, dv 11−10 = 1",
-};
   "76.303.404-6": "la empresa cliente de la contracción por modo/entitlement (AC-FTAR-18), propia y no prestada: rango 76.xxx de persona jurídica — la suite necesita SU propia contratante para que el 403 pruebe que la puerta cerró y no que no había nada que devolver. Dígito verificador DERIVADO por módulo 11: cuerpo 76303404 ⇒ suma ponderada 93, resto 5, dv 11−5 = 6",
   "76.111.222-8": "la empresa a la que se le intenta pactar un OTD fuera de rango (AC-FTAR-13), propia y no prestada: el pgTAP 0036 la usa DOS veces para los dos bordes del CHECK —49 y 101— y ninguna de las dos llega a crear fila, que es justamente lo que ese test comprueba",
+};
 
 /**
  * El RUT sintético número `indice`, o un error que dice qué falta.
