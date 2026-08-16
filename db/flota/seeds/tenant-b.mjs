@@ -8,16 +8,21 @@
 // + tema propio (AC-FMIG-02) + terminología al máximo largo permitido (AC-FMIG-04/06) + los 2
 // EV48 con su capacidad/batería reales + las 4 panaderías cliente con RUT sintético de la lista
 // congelada (AC-FIDN-21) y un centinela ÚNICO por tenant en `razon_social` (§10, §7.8: cero
-// datos personales reales). QUEDA FUERA de este archivo — declarado, no escondido — todo lo que
-// exige un flujo de negocio completo que este AC no alcanzó a construir en la misma sesión: las
-// 2 rutas de madrugada (12 y 9 paradas), los manifiestos firmados con DTE, el encargo creado en
-// andén, el reintento y el cierre con ecuación cuadrada.
+// datos personales reales).
+//
+// La OPERACIÓN de B —2 rutas maestras de madrugada de 12 y 9 paradas, los manifiestos firmados
+// con su DTE ya emitido, el encargo creado en andén, el reintento y el cierre con ecuación
+// cuadrada— era la mitad que AC-FMIG-18 dejó declarada como pendiente y la cierra [AC-FMIG-26],
+// en `seeds/tenant-b-operacion.mjs`. Vive en su propio archivo y no acá porque este sigue siendo
+// la IDENTIDAD del tenant: el e2e doble del §9.2 y el barrido de huella del §9.3.2 se apoyan en
+// ella y no necesitan un día de operación para hacerlo.
 import { con } from "../conectar.mjs";
 import { pasoUnoEmpresaYVertical } from "../wizard-onboarding.mjs";
 import { CENTINELAS, poolDelTenant, sesionDe, sembrarActorAdmin } from "./comun.mjs";
 import { crearVehiculo, editarVehiculo } from "../../../apps/flota/src/servidor/vehiculos.ts";
 import { guardarTema } from "../../../apps/flota/src/servidor/tema.ts";
 import { guardarTermino } from "../../../apps/flota/src/servidor/terminologia.ts";
+import { sembrarOperacionB } from "./tenant-b-operacion.mjs";
 
 /** RUTs de la lista congelada (`db/flota/ruts-sinteticos.mjs`, AC-FIDN-21) — reusados entre
  *  tenants a propósito: cada tenant vive en su PROPIA base física, así que repetir un RUT entre
@@ -58,14 +63,19 @@ const TERMINOS_EXTREMOS_B = [
 ];
 
 /**
- * Siembra el tenant B «Rutapan» [AC-FMIG-18]: identidad + vertical + tema propio +
- * terminología extrema + los 2 EV48 + las 4 panaderías cliente con centinela.
+ * Siembra el tenant B «Rutapan»: identidad + vertical + tema propio + terminología extrema + los
+ * 2 EV48 + las 4 panaderías cliente con centinela [AC-FMIG-18], y encima de eso su OPERACIÓN del
+ * día —rutas maestras de madrugada, manifiestos con DTE, andén, reintento y cierre cuadrado—
+ * [AC-FMIG-26].
  *
- * NO siembra rutas, manifiestos, DTEs, reintento ni cierre cuadrado — ver el comentario de
- * cabecera de este archivo. Idempotente en el sentido de `provisionar()`: `recrear:true` la
- * vuelve a crear desde cero.
+ * `conOperacion:false` deja solo la identidad: es lo que necesitan el barrido de huella del
+ * §9.3.2 y cualquier prueba que no quiera pagar un día entero de operación para mirar un tema.
+ * Idempotente en el sentido de `provisionar()`: `recrear:true` la vuelve a crear desde cero.
  */
-export async function sembrarTenantB(slug = "rutapan_demo", { recrear = false } = {}) {
+export async function sembrarTenantB(
+  slug = "rutapan_demo",
+  { recrear = false, conOperacion = true } = {},
+) {
   const tenant = await pasoUnoEmpresaYVertical(slug, { vertical: "panaderia", modo: "daas", recrear });
   const actorAdmin = await sembrarActorAdmin(tenant.bd, RUT_ACTOR_ADMIN, CENTINELA_B);
   const sesionAdmin = sesionDe(actorAdmin, "admin_tenant");
@@ -117,7 +127,17 @@ export async function sembrarTenantB(slug = "rutapan_demo", { recrear = false } 
       empresas.push(fila);
     }
 
-    return { ...tenant, actorAdmin, tema: tema.tema, terminos, vehiculos, empresas, centinela: CENTINELA_B };
+    const identidad = {
+      ...tenant,
+      actorAdmin,
+      tema: tema.tema,
+      terminos,
+      vehiculos,
+      empresas,
+      centinela: CENTINELA_B,
+    };
+    if (!conOperacion) return identidad;
+    return { ...identidad, operacion: await sembrarOperacionB(tenant, pool, sesionAdmin, identidad) };
   } finally {
     await pool.end();
   }
@@ -133,9 +153,13 @@ async function principal(argv) {
     return 2;
   }
   const r = await sembrarTenantB(libres[0] ?? "rutapan_demo", { recrear });
+  const rutas = r.operacion ? Object.values(r.operacion.rutas) : [];
   console.log(
     `tenant-b: ${r.bd} lista · ${r.vehiculos.length} EV48 · ${r.empresas.length} panaderías · ` +
-      `tema ${r.tema.accentColor} · centinela ${r.centinela}`,
+      `tema ${r.tema.accentColor} · centinela ${r.centinela}` +
+      (rutas.length > 0
+        ? ` · ${rutas.length} recorridos de madrugada (${rutas.map((x) => x.paradas).join(" y ")} paradas)`
+        : ""),
   );
   return 0;
 }
