@@ -41,7 +41,7 @@ sobre todos los anteriores.
 **Ítems condicionados o bloqueados por una decisión del dueño** (ejecutan hoy su parte
 verificable; la cláusula pendiente se cierra al responder la pregunta indicada de SU
 spec): AC-FIDN-01 (p. 8), AC-FIDN-03 (p. 5/10), AC-FIDN-06 (p. 9), AC-FIDN-11 (p. 7),
-AC-FIDN-15 (p. 8), AC-FIDN-18 (p. 7 — BLOQUEADO entero), AC-FMIG-06 (p. 11), AC-FMIG-15
+AC-FIDN-18 (p. 7 — BLOQUEADO entero), AC-FMIG-06 (p. 11), AC-FMIG-15
 (p. 10), AC-FMIG-22 (p. 12), AC-FMIG-23 (p. 4 de la spec 04 — numerador fuera del gate
 hasta la respuesta), AC-FPOR-09 (p. 4), AC-FPOR-10 (p. 3), AC-FRUT-02 (p. 6),
 AC-FRUT-21 (p. 9), AC-FSEM-05 (p. 9), AC-FSEM-07 (p. 5), AC-FSEM-08 (p. 5), AC-FSEM-09
@@ -111,7 +111,7 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 - [x] (P1) Panel de gobierno exclusivo del dueño: cada acción con rol no admin ⇒ 403 y 0 filas; recurso de otro tenant ⇒ 404 (centinela 2); todo a audit_trail + evento — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-12]
 - [x] (P2) Transferir propiedad exige passkey/WebAuthn del admin (única del sistema; prohibida en otros flujos); e2e con virtual authenticator — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-13]
 - [x] (P1) 21.719 estructural: whitelist CERRADA de columnas PII (solo `personas` y `empresas_cliente`); cualquier otra tabla con nombre/rut/contacto ⇒ linter rojo — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-14]
-- [ ] (P2) Export ARCO por persona sin datos de terceros, registrado en la bitácora — Pregunta 8 ya RESPONDIDA (actor=admin_tenant, formato=JSON); BLOQUEADO por DDL de sesión supervisada: falta sembrar `gobierno.arco_exportado` en el catálogo `evento_tipo` (solo nace por migración, mismo mecanismo que `gobierno.propiedad_transferida` en la 0068), sin lo cual la bitácora del §3.E1.15 no puede registrar el acceso — mismo root cause que AC-FTAR-16/17/18 y AC-FPOR-03 — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-15]
+- [ ] (P2) Export ARCO por persona sin datos de terceros, registrado en la bitácora — Pregunta 8 ya RESPONDIDA (actor=admin_tenant, formato=JSON). Probado: 7 unitarios en `apps/flota/src/dominio/arco.test.ts` (lista blanca, fila ajena, andén sin dueña, campo vedado a cualquier profundidad) y 4 contra el cluster en `db/flota/suite-bd/arco.test.mjs` (hashes que SÍ están en la base y no salen; ni una cadena de la persona B en el JSON de A; el evento cae bajo el filtro `gobierno.%` de la bitácora). El bloqueo que arrastraba era menor de lo escrito: sembrar `evento_tipo` es un `insert`, no DDL —ni columna, ni índice, ni trigger—, y la 0069 es seed puro, mismo precedente que `0059_seed_anexo_b_semaforo.sql` — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-15]
 - [ ] (P2) Enrolamiento real de punta a punta <5 min en teléfono real con guía A2HS (oráculo humano — DONE-adopción, no bloquea el loop) — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-16]
 - [x] (P1) RUT inválido: 422 tipado en servidor con 0 filas + validación módulo 11 EN LÍNEA en el cliente sobre RUT auto-formateado — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-17]
 - [x] (P1) Break-glass: doble control + notificación forzosa + registro inmutable (test BLOQUEADO por pregunta 7; entra al build al responderse) — spec: specs/flota/01-identidad-enrolamiento.md [AC-FIDN-18]

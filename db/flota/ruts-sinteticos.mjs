@@ -96,6 +96,11 @@ export function rutDeFixture(indice) {
  * que prueban que el validador rechaza. Sin declararlas, el gate las marcaría como RUTs
  * sembrados fuera de la lista; con ellas en otra lista, queda escrito que el rojo es su oficio.
  */
+// Los dos titulares del fixture del export ARCO [AC-FIDN-15]: uno pide sus datos y el otro es
+// el TERCERO cuya presencia en el mismo tenant hace que la prueba pruebe algo.
+VALIDOS["18.777.333-4"] = "titular del export ARCO en db/flota/suite-bd/arco.test.mjs [AC-FIDN-15]";
+VALIDOS["19.888.444-8"] = "el TERCERO del export ARCO: ni una cadena suya puede salir en el JSON de la titular [AC-FIDN-15]";
+
 export const INVALIDOS_A_PROPOSITO = {
   "12.345.678-9": "el canónico con el dígito verificador cambiado: el caso que prueba que el módulo 11 se corre de verdad",
   "9.999.999-9": "dígito verificador repetido del cuerpo; se ve plausible y el módulo 11 dice 3",

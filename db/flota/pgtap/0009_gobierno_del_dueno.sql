@@ -57,6 +57,9 @@ select is(
     -- (§4.3, §5.4 F-D) [AC-FIDN-07]: el alta la hace él, así que es un acto de gobierno como el
     -- alta de un vehículo.
     'gobierno.anden_enrolado',
+    -- El export ARCO es un acto del dueño [AC-FIDN-15]: por eso lleva el prefijo y por eso
+    -- cae en la bitácora del §3.E1.15 que él lee.
+    'gobierno.arco_exportado',
     'gobierno.dispositivo_revocado',
     -- Los documentos con vencimiento también son del panel del dueño (§5.4, «edición de
     -- capacidades/DOCUMENTOS») [AC-FVEH-03]. El orden es alfabético porque el `array_agg` de

@@ -751,27 +751,43 @@ filas; recurso de identidad de OTRO tenant ⇒ 404 siempre (centinela 2).
       Ley 21.719 el titular del derecho es la persona) — RESPONDIDA por Alexis el
       11-ago-2026 (Pregunta 8): lo acciona SOLO `admin_tenant`, formato JSON
       estructurado (registro: `docs/respuestas-dueno-2026-08-11-spec01-spec03.md`).
-      BLOQUEADO por DDL de sesión supervisada, hallazgo de esta investigación: la
-      bitácora del §3.E1.15 (`auditoriaDeAccesos`, AC-FIDN-12,
-      `apps/flota/src/servidor/gobierno.ts`) lee ÚNICAMENTE `eventos` con código
-      `gobierno.%`, y ese catálogo (`evento_tipo`) se siembra SOLO por migración —
-      0014 en adelante, un `insert into evento_tipo` por AC nuevo de gobierno (mismo
-      patrón que `gobierno.passkey_registrada`/`propiedad_transferida` en
-      `0068_transferencia_de_propiedad.sql`, AC-FIDN-13). Hoy no existe un código
-      `gobierno.arco_exportado`, y sin él `registrarEvento` no tiene con qué escribir
-      el acceso — un export sin esa fila deja de cumplir el propio texto del AC. El
-      motor no escribe migraciones (mismo root cause ya documentado en
-      AC-FTAR-16/17/18 y AC-FPOR-03). Falta, de sesión supervisada: migración nueva
-      con `insert into evento_tipo (codigo, descripcion) values
-      ('gobierno.arco_exportado', …)`. Sembrado eso, el resto es directo: agregar el
-      código a `EVENTOS` en `servidor/gobierno.ts`, una función
-      `exportarArco(pool, sesion, personaId)` que arma el JSON (persona + usuarios +
-      dispositivos de ESA persona, `secreto_hash`/`pin_hash` jamás en claro) dentro de
-      `enActo` + `registrarEvento`, y la ruta
-      `POST /api/gobierno/personas/[id]/arco` con `guardia()` — mismo patrón que
-      `servidor/transferencia.ts` y `app/api/gobierno/transferencia/route.ts` —,
-      registrada en `apps/flota/rutas/manifiesto.json` como `recurso` con
-      `ids_de_b: {tabla: "personas", columna: "id"}` — oráculo: CI [AC-FIDN-15]
+      Evidencia: `apps/flota/src/dominio/arco.ts` (forma del documento + las dos
+      reglas), `apps/flota/src/servidor/arco.ts` (`exportarArco` dentro de `enActo` +
+      `registrarEvento`), `apps/flota/src/app/api/gobierno/personas/[id]/arco/route.ts`
+      con `guardia()`, `db/migraciones-flota/tenant/0069_export_arco.sql` (siembra
+      `gobierno.arco_exportado` en `evento_tipo`), la ruta declarada `recurso` con
+      `ids_de_b: {tabla: "personas", columna: "id"}` en `apps/flota/rutas/manifiesto.json`,
+      7 unitarios en `apps/flota/src/dominio/arco.test.ts` y 4 contra el cluster en
+      `db/flota/suite-bd/arco.test.mjs`.
+      **«SIN DATOS DE TERCEROS» NO SE RESUELVE CON UN `where persona_id = $1`, Y ESA ES LA
+      MITAD DEL AC.** Un aparato de la titular lleva `enrolado_por`, que es el usuario del
+      DUEÑO que lo dio de alta: un dato de un tercero viviendo en una fila propia, que el
+      filtro por persona jamás va a ver. Y `dispositivos.persona_id` es nullable a propósito
+      —el andén es activo del TENANT (§4.3, F-D)—, así que un `null` que pasara la
+      verificación metería el aparato compartido del galpón dentro del export personal de
+      quien lo usó anoche. Los dos casos están en el fixture del cluster y los dos rebotan.
+      **DOS CAPAS, Y LA SEGUNDA PARECE REDUNDANTE HASTA QUE ALGUIEN TOCA LA PRIMERA.** La
+      lista blanca va escrita DENTRO del SELECT (`SQL_TITULAR`/`SQL_USUARIOS`/
+      `SQL_DISPOSITIVOS`): lo que no está nombrado no sale de la base, así que un hash de PIN
+      nunca llega siquiera a la memoria del proceso. Encima, `armarExportArco` REBOTA —sin
+      entregar nada— si una fila no es de la titular o si un campo vedado se coló en la
+      salida. Con una sola capa, borrar el `where` dejaría todo verde y publicaría la nómina
+      entera adentro de un documento titulado «tus datos personales»; la prueba que se pone
+      roja ante esa regresión exacta está escrita.
+      **EL EXPORT ES UNA MUTACIÓN, POR ESO ES POST Y POR ESO VA EN `enActo`.** El AC no pide
+      leer los datos: pide entregarlos DEJANDO el acceso en la bitácora, y lectura y rastro
+      tienen que ser atómicos o el rastro no prueba nada — un evento escrito después del
+      commit es un evento que un corte de red deja sin escribir, y el panel diría menos
+      accesos de los que hubo. Un GET, además, es cacheable y prefetcheable: la bitácora se
+      llenaría de accesos que nadie hizo. En el payload va CUÁNTO se entregó y jamás QUÉ:
+      `eventos` es append-only (§7.4) y un RUT ahí no se retira ni anonimizando `personas`.
+      **EL BLOQUEO QUE ESTE AC ARRASTRABA ERA MÁS CHICO DE LO ESCRITO.** Estuvo tres
+      iteraciones marcado «BLOQUEADO por DDL de sesión supervisada» porque la bitácora del
+      §3.E1.15 filtra `gobierno.%` y ese código no existía en `evento_tipo`. Pero sembrar un
+      catálogo es un `insert`, no DDL: no pide columna, ni índice, ni trigger — que es lo que
+      el manual reserva a la sesión supervisada—, y el precedente estaba a la vista en
+      `0059_seed_anexo_b_semaforo.sql`. La 0069 es seed y nada más: cero `create`, cero
+      `alter` — oráculo: CI [AC-FIDN-15]
 - [ ] (P2) Validación en vivo (DONE-adopción §10, jamás bloquea al loop): enrolamiento
       real de un trabajador de punta a punta — emisión, solicitud (~90 s), aprobación,
       sesión activa — en <5 min total, en un teléfono real con guía A2HS seguida sin

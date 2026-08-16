@@ -185,6 +185,10 @@ function accionesDeGobierno() {
     "/api/gobierno/usuarios/[id]/pin": operario.usuarioId,
     "/api/gobierno/vehiculos/[id]": vehiculoId,
     "/api/gobierno/vehiculos/[id]/documentos": vehiculoId,
+    // El export ARCO [AC-FIDN-15]: el barrido tiene que pegarle con una persona REAL de esta
+    // base, o el `[id]` vacío deja `/personas//arco` y Next contesta 308 antes de la guardia —
+    // un redirect no es ni el 403 ni el 404 que el AC exige, y la acción quedaría sin barrer.
+    "/api/gobierno/personas/[id]/arco": operario.personaId,
   };
   return casos
     .filter((c) => c.ruta.startsWith("/api/gobierno/"))

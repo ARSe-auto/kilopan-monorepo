@@ -65,6 +65,11 @@ export const EVENTOS = {
   // respondida el 11-ago-2026) [AC-FIDN-13]: no hay un paso de setup aparte.
   passkey_registrada: "gobierno.passkey_registrada",
   propiedad_transferida: "gobierno.propiedad_transferida",
+  // El export ARCO lo acciona SOLO el dueño (Pregunta 8, 11-ago-2026) [AC-FIDN-15]: entrega el
+  // RUT, el nombre y el contacto de una persona en un archivo que después viaja por correo, y
+  // bajo la Ley 21.719 el responsable tiene que poder decir quién lo generó. Por eso el acceso
+  // es un acto de gobierno y no una lectura más — sembrado en `0069_export_arco.sql`.
+  arco_exportado: "gobierno.arco_exportado",
   // El §5.4 pone «alta, edición de capacidades/documentos y desactivación de VEHÍCULOS»
   // dentro del plano de control exclusivo del dueño, en la misma lista que aprobar accesos y
   // revocar aparatos. Por eso su evento es `gobierno.*` y no de otro dominio: es lo que hace

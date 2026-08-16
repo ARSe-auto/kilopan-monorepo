@@ -362,6 +362,24 @@
       }
     },
     {
+      "ruta": "/api/gobierno/personas/[id]/arco",
+      "archivo": "src/app/api/gobierno/personas/[id]/arco/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "personas",
+          "columna": "id"
+        },
+        "nota": "LA RUTA MÁS CARA DEL PANEL SI SE CRUZA: devuelve el RUT, el nombre y el contacto de UNA persona en un archivo pensado para salir de la empresa por correo. Ejecutada desde A contra el id de una persona de B, no filtraría un estado ni un contador: entregaría la identidad completa de un trabajador del vecino, ya empaquetada para reenviar, y bajo la Ley 21.719 eso es una brecha con titular con nombre y apellido. El 404 NO alcanza como único oráculo acá: además MUTA la BD de B —escribe `gobierno.arco_exportado` en sus `eventos`— así que hay que mirar la huella (centinela 2, §9.3.2), porque un acceso registrado en la bitácora de B que su dueño nunca hizo le rompe la única bitácora con la que puede responderle a un fiscalizador."
+      }
+    },
+    {
       "ruta": "/api/gobierno/solicitudes",
       "archivo": "src/app/api/gobierno/solicitudes/route.ts",
       "metodos": [
