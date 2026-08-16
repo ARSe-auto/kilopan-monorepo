@@ -591,3 +591,51 @@ test("[AC-FTEN-22] la vista dice CUÁL apagó el modo, para que la UI no tenga q
     await control.sql("delete from tenants where id = $1", [tenant.id]);
   }
 });
+
+// --- El mapeo del modo apunta a features que EXISTEN ------------------------ [AC-FTAR-18]
+//
+// `modo_recorte` (0003) nombra por `lookup_key` de TEXTO las features que cada modo apaga, sin
+// FK contra `features`: es el mismo plano de control, pero el recorte se resuelve por nombre.
+// Eso significa que un nombre mal escrito —o, como pasó de verdad hasta la 0009, un catálogo
+// donde esas filas nunca se sembraron— no rebota en ninguna parte. La resolución simplemente
+// no encuentra la feature, el snapshot congelado no la incluye para NINGÚN modo y el manifest
+// la omite siempre: `daas` termina viéndose igual que `mi_flota`, que es exactamente la
+// contracción que el §3 dice que NO debe pasar.
+//
+// El invariante que lo atrapa no es «existen estas cuatro» sino la relación entera: toda
+// lookup_key que el mapeo recorta tiene que estar en el catálogo. Así también cubre el modo
+// que alguien agregue mañana.
+
+test("[AC-FTAR-18] toda feature que un modo recorta existe en el catálogo", async () => {
+  const huerfanas = await control.sql(
+    "select r.modo::text as modo, r.feature_lookup_key as key from modo_recorte r " +
+      "where not exists (select 1 from features f where f.lookup_key = r.feature_lookup_key) " +
+      "order by 1, 2",
+  );
+  assert.deepEqual(
+    huerfanas,
+    [],
+    "modo_recorte apunta a features que no están en el catálogo: la resolución las ignora en " +
+      "silencio y la contracción por modo deja de existir sin que nada se ponga rojo",
+  );
+
+  // Y el mapeo no está vacío: sin esto, la prueba de arriba sería verde vacuo el día que
+  // alguien borre las filas de `modo_recorte` en vez de arreglar el catálogo.
+  const [{ n }] = await control.sql("select count(*)::int as n from modo_recorte");
+  assert.ok(n > 0, "modo_recorte quedó vacío: no habría recorte que verificar");
+});
+
+test("[AC-FTAR-18] el grupo DaaS del §3 está completo en el catálogo, con sus cuatro miembros", async () => {
+  // La lista literal del §3, no un conteo: si mañana alguien agrega una quinta cosa al grupo
+  // sin sembrarla, el `deepEqual` de arriba no la vería —no estaría en modo_recorte— pero esta
+  // sí, porque el §3 cierra el grupo en cuatro.
+  const filas = await control.sql(
+    "select lookup_key from features where lookup_key in " +
+      "('tarifas', 'liquidacion_por_cliente', 'portal_contratante', 'facturacion') order by 1",
+  );
+  assert.deepEqual(
+    filas.map((f) => f.lookup_key),
+    ["facturacion", "liquidacion_por_cliente", "portal_contratante", "tarifas"],
+    "falta alguna de las cuatro del grupo DaaS (§3) en el catálogo de features",
+  );
+});
