@@ -44,10 +44,18 @@ export type AltaDeEncargo =
   | { tipo: "empresa_no_existe" }
   | { tipo: "destino_no_existe" }
   | { tipo: "bultos_fuera_de_rango" }
+  | { tipo: "fecha_invalida" }
   | { tipo: "attrs_invalidos"; detalle: string };
 
 /** Códigos de PostgreSQL que este alta traduce a un rebote tipado en vez de a un 500. */
 const CHECK_VIOLATION = "23514";
+
+/** [AC-FRUT-25] Mismo patrón que `vence_el` en `servidor/documentos.ts`: un `fecha_servicio`
+ *  que no calza este formato sube como `invalid_datetime_format` (500 no tipado) en el cast
+ *  `::date` del INSERT/UPDATE en vez del 422 que el resto de la función ya respeta. */
+function fechaEsValida(fecha: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(fecha) && !Number.isNaN(new Date(fecha).getTime());
+}
 
 const COLUMNAS = `id::text as id, empresa_cliente_id::text as empresa_cliente_id,
                   destino_id::text as destino_id, bultos,
@@ -70,6 +78,11 @@ export async function crearEncargo(
   // límite adentro; el CHECK de la tabla es la red que no se puede saltar (§4.2).
   if (!Number.isInteger(datos.bultos) || datos.bultos < 1 || datos.bultos > 500) {
     return { tipo: "bultos_fuera_de_rango" };
+  }
+  // [AC-FRUT-25]: `null` es el default legítimo (hoy, §3.E1.5) — se juzga como el resto de las
+  // guardas de esta función, ANTES de llegar al cast `::date` del INSERT.
+  if (datos.fechaServicio !== null && !fechaEsValida(datos.fechaServicio)) {
+    return { tipo: "fecha_invalida" };
   }
 
   try {
@@ -255,6 +268,7 @@ export type Edicion =
   | { tipo: "no_es_de_su_creador" }
   | { tipo: "ya_aceptado"; estado: string }
   | { tipo: "bultos_fuera_de_rango" }
+  | { tipo: "fecha_invalida" }
   | { tipo: "attrs_invalidos"; detalle: string };
 
 /**
@@ -286,6 +300,10 @@ export async function editarEncargo(
     if (!Number.isInteger(cambios.bultos) || cambios.bultos < 1 || cambios.bultos > 500) {
       return { tipo: "bultos_fuera_de_rango" };
     }
+  }
+  // [AC-FRUT-25]: misma guarda que en `crearEncargo`, antes del cast `::date` del UPDATE.
+  if (cambios.fechaServicio !== undefined && !fechaEsValida(cambios.fechaServicio)) {
+    return { tipo: "fecha_invalida" };
   }
 
   try {

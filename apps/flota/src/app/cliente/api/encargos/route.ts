@@ -75,6 +75,12 @@ export async function POST(peticion: Request) {
       { status: 422 },
     );
   }
+  if (alta.tipo === "fecha_invalida") {
+    return Response.json(
+      { error: "fecha_invalida", mensaje: "La fecha de servicio no es una fecha válida (AAAA-MM-DD)." },
+      { status: 422 },
+    );
+  }
   if (alta.tipo === "empresa_no_existe" || alta.tipo === "attrs_invalidos") {
     // La empresa sale de la sesión y `attrs` siempre viaja vacío desde este llamador — ninguna
     // de las dos la puede disparar un cliente real, pero el tipo discriminado las contempla.

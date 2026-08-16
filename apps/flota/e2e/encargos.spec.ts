@@ -115,6 +115,44 @@ test("[AC-FRUT-01] bultos fuera de 1–500 rebota 422 con 0 filas, y lo dice con
   }
 });
 
+// [AC-FRUT-25]: `fecha_servicio` nunca se validaba como fecha antes del cast `::date` de
+// `crearEncargo`/`editarEncargo` — un valor no-fecha subía como 500 no tipado
+// (`invalid_datetime_format` de Postgres) en vez del 422 que el resto de la función ya respeta
+// para bultos/destino/attrs. `servidor/encargos.ts` es COMPARTIDO por la bandeja del operador y
+// por el alta del portal (`cliente/api/encargos`), así que este único test cubre los dos.
+test("[AC-FRUT-25] `fecha_servicio` que no es una fecha rebota 422 tipado, no 500, en el alta", async ({
+  request,
+}) => {
+  const antes = await cuantosEncargos();
+  for (const fechaServicio of ["no-es-una-fecha", "2026-13-40", "2026/08/16"]) {
+    const r = await alta(request, { bultos: 5, fecha_servicio: fechaServicio, client_uuid: randomUUID() });
+    expect(r.status(), `fecha_servicio ${fechaServicio}`).toBe(422);
+    expect((await r.json()).error).toBe("fecha_invalida");
+  }
+  expect(await cuantosEncargos(), "un rebote de fecha dejó fila").toBe(antes);
+
+  // Y el positivo: una fecha real entra, sin lo cual «rebota lo inválido» lo cumpliría un guard
+  // que rechaza todo.
+  const bueno = await alta(request, { bultos: 5, fecha_servicio: "2026-09-01", client_uuid: randomUUID() });
+  expect(bueno.status()).toBe(201);
+  const { encargo } = (await bueno.json()) as { encargo: { id: string } };
+  // Se borra: el resto de este archivo asume que TODO lo que queda en la tabla es de HOY (el
+  // AC-FRUT-02 de más abajo lo mira global), y esta fila de control es a propósito de otro día.
+  await con(BD_A, (c: Conexion) => c.sql("delete from encargos where id = $1", [encargo.id]));
+});
+
+test("[AC-FRUT-25] `fecha_servicio` que no es una fecha rebota 422 tipado en la corrección", async ({
+  request,
+}) => {
+  const id = await encargoSolicitado();
+  const r = await request.patch(`/api/encargos/${id}`, {
+    headers: comoOperador,
+    data: { fecha_servicio: "31-02-2026" },
+  });
+  expect(r.status()).toBe(422);
+  expect((await r.json()).error).toBe("fecha_invalida");
+});
+
 test("[AC-FRUT-01] un `attrs` que no cumple su definición rebota, y con OTRO mensaje", async ({
   request,
 }) => {
@@ -265,6 +303,61 @@ test("[AC-FRUT-01] el rebote de bultos se muestra con su rango, no como «datos 
   await expect(rebote).toBeVisible();
   // Quien tipea arregla un número y no tiene que adivinar cuál: el mensaje trae el límite.
   await expect(rebote).toContainText("500");
+});
+
+// [AC-FRUT-25]: `guardar()` generaba `client_uuid: crypto.randomUUID()` de NUEVO en cada
+// llamada, sin un `enviando` que desactive el botón mientras la petición está en vuelo — mismo
+// patrón que AC-FPOR-13 encontró y arregló en el portal (`cliente/nuevo/page.tsx`). Un doble-tap,
+// o un reintento tras un corte de red a mitad del submit, mandaba un `client_uuid` DISTINTO cada
+// vez y `crearEncargo` (on conflict do nothing) no tenía nada que deduplicar.
+test("[AC-FRUT-25] el botón se desactiva en vuelo y el reintento reusa el MISMO client_uuid", async ({
+  page,
+}) => {
+  await sesionDe(page, SECRETO);
+
+  const clientUuids: string[] = [];
+  let primeraVez = true;
+  await page.route("**/api/encargos", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    const cuerpo = route.request().postDataJSON() as { client_uuid: string };
+    clientUuids.push(cuerpo.client_uuid);
+    if (primeraVez) {
+      primeraVez = false;
+      // Una demora perceptible antes del corte: deja una ventana real para observar el botón
+      // desactivado «en vuelo», no una carrera de un tick contra la propia demora del abort.
+      await new Promise((resolver) => setTimeout(resolver, 300));
+      return route.abort("failed");
+    }
+    return route.continue();
+  });
+
+  await page.goto("/bandeja");
+  const conteo = page.getByTestId("conteo-bandeja");
+  await expect(conteo).toHaveText(/^\d+$/);
+  const antes = Number((await conteo.textContent())!.trim());
+
+  await page.getByTestId("empresa-Panadería del barrio").click();
+  await page.getByTestId("destino-Local del centro").click();
+  const teclado = page.getByTestId("teclado-bultos");
+  for (const d of "8") await teclado.getByRole("button", { name: d, exact: true }).click();
+
+  const boton = page.getByTestId("guardar-encargo");
+  await boton.click();
+  // Mientras la petición está en vuelo (y tras el corte, mientras se procesa el rechazo) el
+  // botón queda desactivado: antes de este AC no había ningún `enviando` que lo hiciera.
+  await expect(boton).toBeDisabled();
+  await expect(page.getByTestId("rebote-encargo")).toBeVisible();
+  await expect(boton).toBeEnabled();
+
+  // El reintento del mismo alta: antes de este AC, este segundo clic mandaba un `client_uuid`
+  // NUEVO y el corte de red de arriba habría duplicado el encargo en cuanto la red volviera.
+  await boton.click();
+  await expect(conteo).toHaveText(String(antes + 1));
+
+  expect(clientUuids).toHaveLength(2);
+  expect(clientUuids[1], "el reintento mandó un client_uuid distinto del primer intento").toBe(
+    clientUuids[0],
+  );
 });
 
 // ─── La máquina de estados del encargo [AC-FRUT-03] — §4.5, §3.E1.10, §6 ────────────

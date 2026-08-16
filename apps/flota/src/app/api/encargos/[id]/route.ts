@@ -67,6 +67,12 @@ export async function PATCH(peticion: Request, ctx: { params: Promise<{ id: stri
       { status: 422 },
     );
   }
+  if (edicion.tipo === "fecha_invalida") {
+    return Response.json(
+      { error: "fecha_invalida", mensaje: "La fecha de servicio no es una fecha válida (AAAA-MM-DD)." },
+      { status: 422 },
+    );
+  }
   if (edicion.tipo === "attrs_invalidos") {
     return Response.json(
       {

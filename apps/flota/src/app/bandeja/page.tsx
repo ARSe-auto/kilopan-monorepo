@@ -45,6 +45,14 @@ export default function Bandeja() {
   const [error, setError] = useState<string | null>(null);
   const [rebote, setRebote] = useState<string | null>(null);
   const [duplicado, setDuplicado] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  // UN client_uuid por intento de alta [AC-FRUT-25]: antes se generaba de nuevo en CADA llamada
+  // a `guardar()`, así que un doble-tap o un reintento tras un corte de red a mitad del submit
+  // mandaban un `client_uuid` DISTINTO cada vez y `crearEncargo` (on conflict do nothing) no
+  // tenía nada que deduplicar — mismo patrón ya arreglado en `cliente/nuevo/page.tsx`
+  // (AC-FPOR-13). Se renueva SOLO tras un alta exitosa, para que el próximo encargo (uno
+  // realmente distinto) no colisione con el anterior.
+  const [clientUuid, setClientUuid] = useState(() => crypto.randomUUID());
 
   const cargar = useCallback(async () => {
     const [e, d, n] = await Promise.all([
@@ -83,15 +91,17 @@ export default function Bandeja() {
 
   async function guardar() {
     setRebote(null);
+    setEnviando(true);
     const respuesta = await pedir("/api/encargos", {
       method: "POST",
       body: JSON.stringify({
         empresa_cliente_id: empresa,
         destino_id: destino,
         bultos: Number(bultos),
-        client_uuid: crypto.randomUUID(),
+        client_uuid: clientUuid,
       }),
     }).catch(() => null);
+    setEnviando(false);
     if (!respuesta) return setRebote("No se pudo guardar. Revisá tu conexión y volvé a intentar.");
     if (!respuesta.ok) {
       const cuerpo = (await respuesta.json().catch(() => ({}))) as { mensaje?: string };
@@ -99,6 +109,7 @@ export default function Bandeja() {
       return setRebote(cuerpo.mensaje ?? "No se pudo guardar el encargo.");
     }
     setBultos("");
+    setClientUuid(crypto.randomUUID());
     // El flujo COMPLETÓ acá, no en el clic: un rebote de bultos que se corrige le costó al
     // operario los toques de las dos pasadas, y `completarFlujo` los suma todos (§5.3) [AC-FRUT-19].
     void completarFlujo("alta_encargo");
@@ -106,7 +117,7 @@ export default function Bandeja() {
     return undefined;
   }
 
-  const listo = empresa !== null && destino !== null && bultos !== "";
+  const listo = empresa !== null && destino !== null && bultos !== "" && !enviando;
 
   return (
     <main data-testid="bandeja">
@@ -185,7 +196,7 @@ export default function Bandeja() {
             void guardar();
           }}
         >
-          Agregar a la bandeja
+          {enviando ? "Guardando…" : "Agregar a la bandeja"}
         </BotonPrimario>
       </section>
 
