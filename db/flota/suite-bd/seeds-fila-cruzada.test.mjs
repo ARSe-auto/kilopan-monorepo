@@ -21,16 +21,21 @@
 // seeds/comun.mjs), descubiertas del catálogo y no de una lista escrita a mano: una lista
 // curada se queda vieja el día que alguien agrega una tabla, y nada avisa.
 //
-// El e2e HTTP del camino dorado A/B/C que el texto del AC también pide sigue pendiente (y el
-// tenant A todavía no existe); este es su mitad de BD, que es la que el §9.3.2 llama
-// insustituible.
+// El e2e HTTP del camino dorado A/B/C que el texto del §10 también pide sigue pendiente
+// (AC-FMIG-27); este es su mitad de BD, que es la que el §9.3.2 llama insustituible.
+//
+// EXTENSIÓN A TENANT A [AC-FMIG-25]: el barrido nació con B y C porque el tenant A no existía.
+// Ahora existe y entra al mismo barrido, con las MISMAS tres partes: control positivo, propiedad
+// (cero cruces A×B y A×C) y una fila de A plantada a mano en la base de B que lo pone ROJO.
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { con } from "../conectar.mjs";
 import { huellaDeCentinela } from "../seeds/comun.mjs";
+import { sembrarTenantA, CENTINELA_A } from "../seeds/tenant-a.mjs";
 import { sembrarTenantB, CENTINELA_B } from "../seeds/tenant-b.mjs";
 import { sembrarTenantC, CENTINELA_C } from "../seeds/tenant-c.mjs";
 
+const SLUG_A = "gate_cruce_a";
 const SLUG_B = "gate_cruce_b";
 const SLUG_C = "gate_cruce_c";
 
@@ -88,5 +93,52 @@ test("[AC-FMIG-18] seeds B y C: cero filas cruzadas, y una fila cruzada plantada
 
   // Y al retirarla, vuelve a verde: el rojo de arriba fue por la fila, no por el barrido.
   const despues = await huellaDeCentinela(c.bd, CENTINELA_B);
+  assert.deepEqual(despues, [], `quedó rastro del cruce tras retirar la fila: ${enQue(despues)}`);
+});
+
+test("[AC-FMIG-25] el barrido extendido a A: cero cruces A×B y A×C, y una fila de A en la base de B ⇒ ROJO", async () => {
+  const a = await sembrarTenantA(SLUG_A, { recrear: true });
+  const b = await sembrarTenantB(SLUG_B, { recrear: true });
+  const c = await sembrarTenantC(SLUG_C, { recrear: true });
+
+  // (1) Control positivo: el centinela de A aparece en su propia base y en más de una columna —
+  // el tenant A es el grande del §10 y su huella tiene que verse en las personas, las empresas y
+  // los destinos, no en un solo lugar por casualidad.
+  const propiaA = await huellaDeCentinela(a.bd, CENTINELA_A);
+  assert.ok(propiaA.length > 0, `el centinela de A no aparece en su propia base ${a.bd}`);
+  assert.ok(
+    propiaA.some((h) => h.tabla === "empresas_cliente") && propiaA.some((h) => h.tabla === "destinos"),
+    `la huella de A es demasiado flaca para servir de control: ${enQue(propiaA)}`,
+  );
+
+  // (2) La propiedad, en las cuatro direcciones que A agrega.
+  const cruces = [
+    ["A en la base de B", await huellaDeCentinela(b.bd, CENTINELA_A)],
+    ["A en la base de C", await huellaDeCentinela(c.bd, CENTINELA_A)],
+    ["B en la base de A", await huellaDeCentinela(a.bd, CENTINELA_B)],
+    ["C en la base de A", await huellaDeCentinela(a.bd, CENTINELA_C)],
+  ];
+  for (const [que, huella] of cruces) {
+    assert.deepEqual(huella, [], `${que}: ${enQue(huella)}`);
+  }
+
+  // (3) El mutante del texto del AC: una fila de A plantada a mano en la base de B.
+  const [plantada] = await con(b.bd, ({ sql }) =>
+    sql("insert into destinos (nombre) values ($1) returning id::text as id", [
+      `Destino que se coló del tenant e-auto ${CENTINELA_A}`,
+    ]),
+  );
+  try {
+    const conCruce = await huellaDeCentinela(b.bd, CENTINELA_A);
+    assert.ok(
+      conCruce.some((h) => h.tabla === "destinos" && h.columna === "nombre"),
+      "el barrido de huella NO vio la fila de A plantada en la base de B: el caso de rebote del " +
+        `AC sería verde con datos del tenant vecino adentro (vio: ${enQue(conCruce)})`,
+    );
+  } finally {
+    await con(b.bd, ({ sql }) => sql("delete from destinos where id = $1", [plantada.id]));
+  }
+
+  const despues = await huellaDeCentinela(b.bd, CENTINELA_A);
   assert.deepEqual(despues, [], `quedó rastro del cruce tras retirar la fila: ${enQue(despues)}`);
 });

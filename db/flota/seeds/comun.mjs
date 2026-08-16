@@ -68,15 +68,21 @@ async function clavePublicaDeAparato() {
 }
 
 /**
- * Un chofer REAL del tenant: invitación por rol + solicitud + aprobación en 1 toque (§5.4), con
- * los servicios de servidor de AC-FIDN-03/04 — nada reimplementado.
+ * Un usuario REAL del tenant por el camino de verdad: invitación por rol + solicitud +
+ * aprobación en 1 toque (§5.4), con los servicios de servidor de AC-FIDN-03/04 — nada
+ * reimplementado.
+ *
+ * El `rol` es parámetro y no una constante «chofer» porque el tenant A necesita los CINCO roles
+ * invitables del §5.4 (`operador`, `chofer`, `responsable_carga`, `responsable_tecnico`) por este
+ * mismo camino [AC-FMIG-25]; `admin_tenant` y `cliente` NO son invitables y tienen su propia
+ * puerta (`ROLES_INVITABLES`, gobierno.ts).
  *
  * La SOLICITUD es la única pieza sin servicio puro que invocar (el endpoint público
  * `/api/solicitudes` está atado a `headers()` de Next), así que se inserta la misma fila
  * `pendiente` que ese handler escribiría, igual que hace el paso 2 del wizard (AC-FMIG-14).
  */
-export async function sembrarChofer(tenant, pool, sesionAdmin, { rut, nombre }) {
-  const invitacion = await emitirInvitacion(pool, sesionAdmin, "chofer");
+export async function sembrarChofer(tenant, pool, sesionAdmin, { rut, nombre, rol = "chofer" }) {
+  const invitacion = await emitirInvitacion(pool, sesionAdmin, rol);
   const clavePublica = await clavePublicaDeAparato();
   const [solicitud] = await con(tenant.bd, ({ sql }) =>
     sql(
