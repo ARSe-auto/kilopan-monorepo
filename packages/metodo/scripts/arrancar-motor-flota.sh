@@ -58,9 +58,18 @@ mkdir -p "$PANEL"
 # solo sube. Acá se archivaron los once que había como ramas `wip/motor-wip-*`, donde el contenido
 # queda recuperable con `git checkout`, y el tope se levanta para que el freno vuelva a significar
 # lo que dice: «está pasando algo raro AHORA», y no «este árbol ya tiene historia».
+#
+# 40 → 120 (16-ago-2026, 00:20). La pila llegó a 41 y pausó al motor 2. OJO CON LO QUE ESTO
+# REVELA: `refs/stash` es del REPOSITORIO, no del worktree — los TRES motores empujan a la MISMA
+# pila, así que crece al triple y este freno los pausa a los tres casi a la vez (era el único
+# recurso con estado que quedó sin aislar al montar el tercer motor; BD, puertos y familias sí
+# lo están). Los 41 quedaron archivados como ramas `wip/*` antes de subir el tope: el contenido
+# es recuperable con `git checkout wip/<nombre>`. Subir el tope es un parche que se va a repetir
+# cada ~40 iteraciones; el arreglo de fondo es que el loop archive su stash como rama y lo
+# saque de la pila, para lo cual `git stash drop` tiene que dejar de estar denegado.
 CLAUDE_CODE_OAUTH_TOKEN="$(cat "$TOKEN_FILE")" \
 KILOPAN_APP=flota \
-KILOPAN_MAX_STASHES=40 \
+KILOPAN_MAX_STASHES=120 \
 PATH="$HOME/.local/lib/nodejs/current/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" \
   nohup bash packages/metodo/scripts/watchdog.sh >> "$LOG" 2>&1 &
 
