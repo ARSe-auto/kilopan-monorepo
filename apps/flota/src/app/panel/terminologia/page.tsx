@@ -6,6 +6,7 @@ import {
   EstadoVacio,
   EstadoError,
   EstadoCargando,
+  ChipEstadoConexion,
   BotonPrimario,
   useEscaladaDeCarga,
 } from "@kilopan/miga/componentes/index.tsx";
@@ -13,6 +14,7 @@ import { tipografia, superficie, grilla, semantico as colorSemantico, enfasis } 
 import { semantico, componente } from "@kilopan/miga/estructura.ts";
 import { TERMINOLOGIA_BASE_ES_CL, type TerminoResuelto } from "@kilopan/miga/terminologia.ts";
 import { pedir } from "../../../cliente/aparato.ts";
+import { useEstadoDeCola } from "../../../cliente/cola.ts";
 
 // Panel de terminología del tenant [AC-FMIG-04, AC-FMIG-06] — §5.1: «el admin ve el término
 // canónico entre paréntesis» y puede renombrar singular/plural de cada término.
@@ -40,6 +42,9 @@ export default function PanelTerminologia() {
   // AC-FMIG-10 (§5.7): misma escalada de EstadoListado.tsx — skeleton instantáneo, aviso
   // solo pasados 400 ms sin respuesta.
   const demorado = useEscaladaDeCarga(!error && !terminos);
+  // AC-FMIG-10 (§5.7), cuarto estado: el MISMO chip de Miga y el MISMO contador real de cola
+  // que «Funciones» — dos pantallas del módulo, cero copias del estado.
+  const cola = useEstadoDeCola();
 
   const cargar = useCallback(async () => {
     setError(false);
@@ -94,12 +99,24 @@ export default function PanelTerminologia() {
   return (
     <main data-testid="panel-terminologia">
       <h1 style={titulo}>Terminología</h1>
+      <div data-testid="conexion-terminologia" style={{ marginTop: semantico.espacio.entreControles }}>
+        <ChipEstadoConexion pendientes={cola.pendientes} online={cola.online} />
+      </div>
       {error && (
         <EstadoError mensaje="No se pudo leer la terminología. Revisá tu conexión." alReintentar={() => void cargar()} />
       )}
       {!error && !terminos && <EstadoCargando avisoDemora={demorado ? "Sigue cargando…" : undefined} />}
       {terminos && Object.keys(terminos).length === 0 && (
-        <EstadoVacio mensaje="Este tenant todavía no tiene términos configurados." />
+        // Vacío ACCIONABLE (§5.7): la salida es volver a leer, que es lo único que este vacío
+        // admite — el diccionario base es del repo, no algo que el admin pueda crear acá.
+        <EstadoVacio
+          mensaje="Este tenant todavía no tiene términos configurados."
+          accion={
+            <BotonPrimario testid="releer-terminos" variante="neutro" onClick={() => void cargar()}>
+              Volver a leer los términos
+            </BotonPrimario>
+          }
+        />
       )}
       {terminos && (
         <ul data-testid="lista-terminos" style={lista}>

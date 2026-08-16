@@ -304,7 +304,11 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 - [ ] (P2) Snapshot 375px con 5 módulos y términos al máximo largo sin desbordes; texto 200% sin truncar cifras — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-07]
 - [x] (P1) Pantalla «Funciones»: OFF siempre permitido, ON solo del plan (mutación directa por API fuera de plan ⇒ 422 y 0 filas; rol no admin ⇒ 403); audit + próximo bootstrap — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-08]
 - [x] (P1) Regla de contracción completa: manifest server-side sin el módulo, 403 en planificación/lectura, captura 2xx con flag; app mínima todo-OFF sigue siendo producto completo — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-09]
-- [ ] (P1) Los 4 estados como componentes ÚNICOS de Miga en wizard/panel/«Funciones»; las capturas JAMÁS muestran rechazo — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-10]
+- [x] (P1) Los 4 estados como componentes ÚNICOS de Miga en las pantallas ya construidas del módulo (panel white-label/«Funciones»); contador REAL de cola; las capturas JAMÁS muestran rechazo con gate propio. La parte del wizard se partió a AC-FMIG-24 — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-10]
+      Probado: `cliente/cola.ts` + `cola.test.ts` (contador real de las dos colas y de todas las
+      identidades), vacío accionable y `ChipEstadoConexion` en `panel/funciones` y
+      `panel/terminologia`, `db/flota/gate-capturas-sin-rechazo.mjs` con 12 mutantes en `gate.sh`,
+      y `e2e/miga-estados-panel.spec.ts` 4/4. `check.sh --full --app=flota`: VERDE.
 - [ ] (P1) Gate axe+Lighthouse de las pantallas del hito + PWA iOS (standalone, safe-areas, touch-action, inputs ≥16px); cualquier violación ⇒ rojo — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-11]
 - [ ] (P2) Pasada VoiceOver real de apertura/POD/recepción con todo estado en texto (oráculo humano — DONE-adopción; complementa AC-FMIG-20) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-12]
 - [ ] (P2) Fluidez en producción vía enum de client_metric: latencia_ms p95 <1 s y time-to-first-stop <5 min (oráculo producción — complementa AC-FMIG-19) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-13]
@@ -318,6 +322,7 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 - [ ] (P1) «Una acción primaria por pantalla» asertada en e2e/snapshots del hito + profundidad ≤2 verificada mecánicamente sobre el manifest bajo el covering array — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-21]
 - [ ] (P1) DPA en términos del tenant (§3.E1.15/§7.8): artefacto VERSIONADO del repo con secciones mínimas (partes, objeto, encargado/responsable, subencargados, seguridad, devolución/supresión y portabilidad `pg_dump`), servido en los términos sin CSS libre, alcanzable ≤2 niveles, versión vigente por tenant y aceptación del `admin_tenant` en audit_trail (rol distinto ⇒ 403); texto y momento BLOQUEADOS por la pregunta 12 — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-22]
 - [ ] (P1) Test de fixture de la EEVD del DONE-software (§10): valor esperado HARDCODEADO con memoria de cálculo versionada junto a los seeds A/B, comparado contra la vista `eevd_semanal` del módulo 02 (AC-FVEH-20); denominador computable hoy, numerador BLOQUEADO por la pregunta 4 de la spec 04 — mientras siga abierta el test no entra al gate — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-23]
+- [ ] (P1) El wizard de onboarding entrega los mismos 4 estados de Miga sin reinventarlos (mitad partida de AC-FMIG-10; depende de AC-FMIG-14, que construye el wizard) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-24]
 
 ---
 

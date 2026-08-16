@@ -56,6 +56,12 @@ paso "theming por filas: cero Liquid Glass, cero CSS arbitrario por tenant (§5.
 paso "selectores de e2e: cero getByText sobre un término renombrable (§5.1, §9.2)" \
   node db/flota/gate-getbytext-renombrable.mjs
 
+# «Las capturas JAMÁS muestran rechazo» (§5.7) — caso de rebote de los 4 estados obligatorios. El
+# cartel de fracaso nunca se escribe a propósito: llega mirando el replay, viendo que un lote puede
+# no llegar y decidiendo avisar. Con el aviso, el chofer vuelve a la parada o recaptura. [AC-FMIG-10]
+paso "capturas sin rechazo: cero canal y cero rama de fracaso hacia la pantalla (§5.7)" \
+  node db/flota/gate-capturas-sin-rechazo.mjs
+
 # La otra mitad del §0: `gate-constantes` vigila los VALORES de la familia de energía; este
 # vigila la ARITMÉTICA. Nadie copia el factor de consumo a mano —el otro gate lo atrapa—, pero
 # cualquiera escribe la multiplicación en la pantalla que está armando, y a partir de ahí hay

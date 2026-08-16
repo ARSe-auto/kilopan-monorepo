@@ -95,3 +95,68 @@ test("[AC-FMIG-10] una carga normal (rápida) jamás muestra el aviso de demora"
   await expect(page.getByTestId("panel-funciones")).toBeVisible({ timeout: 5_000 });
   await expect(page.getByTestId("aviso-demora-carga")).toHaveCount(0);
 });
+
+test("[AC-FMIG-10] el vacío es ACCIONABLE: trae su salida, y la salida vuelve a leer de verdad", async ({ page }) => {
+  await sesionDe(page);
+  // Un catálogo vacío no se puede sembrar en la base (el tenant siempre tiene plan), así que
+  // el vacío se fuerza en la respuesta — que es exactamente el estado que el §5.7 nombra.
+  let lecturas = 0;
+  await page.route("**/api/gobierno/funciones", async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    lecturas++;
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ funciones: [] }) });
+  });
+
+  await page.goto(`${EN_A}/panel/funciones`);
+
+  // El vacío se anuncia como estado (no como alerta: no falló nada) y trae su acción.
+  await expect(page.getByTestId("panel-funciones")).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByTestId("releer-funciones")).toBeVisible();
+  expect(lecturas).toBe(1);
+
+  // Y la acción HACE algo: sin esto sería un botón decorativo, que es el vacío sin salida
+  // otra vez pero disfrazado.
+  await page.getByTestId("releer-funciones").click();
+  await expect.poll(() => lecturas, { timeout: 5_000 }).toBe(2);
+});
+
+test("[AC-FMIG-10] el cuarto estado: el chip de Miga con el contador REAL de la cola del outbox", async ({ page }) => {
+  await sesionDe(page);
+  // Dos capturas de POD guardadas en el aparato, en la partición de una identidad — el mismo
+  // formato que escribe `cliente/outbox-local.ts`. El chip tiene que CONTARLAS: un cartel fijo
+  // diría lo mismo con la cola vacía, y ese es justo el defecto que el §5.7 cierra.
+  await page.addInitScript(() => {
+    const identidad = { tenant: "miga_estados.localhost", usuario: "hash-de-quien-capturo" };
+    const captura = (clientUuid: string) => ({
+      clientUuid,
+      paradaId: "parada-1",
+      tsDispositivo: "2026-08-15T12:00:00.000Z",
+      tzOffsetMin: -240,
+      secuenciaDispositivo: 1,
+      resultado: "exito",
+      metodoEntrega: "receptor",
+      motivoId: null,
+      items: null,
+      evidencias: [],
+      estado: "por_replicar",
+      supersedeDe: null,
+      motivoSupersede: null,
+    });
+    localStorage.setItem("flota.outbox.identidades", JSON.stringify([identidad]));
+    localStorage.setItem(
+      `flota.outbox.pod.${identidad.tenant}.${identidad.usuario}`,
+      JSON.stringify([captura("u1"), captura("u2")]),
+    );
+  });
+
+  await page.goto(`${EN_A}/panel/funciones`);
+  const chip = page.getByTestId("conexion-funciones");
+  // Con señal: el número es el largo real de la cola, no un «sincronizando» perpetuo.
+  await expect(chip).toContainText("2", { timeout: 5_000 });
+
+  // Sin señal: el mismo contador, ahora dicho como lo dice el §5.7.
+  await page.context().setOffline(true);
+  await expect(chip).toContainText("Sin conexión", { timeout: 5_000 });
+  await expect(chip).toContainText("2");
+  await page.context().setOffline(false);
+});

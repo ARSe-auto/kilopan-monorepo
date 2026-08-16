@@ -5,12 +5,14 @@ import {
   EstadoVacio,
   EstadoError,
   EstadoCargando,
+  ChipEstadoConexion,
   BotonPrimario,
   useEscaladaDeCarga,
 } from "@kilopan/miga/componentes/index.tsx";
 import { tipografia, superficie, grilla, semantico as colorSemantico, enfasis } from "@kilopan/miga/tokens.ts";
 import { semantico, componente } from "@kilopan/miga/estructura.ts";
 import { pedir } from "../../../cliente/aparato.ts";
+import { useEstadoDeCola } from "../../../cliente/cola.ts";
 
 // Panel «Funciones» del panel admin [AC-FMIG-08] — §5.5, §5.4.
 //
@@ -30,6 +32,10 @@ export default function PanelFunciones() {
   // AC-FMIG-10 (§5.7): skeleton desde el primer render, y la escalada al aviso recién
   // pasados los 400 ms — nunca antes, para no parpadear en la carga normal.
   const demorado = useEscaladaDeCarga(!error && !funciones);
+  // AC-FMIG-10 (§5.7), cuarto estado obligatorio: «sin conexión con contador REAL de cola».
+  // El número sale de contar el outbox del aparato (`cliente/cola.ts`), jamás de un cartel —
+  // y el componente es el ÚNICO de Miga, el mismo chip que usa cualquier otra pantalla.
+  const cola = useEstadoDeCola();
 
   const cargar = useCallback(async () => {
     setError(false);
@@ -73,12 +79,24 @@ export default function PanelFunciones() {
   return (
     <main data-testid="panel-funciones">
       <h1 style={titulo}>Funciones</h1>
+      <div data-testid="conexion-funciones" style={{ marginTop: semantico.espacio.entreControles }}>
+        <ChipEstadoConexion pendientes={cola.pendientes} online={cola.online} />
+      </div>
       {error && (
         <EstadoError mensaje="No se pudieron leer las funciones. Revisá tu conexión." alReintentar={() => void cargar()} />
       )}
       {!error && !funciones && <EstadoCargando avisoDemora={demorado ? "Sigue cargando…" : undefined} />}
       {funciones && funciones.length === 0 && (
-        <EstadoVacio mensaje="Este tenant todavía no tiene funciones en su catálogo." />
+        // ACCIONABLE y no un «no hay nada» a secas (§5.7): un catálogo vacío es casi siempre un
+        // catálogo que todavía no se leyó bien, y sin la salida el admin cierra el panel.
+        <EstadoVacio
+          mensaje="Este tenant todavía no tiene funciones en su catálogo."
+          accion={
+            <BotonPrimario testid="releer-funciones" variante="neutro" onClick={() => void cargar()}>
+              Volver a leer el catálogo
+            </BotonPrimario>
+          }
+        />
       )}
       {funciones && funciones.length > 0 && (
         <ul data-testid="lista-funciones" style={lista}>
