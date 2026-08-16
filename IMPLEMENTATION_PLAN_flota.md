@@ -316,7 +316,7 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
       AA en `packages/miga/src/componentes/ChipEstadoConexion.tsx`.
 - [ ] (P2) Pasada VoiceOver real de apertura/POD/recepción con todo estado en texto (oráculo humano — DONE-adopción; complementa AC-FMIG-20) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-12]
 - [ ] (P2) Fluidez en producción vía enum de client_metric: latencia_ms p95 <1 s y time-to-first-stop <5 min (oráculo producción — complementa AC-FMIG-19) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-13]
-- [ ] (P1) Wizard 4 pasos completable por SCRIPT <15 min contra stack local: provisión CREATE DATABASE…TEMPLATE + siembra del vertical con demo tocable + vehículo/chofer + paradas + primera parada — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-14]
+- [x] (P1) Wizard 4 pasos completable por SCRIPT <15 min contra stack local: provisión CREATE DATABASE…TEMPLATE + siembra del vertical con demo tocable + vehículo/chofer + paradas + primera parada — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-14]
 - [ ] (P1) Activar vertical = INSERT (schema_migrations idéntico antes/después); flujo armado POR DATOS (grep cero condicionales por vertical); cero seeds de ganchos E2/E3 (verticales de A y C pendientes pregunta 10) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-15]
 - [ ] (P2) Wizard y primera parada validados EN VIVO por Alexis (oráculo humano — DONE-adopción, no bloquea) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-16]
 - [ ] (P2) Embudo de activación en el panel SaaS: alta→primera entrega real con evidencia p50 <4 h, p90 <24 h (oráculo producción) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-17]
