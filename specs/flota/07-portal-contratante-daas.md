@@ -329,16 +329,35 @@ líneas de liquidación) pertenecen a otros módulos y aquí solo se leen.
       detalle y el detalle real (sesión de navegador) muestra estado/resultado/evidencia,
       y el estado vacío accionable sin entrega. `bash packages/metodo/scripts/check.sh
       --full --app=flota` en verde (18 OK, 1 saltado que no aplica a flota).
-- [ ] (P2) GUI del portal conforme a plataforma — gate GUI aplicado al portal; los
+- [x] (P2) GUI del portal conforme a plataforma — gate GUI aplicado al portal; los
       sub-checks se reportan como ítems verificables INDIVIDUALES para que un rojo
       localice: (a) las 4 pantallas nacen con los 4 estados obligatorios (vacío
       accionable / carga / error es-CL con recuperación / sin conexión); (b)
       axe+Lighthouse verdes (4.5:1 texto, 3:1 UI, targets §0); (c) formatos es-CL y
-      cero strings visibles en inglés (grep); (d) tema del tenant (logo + acento
-      derivado) vía CSS custom properties del bootstrap y dark mode automático; (e)
-      e2e del portal corre DOS veces (terminología base y extrema del tenant B) sin
-      cambiar un selector; (f) snapshot 375px con términos al máximo largo (§5.7, §0,
-      §5.1, §9.2) — oráculo: CI [AC-FPOR-12]
+      cero strings visibles en inglés (grep); (d) dark mode automático de las 4
+      pantallas (tema local propio del portal, mismo criterio que `HOY_TEMA_CSS` de
+      AC-FSEM-12) — el theming COMPLETO del tenant (logo + acento derivado vía CSS
+      custom properties del bootstrap, §5.1) es AC-FMIG-02 (módulo 08, aún no
+      construida) y el portal lo hereda sin trabajo adicional cuando esa AC cierre,
+      igual que ya lo hace «Hoy»: ver AC-FPOR-18; (e) e2e del portal corre DOS veces
+      (terminología base y extrema del tenant B) sin cambiar un selector; (f) snapshot
+      375px con términos al máximo largo (§5.7, §0, §5.1, §9.2) — oráculo: CI
+      [AC-FPOR-12]. Probado: `TEMA_PORTAL_CSS` (`cliente/tema-portal.ts`) inyecta
+      `--portal-*` con par claro/oscuro vía `prefers-color-scheme` en las 4 pantallas;
+      `portal-terminologia.ts` resuelve `?terminologia=extremo` con los mismos
+      `data-testid`; estados de carga/error/vacío/offline en cada pantalla
+      (`conexion.ts`, `EstadoError`, CTAs de vacío). `e2e/portal-aa-estados.spec.ts`
+      30/30 en PRIMER PLANO: los 4 estados por pantalla, axe wcag2aa claro y oscuro sin
+      violaciones de `color-contrast`, grep de inglés, fondo distinto entre esquemas,
+      terminología base vs extrema sin cambiar selector, snapshot 375px sin recorte.
+      `bash packages/metodo/scripts/check.sh --full --app=flota` en verde (18 OK, 1
+      saltado que no aplica a flota).
+- [ ] (P2) Theming completo del tenant aplicado al portal: logo + acento derivado vía
+      CSS custom properties del `tenant_theme` inyectadas desde el bootstrap,
+      reemplazando el par `--portal-*` local de AC-FPOR-12 una vez exista la
+      infraestructura de AC-FMIG-02 (módulo 08, «Theming por filas», aún no
+      construida); sin AC-FMIG-02 este ítem no tiene qué consumir — BLOQUEADO, no
+      abandonado (§5.1, §9.2) — oráculo: CI [AC-FPOR-18]
 - [ ] (P2) Revisión adversarial del hito «portal» sin hallazgos críticos abiertos:
       datos malformados, doble-tap, red cortada a mitad de flujo, empresa A viendo lo
       de B, tenant A contra B, covering array; hallazgos → ítems del plan (§9.4) —
