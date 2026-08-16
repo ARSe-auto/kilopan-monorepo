@@ -142,3 +142,16 @@ export const componente = Object.freeze({
 
 /** Las 3 capas del §5.1, en orden, para que un test pueda recorrerlas sin adivinarlas. */
 export const CAPAS = ["primitivo", "semantico", "componente"] as const;
+
+// ─── Superficie: el fondo NEUTRO de cada modo, de PLATAFORMA, no del tenant ───────────────
+//
+// El §5.1 personaliza EXACTAMENTE tres cosas —logo, acento, terminología— y el fondo no es
+// una de ellas. `tenant_theme` (db/migraciones-flota/tenant/0010, AC-FTEN-10) valida cada
+// variante del acento CONTRA su fondo (Pregunta al dueño 7), y ese fondo lo pone «el módulo
+// de diseño» —acá, no la base—: son los MISMOS valores que su pgTAP ya usa como fixture, y
+// coincidir no es casualidad: cambiar uno sin el otro dejaría el fixture describiendo un
+// fondo que la app nunca sirve [AC-FMIG-02].
+export const superficie = Object.freeze({
+  claro: Object.freeze({ fondo: "#FFFFFF" }),
+  oscuro: Object.freeze({ fondo: "#101314" }),
+});

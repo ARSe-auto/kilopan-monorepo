@@ -67,3 +67,38 @@ test("los tres estados se exportan desde el barril de miga [AC-H0-11]", () => {
     assert.match(barril, new RegExp(c), `${c} no se exporta: ninguna pantalla puede usarlo`);
   }
 });
+
+// AC-FMIG-10 (§5.7): «skeleton <50 ms, spinner solo >400 ms» tenía UNA implementación real
+// —a mano, adentro de la pantalla de POD (AC-FPOD-22)— y cero en `miga`. Estos casos
+// protegen que la escalada exista como componente ÚNICO reusable, no que una segunda
+// pantalla la reinvente con su propio `setTimeout`.
+
+test("la escalada de carga se exporta desde el barril de miga [AC-FMIG-10]", () => {
+  const barril = readFileSync(join(DIR, "index.tsx"), "utf8");
+  assert.match(barril, /useEscaladaDeCarga/, "useEscaladaDeCarga no se exporta: ninguna pantalla puede usarlo");
+});
+
+test("la escalada espera 400 ms por defecto y jamás antes — el spinner temprano es el defecto que el AC cierra [AC-FMIG-10]", () => {
+  assert.match(
+    codigo,
+    /useEscaladaDeCarga\([^)]*umbralMs\s*=\s*400/,
+    "el umbral por defecto de la escalada no es 400 ms",
+  );
+  assert.match(
+    codigo,
+    /setTimeout\(\(\)\s*=>\s*setDemorado\(true\),\s*umbralMs\)/,
+    "la escalada no arma un temporizador contra el umbral — podría disparar antes de tiempo",
+  );
+});
+
+test("EstadoCargando sin avisoDemora se comporta igual que antes de AC-FMIG-10 — cero ruptura para las pantallas que no lo usan", () => {
+  assert.match(
+    codigo,
+    /avisoDemora\s*!==\s*undefined/,
+    "el aviso de demora no es opcional: una pantalla que no lo pasa no puede quedar exactamente como estaba",
+  );
+});
+
+test("el aviso de demora tiene un testid estable — sin él, cada pantalla que lo necesite tendría que envolverlo a mano [AC-FMIG-10]", () => {
+  assert.match(codigo, /data-testid="aviso-demora-carga"/, "el aviso de demora no tiene testid propio");
+});

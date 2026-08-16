@@ -44,6 +44,24 @@ paso "matriz KiloRuta: N filas, IDs únicos y cada test referenciado existe" \
 paso "familia canónica de constantes: cero números mágicos duplicados (§0)" \
   node db/flota/gate-constantes.mjs
 
+# Theming por filas (§5.1): cero Liquid Glass en pantallas/componentes y cero vía de CSS
+# arbitrario por tenant — el tema entra ÚNICAMENTE como custom properties derivadas. [AC-FMIG-02]
+paso "theming por filas: cero Liquid Glass, cero CSS arbitrario por tenant (§5.1)" \
+  node db/flota/gate-theming-por-filas.mjs
+
+# Selectores de e2e SOLO por data-testid/term_key (§5.1, §9.2): getByText sobre un término
+# RENOMBRABLE (catálogo de packages/miga/src/terminologia.ts) se rompe el día que un tenant
+# lo renombra — caso de rebote textual del AC: «PR con getByText sobre un renombrable ⇒ lint
+# rojo». [AC-FMIG-04]
+paso "selectores de e2e: cero getByText sobre un término renombrable (§5.1, §9.2)" \
+  node db/flota/gate-getbytext-renombrable.mjs
+
+# «Las capturas JAMÁS muestran rechazo» (§5.7) — caso de rebote de los 4 estados obligatorios. El
+# cartel de fracaso nunca se escribe a propósito: llega mirando el replay, viendo que un lote puede
+# no llegar y decidiendo avisar. Con el aviso, el chofer vuelve a la parada o recaptura. [AC-FMIG-10]
+paso "capturas sin rechazo: cero canal y cero rama de fracaso hacia la pantalla (§5.7)" \
+  node db/flota/gate-capturas-sin-rechazo.mjs
+
 # La otra mitad del §0: `gate-constantes` vigila los VALORES de la familia de energía; este
 # vigila la ARITMÉTICA. Nadie copia el factor de consumo a mano —el otro gate lo atrapa—, pero
 # cualquiera escribe la multiplicación en la pantalla que está armando, y a partir de ahí hay
@@ -74,6 +92,18 @@ paso "seeds: nadie siembra el gancho pin_destinatario, y sigue vivo en el DDL (�
 # E1 y su UI es de E3 (§3.E3); ningún seed E1 lo pone. [AC-FPOD-17]
 paso "seeds: nadie siembra el gancho escaneo_codigo, y sigue vivo en el DDL (§4.9, §3.E3)" \
   node db/flota/gate-seeds-escaneo-codigo.mjs
+
+# `thermal_profile`/`alarm_rule` son DDL-only en E1 (§4.9): esquema sí, seeds no. Los gates de
+# arriba miran el enum de evidencia; este mira las dos TABLAS del gancho de frío — ningún seed ni
+# el wizard puede insertarles una fila. [AC-FMIG-15]
+paso "seeds: nadie siembra alarm_rule ni thermal_profile, y siguen vivas en el DDL (§4.9)" \
+  node db/flota/gate-seeds-alarm-thermal.mjs
+
+# «El flujo del operario se arma POR DATOS» (§4.6) no es solo diseño de hoy: sin este gate,
+# nada impide que mañana alguien escriba `if (vertical === 'panaderia')` en una pantalla y
+# convierta «activar un vertical» de vuelta en código en vez de filas (§2 métrica 4). [AC-FMIG-15]
+paso "flujo por datos: cero condicionales por el nombre de un vertical en la UI (§4.6, §4.9)" \
+  node db/flota/gate-flujo-por-datos.mjs
 
 # «Archivo PICT versionado; agregar un flag sin regenerarlo ⇒ gate rojo» (§9.2): recalcula el
 # covering array 2-way desde covering-array-parada.pict y lo compara contra el .json comiteado

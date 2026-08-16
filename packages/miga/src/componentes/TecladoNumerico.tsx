@@ -1,5 +1,6 @@
 import { tipografia, grilla } from "../tokens.ts";
 import { componente } from "../estructura.ts";
+import { BotonTactil } from "./BotonTactil.tsx";
 
 // Teclado numérico PROPIO — jamás el teclado del sistema (PROMPT_MAESTRO.md §5).
 // El tamaño de tecla sale de `componente.tecla`, que lo toma de la familia canónica del
@@ -13,6 +14,7 @@ export function TecladoNumerico({
   permitirCeroInicial = false,
   permitirGuion = false,
   permitirK = false,
+  onToque,
 }: {
   valor: string;
   onCambiar: (nuevoValor: string) => void;
@@ -36,8 +38,14 @@ export function TecladoNumerico({
    *  campo donde el maestro lo prohíbe. Los puntos y el guion los pone el formateador de
    *  `packages/nucleo-comun/src/rut.ts`, no este teclado: acá solo se entra el alfabeto. */
   permitirK?: boolean;
+  /** AC-FMIG-03: cuenta los toques REALES (incluida cada «⌫» de corrección) sin importar la
+   *  convención de presupuesto del §5.3, que sigue contando el campo entero como 1 acción —
+   *  quien llama decide cuándo el campo "se completó" y qué hacer con el total (emitirlo a
+   *  `client_metric` tipo `toques_flujo`, típicamente). Este componente no sabe de sync. */
+  onToque?: () => void;
 }) {
   function tocar(tecla: string) {
+    onToque?.();
     if (tecla === "⌫") {
       onCambiar(valor.slice(0, -1));
       return;
@@ -83,7 +91,7 @@ export function TecladoNumerico({
         const etiqueta =
           tecla === "," ? (permitirGuion ? "−" : permitirK ? "K" : tecla) : tecla;
         return (
-          <button
+          <BotonTactil
             key={tecla}
             type="button"
             onClick={() => tocar(etiqueta)}
@@ -104,7 +112,7 @@ export function TecladoNumerico({
             }}
           >
             {etiqueta}
-          </button>
+          </BotonTactil>
         );
       })}
     </div>

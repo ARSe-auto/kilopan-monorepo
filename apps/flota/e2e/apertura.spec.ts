@@ -6,6 +6,7 @@ import { registrarBaseline } from "./baseline-acciones.mjs";
 import { limpiarFixture } from "./limpiar.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
 import { PUERTO_E2E } from "./puerto.ts";
+import { medirTransicion, UMBRAL_LATENCIA_MS, UMBRAL_SALTO_FRAME_MS } from "./frame-timing.ts";
 
 // La apertura del turno (F3), contando toques [AC-FVEH-10] — §5.2-F3, §5.3, §5.7, §7.6, §0.
 //
@@ -232,6 +233,39 @@ test("[AC-FVEH-10] el semáforo se dice con TEXTO, jamás solo con color", async
   expect(cifra!.variante, "la cifra baila al actualizarse: le falta tabular-nums").toContain(
     "tabular-nums",
   );
+});
+
+test("[AC-FMIG-19] la transición al semáforo entra en <1s y sin salto de frame — gate CI de terreno", async ({
+  page,
+}) => {
+  await con(BD_A, (c: Conexion) =>
+    c.sql("insert into vehiculos (patente, tipo) values ('APT0004', 'furgón')"),
+  );
+  await sesionDe(page, SECRETO);
+  await page.goto(`${EN_HECHOS}/turno/abrir`);
+  await page.getByTestId("vehiculo-APT0004").click();
+  await page.getByTestId("todo-bien").click();
+  await page.getByRole("button", { name: "5", exact: true }).click();
+  await page.getByTestId("continuar-odometro").click();
+  await page.getByRole("button", { name: "7", exact: true }).click();
+
+  // §5.7: "<1s por interacción" y "transiciones 60fps" son gate de CI BLOQUEANTE
+  // (AC-FMIG-19) — proxy de laboratorio sin Lighthouse, mismo precedente que AC-PERF-04.
+  const medicion = await medirTransicion(
+    page,
+    () => page.getByTestId("continuar-carga").click(),
+    () => page.getByTestId("semaforo-texto").waitFor({ state: "visible" }),
+  );
+
+  expect(
+    medicion.latenciaMs,
+    `la transición a "semaforo-texto" tardó ${medicion.latenciaMs}ms — sobre el techo de ${UMBRAL_LATENCIA_MS}ms del §5.7`,
+  ).toBeLessThan(UMBRAL_LATENCIA_MS);
+  expect(medicion.frames, "no se capturó ni un frame — la medición es vacía").toBeGreaterThan(0);
+  expect(
+    medicion.saltoMaximoMs,
+    `un frame tardó ${medicion.saltoMaximoMs}ms en pintarse tras el anterior — jank sobre el techo de ${UMBRAL_SALTO_FRAME_MS}ms`,
+  ).toBeLessThan(UMBRAL_SALTO_FRAME_MS);
 });
 
 // ─── El cierre del turno (F5) [AC-FVEH-21] — §5.2-F5, §5.3, §7.6 ────────────────────

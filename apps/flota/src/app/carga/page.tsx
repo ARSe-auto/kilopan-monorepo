@@ -12,7 +12,13 @@ import { tipografia, superficie, grilla, enfasis, semantico as colorSemantico } 
 import { semantico, componente } from "@kilopan/miga/estructura.ts";
 import { UNDO } from "../../../../../packages/nucleo-comun/src/constants.ts";
 import { pedir } from "../../cliente/aparato.ts";
-import { registrarToque, alCambiarTeclado, completarFlujo } from "../../cliente/toques-flujo.ts";
+import {
+  registrarToque,
+  alCambiarTeclado,
+  completarFlujo,
+  useContadorDeToques,
+  enviarToquesFlujo,
+} from "../../cliente/toques-flujo.ts";
 
 // La recepción de carga en el andén (F2) [AC-FRUT-07] — §5.2 F2, §5.3, §0, §4.7, §7.6.
 //
@@ -65,9 +71,12 @@ export default function RecepcionDeCarga() {
   const [confirmadas, setConfirmadas] = useState<Record<string, "enviando" | "listo">>({});
   const [porDeshacer, setPorDeshacer] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const contadorPin = useContadorDeToques();
 
   const cargar = useCallback(async () => {
-    const respuesta = await pedir("/api/vehiculos").catch(() => null);
+    // `operativo=1`: elegir el vehículo que recibe la carga es terreno [AC-FMIG-09] — §5.5,
+    // no gestión del catálogo, así que no pasa por el candado de la Vehículos apagada.
+    const respuesta = await pedir("/api/vehiculos?operativo=1").catch(() => null);
     if (!respuesta?.ok) return setError("No se pudo leer la flota. Revisá tu conexión.");
     setVehiculos(((await respuesta.json()) as { vehiculos: { id: string; patente: string }[] }).vehiculos);
     return undefined;
@@ -171,13 +180,18 @@ export default function RecepcionDeCarga() {
                 alCambiarTeclado("recepcion_custodia", pin, v);
                 setPin(v);
               }}
+              // Y los toques REALES del campo, incluido cada «⌫» [AC-FMIG-03]: mide otra cosa
+              // que la convención de 1-acción-por-campo, por eso conviven.
+              onToque={contadorPin.contar}
             />
+
           </div>
           <BotonPrimario
             testid="continuar-pin"
             disabled={pin.length < 4}
             onClick={() => {
               registrarToque("recepcion_custodia");
+              enviarToquesFlujo("carga_pin", contadorPin.leerYReiniciar());
               setPaso("vehiculo");
             }}
           >

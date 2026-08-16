@@ -110,3 +110,42 @@ export const FEATURES = {
   // planificación/lectura: apagado ⇒ 403 en TODA ruta del namespace, jamás el flag de captura.
   portal_contratante: "portal_contratante",
 } as const;
+
+/**
+ * ¿Está ENCENDIDO este módulo, según la config VIGENTE? [AC-FMIG-09] — §5.5, §0.
+ *
+ * El default es AL REVÉS que `entitlementVigente`, y a propósito: un «bloquean» del §4.5 nace
+ * apagado (encender es la excepción que alguien pide), pero un MÓDULO del §5.5 nace prendido —
+ * es el tamaño del producto tal como lo compraron— y se apaga con una decisión humana explícita
+ * desde «Funciones». Por eso acá «sin configurar» cuenta ENCENDIDO, el mismo criterio que ya usa
+ * el lado de captura (`estadoDeFeature(...) !== false` en `lecturas.ts`/`capturas.ts`/
+ * `manifiestos.ts`): el guard de planificación/lectura tiene que dar la MISMA respuesta que el
+ * flag de captura para el mismo `lookup_key` — apagar un módulo no puede significar «403 en
+ * planificación» y «encendido para el terreno» a la vez sobre el mismo interruptor.
+ *
+ * Lee la VIGENTE, no la congelada de un turno: a diferencia de una captura (que juzga un hecho
+ * ya ocurrido contra la config con la que el turno abrió), una pantalla de planificación o de
+ * lectura consulta el estado de AHORA — el mismo criterio que ya usan los rebotes de
+ * `documentos_vencidos_bloquean`/`certificaciones_vencidas_bloquean` en `turnos.ts`/`agenda.ts`/
+ * `rutas.ts`.
+ */
+export async function moduloVigenteEncendido(
+  c: PoolClient,
+  slug: string,
+  lookupKey: string,
+): Promise<boolean> {
+  const versionId = await versionVigente(c, slug);
+  return (await estadoDeFeature(c, versionId, lookupKey)) !== false;
+}
+
+/** El 403 de la regla de contracción [AC-FMIG-09] — §5.5, §0: «módulo apagado ⇒ 403 SOLO en
+ *  endpoints de planificación/lectura». Tipado es-CL (§4.2) para que la pantalla que lo reciba
+ *  pueda decir qué pasó sin traducir un código. */
+export const moduloApagadoRespuesta = (): Response =>
+  Response.json(
+    {
+      error: "modulo_apagado",
+      mensaje: "El administrador apagó este módulo para esta cuenta desde «Funciones».",
+    },
+    { status: 403 },
+  );

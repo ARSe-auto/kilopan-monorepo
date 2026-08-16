@@ -25,7 +25,7 @@ const ORIGEN = origenDe(SLUG);
 type Conexion = { sql: <T = Record<string, string>>(t: string, p?: unknown[]) => Promise<T[]> };
 
 const RUT_PERSONA = rutDeFixture(38);
-const RUT_EMPRESA = rutDeFixture(39);
+const RUT_EMPRESA = rutDeFixture(46);
 const SECRETO = secretoNuevo();
 
 const DESTINO_AJENO = "Local del tercero en la misma ruta";

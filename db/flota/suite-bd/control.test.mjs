@@ -10,6 +10,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { migrar } from "../migrar.mjs";
 import { con, conectar, BD_CONTROL, ROL_MIGRADOR, bdDeTenant } from "../conectar.mjs";
+import { desregistrarComo } from "./desregistrar.mjs";
 import { duenoDe } from "../provisionar.mjs";
 import { versionEsperada } from "../aplicar.mjs";
 import { altaTenant } from "../../../apps/flota/src/servidor/modo.ts";
@@ -245,7 +246,7 @@ test("[AC-FTEN-04] un grant de soporte sin vencimiento no entra", async () => {
 
 /** Arma un tenant con un plan que trae `enElPlan` y no trae `fueraDelPlan`. */
 async function escenarioDeEntitlements() {
-  await control.sql("delete from tenants where slug like 'gate_ent%'");
+  await desregistrarComo("gate\\_ent%");
   const [plan] = await control.sql(
     "insert into planes (lookup_key, nombre) values ('gate_ent_plan', 'Gate') " +
       "on conflict (lookup_key) do update set nombre = excluded.nombre returning id::text as id",
@@ -369,7 +370,7 @@ test("[AC-FTEN-11] los límites cuantitativos son COLUMNAS del plan, no features
 const RECORTE_MI_FLOTA = ["tarifas", "liquidacion_por_cliente", "portal_contratante", "facturacion"];
 
 async function tenantConTodoEnElPlan() {
-  await control.sql("delete from tenants where slug like 'gate_modo%'");
+  await desregistrarComo("gate\\_modo%");
   const [plan] = await control.sql(
     "insert into planes (lookup_key, nombre) values ('gate_modo_plan', 'Completo') " +
       "on conflict (lookup_key) do update set nombre = excluded.nombre returning id::text as id",

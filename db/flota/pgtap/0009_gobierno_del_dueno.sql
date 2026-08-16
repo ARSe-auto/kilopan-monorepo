@@ -67,6 +67,9 @@ select is(
     -- test sin que falte ni sobre nada.
     'gobierno.documento_cargado',
     'gobierno.documento_eliminado',
+    -- La aceptación del DPA en términos del tenant [AC-FMIG-22] — §3.E1.15, §7.8: acto del
+    -- dueño (solo `admin_tenant`), misma familia que el resto del plano de control.
+    'gobierno.dpa_aceptado',
     'gobierno.invitacion_emitida',
     'gobierno.invitacion_pausada',
     'gobierno.invitacion_reanudada',

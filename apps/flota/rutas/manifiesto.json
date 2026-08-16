@@ -305,6 +305,32 @@
       }
     },
     {
+      "ruta": "/api/gobierno/dpa",
+      "archivo": "src/app/api/gobierno/dpa/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "El DPA en términos del tenant [AC-FMIG-22], plano de control exclusivo del dueño (§5.4, §3.E1.15). Sin parámetro de ruta: no hay id de recurso — la versión vigente sale de `packages/miga/src/dpa.ts` (DPA_VERSION), igual para todo tenant, y lo único que varía por tenant es SI ya la aceptó. El GET expone el texto del documento y el estado de aceptación de ESTE tenant; el POST inserta en `dpa_aceptaciones` (tenant_id por default `tenant_actual()`, con CHECK) y jamás recibe un id ajeno que pudiera aceptar en nombre de otro tenant. El caso genérico va sin credencial y la guardia contesta 404 pelado antes de mirar el cuerpo; el barrido de AC-FIDN-12 prueba el 403 con rol distinto de `admin_tenant` sobre esta misma ruta con CERO filas nuevas."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/funciones",
+      "archivo": "src/app/api/gobierno/funciones/route.ts",
+      "metodos": [
+        "GET",
+        "PATCH"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La pantalla «Funciones» del panel admin [AC-FMIG-08], plano de control exclusivo del dueño (§5.4, §5.5). Sin parámetro de ruta: la función se nombra por `lookup_key` en el cuerpo del PATCH, no por id. El GET expone qué módulos tiene comprados y encendidos el vecino —su plan comercial en una respuesta—; el PATCH MUTA `tenant_feature_overrides` en `control` (compartida entre TODOS los tenants) y sella una `config_version` nueva en la base del tenant, así que enciende el comparador de huella de LAS DOS bases: escribirle un override al vecino le prende o le apaga un módulo entero de su operación sin que su dueño lo haya tocado. El caso genérico va sin credencial y la guardia contesta 404 pelado antes de mirar el cuerpo; el barrido de AC-FIDN-12 prueba el 403 con rol distinto de `admin_tenant` sobre esta misma ruta, y `e2e/funciones.spec.ts` prueba además el 422 de «fuera de plan» con CERO filas en `control.tenant_feature_overrides`."
+      }
+    },
+    {
       "ruta": "/api/gobierno/grants",
       "archivo": "src/app/api/gobierno/grants/route.ts",
       "metodos": [
@@ -551,6 +577,19 @@
       }
     },
     {
+      "ruta": "/api/manifiesto",
+      "archivo": "src/app/api/manifiesto/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "ids_de_b": [],
+        "nota": "Sin sesión propia: 404 (sesionDelTenant). Con sesión de B contra la BD de A: cabecera x-flota-tenant-bd la resuelve el ruteo por subdominio de A, no el cliente — B nunca puede apuntar su sesión a la BD de A, así que no hay fila del vecino que leer ni con qué armar el manifest ajeno."
+      }
+    },
+    {
       "ruta": "/api/manifiesto-items/[id]/bajar",
       "archivo": "src/app/api/manifiesto-items/[id]/bajar/route.ts",
       "metodos": [
@@ -620,6 +659,18 @@
           "columna": "id"
         },
         "nota": "El binario de la foto del sub-manifiesto de B desde una sesión de A [AC-FRUT-10]: 404 y la BD de B sin cambios. Escribe `evidence` APPEND-ONLY colgada de su manifiesto, con un sha256 write-once — una foto ajena pegada a su carga queda como constancia de cómo llegó esa mercadería y no se puede borrar. El manifiesto de B tiene que ser REAL, porque contra un uuid inventado el 404 no distingue al handler que mira el tenant primero del que no."
+      }
+    },
+    {
+      "ruta": "/api/metricas/toques-flujo",
+      "archivo": "src/app/api/metricas/toques-flujo/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "AC-FMIG-03: no recibe identificador por URL — el cuerpo trae flujo (whitelist cerrada) y toques (entero). No hay fila de otro tenant que leer ni mutar por id; el cruce que aplica es el genérico de sesión (`sesionDelTenant`, igual que el resto de las rutas de terreno): cabecera de tenant falsificada contra el host propio de A tiene que seguir resolviendo la sesión de A, y una sesión de B contra el host de A tiene que rebotar 404. El daño de un cruce logrado sería insertar `client_metric` en la base equivocada — ruido de telemetría, cero dato de negocio."
       }
     },
     {
@@ -1005,6 +1056,19 @@
       }
     },
     {
+      "ruta": "/api/tema",
+      "archivo": "src/app/api/tema/route.ts",
+      "metodos": [
+        "GET",
+        "PUT"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Lee y guarda el tema del tenant [AC-FMIG-02]: la fila única de tenant_theme de SU base, resuelta por poolDe(x-flota-tenant-bd), igual que /api/tenant. Sin parámetro de ruta, así que no hay id de B que colar — el riesgo de cruce acá no es leer la fila de otro tenant (el pool ya está fijado a la base de A) sino escribirle a A un acento derivado de un cálculo hecho con el fondo o el mínimo de contraste de OTRO tenant, y eso no puede pasar porque ambos son constantes de plataforma (superficie, CONTRASTE.texto), no filas por tenant. El PUT MUTA, así que enciende el comparador de huella de la BD de B: un GET/PUT sin la cabecera de B nunca la toca, y la fila de B queda intacta."
+      }
+    },
+    {
       "ruta": "/api/tenant",
       "archivo": "src/app/api/tenant/route.ts",
       "metodos": [
@@ -1014,6 +1078,19 @@
       "cruce": {
         "tipo": "sin_recurso",
         "nota": "Devuelve la identidad del tenant leída de tenant_info de SU base, así que es la ruta donde una fuga se vería a simple vista: si el aislamiento cediera, el slug y el nombre de la BD de B saldrían literalmente en el cuerpo. Sin parámetros hasta el módulo 01; el día que reciba uno, pasa a tipo recurso y el gate lo exige."
+      }
+    },
+    {
+      "ruta": "/api/terminologia",
+      "archivo": "src/app/api/terminologia/route.ts",
+      "metodos": [
+        "GET",
+        "PUT"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Catálogo de terminología resuelto del tenant [AC-FMIG-04] y su edición [AC-FMIG-06]. Sin parámetro de ruta: el tenant sale de x-flota-tenant-bd, igual que /api/tema. El GET es la fuga silenciosa que ya documentaba este AC —no hay dinero ni PII, «parada» de B en vez de «Punto extra» de A no compromete nada operativo, pero SÍ delataría estructura de marca frente a un vecino—. El PUT eleva el daño: sin aislamiento, A podría RENOMBRAR el diccionario de B —vandalizar cómo la app le habla a sus propios choferes— y, por sellar una config_version nueva en cada edit (§4.4), correrle además la versión congelada al PRÓXIMO turno que B abra. El caso genérico va sin credencial de tenant y la guardia contesta 404 pelado antes de tocar tenant_terminology, en las dos verbos."
       }
     },
     {
@@ -1401,6 +1478,42 @@
       "cruce": {
         "tipo": "sin_recurso",
         "nota": "Pantalla del dueño (F-A y F-C del §5.4). No recibe identificador por URL: todo lo que hace pasa por /api/gobierno/**, que ya tiene sus propios casos declarados, y el tenant sale del ruteo. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y acá pesa porque el HTML servido no puede traer ni el slug ni la base del vecino antes siquiera de que haya sesión: sin credencial la pantalla no pinta datos de nadie."
+      }
+    },
+    {
+      "ruta": "/panel/dpa",
+      "archivo": "src/app/panel/dpa/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de solo lectura sobre el shell [AC-FMIG-22]: no recibe identificador por URL, y todo lo que muta (la aceptación) pasa por `POST /api/gobierno/dpa`, que ya tiene su propio caso declarado y su propia guardia de rol. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y el HTML servido no puede traer el estado de aceptación del vecino antes de que el GET del endpoint resuelva contra la base correcta."
+      }
+    },
+    {
+      "ruta": "/panel/funciones",
+      "archivo": "src/app/panel/funciones/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de solo lectura sobre el shell [AC-FMIG-08]: no recibe identificador por URL, y todo lo que muta pasa por `PATCH /api/gobierno/funciones`, que ya tiene su propio caso declarado y su propia guardia de rol. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y el HTML servido no puede traer un `lookup_key` ni un estado de plan del vecino antes de que el GET del endpoint resuelva contra la base correcta."
+      }
+    },
+    {
+      "ruta": "/panel/terminologia",
+      "archivo": "src/app/panel/terminologia/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de solo lectura del catálogo de terminología [AC-FMIG-04]. No recibe identificador por URL: todo lo que pinta pasa por /api/terminologia, que ya tiene su propio caso declarado, y el tenant sale del ruteo por host. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y el HTML servido no puede traer un term_key ni una fila de tenant_terminology del vecino antes de que /api/terminologia resuelva contra la base correcta."
       }
     },
     {

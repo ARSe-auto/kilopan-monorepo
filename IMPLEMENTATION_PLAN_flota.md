@@ -6,11 +6,14 @@ commit (`feat(flota/modulo): descripción [AC-XX-YY]`, §9.2). **Exactamente un 
 por AC** y **ningún AC de las specs falta** (cualquiera de las dos cosas pone el gate en
 rojo). TODOS los ítems parten en `[ ]`: nada está hecho.
 
-Reparto por módulo (suma 197): 00 = 28 · 01 = 21 · 02 = 22 · 03 = 22 · 04 = 24 ·
-05 = 25 · 06 = 15 · 07 = 17 · 08 = 23. Los dos ACs por sobre los 195 originales nacen
-de la firma de la lista congelada de criterios KiloRuta el 08-ago-2026 (AC-FTEN-18):
-AC-FVEH-22 (KR-41, cierre forzado del turno) y AC-FRUT-22 (KR-29, candado
-entrega←manifiesto).
+Reparto por módulo (suma 204, contado de `specs/flota/*.md`): 00 = 28 · 01 = 21 ·
+02 = 22 · 03 = 24 · 04 = 24 · 05 = 25 · 06 = 15 · 07 = 17 · 08 = 28. Los ACs por sobre
+los 195 originales nacen de la firma de la lista congelada de criterios KiloRuta el
+08-ago-2026 (AC-FTEN-18) —AC-FVEH-22 (KR-41, cierre forzado del turno) y AC-FRUT-22
+(KR-29, candado entrega←manifiesto)— y de PARTIR ACs a medias, que es la regla cuando
+uno cierra sobre una parte: AC-FMIG-24 salió de AC-FMIG-10, AC-FMIG-25/26/27 de
+AC-FMIG-18 y AC-FMIG-28 de AC-FMIG-23. Partir sube el conteo a propósito: esconder el resto adentro de un `[x]`
+es lo que dejó 21 ACs abiertos invisibles el 26-jul-2026.
 
 **Precondiciones de proceso (criterio de entrada de E1, §9.1 — NO son ítems de este
 plan y el motor no puede saltárselas):** (0) hito 0 entregado (esqueleto +
@@ -44,6 +47,9 @@ spec): AC-FIDN-01 (p. 8), AC-FIDN-03 (p. 5/10), AC-FIDN-06 (p. 9), AC-FIDN-11 (p
 AC-FIDN-18 (p. 7 — BLOQUEADO entero), AC-FMIG-06 (p. 11), AC-FMIG-15
 (p. 10), AC-FMIG-22 (p. 12), AC-FMIG-23 (p. 4 de la spec 04 — numerador fuera del gate
 hasta la respuesta), AC-FPOR-09 (p. 4), AC-FPOR-10 (p. 3), AC-FRUT-02 (p. 6),
+AC-FIDN-15 (p. 8), AC-FIDN-18 (p. 7 — BLOQUEADO entero), AC-FMIG-06 (p. 11), AC-FMIG-15
+(p. 10), AC-FMIG-22 (p. 12), AC-FMIG-28 (p. 4 de la spec 04 — el numerador, partido de
+AC-FMIG-23, que cerró sobre el denominador), AC-FPOR-09 (p. 4), AC-FPOR-10 (p. 3), AC-FRUT-02 (p. 6),
 AC-FRUT-21 (p. 9), AC-FSEM-05 (p. 9), AC-FSEM-07 (p. 5), AC-FSEM-08 (p. 5), AC-FSEM-09
 (p. 1), AC-FSEM-10 (p. 2), AC-FSEM-11 (p. 3/5), AC-FSEM-13 (p. 8), AC-FSEM-14 (p. 6),
 AC-FSEM-16 (p. 5), AC-FSEM-17 (p. 11), AC-FSEM-19 (p. 4/5), AC-FSEM-21 (p. 8 —
@@ -311,28 +317,61 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
 
 ## Hito (g) — Panel admin white-label (incl. «Funciones»), wizard de onboarding y seeds de los 3 tenants
 
-- [ ] (P1) Theming por filas: CSS custom properties del bootstrap con derivados pressed/disabled/dark; acento <4.5:1 ⇒ 422; grep anti-Liquid-Glass; dos tenants, temas distintos, UN build — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-02]
-- [ ] (P1) Teclado numérico PROPIO (teclas ≥64px) en PIN/odómetro/SOC/cantidades; el del sistema jamás en terreno; campo = 1 acción con emisión de toques_flujo — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-03]
-- [ ] (P1) Capa de copy única term_key tenant→vertical→base es-CL; canónico entre paréntesis para el admin; lint que veta getByText; suite e2e DOBLE sin cambiar un selector — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-04]
-- [ ] (P1) Formatos es-CL únicos ($12.500, dd-mm-aaaa, RUT) con unit tests; grep cero strings visibles en inglés — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-05]
-- [ ] (P1) Edición de terminología con CHECKs de BD (largos por tipo, caracteres, sistema no editable) ⇒ 422 es-CL; aplica al próximo bootstrap con turno abierto congelado — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-06]
+- [x] (P1) Theming por filas: CSS custom properties del bootstrap con derivados pressed/disabled/dark; acento <4.5:1 ⇒ 422; grep anti-Liquid-Glass; dos tenants, temas distintos, UN build — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-02]
+- [x] (P1) Teclado numérico PROPIO (teclas ≥64px) en PIN/odómetro/SOC/cantidades; el del sistema jamás en terreno; campo = 1 acción con emisión de toques_flujo — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-03]
+- [x] (P1) Capa de copy única term_key tenant→vertical→base es-CL; canónico entre paréntesis para el admin; lint que veta getByText; suite e2e DOBLE sin cambiar un selector — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-04]
+- [x] (P1) Formatos es-CL únicos ($12.500, dd-mm-aaaa, RUT) con unit tests; grep cero strings visibles en inglés — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-05]
+  PROBADO: capa de formato ya en nucleo-comun/{fechas,rut}.ts con tests; grep-gate
+  verifica-es-cl.mjs --app=flota (apps/flota/src + packages/miga/src) cableado en
+  check.sh, con 3 tests nuevos end-to-end (verde real, rojo con inglés, verde con
+  español). check.sh --full --app=flota: VERDE.
+- [x] (P1) Edición de terminología con CHECKs de BD (largos por tipo, caracteres, sistema no editable) ⇒ 422 es-CL; aplica al próximo bootstrap con turno abierto congelado — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-06]
 - [ ] (P2) Snapshot 375px con 5 módulos y términos al máximo largo sin desbordes; texto 200% sin truncar cifras — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-07]
-- [ ] (P1) Pantalla «Funciones»: OFF siempre permitido, ON solo del plan (mutación directa por API fuera de plan ⇒ 422 y 0 filas; rol no admin ⇒ 403); audit + próximo bootstrap — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-08]
-- [ ] (P1) Regla de contracción completa: manifest server-side sin el módulo, 403 en planificación/lectura, captura 2xx con flag; app mínima todo-OFF sigue siendo producto completo — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-09]
-- [ ] (P1) Los 4 estados como componentes ÚNICOS de Miga en wizard/panel/«Funciones»; las capturas JAMÁS muestran rechazo — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-10]
-- [ ] (P1) Gate axe+Lighthouse de las pantallas del hito + PWA iOS (standalone, safe-areas, touch-action, inputs ≥16px); cualquier violación ⇒ rojo — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-11]
+- [x] (P1) Pantalla «Funciones»: OFF siempre permitido, ON solo del plan (mutación directa por API fuera de plan ⇒ 422 y 0 filas; rol no admin ⇒ 403); audit + próximo bootstrap — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-08]
+- [x] (P1) Regla de contracción completa: manifest server-side sin el módulo, 403 en planificación/lectura, captura 2xx con flag; app mínima todo-OFF sigue siendo producto completo — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-09]
+- [x] (P1) Los 4 estados como componentes ÚNICOS de Miga en las pantallas ya construidas del módulo (panel white-label/«Funciones»); contador REAL de cola; las capturas JAMÁS muestran rechazo con gate propio. La parte del wizard se partió a AC-FMIG-24 — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-10]
+      Probado: `cliente/cola.ts` + `cola.test.ts` (contador real de las dos colas y de todas las
+      identidades), vacío accionable y `ChipEstadoConexion` en `panel/funciones` y
+      `panel/terminologia`, `db/flota/gate-capturas-sin-rechazo.mjs` con 12 mutantes en `gate.sh`,
+      y `e2e/miga-estados-panel.spec.ts` 4/4. `check.sh --full --app=flota`: VERDE.
+- [x] (P1) Gate axe+Lighthouse de las pantallas del hito + PWA iOS (standalone, safe-areas, touch-action, inputs ≥16px); cualquier violación ⇒ rojo — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-11]
+      `apps/flota/e2e/panel-a11y-pwa-gate.spec.ts` 13/13 (2 skips documentados, sin
+      controles habilitados por falta de plan en el tenant) sobre `/panel`,
+      `/panel/funciones`, `/panel/terminologia`. Encontró y arregló un contraste real bajo
+      AA en `packages/miga/src/componentes/ChipEstadoConexion.tsx`.
 - [ ] (P2) Pasada VoiceOver real de apertura/POD/recepción con todo estado en texto (oráculo humano — DONE-adopción; complementa AC-FMIG-20) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-12]
 - [ ] (P2) Fluidez en producción vía enum de client_metric: latencia_ms p95 <1 s y time-to-first-stop <5 min (oráculo producción — complementa AC-FMIG-19) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-13]
-- [ ] (P1) Wizard 4 pasos completable por SCRIPT <15 min contra stack local: provisión CREATE DATABASE…TEMPLATE + siembra del vertical con demo tocable + vehículo/chofer + paradas + primera parada — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-14]
-- [ ] (P1) Activar vertical = INSERT (schema_migrations idéntico antes/después); flujo armado POR DATOS (grep cero condicionales por vertical); cero seeds de ganchos E2/E3 (verticales de A y C pendientes pregunta 10) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-15]
+- [x] (P1) Wizard 4 pasos completable por SCRIPT <15 min contra stack local: provisión CREATE DATABASE…TEMPLATE + siembra del vertical con demo tocable + vehículo/chofer + paradas + primera parada — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-14]
+- [x] (P1) Activar vertical = INSERT (schema_migrations idéntico antes/después); flujo armado POR DATOS (grep cero condicionales por vertical); cero seeds de ganchos E2/E3 (verticales de A y C pendientes pregunta 10) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-15]
+  PROBADO: test de invariante schema_migrations en wizard-onboarding.test.mjs + gate-flujo-por-datos.mjs + gate-seeds-alarm-thermal.mjs (ver nota completa en la spec). check.sh --full --app=flota: VERDE.
 - [ ] (P2) Wizard y primera parada validados EN VIVO por Alexis (oráculo humano — DONE-adopción, no bloquea) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-16]
 - [ ] (P2) Embudo de activación en el panel SaaS: alta→primera entrega real con evidencia p50 <4 h, p90 <24 h (oráculo producción) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-17]
-- [ ] (P1) Seeds A/B/C EXACTOS según §10 (EV48, empresas y conceptos, terminología extrema de B, C contraído) con centinelas únicos por tenant, RUTs irreales y memoria de cálculo EEVD; fila cruzada ⇒ rojo — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-18]
-- [ ] (P1) Gate CI de performance de terreno: presupuesto Lighthouse + frame-timing en los e2e de apertura/POD/recepción + test de feedback táctil simulado — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-19]
-- [ ] (P1) Proxy CI bloqueante de VoiceOver: nombre accesible + rol correcto + orden de foco que completa los 3 flujos por navegación secuencial — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-20]
-- [ ] (P1) «Una acción primaria por pantalla» asertada en e2e/snapshots del hito + profundidad ≤2 verificada mecánicamente sobre el manifest bajo el covering array — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-21]
-- [ ] (P1) DPA en términos del tenant (§3.E1.15/§7.8): artefacto VERSIONADO del repo con secciones mínimas (partes, objeto, encargado/responsable, subencargados, seguridad, devolución/supresión y portabilidad `pg_dump`), servido en los términos sin CSS libre, alcanzable ≤2 niveles, versión vigente por tenant y aceptación del `admin_tenant` en audit_trail (rol distinto ⇒ 403); texto y momento BLOQUEADOS por la pregunta 12 — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-22]
-- [ ] (P1) Test de fixture de la EEVD del DONE-software (§10): valor esperado HARDCODEADO con memoria de cálculo versionada junto a los seeds A/B, comparado contra la vista `eevd_semanal` del módulo 02 (AC-FVEH-20); denominador computable hoy, numerador BLOQUEADO por la pregunta 4 de la spec 04 — mientras siga abierta el test no entra al gate — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-23]
+- [x] (P1) Tenants B «Rutapan» y C «Demo Mi Flota» sembrados desde `tenant_template` (`db/flota/seeds/tenant-b.mjs`, `tenant-c.mjs`) con centinelas únicos por tenant (`seeds/centinelas.mjs`, disjuntos y ninguno subcadena de otro, 5 mutantes en el gate rápido) y el caso de rebote de FILA CRUZADA con oráculo real: `suite-bd/seeds-fila-cruzada.test.mjs` barre la huella de las columnas de texto del CATÁLOGO de la base vecina (§9.3.2: el 404 no alcanza), con control positivo y fila plantada que lo pone rojo. El tenant A, la operación de B, la memoria EEVD y el e2e HTTP se partieron a AC-FMIG-25/26/27 — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-18]
+  PROBADO: `centinelas-de-seeds.test.mjs` 5/5 y las 3 suites de seeds verdes en serie contra el
+  cluster de flota (`--test-concurrency=1`: dos provisiones simultáneas desde la plantilla chocan
+  en el catálogo de Postgres). check.sh --full --app=flota: VERDE.
+- [x] (P1) Tenant A «e-auto DaaS» entero (3 EV48, 6 usuarios, 3 empresas con sus conceptos, 25 destinos, agenda con recarga AC nocturna, no-entrega/parcial/devolución/descuadre, liquidaciones cerrada/disputada/pagada) con su centinela y el barrido de cruce extendido a A; `otd_comprometido_pct` BLOQUEADO por esquema (columna inexistente; el motor no toca migraciones) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-25] — `db/flota/seeds/tenant-a.mjs` siembra por los servicios de servidor del AC dueño (nada a mano); `suite-bd/seed-tenant-a.test.mjs` (9 tests) cuenta todo contra la BASE, y el 10.º caso de `suite-bd/seeds-fila-cruzada.test.mjs` extiende el barrido de huella a A: cero cruces A×B/A×C en las 4 direcciones y una fila de A plantada en la base de B ⇒ ROJO. La ausencia de `otd_comprometido_pct` se ASERTA (no se saltea): el día que AC-FTAR-13 cree la columna, el test se pone rojo y obliga a sembrar el 95 de la farmacia.
+- [x] (P1) Operación del tenant B: 2 rutas de madrugada (12 y 9 paradas) con términos renombrados, manifiestos con DTE ya emitido, encargo de andén, reintento y cierre con ecuación cuadrada; cierre que no cuadra o manifiesto sin DTE ⇒ rojo — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-26] — `db/flota/seeds/tenant-b-operacion.mjs` + `db/flota/suite-bd/seed-tenant-b-operacion.test.mjs` (6 tests verdes contra el cluster real), con los dos casos de rebote como MUTANTES: un bulto menos entregado pone `ecuacion_de_cierre()` en rojo y reponerlo la devuelve a verde; un sub-manifiesto traspasado sin documento sale marcado `item_sin_dte`.
+- [x] (P1) Memoria de cálculo del EEVD esperado de A y B versionada junto a los seeds (la consume AC-FMIG-23 sin recalcular) + e2e HTTP del camino dorado A/B/C con fila cruzada ⇒ rojo por 404 Y por huella de BD; depende de AC-FMIG-25 y AC-FMIG-26 — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-27]
+- [x] (P1) Gate CI de performance de terreno: presupuesto Lighthouse + frame-timing en los e2e de apertura/POD/recepción + test de feedback táctil simulado — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-19] — presupuesto-perf.mjs extendido a /panel+funciones+terminologia (109-111 KB, bajo 150 KB); frame-timing.ts (latencia <1s + salto máx de frame <100ms) en apertura/pod-feliz/carga.spec.ts; BotonTactil centraliza el feedback táctil simulado en los 4 controles operativos de packages/miga, con su gate feedback-tactil.test.ts. check.sh --full --app=flota: VERDE (verde-20260816-041711).
+- [x] (P1) Proxy CI bloqueante de VoiceOver: nombre accesible + rol correcto + orden de foco que completa los 3 flujos por navegación secuencial — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-20]
+  PROBADO: `apps/flota/e2e/voiceover-proxy-3-flujos.spec.ts` (3/3 verde, apertura/POD/recepción). `check.sh --full --app=flota`: VERDE.
+- [x] (P1) «Una acción primaria por pantalla» asertada en e2e/snapshots del hito + profundidad ≤2 verificada mecánicamente sobre el manifest bajo el covering array — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-21]
+  PROBADO: unit de `una-accion-primaria.ts`/`manifiesto-profundidad.ts` + e2e
+  `una-accion-primaria.spec.ts` (DOM real) y `profundidad-manifiesto.spec.ts` (covering array
+  entitlements × rol contra `GET /api/manifiesto`). `check.sh --full --app=flota`: VERDE.
+- [x] (P1) DPA en términos del tenant (§3.E1.15/§7.8): artefacto VERSIONADO del repo con secciones mínimas (partes, objeto, encargado/responsable, subencargados, seguridad, devolución/supresión y portabilidad `pg_dump`), servido en los términos sin CSS libre, alcanzable ≤2 niveles, versión vigente por tenant y aceptación del `admin_tenant` en audit_trail (rol distinto ⇒ 403); texto y momento BLOQUEADOS por la pregunta 12 — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-22]
+  PROBADO: `dpa.test.ts` + `dpa.spec.ts` (5/5) + migración `0067_dpa_del_tenant.sql`.
+  `check.sh --full --app=flota`: VERDE (verde-20260816-065445).
+- [x] (P1) Test de fixture de la EEVD del DONE-software (§10) sobre el DENOMINADOR: valor esperado HARDCODEADO con memoria de cálculo versionada junto a los seeds A/B, comparado contra la vista `eevd_semanal` del módulo 02 (AC-FVEH-20), con mutante vivo que lo pone rojo. El numerador y el `eevd` completo se partieron a AC-FMIG-28, que sigue bloqueado por la pregunta 4 de la spec 04 — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-23]
+  PROBADO: `db/flota/suite-bd/eevd-fixture.test.mjs` (4 verdes + 1 `skip` que es AC-FMIG-28):
+  siembra A y B enteros desde `tenant_template` y COMPARA `eevd_semanal` contra
+  `seeds/eevd-esperado.mjs` (1 y 2 vehículos-día) sin recalcular nada; caso de rebote como
+  mutante vivo en los dos tenants — un turno plantado 30 días atrás sube el denominador real y
+  pone ROJA la comparación, y el `rollback` (`turnos` es append-only) la devuelve a verde.
+  `check.sh --full --app=flota`: VERDE.
+- [ ] (P1) NUMERADOR de la EEVD y valor `eevd` completo contra la memoria de cálculo (mitad partida de AC-FMIG-23): quitar el `skip` del test de fixture y asertar `entregas_con_evidencia`/`eevd`; BLOQUEADO por la pregunta 4 de la spec 04 — `entrega.con_evidencia` no está en `EVENTOS_OPERACION` y el numerador es 0 por ausencia de catálogo — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-28]
+- [ ] (P1) El wizard de onboarding entrega los mismos 4 estados de Miga sin reinventarlos (mitad partida de AC-FMIG-10; depende de AC-FMIG-14, que construye el wizard) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-24]
 
 ---
 

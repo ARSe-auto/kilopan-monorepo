@@ -124,6 +124,54 @@ export const TENANTS = [
   // portal dejaría encargos/liquidaciones ajenos contaminando el vacío accionable de B o el
   // contenido esperado de A.
   { slug: "portal_aa_estados", estado: "activo" },
+  // Base PROPIA para editar terminología con un turno de por medio [AC-FMIG-06].
+  //
+  // `terminologia.spec.ts` (AC-FMIG-04) deja escrito que `tenant_terminology` es una tabla que
+  // NINGUNA otra suite toca, y este AC la muta de verdad —PUT real, no INSERT directo— además
+  // de sellar `config_version` nuevas cada vez que edita. Sumarle esa escritura a `ruteo_activo`
+  // rompería esa invariante para la propia suite de AC-FMIG-04; sumarla a `hechos` —compartida
+  // por media docena de suites de POD/turnos— arriesgaría que un `config_version` nuevo
+  // resellado a mitad de esa corrida cambiara qué versión congela el PRÓXIMO turno que abra
+  // cualquiera de ellas. Va al final por la misma razón que `gobierno` y `hechos`.
+  { slug: "config_congelada", estado: "activo" },
+  // Base PROPIA para la pantalla «Funciones» [AC-FMIG-08]: cada toggle escribe una
+  // `tenant_feature_overrides` en `control` (compartida entre TODAS las bases) Y sella una
+  // `config_version` nueva del lado del tenant. Compartir `ruteo_activo` arriesgaría el mismo
+  // problema que `config_congelada` documenta arriba —una versión resellada a mitad de otra
+  // suite— y encima ensuciaría `tenant_feature_overrides` de A para `documentos.spec.ts`
+  // (AC-FVEH-03), que también usa ese tenant y esa tabla. Va al final por la misma razón que
+  // el resto de las bases dedicadas.
+  { slug: "funciones", estado: "activo" },
+  // Base PROPIA para la regla de contracción [AC-FMIG-09]: sella `config_version` propias
+  // (modulo_vehiculos ON/OFF) para probar manifest+403+app mínima sin arriesgar un resellado
+  // a mitad de `documentos.spec.ts` (AC-FVEH-18) ni de `vehiculos.spec.ts`, que comparten
+  // `ruteo_activo`. Va al final por la misma razón que el resto de las bases dedicadas.
+  { slug: "contraccion", estado: "activo" },
+  // Base PROPIA para la escalada única de carga de Miga [AC-FMIG-10]: la suite solo LEE
+  // (GET de `/panel/funciones`, con la respuesta demorada por `page.route`), pero comparte
+  // el mismo `admin_tenant` que `funciones.spec.ts` muta constantemente — un toggle a mitad
+  // de la demora artificial de este test cambiaría qué filas ve y lo haría flaky por una
+  // razón que no tiene nada que ver con el AC. Va al final por la misma razón que el resto.
+  { slug: "miga_estados", estado: "activo" },
+  // Base PROPIA para el chequeo mecánico de profundidad ≤2 del manifest [AC-FMIG-21]: sella
+  // `config_version` propias (modulo_vehiculos ON/OFF, igual que `contraccion`) y necesita un
+  // usuario POR ROL de `rol_usuario` para recorrer el covering array entitlements × rol contra
+  // `GET /api/manifiesto` — compartir `contraccion` arriesgaría el mismo resellado a mitad de
+  // corrida que ese archivo ya documenta para `documentos.spec.ts`/`vehiculos.spec.ts`. Va al
+  // final por la misma razón que el resto de las bases dedicadas.
+  { slug: "manifiesto_profundidad", estado: "activo" },
+  // Base PROPIA para "una acción primaria por pantalla" [AC-FMIG-21]: necesita un plan que cubra
+  // LAS TRES features del catálogo (para que `/panel/funciones` muestre sus tres "Encender"
+  // simultáneos y el chequeo de unicidad se ejerza sobre más de una fila real, no sobre un caso
+  // vacío) — mismo motivo que separó `funciones` de `ruteo_activo`: un plan propio no puede
+  // compartir tenant con la suite que muta `tenant_feature_overrides` a cada rato.
+  { slug: "pantalla_primaria", estado: "activo" },
+  // Base PROPIA para el DPA en términos del tenant [AC-FMIG-22]: la aceptación escribe
+  // `dpa_aceptaciones` (con su `auditar()` a `audit_trail`) y un evento `gobierno.dpa_aceptado`
+  // — compartir `gobierno` arriesgaría que esa suite, que limpia identidad completa en su
+  // `beforeAll`, corriera a mitad de la aceptación de esta y dejara un `usuario_id` colgando.
+  // Va al final por la misma razón que el resto de las bases dedicadas.
+  { slug: "dpa", estado: "activo" },
 ];
 
 /** Subdominio que jamás se registra. Nombrarlo acá evita que el test lo invente distinto. */

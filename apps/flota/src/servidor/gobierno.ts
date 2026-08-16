@@ -83,6 +83,10 @@ export const EVENTOS = {
   // El selector de modo (§3) cambia qué módulos ve la operación entera: es un acto del dueño y
   // por eso su evento es `gobierno.*`, en la misma auditoría donde él lee los accesos.
   modo_conmutado: "gobierno.modo_conmutado",
+  // La aceptación del DPA en términos del tenant [AC-FMIG-22] — §3.E1.15, §7.8: es un acto del
+  // dueño (solo `admin_tenant`, §5.4) y por eso entra en la MISMA auditoría de accesos que el
+  // resto del plano de control, no en una pantalla aparte.
+  dpa_aceptado: "gobierno.dpa_aceptado",
 } as const;
 
 /** Los eventos del TERRENO. No llevan el prefijo `gobierno.` y no es un detalle: la auditoría

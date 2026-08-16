@@ -6,6 +6,7 @@ import { TENANTS } from "./preparar-tenants.mjs";
 import { registrarBaseline } from "./baseline-acciones.mjs";
 import { UNDO } from "../../../packages/nucleo-comun/src/constants.ts";
 import { PUERTO_E2E } from "./puerto.ts";
+import { medirTransicion, UMBRAL_LATENCIA_MS, UMBRAL_SALTO_FRAME_MS } from "./frame-timing.ts";
 
 // El camino feliz de F4, contado en acciones [AC-FPOD-01] — §5.2 F4, §5.3, §4.7, §7.6.
 //
@@ -190,6 +191,37 @@ test("[AC-FPOD-01] la entrega feliz cuesta DOS acciones exactas y avanza sola a 
     acciones,
     `la entrega feliz pasó de ${baseline} a ${acciones} acciones: una regresión del camino feliz no se mergea (§5.3)`,
   ).toBeLessThanOrEqual(baseline);
+});
+
+test("[AC-FMIG-19] «Entregado» avanza a la parada siguiente en <1s y sin salto de frame — gate CI de terreno", async ({
+  page,
+}) => {
+  const { entregas } = await rutaDeTresEntregas("la ruta del gate de performance");
+  await sesionDe(page);
+
+  await page.goto(`${EN_A}/entrega?parada=${entregas[0]!.id}`);
+  await expect(page.getByTestId("parada-actual")).toContainText(entregas[0]!.destino);
+  await page.getByTestId("llegue").click();
+
+  // §5.7: "<1s por interacción" y "transiciones 60fps" son gate de CI BLOQUEANTE
+  // (AC-FMIG-19) — proxy de laboratorio sin Lighthouse, mismo precedente que AC-PERF-04.
+  // El avance a la parada 2 es PARTE de la acción "Entregado" (§5.3): mide esa misma
+  // transición, no una navegación aparte.
+  const medicion = await medirTransicion(
+    page,
+    () => page.getByTestId("entregado").click(),
+    () => expect(page.getByTestId("parada-actual")).toContainText(entregas[1]!.destino),
+  );
+
+  expect(
+    medicion.latenciaMs,
+    `el avance a la parada siguiente tardó ${medicion.latenciaMs}ms — sobre el techo de ${UMBRAL_LATENCIA_MS}ms del §5.7`,
+  ).toBeLessThan(UMBRAL_LATENCIA_MS);
+  expect(medicion.frames, "no se capturó ni un frame — la medición es vacía").toBeGreaterThan(0);
+  expect(
+    medicion.saltoMaximoMs,
+    `un frame tardó ${medicion.saltoMaximoMs}ms en pintarse tras el anterior — jank sobre el techo de ${UMBRAL_SALTO_FRAME_MS}ms`,
+  ).toBeLessThan(UMBRAL_SALTO_FRAME_MS);
 });
 
 test("[AC-FPOD-01] deshacer dentro de la ventana devuelve a la parada, y no cuesta ninguna acción seguir", async ({

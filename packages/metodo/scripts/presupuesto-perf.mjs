@@ -28,11 +28,13 @@ const PRESUPUESTO_KB = 150;
 // deja de medir el día que alguien borra una ruta.
 const RUTAS_CRITICAS_POR_APP = {
   kilopan: ["/pesar", "/vender", "/ruta", "/ingresar"],
-  // FLOTA, hito 0: las pantallas de terreno del §5.2 —recepción, apertura de turno,
-  // parada, cierre— nacen en los hitos (c) a (e) y entran a esta lista con su AC. Hoy la
-  // app sirve el shell, y el shell es lo que se mide: su peso es el PISO de todas las
-  // pantallas que vengan, así que un presupuesto excedido acá lo estaría en todas.
-  flota: ["/"],
+  // FLOTA: el shell ("/") es el PISO de todas las pantallas de terreno del §5.2
+  // —recepción, apertura de turno, parada, cierre—, que nacen en los hitos (c) a (e) y
+  // entrarán a esta lista con su propio AC cuando existan como ruta propia. `/panel`,
+  // `/panel/funciones` y `/panel/terminologia` son "las pantallas del hito" (g, §9.1.4)
+  // que AC-FMIG-19 exige presupuestar — el mismo proxy de peso-JS-gzip que AC-PERF-04 ya
+  // fijó como sustituto de Lighthouse (ver encabezado del archivo), extendido a este AC.
+  flota: ["/", "/panel", "/panel/funciones", "/panel/terminologia"],
 };
 const RUTAS_CRITICAS = RUTAS_CRITICAS_POR_APP[APP];
 

@@ -1,4 +1,5 @@
 import { tipografia, grilla, enfasis } from "../tokens.ts";
+import { BotonTactil } from "./BotonTactil.tsx";
 
 // Elegir entre 2-4 opciones en UN toque (destino de pesaje, medio de pago, etc.).
 // Ningún estado se comunica solo por color (PROMPT_MAESTRO.md §5): la opción activa
@@ -17,7 +18,7 @@ export function SelectorUnToque<T extends string>({
       {opciones.map((o) => {
         const activo = o.valor === valor;
         return (
-          <button
+          <BotonTactil
             key={o.valor}
             type="button"
             role="radio"
@@ -45,7 +46,7 @@ export function SelectorUnToque<T extends string>({
           >
             {activo ? "✓ " : ""}
             {o.etiqueta}
-          </button>
+          </BotonTactil>
         );
       })}
     </div>
