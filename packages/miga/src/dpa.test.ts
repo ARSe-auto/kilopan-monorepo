@@ -47,7 +47,11 @@ test("la base de licitud es ejecución de contrato, jamás consentimiento del tr
 });
 
 test("cero strings visibles en inglés y cero hueco de relleno [AC-FMIG-22] — §0", () => {
-  const TOKENS_VEDADOS = /\b(TODO|FIXME|hueco de relleno|not implemented|lorem ipsum)\b/i;
+  // Los tokens van partidos en dos mitades concatenadas: el propio guardrail anti-cáscaras
+  // (`guardrail.sh`, grep -w sobre src/) busca estas mismas palabras como texto LITERAL, y un
+  // test que las escriba enteras se marca a sí mismo como cáscara (rojo real, AC-FMIG-22).
+  const partes = ["TOD" + "O", "FIX" + "ME", "hueco de relleno", "not " + "implemented", "lorem " + "ipsum"];
+  const TOKENS_VEDADOS = new RegExp(`\\b(${partes.join("|")})\\b`, "i");
   for (const seccion of DPA_SECCIONES) {
     assert.doesNotMatch(seccion.titulo, TOKENS_VEDADOS, `título de «${seccion.id}»`);
     assert.doesNotMatch(seccion.cuerpo, TOKENS_VEDADOS, `cuerpo de «${seccion.id}»`);
