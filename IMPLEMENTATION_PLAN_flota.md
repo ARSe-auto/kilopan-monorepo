@@ -309,7 +309,11 @@ El primer ítem del hito es la lista KR congelada (mandato del encabezado del ma
       identidades), vacío accionable y `ChipEstadoConexion` en `panel/funciones` y
       `panel/terminologia`, `db/flota/gate-capturas-sin-rechazo.mjs` con 12 mutantes en `gate.sh`,
       y `e2e/miga-estados-panel.spec.ts` 4/4. `check.sh --full --app=flota`: VERDE.
-- [ ] (P1) Gate axe+Lighthouse de las pantallas del hito + PWA iOS (standalone, safe-areas, touch-action, inputs ≥16px); cualquier violación ⇒ rojo — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-11]
+- [x] (P1) Gate axe+Lighthouse de las pantallas del hito + PWA iOS (standalone, safe-areas, touch-action, inputs ≥16px); cualquier violación ⇒ rojo — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-11]
+      `apps/flota/e2e/panel-a11y-pwa-gate.spec.ts` 13/13 (2 skips documentados, sin
+      controles habilitados por falta de plan en el tenant) sobre `/panel`,
+      `/panel/funciones`, `/panel/terminologia`. Encontró y arregló un contraste real bajo
+      AA en `packages/miga/src/componentes/ChipEstadoConexion.tsx`.
 - [ ] (P2) Pasada VoiceOver real de apertura/POD/recepción con todo estado en texto (oráculo humano — DONE-adopción; complementa AC-FMIG-20) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-12]
 - [ ] (P2) Fluidez en producción vía enum de client_metric: latencia_ms p95 <1 s y time-to-first-stop <5 min (oráculo producción — complementa AC-FMIG-19) — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-13]
 - [ ] (P1) Wizard 4 pasos completable por SCRIPT <15 min contra stack local: provisión CREATE DATABASE…TEMPLATE + siembra del vertical con demo tocable + vehículo/chofer + paradas + primera parada — spec: specs/flota/08-diseno-miga-onboarding.md [AC-FMIG-14]
