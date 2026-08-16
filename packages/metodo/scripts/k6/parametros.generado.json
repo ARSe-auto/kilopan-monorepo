@@ -1,0 +1,10 @@
+{
+  "fuente": "packages/nucleo-comun/src/constants.ts#CAPACIDAD",
+  "capacidad": {
+    "dispositivos_con_turno_abierto": 2000,
+    "usuarios_concurrentes_por_celula": 5000,
+    "replays_por_segundo": 100,
+    "p95_bootstrap_ms": 400,
+    "p95_sync_ms": 250
+  }
+}
