@@ -40,3 +40,7 @@ AC-FTAR-15   # DONE-adopción del §10 (checklist con dueño humano, JAMÁS bloq
 # una migración. El motor NUNCA crea ni edita `db/migraciones*/` (AGENTS.md, regla dura), así que
 # el AC no es difícil: es inalcanzable desde el arnés hasta que una persona corra el ALTER.
 AC-FPOR-14   # Gemelo del anterior para el piloto A (e-auto DaaS): 7 días de producción con rutas manuales y ≥90% de entregas con evidencia, medidos por Alexis en el panel. Es DONE-adopción del §10 («checklist humana, dueño: Alexis; JAMÁS bloquea al loop»), no DONE-software: no hay nada que construir ni test que lo pueda ejercer — el oráculo son 7 días de operación real. Se quita cuando el piloto A corrió y Alexis leyó el umbral en el panel. (16-ago-2026: el motor lo eligió como si fuera construible; sin esta línea lo habría reintentado en cada tanda.)
+
+# ─── E1.5 (§11, 18-ago-2026): los dos no-construibles de la familia FTEL ─────────────
+AC-FTEL-09   # CONDICIONADO a la Pregunta 2 de specs/flota/09 (sensor de frío) sin responder: sin saber QUÉ hardware reporta temperatura no hay proveedor que implementar; la columna reservada del export ya la deja lista AC-FTEL-07. Lo desbloquea la respuesta del dueño, no más código.
+AC-FTEL-10   # DONE-adopción del §10 (oráculo humano, JAMÁS bloquea al loop §9.2): Alexis ve el mapa moviéndose con un teléfono real en un turno real. Dueño nombrado: Alexis. Lo desbloquea la validación en vivo cuando AC-FTEL-01..04 estén construidos, no más código.

@@ -1,7 +1,7 @@
 # IMPLEMENTATION_PLAN — Plataforma FLOTA · E1 (apps/flota)
 
-Fuente única: `docs/PROMPT_MAESTRO_FLOTA.md`. Este plan ordena los **195 ACs** de las 9
-specs (`specs/flota/00…08`) por los hitos (a)→(g) del §9.1(4) del maestro. Un AC por
+Fuente única: `docs/PROMPT_MAESTRO_FLOTA.md`. Este plan ordena los **220 ACs** de las 10
+specs (`specs/flota/00…09`; la 09 es la etapa E1.5 del §11, firmada el 18-ago-2026) por los hitos (a)→(g) del §9.1(4) del maestro. Un AC por
 commit (`feat(flota/modulo): descripción [AC-XX-YY]`, §9.2). **Exactamente un checkbox
 por AC** y **ningún AC de las specs falta** (cualquiera de las dos cosas pone el gate en
 rojo). TODOS los ítems parten en `[ ]`: nada está hecho.
@@ -416,3 +416,22 @@ spec; ningún ítem del plan los da por resueltos):**
 4. **Solapamiento menor:** la atomicidad/granularidad del import CSV se pregunta en
    03 · p. 6 (bandeja del operador) y 07 · p. 4 (portal del cliente). Son dos superficies
    distintas del maestro, pero la semántica del lote conviene decidirla UNA vez.
+
+## Hito (h) — E1.5: rastreo, telemetría y export (§11, enmienda del 18-ago-2026)
+
+Familia NUEVA, asignada entera al motor 2 (`KILOPAN_FAMILIAS='^AC-(FPOR|FTEL)-'`).
+Deriva de `docs/PROMPT_MAESTRO_FLOTA.md` §11; la spec es la 09. Los dos últimos NO son
+construibles hoy y están en `packages/metodo/acs-bloqueados-flota.txt` con su razón:
+AC-FTEL-09 CONDICIONADO a la Pregunta 2 de la spec (sensor de frío) y AC-FTEL-10 de
+oráculo humano (DONE-adopción, dueño: Alexis — JAMÁS bloquea al loop, §9.2/§10).
+
+- [ ] (P1) Privacidad del rastreo (§7.8, §11): captura de posición SOLO con turno abierto — INSERT con turno cerrado rebota en BD, el chofer ve «rastreado desde HH:MM» y el aviso no es removible — spec: specs/flota/09-rastreo-telemetria-export.md [AC-FTEL-01]
+- [ ] (P1) `posiciones` como CAPTURA del §4.6: tabla en `tenant_template` con tenant_id compuesto, append-only, y los 6 invariantes pgTAP de la spec — spec: specs/flota/09-rastreo-telemetria-export.md [AC-FTEL-02]
+- [ ] (P1) La posición viaja por el MISMO motor de sync (§4.6): lote con `posiciones` + otros hechos entra 2xx, offline-first sin canal aparte — spec: specs/flota/09-rastreo-telemetria-export.md [AC-FTEL-03]
+- [ ] (P1) Torre de control honesta (§5.7, §11): mapa del gestor con última posición por vehículo y ANTIGÜEDAD del dato visible; umbral «desactualizada» de 10 min en constants.ts — spec: specs/flota/09-rastreo-telemetria-export.md [AC-FTEL-04]
+- [ ] (P1) El contratante jamás ve posiciones (§4.3): política en BD, 0 filas por el rol contratante, probado con el rol de app real — spec: specs/flota/09-rastreo-telemetria-export.md [AC-FTEL-05]
+- [ ] (P1) `telefono_gps` como implementación real de `ProveedorTelemetria` en el registro (§4.9, §11), con gate-ganchos actualizado — spec: specs/flota/09-rastreo-telemetria-export.md [AC-FTEL-06]
+- [ ] (P1) Export de PODs por rango (§11): rango + empresa ⇒ CSV es-CL (`;`, dd-mm-aaaa, CLP entero) con columna `temperatura` reservada y vacía — spec: specs/flota/09-rastreo-telemetria-export.md [AC-FTEL-07]
+- [ ] (P2) Eco-score v1 sin hardware (§11): consumo declarado vs `km_presupuesto_energia`; división por cero ⇒ estado vacío honesto; PROHIBIDO presentarlo como medición de manejo en tiempo real — spec: specs/flota/09-rastreo-telemetria-export.md [AC-FTEL-08]
+- [ ] (P2) CONDICIONADO a la Pregunta 2 (sensor de frío): captura de temperatura hacia la columna reservada — spec: specs/flota/09-rastreo-telemetria-export.md [AC-FTEL-09]
+- [ ] (P2) Validación en vivo (oráculo humano, DONE-adopción §10): Alexis ve el mapa moviéndose con un teléfono real en un turno real — spec: specs/flota/09-rastreo-telemetria-export.md [AC-FTEL-10]
