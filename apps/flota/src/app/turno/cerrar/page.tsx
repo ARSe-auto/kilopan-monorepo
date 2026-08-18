@@ -11,6 +11,7 @@ import {
 import { tipografia, superficie, grilla, enfasis } from "@kilopan/miga/tokens.ts";
 import { semantico, componente } from "@kilopan/miga/estructura.ts";
 import { pedir } from "../../../cliente/aparato.ts";
+import { EstadoDeRastreo } from "../estado-de-rastreo.tsx";
 
 // El cierre del turno (F5) [AC-FVEH-21] — §5.2-F5, §5.3, §5.7, §7.6.
 //
@@ -117,6 +118,9 @@ export default function CerrarTurno() {
       <main data-testid="turno-cerrado">
         <h1 style={titulo}>Turno cerrado</h1>
         <p style={cuerpo}>Listo por hoy. Gracias.</p>
+        {/* El cierre APAGA el rastreo del §7.8 [AC-FTEL-01]: no configurable ni removible, y
+            este es el único momento en que el aviso puede decir «apagado». */}
+        <EstadoDeRastreo turno={null} />
       </main>
     );
   }

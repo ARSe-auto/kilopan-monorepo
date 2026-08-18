@@ -13,6 +13,7 @@ import { semantico, componente } from "@kilopan/miga/estructura.ts";
 import { pedir } from "../../../cliente/aparato.ts";
 import { useContadorDeToques, enviarToquesFlujo } from "../../../cliente/toques-flujo.ts";
 import { semaforoDeSalida, type Semaforo } from "../../../../../../packages/nucleo-comun/src/energia.ts";
+import { EstadoDeRastreo } from "../estado-de-rastreo.tsx";
 
 // La apertura del turno (F3) [AC-FVEH-10] — §5.2-F3, §5.3, §5.7, §7.6, §0.
 //
@@ -73,6 +74,9 @@ export default function AbrirTurno() {
   const [carga, setCarga] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [abierto, setAbierto] = useState(false);
+  /** El turno recién abierto, para el aviso de rastreo del §7.8 [AC-FTEL-01]: no configurable
+   *  ni removible, y solo existe mientras haya un turno abierto de verdad. */
+  const [turnoAbierto, setTurnoAbierto] = useState<{ id: string; abiertoEn: string } | null>(null);
   /** Lo que le dejó dicho quien manejó antes ESTE vehículo (§5.2-F5 → §5.2-F3). */
   const [nota, setNota] = useState<string | null>(null);
   const contadorOdometro = useContadorDeToques();
@@ -117,7 +121,7 @@ export default function AbrirTurno() {
       const cuerpo = (await respuesta.json().catch(() => ({}))) as { mensaje?: string };
       return setError(cuerpo.mensaje ?? "No se pudo abrir el turno.");
     }
-    const { turno } = (await respuesta.json()) as { turno: { id: string } };
+    const { turno } = (await respuesta.json()) as { turno: { id: string; abierto_en: string } };
 
     // El chequeo pre y las dos lecturas viajan DESPUÉS de abrir, porque cuelgan del turno. Las
     // tres son CAPTURA: si alguna fallara, el turno ya está abierto y la persona puede trabajar
@@ -152,6 +156,7 @@ export default function AbrirTurno() {
       }).catch(() => null);
     }
 
+    setTurnoAbierto({ id: turno.id, abiertoEn: turno.abierto_en });
     setAbierto(true);
     return undefined;
   }
@@ -161,6 +166,7 @@ export default function AbrirTurno() {
       <main data-testid="turno-abierto">
         <h1 style={titulo}>Turno abierto</h1>
         <p style={cuerpo}>Ya podés salir. Buen viaje.</p>
+        <EstadoDeRastreo turno={turnoAbierto} />
       </main>
     );
   }

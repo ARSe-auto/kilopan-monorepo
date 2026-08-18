@@ -1161,6 +1161,24 @@
       }
     },
     {
+      "ruta": "/api/turnos/[id]/posiciones",
+      "archivo": "src/app/api/turnos/[id]/posiciones/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "turnos",
+          "columna": "id"
+        },
+        "nota": "Captura de un punto de rastreo en vivo [AC-FTEL-01]. El parámetro es el TURNO de B: capturarle una posición desde A le sumaría al vecino un punto GPS falso a su propia jornada, y —peor— un turno de B que YA cerró rebota igual por el trigger de privacidad del §7.8 (0074), así que un id de otro tenant no puede colarse ni disfrazado de 'turno abierto ajeno'. Contrato 404 y huella de B intacta; el fixture del vecino siembra un turno abierto para que el id sea REAL: contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin haber probado nada."
+      }
+    },
+    {
       "ruta": "/api/turnos/abierto",
       "archivo": "src/app/api/turnos/abierto/route.ts",
       "metodos": [

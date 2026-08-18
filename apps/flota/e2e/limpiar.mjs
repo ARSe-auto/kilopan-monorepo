@@ -11,8 +11,8 @@
 // todas las suites se enteran solas.
 //
 // LO QUE NO SE PUEDE BORRAR, y por eso no está en ninguna lista: `eventos`, `audit_trail`,
-// `reading`, `evidence` y `client_metric` son append-only (§7.4) y rebotan el DELETE con
-// 42501. Las suites que las miran cuentan por DIFERENCIA, no por total.
+// `reading`, `evidence`, `client_metric` y `posiciones` [AC-FTEL-01] son append-only (§7.4) y
+// rebotan el DELETE con 42501. Las suites que las miran cuentan por DIFERENCIA, no por total.
 
 /** De lo que apunta a lo apuntado: los defectos cuelgan de los chequeos, y los chequeos, los
  *  bloques, los turnos y los documentos cuelgan de los vehículos. Agregar una tabla acá es la
@@ -193,7 +193,8 @@ export async function limpiarOperacion(sql) {
   await sql(
     `delete from turnos t
       where not exists (select 1 from chequeos c where c.turno_id = t.id)
-        and not exists (select 1 from energy_entry e where e.turno_id = t.id)`,
+        and not exists (select 1 from energy_entry e where e.turno_id = t.id)
+        and not exists (select 1 from posiciones p where p.turno_id = t.id)`,
   );
   // `vehicle_certification` es PLANIFICACIÓN y se borra sin problema: desde AC-FVEH-14 tiene
   // FK a `vehiculos`, así que va antes.
