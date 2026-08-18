@@ -873,6 +873,52 @@ Hallazgos → ítems del plan.
 
 ---
 
+## 11. ETAPA E1.5 — RASTREO, TELEMETRÍA Y EXPORT (enmienda del dueño, 18-ago-2026)
+
+Decisión de Alexis (18-ago-2026, en la sesión de supervisión): el sitio imotion.cl vende la
+«Plataforma i Motion» con GPS y telemetría, y esa plataforma ES esta app. Las funciones que el
+§3 dejó FUERA del MVP y que el sitio promete pasan a ser **compromiso de producto**: se
+construyen como etapa E1.5, sobre el MVP ya terminado (190/211 ACs; lo restante del E1 es
+oráculo humano/producción). La lista FUERA del §3 no se reescribe — esta sección la enmienda
+para los seis puntos de abajo y SOLO para ellos.
+
+**Principio de la etapa: primero lo que no necesita hardware.** El teléfono del chofer ya corre
+la PWA y trae GPS; la telemetría OBD/OEM y los sensores de frío necesitan proveedor y quedan
+CONDICIONADOS a decisión del dueño (preguntas en la spec 09), con su esquema listo.
+
+1. **Posición en vivo por el teléfono del chofer** — durante TURNO ABIERTO, jamás fuera de él.
+   Captura best-effort por el motor de sync existente (§4.6: la posición es CAPTURA, 2xx
+   siempre, cola offline); precisión y timestamp del dispositivo. Ley 21.719 (§7.8): base de
+   licitud = ejecución del contrato, minimización = solo en turno, y el chofer VE en su propia
+   app que está siendo rastreado y desde cuándo — un rastreo que el rastreado no puede ver está
+   prohibido por diseño.
+2. **Torre de control con mapa de flota** — pantalla del gestor: última posición conocida de
+   cada vehículo en ruta, con antigüedad del dato SIEMPRE visible (una posición de hace 40 min
+   presentada como «en vivo» es una mentira de UI; el §5.7 manda estados honestos). Sin
+   cobertura, la posición envejece y la UI lo dice — el mapa degrada, no inventa.
+3. **Telemetría automática como implementación del gancho §4.9** — `telefono_gps` se registra
+   como implementación REAL de `ProveedorTelemetria` (hasta hoy solo «declarada»). La regla E1
+   «una sola implementación» queda enmendada así: las implementaciones viven en el REGISTRO por
+   datos, y activar una nueva jamás toca las pantallas (§4.6, flujo por datos). OBD/OEM (EV48
+   vía e-auto) sigue siendo punto de extensión: entra cuando el dueño elija proveedor.
+4. **Temperatura de frío** — el DDL (`thermal_profile`/`alarm_rule`) ya existe DDL-only; la
+   captura y la UI entran CONDICIONADAS a la elección de sensor/proveedor (pregunta al dueño).
+   Mientras tanto, el export del POD (punto 5) reserva la columna: el día que exista el dato,
+   el export no cambia de forma.
+5. **Export de PODs por rango** — función de usuario: rango de fechas + empresa contratante ⇒
+   archivo con las entregas, su evidencia (hash y referencia), parcialidades y devoluciones.
+   CSV es-CL (`;` como separador, fechas dd-mm-aaaa, CLP entero) — sin hardware, construible YA.
+6. **Score de eco-conducción v1, sin OBD** — derivado de lo que la app ya mide: consumo
+   DECLARADO contra `km_presupuesto_energia` de la ruta, por chofer y por semana. Es un score
+   de eficiencia honesto con los datos que existen; la versión con telemetría automática llega
+   con el punto 3/OBD. PROHIBIDO presentarlo como medición de manejo en tiempo real: la spec
+   nombra qué mide y qué no.
+
+Gate de la etapa: misma vara que el resto (§9): specs con Fuente: §11, un AC por commit,
+pgTAP/e2e donde toque, y el §7.8 auditado en el rastreo — el AC de privacidad del punto 1 es
+P1, no opcional. El sitio puede publicar estas funciones como «en incorporación» citando esta
+sección; la sesión del sitio decide el encuadre exacto con su verificador de hechos.
+
 ## Anexo A — Contexto de negocio (para el planificador; no es alcance)
 
 - **e-auto** vende los furgones (Gecko EV48: CATL LFP 41,86 kWh, 1.375 kg, 6,2 m³,
