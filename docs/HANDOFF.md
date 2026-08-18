@@ -1,13 +1,24 @@
-# HANDOFF — tres motores vivos y construyendo (16-Ago-2026 01:20)
+# HANDOFF — construcción automatizable TERMINADA; supervisión en régimen (18-Ago-2026 17:45)
 
-> **Arrancá con Fable 5 y esfuerzo max** (pedido explícito de Alexis a las 16:45).
+> **Arrancá con Fable 5 y esfuerzo max** (pedido explícito de Alexis).
 >
-> **LO PRIMERO: los TRES motores están VIVOS y sanos.** Nada que destrabar al arrancar.
-> El motor 3, que el traspaso anterior dejó aparcado, lleva construyendo desde las 16:41.
-> **171 de 203 ACs cerrados · faltan 32.**
+> **LO PRIMERO: los TRES motores están en DONE LEGÍTIMO — no los relances a mano.**
+> **190 de 211 ACs cerrados.** Lo que resta NO lo cierra un builder: validaciones en vivo de
+> Alexis y pilotos en producción (oráculo humano/producción), FSEM condicionada a 4 preguntas
+> del dueño sin responder, y 2 FMIG atascados tras 3 intentos (diagnosticarlos antes de
+> desatascar). El centinela permanente (`~/bin/centinela-flota.sh`, log en
+> `~/centinela-flota.log`) vigila cada 10 min, relanza supervisores caídos y NO relanza motores
+> sin ítems construibles — cuenta por familia y descuenta oráculos, BLOQUEADO/CONDICIONADO y
+> la lista de atascados del worktree.
 >
-> Los tres worktrees tienen archivos sin comitear: es el WIP de los agentes en su AC actual,
-> **no lo commitees vos** — lo cierra cada motor con su propio commit al terminar.
+> **Reparto entre sesiones (18-ago):** motores/arnés/clusters + el artifact «i Motion en el
+> andén» → sesión agitated-satoshi; el paquete `~/compartido-imotion-app/` + copy + trato con
+> el sitio imotion.cl → sesión festive-lumiere. Las ramas motor2/motor3 ya están MERGEADAS en
+> specs-e1 (16-ago, con los 2 ACs duplicados reconciliados); los tres worktrees corren la
+> misma base.
+>
+> Las secciones de abajo son la historia del 15–16-ago: valen como diagnóstico y lecciones,
+> no como estado. La cifra de cada tabla vieja está superada por la de arriba.
 
 ## El mapa (verificar vivo antes de afirmar nada)
 
