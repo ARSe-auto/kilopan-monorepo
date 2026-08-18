@@ -163,3 +163,20 @@ archivo que gobierna a los motores queda intacto y ellos siguen sin poder tocar 
 > despertador de 4h30m al arrancar y traspasá ~5 min antes del límite actualizando este mismo
 > archivo. Reglas duras: un builder por worktree · lock `e2e-flota` antes de cualquier e2e
 > manual · commits solo con `-F <msg> -- <rutas>` · nada sin verificar se publica.
+
+## Insumo de producto (18-ago, vía la sesión del sitio imotion.cl): el GPS prometido
+
+El sitio imotion.cl publica HOY, como capacidad del complemento contratable «Plataforma
+i Motion»: «GPS de la flota — dónde está cada vehículo mientras la ruta ocurre» (portada,
+/app, /complementos, título SEO). Verificado contra este repo: **esa función no existe en la
+app** — no hay mapa ni tracking; `destinos.lat/lng` son datos (E1 produce solo
+`manual`/`sin_geo`; geocoding y VRP son E2) y la telemetría E1 es «declarada» por el operario
+(§3.E1.3). El claim del sitio sale del brief del propio Alexis, así que puede referirse a OTRO
+producto (hardware/proveedor GPS) y no a esta app: la sesión del sitio le llevó a Alexis la
+pregunta única (docs/INSUMO-10-3-APP.md en ~/imotion-web) — ¿ese GPS es de esta app o de otro
+producto?
+
+Para quien priorice el roadmap: si la respuesta es «de esta app», hay una promesa comercial
+en producción sin ningún AC que la respalde — sería trabajo de specs nuevas (E2 adelantado o
+integración), no un parche. No construir nada de esto sin esa respuesta. Relacionado: el
+renombre KiloRuta/FLOTA → «i Motion» en código también sigue pendiente de la orden de Alexis.
