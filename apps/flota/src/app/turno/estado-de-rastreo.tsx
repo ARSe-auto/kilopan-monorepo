@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { tipografia, superficie, semantico as colorSemantico } from "@kilopan/miga/tokens.ts";
+import { tipografia, superficie, grilla, semantico as colorSemantico } from "@kilopan/miga/tokens.ts";
+import { semantico as espacio } from "@kilopan/miga/estructura.ts";
 import { estadoDeRastreo } from "../../dominio/rastreo.ts";
 import { iniciarRastreo, type PosicionCruda } from "../../cliente/rastreo.ts";
 import { pedir } from "../../cliente/aparato.ts";
@@ -99,9 +100,25 @@ export function EstadoDeRastreo({ turno }: { turno: { id: string; abiertoEn: str
   }, [turno?.id]);
 
   return (
-    <p data-testid="rastreo-estado" role="status" style={estilo(estado.rastreando)}>
-      {estado.texto}
-    </p>
+    <>
+      <p data-testid="rastreo-estado" role="status" style={estilo(estado.rastreando)}>
+        {estado.texto}
+      </p>
+      {/* El §5.7 no pide silencio ante una posición sin confirmar: pide el contador REAL de la
+          cola, igual que `recarga/tarjeta-de-recarga.tsx` y `entrega/tarjeta-de-entrega.tsx`
+          [AC-FTEL-03] — gate-capturas-sin-rechazo.mjs. */}
+      {cola.length > 0 && (
+        <section data-testid="rastreo-por-sincronizar" style={banda}>
+          <p style={{ ...cuerpo, margin: 0 }}>Posición — por sincronizar</p>
+          <p style={{ ...pieDim, margin: 0 }}>
+            <span data-testid="contador-cola-rastreo" style={{ fontVariantNumeric: "tabular-nums" }}>
+              {cola.length}
+            </span>{" "}
+            {cola.length === 1 ? "punto esperando señal" : "puntos esperando señal"}
+          </p>
+        </section>
+      )}
+    </>
   );
 }
 
@@ -111,3 +128,15 @@ const estilo = (rastreando: boolean) => ({
   fontWeight: 600,
   color: rastreando ? colorSemantico.ok : superficie.textoDim,
 });
+
+const cuerpo = { fontSize: tipografia.cuerpo.tamano, color: superficie.texto };
+const pieDim = { fontSize: tipografia.pie.tamano, color: superficie.textoDim, margin: 0 };
+const banda = {
+  display: "grid",
+  gap: espacio.espacio.entreControles,
+  marginTop: espacio.espacio.entreControles,
+  padding: `${grilla.base}px`,
+  borderRadius: grilla.radio,
+  background: superficie.tarjeta,
+  border: `1px solid ${superficie.hairline}`,
+};

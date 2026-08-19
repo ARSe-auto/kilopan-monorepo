@@ -115,6 +115,9 @@ test("[AC-FTEL-03] sin red la posición se encola, y al volver la señal el repl
     await posicionesDelTurno(turnoId),
     "sin señal no aterrizó nada, que es el punto (§4.6)",
   ).toBe(antesDeCortar);
+  // El §5.7 pide el contador REAL de la cola, no silencio — gate-capturas-sin-rechazo.mjs.
+  await expect(page.getByTestId("rastreo-por-sincronizar")).toBeVisible();
+  await expect(page.getByTestId("contador-cola-rastreo")).toHaveText("1");
 
   // Vuelve la señal. NADIE toca la pantalla: el replay-on-online del §4.7 es el camino principal.
   await page.context().setOffline(false);

@@ -79,9 +79,21 @@ ver que está siendo rastreado.
       Arica y Punta Arenas entran; (5) los dos relojes por separado y el teléfono adelantado
       NO rebota (§4.2); (6) `fuente` enum cerrado y precisión de 900 m que entra igual.
       `check.sh --full --app=flota` VERDE (18 pasos OK, 0 fallidos).
-- [ ] (P1) La posición viaja por el MISMO motor de sync (§4.6): lote con `posiciones` +
+- [x] (P1) La posición viaja por el MISMO motor de sync (§4.6): lote con `posiciones` +
       capturas mezcladas ⇒ 2xx siempre; sin red encola y el replay-on-online la aterriza;
       e2e móvil offline→online con la cola verificada — oráculo: CI [AC-FTEL-03]
+      Probado: e2e/rastreo-outbox.spec.ts (offline→online, lote mixto posiciones+metricas
+      2xx, idempotencia por client_uuid); unit gate-capturas-sin-rechazo.test.mjs (12/12).
+      El AC-ABIERTO que dejó f8ca264 eran DOS rojos del mismo defecto, no dos defectos:
+      `estado-de-rastreo.tsx` capturaba por el outbox pero nunca mostraba «por
+      sincronizar» con el contador real de la cola (§5.7) — y como
+      `gate-capturas-sin-rechazo.mjs` corre su chequeo en el top-level del módulo,
+      hasta IMPORTARLO desde el test (`gate-capturas-sin-rechazo.test.mjs`) heredaba el
+      `process.exit(1)`, tumbando la suite entera antes de correr un solo test. Se agregó
+      la sección «Posición — por sincronizar» (mismo patrón que
+      `recarga/tarjeta-de-recarga.tsx` y `entrega/tarjeta-de-entrega.tsx`) y una
+      aserción nueva en rastreo-outbox.spec.ts que la ejercita en el tramo offline.
+      `check.sh --full --app=flota` VERDE (18 pasos OK, 0 fallidos).
 - [ ] (P1) Torre de control honesta (§5.7, §11): mapa del gestor con última posición por
       vehículo en ruta y ANTIGÜEDAD visible; posición de más de 10 min se marca
       «desactualizada» (umbral en constants.ts, familia canónica §0); sin posiciones ⇒
