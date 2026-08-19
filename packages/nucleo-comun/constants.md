@@ -28,6 +28,7 @@ escrito fuera del archivo canónico pone el build en rojo (`db/flota/gate-consta
 | `LABELS` | largo_max = navegacion = 12 · titulo = 24 · descripcion = 40 · requiere_singular_y_plural = true · caracteres_prohibidos = `#` · `$` · `%` · `;` · `<` · `=` · `>` | Labels renombrables por el tenant (§0, §4.4, §5.1). */ |
 | `PIN` | digitos = 4 · hash = `argon2id` · intentos_hasta_bloqueo = 5 · ambito_del_bloqueo = `usuario` · backoff = `server-side` · backoff_inicial_segundos = 30 · backoff_factor = 2 · backoff_tope_segundos = 900 · backoff_se_resetea_con_acierto = true | PIN de operario (§0, §4.3). */ |
 | `PLAZOS_LEGALES` | pago_dias = 30 · reclamo_factura_dias = 8 · disputa_liquidacion_dias = 7 | Plazos legales chilenos (§0, Anexo A). Cableados: la app es para Chile. */ |
+| `RASTREO` | umbral_desactualizada_min = 10 | Torre de control del gestor (§0, §11, §5.7, AC-FTEL-04). El umbral que decide cuándo una posición deja de presentarse como fresca. Se mide contra `posiciones.recibida_en` —el reloj del SERVIDOR— y jamás contra `capturada_en` —el reloj del TELÉFONO—: ese es justamente el punto del doble reloj (§4.6, comentario de la 0075): un teléfono con la hora adulterada no puede maquillar la antigüedad que ve el gestor. |
 | `RELOJ` | drift_max_minutos = 5 | Doble reloj: el del dispositivo y el del servidor (§0, §4.6). */ |
 | `REVOCACION` | ventana_horas = 72 · flag_dentro = `post_revocacion` · flag_fuera = `post_revocacion_tardia` | Revocación de un dispositivo (§4.3, §5.4 F-F, centinela 4 del §9.3). El efecto es INMEDIATO del lado del servidor, pero el aparato pudo estar sin señal y traer capturas de antes: esas entran igual —la captura del terreno JAMÁS rebota (§4.2)— y se clasifican por cuán vieja es la ventana. El corte lo fija el maestro en el §4.3. |
 | `ROLES` | `admin_tenant` · `operador` · `chofer` · `responsable_carga` · `responsable_tecnico` · `cliente` | Enum FIJO de roles. Los packs de vertical NO crean roles (§0, §4.3). */ |
@@ -71,6 +72,7 @@ código se desactiva solo a la semana.
 | `PIN.digitos` | 4 | `[Pp][Ii][Nn][^\n]{0,24}\b4\s*(?:d[ií]gitos?|digits?)\b` |
 | `PIN.intentos_hasta_bloqueo` | 5 | `(?:lockout|intentos)[^\n]{0,24}\b5\b` |
 | `RELOJ.drift_max_minutos` | 5 | `drift[^\n]{0,24}\b5\b` |
+| `RASTREO.umbral_desactualizada_min` | 10 | `(?:desactualizad|antig[üu]edad)[^\n]{0,32}\b10\b` |
 | `INVITACION.expira_dias` | 7 | `(?:invitaci[oó]n|invitation)[^\n]{0,32}\b7\s*d[ií]as?\b` |
 | `PLAZOS_LEGALES.pago_dias` | 30 | `(?:21\.131|pago)[^\n]{0,24}\b30\s*d[ií]as?\b` |
 | `PLAZOS_LEGALES.reclamo_factura_dias` | 8 | `(?:19\.983|reclamo)[^\n]{0,24}\b8\s*d[ií]as?\b` |

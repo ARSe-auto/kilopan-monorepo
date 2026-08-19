@@ -24,6 +24,8 @@ import {
   FORMATOS,
   DTE,
   IDENTIDAD_DE_FILA,
+  RASTREO,
+  RELOJ,
   CIFRAS_VIGILADAS,
 } from "./constants.ts";
 
@@ -117,6 +119,13 @@ test("los formatos son de Chile y la PK es UUIDv7 de servidor", () => {
 
 test("la app jamás emite DTE (art. 97 N°4 CT)", () => {
   assert.equal(DTE.emite_la_app, false);
+});
+
+test("el umbral de la torre de control es mayor que el drift de reloj tolerado [AC-FTEL-04]", () => {
+  // Si el umbral fuera menor o igual al drift que el §4.6 tolera sin flag, una posición fresca
+  // con el reloj del teléfono apenas corrido ya nacería «desactualizada» — y la antigüedad se
+  // mide contra `recibida_en` (servidor), que ese drift ni siquiera toca.
+  assert.ok(RASTREO.umbral_desactualizada_min > RELOJ.drift_max_minutos);
 });
 
 test("cada cifra vigilada tiene un patrón válido que atrapa su propio valor", () => {

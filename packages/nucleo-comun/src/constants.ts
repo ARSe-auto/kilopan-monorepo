@@ -235,6 +235,20 @@ export const RELOJ = {
   drift_max_minutos: 5,
 } as const;
 
+/**
+ * Torre de control del gestor (§0, §11, §5.7, AC-FTEL-04).
+ *
+ * El umbral que decide cuándo una posición deja de presentarse como fresca. Se mide contra
+ * `posiciones.recibida_en` —el reloj del SERVIDOR— y jamás contra `capturada_en` —el reloj del
+ * TELÉFONO—: ese es justamente el punto del doble reloj (§4.6, comentario de la 0075): un
+ * teléfono con la hora adulterada no puede maquillar la antigüedad que ve el gestor.
+ */
+export const RASTREO = {
+  /** Más de esto sin una posición nueva ⇒ la UI la marca «desactualizada» (§5.7: el mapa
+   *  degrada, no inventa; una posición de hace 40 min mostrada como «en vivo» es una mentira). */
+  umbral_desactualizada_min: 10,
+} as const;
+
 /** PIN de operario (§0, §4.3). */
 export const PIN = {
   digitos: 4,
@@ -471,6 +485,11 @@ export const CIFRAS_VIGILADAS = [
   { nombre: "PIN.digitos", valor: 4, patron: String.raw`[Pp][Ii][Nn][^\n]{0,24}\b4\s*(?:d[ií]gitos?|digits?)\b` },
   { nombre: "PIN.intentos_hasta_bloqueo", valor: 5, patron: String.raw`(?:lockout|intentos)[^\n]{0,24}\b5\b` },
   { nombre: "RELOJ.drift_max_minutos", valor: 5, patron: String.raw`drift[^\n]{0,24}\b5\b` },
+  {
+    nombre: "RASTREO.umbral_desactualizada_min",
+    valor: 10,
+    patron: String.raw`(?:desactualizad|antig[üu]edad)[^\n]{0,32}\b10\b`,
+  },
   { nombre: "INVITACION.expira_dias", valor: 7, patron: String.raw`(?:invitaci[oó]n|invitation)[^\n]{0,32}\b7\s*d[ií]as?\b` },
   { nombre: "PLAZOS_LEGALES.pago_dias", valor: 30, patron: String.raw`(?:21\.131|pago)[^\n]{0,24}\b30\s*d[ií]as?\b` },
   { nombre: "PLAZOS_LEGALES.reclamo_factura_dias", valor: 8, patron: String.raw`(?:19\.983|reclamo)[^\n]{0,24}\b8\s*d[ií]as?\b` },
