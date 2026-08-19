@@ -135,6 +135,18 @@
       }
     },
     {
+      "ruta": "/api/eco-score",
+      "archivo": "src/app/api/eco-score/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Eco-score v1 sin hardware del gestor [AC-FTEL-08] — §11 punto 6. Sin parámetro de ruta: la lista sale entera de `ecoScoreSemanal(pool)`, que solo conoce el pool ya resuelto contra la BD del tenant de la sesión (mismo patrón que `/api/torre-de-control`, AC-FTEL-04). El daño de una fuga acá no es dinero: es el nombre y la eficiencia energética declarada de cada chofer de B, dato de desempeño laboral que el §7.8 exige minimizar igual que la posición GPS. El caso genérico va sin credencial de tenant (404 pelado) y con sesión de A y cabeceras apuntando a B: cero choferes ni rutas de B en la respuesta, porque `rutas`/`turnos`/`eventos`/`usuarios` son tablas de la BD física de A."
+      }
+    },
+    {
       "ruta": "/api/empresas",
       "archivo": "src/app/api/empresas/route.ts",
       "metodos": [
@@ -1454,6 +1466,18 @@
       "cruce": {
         "tipo": "sin_recurso",
         "nota": "La pantalla «Nuevo / Importar CSV» del portal [AC-FPOR-07]. Server Component ESTÁTICO: sin fetch, sin sesión, sin dato de ningún tenant — la mutación de alta (AC-FPOR-08) y el import (AC-FPOR-09) todavía no existen. Nada que un vecino B pueda cruzar contra algo que no lee ni escribe nada."
+      }
+    },
+    {
+      "ruta": "/eco-score",
+      "archivo": "src/app/eco-score/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla del eco-score del gestor [AC-FTEL-08]. No recibe identificador de recurso: es cliente puro que solo llama `pedir(\"/api/eco-score\")`, mismo criterio que `torre-de-control/page.tsx` (AC-FTEL-04) — el confinamiento por tenant y por rol vive ENTERO en ese endpoint, no acá. El cruce que aplica es el genérico de una pantalla sin recurso: identidad de B por los canales falsificables (host propio de A + cabeceras de tenant apuntando a B) y el shell servido no puede filtrar ni un chofer ni un porcentaje de B porque el HTML no trae la lista — la trae el fetch del cliente, que golpea el endpoint con SU PROPIA sesión."
       }
     },
     {
