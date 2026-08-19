@@ -114,9 +114,31 @@ ver que está siendo rastreado.
       (`torre-marcador-<patente>`) en vez del pin por defecto de Leaflet, indistinguible entre
       vehículos, para poder probar «degrada, no inventa» por patente en un tenant compartido.
       `check.sh --full --app=flota` VERDE (18 pasos OK, 0 fallidos).
-- [ ] (P1) El contratante jamás ve posiciones (§4.3): política en BD (0 filas por el
+- [x] (P1) El contratante jamás ve posiciones (§4.3): política en BD (0 filas por el
       camino del rol `cliente`) + el manifest del portal no incluye el mapa; suite de
       aislamiento extendida con la tabla nueva — oráculo: CI [AC-FTEL-05]
+      Probado: migración `0076_posiciones_sin_cliente.sql` — `posiciones` con RLS y las dos
+      políticas del patrón: `posiciones_base` permisiva y `sin_posiciones_para_el_cliente`
+      RESTRICTIVE **FOR ALL** (no solo `FOR SELECT`), que niega cuando
+      `app.current_role = 'cliente'`. No lleva rebanada por `empresa_cliente_id` como
+      `encargos`/`items`/`paradas`: una posición es del VEHÍCULO y un turno carga encargos de
+      varias empresas, así que el §4.3 la excluye ENTERA — mismo caso que `rutas` en la 0040.
+      `db/flota/suite-bd/confinamiento.test.mjs` la ejerce con el rol de app REAL
+      (`app_t_<slug>`, NOSUPERUSER, sin `BYPASSRLS`) sobre un fixture con vehículo, turno
+      abierto y una posición encima: el `cliente` con empresa declarada ve 0 filas, el
+      `cliente` SIN empresa declarada también (la política mira el ROL, no la empresa) y su
+      INSERT rebota por la política. El UPDATE no se asevera porque no hay nada que aseverar:
+      `posiciones` es append-only por REVOKE + trigger, y el 42501 le llega a todo rol. Su
+      POSITIVO —sin el cual «0 filas» lo cumpliría una política que devuelve cero siempre—
+      es el test del operador sin rol declarado, que sí ve exactamente esa posición. La misma
+      suite extiende a `posiciones` la verificación de «RLS + sus DOS políticas».
+      Del lado del portal, `apps/flota/src/dominio/manifest-cliente.test.ts` prueba que
+      ningún módulo de `MODULOS_PORTAL_CLIENTE` apunta a `/torre-de-control` (AC-FTEL-04),
+      con cualquier clave: la cuenta de «EXACTAMENTE 4 pantallas» detecta un quinto módulo
+      cualquiera, esta nombra CUÁL no puede ser ninguno de los cuatro. El 403 de
+      `/api/torre-de-control` (AC-FTEL-04) sigue siendo la primera capa; esta es la segunda,
+      la que no depende de que nadie recuerde el chequeo.
+      `check.sh --full --app=flota` VERDE (18 pasos OK, 0 fallidos).
 - [ ] (P1) `telefono_gps` en el registro por datos de `ProveedorTelemetria` (§4.9, §11):
       activar/desactivar la implementación es UPDATE de una fila, cero cambios de código
       de pantalla; el gate de ganchos pasa de exigir «solo declarada» a exigir «las del

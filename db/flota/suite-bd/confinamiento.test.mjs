@@ -143,7 +143,8 @@ before(async () => {
   // Un vehículo EN RUTA con una posición encima — el fixture de AC-FTEL-05: la torre de control
   // (AC-FTEL-04) es lo único que hoy lee `posiciones`, y es del gestor, jamás del contratante.
   id.vehiculo = (
-    await una("insert into vehiculos (patente, tipo) values ('CF-1234', 'furgon') returning id::text as id")
+    // La patente va sin guion: `vehiculos_patente_normalizada` (0016) exige `^[A-Z0-9]{4,12}$`.
+    await una("insert into vehiculos (patente, tipo) values ('CFTL05', 'furgon') returning id::text as id")
   ).id;
   const config = (await una("select crear_config_version('fixture AC-FTEL-05')::text as id")).id;
   id.turno = (
@@ -230,15 +231,29 @@ test("[AC-FTEL-05] el contratante no ve NINGUNA posición (§4.3): 0 filas, con 
     assert.equal(posiciones.length, 0, "el contratante ve posiciones del vehículo");
   });
 
-  // Y tampoco puede escribir: RESTRICTIVE FOR ALL, no solo FOR SELECT (mismo criterio que
-  // `empresa_del_cliente` en la 0040 — esto es defensa en profundidad, hoy ningún camino de
-  // escritura del `cliente` toca `posiciones`).
+  // Sin empresa declarada tampoco: la política mira el ROL, no la empresa, así que el que
+  // olvidó declarar la suya no se cuela por el hueco que sí abriría un `empresa_cliente_id`
+  // nulo en las otras cuatro tablas.
+  await comoCliente(null, async () => {
+    const posiciones = await app.sql("select id::text as id from posiciones");
+    assert.equal(posiciones.length, 0, "un `cliente` sin empresa declarada ve posiciones");
+  });
+
+  // Y tampoco puede ESCRIBIR una: la política es RESTRICTIVE FOR ALL, no solo FOR SELECT, así
+  // que su `using` vale también de `with check` y el INSERT rebota (mismo criterio que
+  // `sin_rutas_para_el_cliente` en la 0040). Defensa en profundidad: hoy ningún camino de
+  // escritura del contratante toca `posiciones` — el que captura es el chofer.
+  // El UPDATE no se prueba acá porque no hay nada que probar: `posiciones` es append-only y
+  // el rol de app no tiene el privilegio para NINGÚN rol de aplicación (42501 antes de RLS).
   await comoCliente(id.suya, async () => {
-    const escritura = await app.sql(
-      "update posiciones set lat = lat where id = $1 returning 1",
-      [id.posicion],
+    await assert.rejects(
+      () =>
+        app.sql("insert into posiciones (turno_id, lat, lng) values ($1, -33.46, -70.65)", [
+          id.turno,
+        ]),
+      /row-level security|permission denied/i,
+      "el contratante insertó una posición",
     );
-    assert.equal(escritura.length, 0, "el contratante escribió sobre una posición");
   });
 });
 
