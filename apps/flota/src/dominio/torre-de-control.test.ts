@@ -21,7 +21,7 @@ test("dos minutos: el texto es el literal del AC", () => {
   assert.equal(r.desactualizada, false);
 });
 
-test("exactamente el umbral: todavía NO es desactualizada — el AC pide MÁS de 10 min", () => {
+test(`exactamente el umbral: todavía NO es desactualizada — el AC pide MÁS de ${RASTREO.umbral_desactualizada_min} min`, () => {
   const ahora = new Date("2026-08-18T12:00:00.000Z");
   const recibidaEn = new Date(
     ahora.getTime() - RASTREO.umbral_desactualizada_min * 60_000,

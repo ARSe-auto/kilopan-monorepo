@@ -1112,6 +1112,18 @@
       }
     },
     {
+      "ruta": "/api/torre-de-control",
+      "archivo": "src/app/api/torre-de-control/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La torre de control del gestor [AC-FTEL-04] — última posición por vehículo EN RUTA. Sin parámetro de ruta: la lista sale entera de `vehiculosEnRuta(pool, ahora)`, que solo conoce el pool ya resuelto contra la BD del tenant de la sesión (mismo patrón que `/api/liquidaciones/[id]`). El daño de una fuga acá no es dinero ni PII de terceros: es la POSICIÓN GPS EN VIVO de los vehículos de B — con quién trabaja, qué rutas corre, dónde está su flota ahora mismo, información que el §7.8 (Ley 21.719) exige minimizar y que el §4.3 ya excluye de frente incluso para el propio contratante de B (AC-FTEL-05). El caso genérico va sin credencial de tenant (404 pelado antes de tocar `posiciones`) y con sesión de A pero cabeceras apuntando a B: cero patentes ni coordenadas de B en la respuesta."
+      }
+    },
+    {
       "ruta": "/api/turnos",
       "archivo": "src/app/api/turnos/route.ts",
       "metodos": [
@@ -1598,6 +1610,18 @@
       "cruce": {
         "tipo": "sin_recurso",
         "nota": "Pantalla F-B del §5.4. No recibe identificador de recurso —el código de la invitación llega por query o se teclea, y no es un id de la casa— así que el cruce que aplica es el genérico: identidad de B inyectada por los canales falsificables (host propio de A + cabeceras de tenant apuntando a B) y ni una cadena de B en el HTML servido. Importa más que en otras pantallas porque esta es la primera que un desconocido abre: si el shell filtrara el slug o la base del vecino, lo haría ante alguien que todavía no es de ninguna de las dos empresas."
+      }
+    },
+    {
+      "ruta": "/torre-de-control",
+      "archivo": "src/app/torre-de-control/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla del mapa de flota del gestor [AC-FTEL-04]. No recibe identificador de recurso: es cliente puro que solo llama `pedir(\"/api/torre-de-control\")`, mismo criterio que `liquidaciones/page.tsx` (AC-FTAR-07) — el confinamiento por tenant y por rol vive ENTERO en ese endpoint, no acá. El cruce que aplica es el genérico de una pantalla sin recurso: identidad de B por los canales falsificables (host propio de A + cabeceras de tenant apuntando a B) y el shell servido no puede filtrar ni una patente ni una coordenada de B porque el HTML no trae la lista — la trae el fetch del cliente, que golpea el endpoint con SU PROPIA sesión."
       }
     },
     {
