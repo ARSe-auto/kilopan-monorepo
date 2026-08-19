@@ -5,6 +5,7 @@ import { rutDeFixture } from "../../../db/flota/ruts-sinteticos.mjs";
 import { limpiarFixture, limpiarBandeja } from "./limpiar.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
 import { UNDO } from "../../../packages/nucleo-comun/src/constants.ts";
+import { origenDe } from "./puerto.ts";
 
 // Telemetría `toques_flujo` como CONTRATO, el mecanismo GEMELO del e2e que cuenta eventos
 // [AC-FRUT-19, AC-FPOD-14] — §5.3, §4.6, §10.
@@ -40,7 +41,9 @@ import { UNDO } from "../../../packages/nucleo-comun/src/constants.ts";
 // limpieza de las demás suites.
 const A = TENANTS.find((t) => t.slug === "hechos")!;
 const BD_A = bdDeTenant(A.slug);
-const EN_A = `http://${A.slug}.localhost:3311`;
+// Puerto desde `puerto.ts`, no clavado: con el 3311 a mano esta suite moría con ECONNREFUSED
+// en el segundo worktree (que escucha en el 3312) y el rojo parecía de AC-FRUT-19/AC-FPOD-14.
+const EN_A = origenDe(A.slug);
 type Conexion = { sql: <T = Record<string, string>>(t: string, p?: unknown[]) => Promise<T[]> };
 
 const SECRETO = secretoNuevo();

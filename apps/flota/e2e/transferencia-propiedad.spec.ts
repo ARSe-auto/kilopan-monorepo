@@ -5,6 +5,7 @@ import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
 import { con, bdDeTenant, CLUSTER_LOCAL, ROL_MIGRADOR } from "../../../db/flota/conectar.mjs";
 import { limpiarFixture } from "./limpiar.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
+import { PUERTO_E2E, origenDe } from "./puerto.ts";
 
 // Transferir propiedad con passkey/WebAuthn [AC-FIDN-13] — §5.4 F-H.
 //
@@ -17,10 +18,13 @@ import { TENANTS } from "./preparar-tenants.mjs";
 // WebAuthn que un teléfono, no un mock. Es el segundo brazo de la verificación de AC-FIDN-13:
 // el primero, sin oráculo externo, es `src/dominio/passkey.test.ts`.
 
-const PUERTO = 3311;
+// El puerto sale de `puerto.ts`, jamás clavado: este archivo fue uno de los dos que sobrevivió
+// al desclavado del 3311 (12-ago-2026) y por eso la suite entera moría con ECONNREFUSED en el
+// SEGUNDO worktree, que escucha en el 3312. El rojo parecía de AC-FIDN-13 y era del puerto.
+const PUERTO = PUERTO_E2E;
 const T = TENANTS.find((t) => t.slug === "transferencia")!;
 const HOST = `${T.slug}.localhost:${PUERTO}`;
-const ORIGEN = `http://${HOST}`;
+const ORIGEN = origenDe(T.slug);
 const BD = bdDeTenant(T.slug);
 
 type Conexion = { sql: <F = Record<string, string>>(t: string, p?: unknown[]) => Promise<F[]> };

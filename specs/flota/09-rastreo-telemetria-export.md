@@ -54,12 +54,16 @@ ver que está siendo rastreado.
 
 ## Criterios de aceptación
 
-- [ ] (P1) Privacidad del rastreo (§7.8, §11): el cliente captura posición SOLO con turno
+- [x] (P1) Privacidad del rastreo (§7.8, §11): el cliente captura posición SOLO con turno
       abierto — pgTAP: INSERT de posición con turno cerrado rebota en la BD (constraint
       contra `turnos.estado`), y e2e: al cerrar turno la captura se detiene y la app del
       chofer muestra «rastreo apagado»; con turno abierto muestra «en ruta, rastreado
       desde HH:MM». El aviso al chofer no es configurable ni removible por el tenant —
       oráculo: CI [AC-FTEL-01]
+      Probado: tabla `posiciones` (tenant 0074) con trigger `posiciones_exige_turno_abierto`;
+      pgTAP `0038_posiciones_solo_turno_abierto.sql` (rebote con turno cerrado, 0 filas,
+      append-only) y e2e `rastreo.spec.ts` (banner «rastreado desde HH:MM» con turno abierto,
+      «Rastreo apagado» al cerrar, aviso no removible). `check.sh --full --app=flota` VERDE.
 - [ ] (P1) `posiciones` como CAPTURA del §4.6: nace en `tenant_template` con tenant_id
       horneado, append-only (UPDATE/DELETE ⇒ 42501 también para el migrador), idempotencia
       por `client_uuid` (replay doble ⇒ una fila), caja Chile en el CHECK y doble reloj —

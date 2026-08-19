@@ -425,7 +425,7 @@ construibles hoy y están en `packages/metodo/acs-bloqueados-flota.txt` con su r
 AC-FTEL-09 CONDICIONADO a la Pregunta 2 de la spec (sensor de frío) y AC-FTEL-10 de
 oráculo humano (DONE-adopción, dueño: Alexis — JAMÁS bloquea al loop, §9.2/§10).
 
-- [ ] (P1) Privacidad del rastreo (§7.8, §11): captura de posición SOLO con turno abierto — INSERT con turno cerrado rebota en BD, el chofer ve «rastreado desde HH:MM» y el aviso no es removible — spec: specs/flota/09-rastreo-telemetria-export.md [AC-FTEL-01]
+- [x] (P1) Privacidad del rastreo (§7.8, §11): captura de posición SOLO con turno abierto — INSERT con turno cerrado rebota en BD, el chofer ve «rastreado desde HH:MM» y el aviso no es removible — spec: specs/flota/09-rastreo-telemetria-export.md [AC-FTEL-01] — probado: pgTAP 0038 (rebote + append-only) y e2e rastreo.spec.ts (banner con turno abierto, «Rastreo apagado» al cerrar); `check.sh --full --app=flota` VERDE
 - [ ] (P1) `posiciones` como CAPTURA del §4.6: tabla en `tenant_template` con tenant_id compuesto, append-only, y los 6 invariantes pgTAP de la spec — spec: specs/flota/09-rastreo-telemetria-export.md [AC-FTEL-02]
 - [ ] (P1) La posición viaja por el MISMO motor de sync (§4.6): lote con `posiciones` + otros hechos entra 2xx, offline-first sin canal aparte — spec: specs/flota/09-rastreo-telemetria-export.md [AC-FTEL-03]
 - [ ] (P1) Torre de control honesta (§5.7, §11): mapa del gestor con última posición por vehículo y ANTIGÜEDAD del dato visible; umbral «desactualizada» de 10 min en constants.ts — spec: specs/flota/09-rastreo-telemetria-export.md [AC-FTEL-04]
