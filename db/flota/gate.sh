@@ -76,9 +76,10 @@ paso "documentos del contrato: runbook de brechas con sus secciones y sus exigen
   node db/flota/gate-documentos.mjs
 
 # Los ganchos del §4.9 en su ESTADO exacto, que se pierde de dos formas que ningún test de base
-# atrapa: una pantalla para un gancho DDL-only (su UI es de E3) o una segunda implementación de
-# telemetría (E1 solo admite `declarada`). Las dos entran sin tocar una migración. [AC-FVEH-14]
-paso "ganchos §4.9: DDL-only sin pantalla y una sola implementación de telemetría" \
+# atrapa: una pantalla para un gancho DDL-only (su UI es de E3) o una implementación de
+# telemetría FUERA del registro de E1.5 (declarada + telefono_gps, §11, AC-FTEL-06). Las dos
+# entran sin tocar una migración. [AC-FVEH-14, AC-FTEL-06]
+paso "ganchos §4.9: DDL-only sin pantalla y solo las implementaciones del registro" \
   node db/flota/gate-ganchos-e1.mjs
 
 # `pin_destinatario` está VIVO en el enum y NINGÚN seed lo pone (§5.2 F4). Un test de base

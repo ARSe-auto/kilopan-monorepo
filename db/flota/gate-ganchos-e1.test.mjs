@@ -1,16 +1,23 @@
 #!/usr/bin/env node
-// Mutantes del gate de ganchos §4.9 [AC-FVEH-14].
+// Mutantes del gate de ganchos §4.9 [AC-FVEH-14, AC-FTEL-06].
 //
 // Un gate que solo se prueba contra el repo sano es un gate del que nadie sabe si dispara. Acá
-// se plantan los dos defectos que existe para atrapar —una pantalla de un gancho DDL-only y una
-// segunda implementación de telemetría— en un SANDBOX, nunca en el árbol real.
+// se plantan los defectos que existe para atrapar —una pantalla de un gancho DDL-only y una
+// implementación de telemetría FUERA del registro de E1.5 (declarada + telefono_gps)— en un
+// SANDBOX, nunca en el árbol real.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SIN_PANTALLA, FUENTES_DE_E4, CONFIANZAS_DE_E2, sinComentarios } from "./gate-ganchos-e1.mjs";
+import {
+  SIN_PANTALLA,
+  FUENTES_DE_E4,
+  FUENTES_DEL_REGISTRO,
+  CONFIANZAS_DE_E2,
+  sinComentarios,
+} from "./gate-ganchos-e1.mjs";
 
 const RAIZ = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
 const GATE = join(RAIZ, "db/flota/gate-ganchos-e1.mjs");
@@ -97,11 +104,24 @@ test("nombrar un gancho en un COMENTARIO no dispara", () => {
   assert.equal(codigo, 0, salida);
 });
 
-test("la fuente `declarada` NO dispara: es la única que E1 admite", () => {
-  const raiz = sandbox({
-    "apps/flota/src/.fixture-declarada.ts": 'export const fuente = "declarada";\n',
-  });
-  assert.equal(correr(raiz).codigo, 0);
+test("las fuentes DEL REGISTRO no disparan: declarada y telefono_gps son E1.5, no E4", () => {
+  // [AC-FTEL-06] El nombre se ARMA desde la lista, igual que el mutante de SIN_PANTALLA de más
+  // arriba: escrito literal, este archivo tendría que actualizarse a mano cada vez que el
+  // registro suma una implementación, y la que falte quedaría sin vigilancia.
+  for (const fuente of FUENTES_DEL_REGISTRO) {
+    const raiz = sandbox({
+      "apps/flota/src/.fixture-registro.ts": `export const fuente = "${fuente}";\n`,
+    });
+    assert.equal(correr(raiz).codigo, 0, `${fuente} disparó y no debería: está en el registro`);
+  }
+});
+
+test("el registro y las fuentes de E4 no se solapan", () => {
+  // La frontera que separa «E1.5 real» de «E4 entrando por la puerta de atrás» deja de
+  // significar algo el día que la misma fuente aparece en las dos listas.
+  for (const fuente of FUENTES_DEL_REGISTRO) {
+    assert.equal(FUENTES_DE_E4.includes(fuente), false, `${fuente} está en las dos listas`);
+  }
 });
 
 test("sin árbol de pantallas el gate lo DICE en vez de pasar en silencio", () => {
