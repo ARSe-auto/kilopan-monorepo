@@ -10,14 +10,20 @@
 //      un módulo que el maestro puso en E3 — sin tocar una sola migración, así que el pgTAP
 //      seguiría en verde.
 //
-//   2. `ProveedorTelemetria` es una interfaz con ÚNICA implementación `declarada`. En E1 no hay
-//      telemetría real (§3-FUERA: nada de OBD, OCPP ni API de fabricante). Una segunda
-//      implementación en el árbol es E4 entrando por la puerta de atrás, y con ella se cae la
-//      matriz de honestidad del §7.7: «prohibido prometer compliance con datos declarados»
-//      solo se puede sostener si se sabe de dónde salen los datos.
+//   2. `ProveedorTelemetria` es una interfaz cuyas implementaciones REALES viven en un REGISTRO
+//      POR DATOS (§4.9). En E1 admitía una sola —`declarada`—; la enmienda §11 (E1.5) sumó
+//      `telefono_gps`, porque el teléfono del chofer ya trae GPS y no exige hardware
+//      [AC-FTEL-06]. Lo que sigue FUERA es la telemetría de vehículo (§3-FUERA: nada de OBD,
+//      OCPP ni API de fabricante): una de esas en el árbol es E4 entrando por la puerta de
+//      atrás, y con ella se cae la matriz de honestidad del §7.7 —«prohibido prometer
+//      compliance con datos declarados» solo se puede sostener si se sabe de dónde salen los
+//      datos—. Por eso lo que se vigila es la lista de las PROHIBIDAS y no un conteo: el
+//      registro puede crecer con implementaciones sin hardware sin aflojar nada.
 //
 // Lo que este gate NO hace: mirar la base. Que las tablas existan vacías y que el CHECK de
-// honestidad rebote se prueba en `db/flota/pgtap/0005_ganchos_ddl_only.sql` (AC-FTEN-15).
+// honestidad rebote se prueba en `db/flota/pgtap/0005_ganchos_ddl_only.sql` (AC-FTEN-15); que
+// `telefono_gps` esté sembrada, que activarla sea un UPDATE y que sumarla NO afloje la matriz de
+// honestidad, en `db/flota/pgtap/0040_registro_de_telemetria.sql` (AC-FTEL-06).
 //
 // Uso: node db/flota/gate-ganchos-e1.mjs [--raiz=<ruta>]
 // Exit: 0 verde · 1 un gancho salió de su estado.
@@ -31,10 +37,29 @@ const RAIZ = raizArg ?? RAIZ_REPO;
 /** Las tablas que en E1 son DDL-only: esquema sí, pantalla no (§4.9). */
 export const SIN_PANTALLA = ["thermal_profile", "alarm_rule", "excursion", "disposition"];
 
-/** La única implementación de telemetría que E1 admite (§4.9, §3-FUERA). */
-export const FUENTE_UNICA = "declarada";
+/**
+ * Las implementaciones REALES del registro de `ProveedorTelemetria` (§4.9, §11) [AC-FTEL-06].
+ *
+ * Es el espejo en código de las filas que siembran las migraciones 0007 (`declarada`) y 0078
+ * (`telefono_gps`): la BD es la autoridad sobre cuál está ACTIVA —eso es un UPDATE de la fila—
+ * y esta lista solo dice cuáles tienen derecho a existir. Nombrarlas acá es lo que permite que
+ * el mensaje del gate diga contra qué se está comparando.
+ */
+export const FUENTES_DEL_REGISTRO = ["declarada", "telefono_gps"];
 /** Las que existen en el enum de `reading.fuente` y NO pueden tener implementación en E1. */
 export const FUENTES_DE_E4 = ["archivo_logger", "api_fabricante", "sonda_vehiculo", "obd", "ocpp"];
+
+// Las dos listas tienen que ser DISJUNTAS o el gate deja de significar algo: el día que alguien
+// mueva una fuente al registro sin sacarla de las de E4, la misma cadena estaría permitida y
+// prohibida a la vez, y cuál gana dependería del orden del bucle. [AC-FTEL-06]
+for (const fuente of FUENTES_DEL_REGISTRO) {
+  if (FUENTES_DE_E4.includes(fuente)) {
+    throw new Error(
+      `gate-ganchos-e1: «${fuente}» está en el registro Y en las fuentes de E4 a la vez — las ` +
+        "dos listas tienen que ser disjuntas o la frontera entre E1.5 y E4 no separa nada",
+    );
+  }
+}
 
 /**
  * Los valores de `destinos.geo_confianza` que solo puede producir el GEOCODING, que es E2
@@ -134,8 +159,8 @@ for (const arbol of ARBOL_DE_CODIGO) {
         .join("\n");
       if (new RegExp(String.raw`['"\`]${fuente}['"\`]`).test(lineasVivas)) {
         problemas.push(
-          `${rel} usa la fuente «${fuente}»: en E1 la única implementación de ` +
-            `ProveedorTelemetria es «${FUENTE_UNICA}» (§4.9, §3-FUERA)`,
+          `${rel} usa la fuente «${fuente}»: no está en el registro de ProveedorTelemetria ` +
+            `(«${FUENTES_DEL_REGISTRO.join("», «")}», §4.9, §11, §3-FUERA)`,
         );
         fallo = true;
       }

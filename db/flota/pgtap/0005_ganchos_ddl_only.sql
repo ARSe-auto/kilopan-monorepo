@@ -25,12 +25,14 @@ select is((select count(*)::int from disposition), 0, 'disposition nace vacía: 
 select is((select count(*)::int from excursion), 0, 'excursion nace vacía');
 
 -- La ÚNICA excepción declarada: el registro de la interfaz `ProveedorTelemetria`, que el §4.9
--- pide con exactamente una implementación en E1. No es un seed de negocio: es la declaración
--- de que la interfaz existe, y es lo que vuelve verificable la matriz de honestidad.
+-- pide con sus implementaciones REALES sembradas. No es un seed de negocio: es la declaración
+-- de que la interfaz existe, y es lo que vuelve verificable la matriz de honestidad. En E1 era
+-- una sola (`declarada`); la enmienda §11 (E1.5) sumó `telefono_gps`, que no exige hardware
+-- [AC-FTEL-06]. Lo que ese registro hace posible se prueba en `0040_registro_de_telemetria`.
 select results_eq(
-  $$ select fuente::text, activo from proveedor_telemetria $$,
-  $$ values ('declarada', true) $$,
-  'ProveedorTelemetria tiene UNA implementación registrada en E1: declarada (§4.9)'
+  $$ select fuente::text, activo from proveedor_telemetria order by fuente::text $$,
+  $$ values ('declarada', true), ('telefono_gps', true) $$,
+  'ProveedorTelemetria tiene registradas las implementaciones reales de E1.5 (§4.9, §11)'
 );
 
 -- --- La matriz de honestidad, VIVA (§7.7) --------------------------------------------------
@@ -46,8 +48,8 @@ select lives_ok(
 select throws_ok(
   $$ update alarm_rule set activa = true where tipo = 'cumulative' $$,
   '23514', null,
-  'ACTIVARLA con la única fuente en «declarada» rebota: una serie de números tecleados no ' ||
-  'sostiene «estuvo N minutos fuera de rango» (§7.7)'
+  'ACTIVARLA sin ninguna fuente que mida temperatura rebota: ni los números tecleados de ' ||
+  '«declarada» ni el GPS del teléfono sostienen «estuvo N minutos fuera de rango» (§7.7)'
 );
 
 select throws_ok(

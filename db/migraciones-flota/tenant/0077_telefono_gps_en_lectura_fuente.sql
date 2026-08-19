@@ -1,0 +1,21 @@
+-- 0077 — `telefono_gps` entra al enum `lectura_fuente` [AC-FTEL-06]
+--
+-- Fuente: §11 (enmienda E1.5 del dueño, 18-ago-2026) y §4.9 (ProveedorTelemetria es un
+-- REGISTRO POR DATOS: activar una implementación es una fila, no una rama en el código).
+--
+-- El §11 pide primero lo que NO necesita hardware: el teléfono del chofer ya trae GPS. Esa
+-- implementación ya existe y ya escribe —`posiciones.fuente` es del enum `posicion_fuente`
+-- (0074/0075, AC-FTEL-01/02)—, pero el REGISTRO de proveedores (`proveedor_telemetria.fuente`,
+-- 0007) se lleva por `lectura_fuente`, que se cerró en la 0006 con las fuentes que el §4.6
+-- conocía entonces y sin `telefono_gps`. Sin este valor, la implementación real del §11 no se
+-- puede registrar: quedaría viva en el producto y ausente del catálogo que la declara, que es
+-- justo lo que la matriz de honestidad del §7.7 existe para impedir.
+--
+-- VA SOLA EN SU MIGRACIÓN, y no es un capricho de orden: PostgreSQL no permite USAR un valor
+-- de enum en la misma transacción que lo agrega, y este runner corre cada migración dentro de
+-- su propia transacción (`db/flota/aplicar.mjs`). El `insert` que siembra la fila y la función
+-- que la lee viven en la 0078, que ya la encuentra commiteada.
+--
+-- `if not exists` porque este ALTER es lo único de la migración: si una corrida anterior murió
+-- entre el ALTER y el `insert` de `schema_migrations`, el reintento tiene que pasar, no chocar.
+alter type lectura_fuente add value if not exists 'telefono_gps';

@@ -48,11 +48,13 @@ select col_is_unique('reading', array['tenant_id', 'client_uuid'],
 select col_is_unique('reading', array['tenant_id', 'instrumento_id', 'sensor', 'ts_dispositivo'],
   'reading es idempotente además por (instrumento, sensor, ts): el logger no tiene client_uuid');
 
+-- `telefono_gps` la sumó la 0077 (§11, E1.5): el registro de ProveedorTelemetria se lleva por
+-- este enum, y sin el valor la implementación real del §11 no se podía registrar [AC-FTEL-06].
 select bag_eq(
   $$ select unnest(enum_range(null::lectura_fuente))::text $$,
   $$ values ('declarada'), ('archivo_logger'), ('api_fabricante'),
-            ('sonda_vehiculo'), ('obd'), ('ocpp') $$,
-  'el enum de fuente de lectura es el CERRADO del §4.6'
+            ('sonda_vehiculo'), ('obd'), ('ocpp'), ('telefono_gps') $$,
+  'el enum de fuente de lectura es el CERRADO del §4.6 más la fuente sin hardware del §11'
 );
 
 -- --- reference_document: la app JAMÁS emite DTE (§7.3, art. 97 N°4 CT) ---------------------

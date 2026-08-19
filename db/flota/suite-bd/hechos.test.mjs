@@ -348,9 +348,13 @@ test("[AC-FTEN-15] los ganchos DDL-only nacen sin seeds en la plantilla", async 
     );
     assert.equal(n, 0, `${tabla} nace con ${n} filas sembradas`);
   }
-  // La única fila declarada del §4.9: la interfaz ProveedorTelemetria con su implementación.
+  // Las únicas filas declaradas del §4.9: el registro de ProveedorTelemetria con sus
+  // implementaciones REALES. `telefono_gps` la sumó la 0078 (§11, E1.5) [AC-FTEL-06].
   const proveedores = await con(BD_PLANTILLA, ({ sql }) =>
-    sql("select fuente, activo from proveedor_telemetria"),
+    sql("select fuente, activo from proveedor_telemetria order by fuente"),
   );
-  assert.deepEqual(proveedores, [{ fuente: "declarada", activo: true }]);
+  assert.deepEqual(proveedores, [
+    { fuente: "declarada", activo: true },
+    { fuente: "telefono_gps", activo: true },
+  ]);
 });

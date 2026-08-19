@@ -139,10 +139,38 @@ ver que está siendo rastreado.
       `/api/torre-de-control` (AC-FTEL-04) sigue siendo la primera capa; esta es la segunda,
       la que no depende de que nadie recuerde el chequeo.
       `check.sh --full --app=flota` VERDE (18 pasos OK, 0 fallidos).
-- [ ] (P1) `telefono_gps` en el registro por datos de `ProveedorTelemetria` (§4.9, §11):
+- [x] (P1) `telefono_gps` en el registro por datos de `ProveedorTelemetria` (§4.9, §11):
       activar/desactivar la implementación es UPDATE de una fila, cero cambios de código
       de pantalla; el gate de ganchos pasa de exigir «solo declarada» a exigir «las del
       registro» sin aflojar el resto — oráculo: CI [AC-FTEL-06]
+      Probado: DOS migraciones y no una, porque PostgreSQL no deja USAR un valor de enum en la
+      misma transacción que lo agrega y el runner corre cada archivo en la suya —
+      `0077_telefono_gps_en_lectura_fuente.sql` mete el valor en `lectura_fuente` (el enum del
+      que cuelga `proveedor_telemetria.fuente`, tabla que existe desde la 0007 y que NO se
+      recrea) y `0078_telefono_gps_en_el_registro.sql` siembra la fila activa. Aplicadas sobre
+      las 43 bases del cluster + plantilla + canario, `migrar verificar` VERDE.
+      El «sin aflojar el resto» era el riesgo real y no era retórico: `honestidad_de_la_alarma()`
+      (0007) preguntaba `bool_and(fuente = 'declarada')`, o sea que una SEGUNDA fila activa
+      cualquiera la volvía permisiva sola — registrar el GPS del teléfono habría desbloqueado
+      las alarmas térmicas acumulativas de todos los tenants sin que nadie comprara una sonda y
+      sin poner rojo ningún test de la 0007. La 0078 cambia la pregunta a «¿alguna fuente activa
+      MIDE temperatura sola?», escrita por su complemento (`declarada`, `telefono_gps`): el
+      teléfono mide posición, no temperatura, así que tampoco sostiene «estuvo N minutos fuera
+      de rango» (§7.7).
+      pgTAP `0040_registro_de_telemetria.sql`: las dos filas del registro y ninguna de E4;
+      desactivar y reactivar `telefono_gps` con un UPDATE (con el `is` que verifica que la fila
+      mandó, no una constante); el UNIQUE que impide registrarla dos veces; y los tres casos de
+      la matriz — declarada+telefono_gps activas ⇒ 23514, `telefono_gps` como ÚNICA activa ⇒
+      23514 (no es «cuántas», es «si alguna mide») y el positivo con `sonda_vehiculo` registrada,
+      sin el cual un trigger que rechazara siempre pasaría los dos anteriores. pgTAP 0004 (enum
+      cerrado) y 0005 (registro + matriz) actualizados; `hechos.test.mjs` asevera las dos filas
+      en la plantilla.
+      Del lado del código, `gate-ganchos-e1.mjs` cambia `FUENTE_UNICA` por
+      `FUENTES_DEL_REGISTRO` y falla de arranque si esa lista y `FUENTES_DE_E4` se solapan —
+      con la misma fuente en las dos, cuál gana dependería del orden del bucle. Sus mutantes
+      arman el fixture DESDE la lista (una implementación futura del §11 no queda sin positivo)
+      y `FUENTES_DE_E4` sigue intacta: OBD/OCPP/`api_fabricante`/`sonda_vehiculo`/`archivo_logger`
+      siguen prohibidas en el árbol. `check.sh --full --app=flota` VERDE.
 - [ ] (P1) Export de PODs por rango (§11): gestor elige rango + empresa ⇒ CSV es-CL con
       separador `;`, fechas dd-mm-aaaa, CLP entero, resultado por ítem, devoluciones y
       hash de evidencia; columna `temperatura` presente y vacía; pgTAP del generador +
