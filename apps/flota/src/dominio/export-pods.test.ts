@@ -63,7 +63,7 @@ test("CSV: una fila con fecha dd-mm-aaaa, separador `;` y temperatura vacía", (
 test("CSV: sin binario, el hash sale vacío y no 'null'", () => {
   const csv = filasACsv([fila({ evidencia_tipo: "firma", evidencia_sha256: null })]);
   const [, linea] = csv.split("\n");
-  assert.match(linea, /;firma;;$/);
+  assert.match(linea!, /;firma;;$/);
 });
 
 test("CSV: un nombre de destino con `;` adentro se cita, no se rompe la columna", () => {

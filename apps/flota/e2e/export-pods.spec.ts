@@ -31,6 +31,8 @@ const DESDE = "2026-05-04";
 const HASTA = "2026-05-08";
 const FECHA_EN_RANGO = "2026-05-05";
 const FECHA_FUERA_DE_RANGO = "2026-06-01";
+// 32 bytes exactos (64 hex): `evidence_sha256_de_32_bytes` (0002) rebota cualquier hash corto.
+const SHA256_FOTO = "97a452f16151923f8329088f3d9acf40ca451b158e074206a2122fefb9d3bda4";
 
 let empresaId = "";
 let esperadas = 0;
@@ -95,11 +97,13 @@ test.beforeAll(async () => {
 
     // La evidencia de ESA parada: una firma sin binario y una foto con sha256 — el CSV toma la
     // MÁS RECIENTE (la foto), y el caso "sin binario" ya lo cubre el unit de dominio.
+    // El hash va con los 32 bytes exactos que exige `evidence_sha256_de_32_bytes` (0002): un
+    // sha256 real, no un valor corto de relleno.
     await c.sql(
       `insert into evidence (tipo, objeto_tabla, objeto_id, sha256, capturada_en, tz_offset_min)
        values ('firma', 'paradas', $1, null, timestamptz '2026-05-05 10:00:00-04', -240),
-              ('foto', 'paradas', $1, decode('a3f5b1', 'hex'), timestamptz '2026-05-05 10:05:00-04', -240)`,
-      [parada!.id],
+              ('foto', 'paradas', $1, decode($2, 'hex'), timestamptz '2026-05-05 10:05:00-04', -240)`,
+      [parada!.id, SHA256_FOTO],
     );
 
     // Un ítem de la empresa VECINA en la MISMA parada: no puede colarse cuando el filtro es
@@ -159,7 +163,7 @@ test("[AC-FTEL-07] CSV es-CL con el resultado por ítem, filtrado por rango y em
   // (la foto más reciente, con su hash) — cada fila la lleva porque comparten parada.
   for (const linea of filas) {
     expect(linea.startsWith("05-05-2026;Export PODs SpA;")).toBeTruthy();
-    expect(linea).toContain(";foto;a3f5b1;");
+    expect(linea).toContain(`;foto;${SHA256_FOTO};`);
     // Columna `temperatura` reservada y vacía: la línea termina en `;` (§11 punto 4).
     expect(linea.endsWith(";")).toBeTruthy();
   }

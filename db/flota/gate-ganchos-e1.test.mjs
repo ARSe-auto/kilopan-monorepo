@@ -125,6 +125,30 @@ test("[AC-FTEL-06] el registro y las fuentes de E4 no se solapan", () => {
   }
 });
 
+test("[AC-FTEL-07] el header HTTP Content-Disposition no dispara la tabla `disposition`", () => {
+  // El export de PODs por rango descarga un CSV y necesita el header estándar de descarga —no
+  // tiene nada que ver con la tabla DDL-only `disposition` (§4.9), pero comparte la palabra en
+  // inglés. Sin esta excepción, CUALQUIER descarga de archivo en el árbol de pantallas
+  // dispararía el gate en falso.
+  const raiz = sandbox({
+    "apps/flota/src/app/api/.fixture-descarga.ts":
+      'return new Response(csv, { headers: { "content-disposition": `attachment; filename="x.csv"` } });\n',
+  });
+  const { codigo, salida } = correr(raiz);
+  assert.equal(codigo, 0, salida);
+});
+
+test("[AC-FTEL-07] pero una referencia REAL a la tabla `disposition` sigue disparando", () => {
+  // El gemelo del test anterior: sin él, «el header no dispara» lo cumpliría un gate que dejó
+  // de mirar la tabla por completo.
+  const raiz = sandbox({
+    "apps/flota/src/app/api/.fixture-fuga.ts": "const filas = await pedir(`select * from disposition`);\n",
+  });
+  const { codigo, salida } = correr(raiz);
+  assert.equal(codigo, 1, salida);
+  assert.match(salida, /disposition/);
+});
+
 test("sin árbol de pantallas el gate lo DICE en vez de pasar en silencio", () => {
   const raiz = mkdtempSync(join(tmpdir(), "flota-ganchos-vacio-"));
   const { salida } = correr(raiz);

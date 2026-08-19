@@ -171,10 +171,26 @@ ver que está siendo rastreado.
       arman el fixture DESDE la lista (una implementación futura del §11 no queda sin positivo)
       y `FUENTES_DE_E4` sigue intacta: OBD/OCPP/`api_fabricante`/`sonda_vehiculo`/`archivo_logger`
       siguen prohibidas en el árbol. `check.sh --full --app=flota` VERDE.
-- [ ] (P1) Export de PODs por rango (§11): gestor elige rango + empresa ⇒ CSV es-CL con
+- [x] (P1) Export de PODs por rango (§11): gestor elige rango + empresa ⇒ CSV es-CL con
       separador `;`, fechas dd-mm-aaaa, CLP entero, resultado por ítem, devoluciones y
       hash de evidencia; columna `temperatura` presente y vacía; pgTAP del generador +
       e2e de descarga con conteos contra la BD — oráculo: CI [AC-FTEL-07]
+      Probado: `/api/export-pods` (admin_tenant/operador, mismo criterio que
+      `/api/torre-de-control` AC-FTEL-04) corre `podsPorRango` dentro de `enLectura` —la RLS de
+      la sesión filtra por tenant y por `items.empresa_cliente_id` sin join adicional (§7.2)— y
+      `filasACsv` arma el CSV es-CL: `;`, `dd-mm-aaaa` por split de texto (nunca `Date`+huso,
+      que correría la fecha un día), `resultado_item` con el vocabulario de `parada_resultado`
+      (0037: NULL es `pendiente`, nunca `fallo`), y la columna `temperatura` reservada y SIEMPRE
+      vacía. Unit `dominio/export-pods.test.ts` (resultado por ítem, fecha, escapado RFC 4180,
+      hash ausente sin binario). e2e `export-pods.spec.ts`: CSV con las 3 filas del rango+empresa
+      contra conteo real de la BD (éxito/parcial/fallo), la empresa vecina en la MISMA parada
+      filtrada afuera, 422 con parámetros inválidos y 404 pelado sin sesión. El export es un
+      route handler de Next (`apps/flota/src/app/api/export-pods/route.ts`) y su header estándar
+      `content-disposition` (para el nombre del archivo descargado) colisionaba en texto con la
+      tabla DDL-only `disposition` del §4.9 (gancho de frío, sin UI en E1) — `gate-ganchos-e1.mjs`
+      ahora descarta esa ocurrencia puntual antes de buscar la tabla, con su propio positivo y
+      negativo en `gate-ganchos-e1.test.mjs` para que la excepción no vuelva a aflojar la
+      detección real. `check.sh --full --app=flota` VERDE.
 - [ ] (P2) Eco-score v1 sin hardware (§11): consumo declarado vs presupuesto energético
       por chofer/semana; la pantalla nombra qué mide y qué NO («no es medición en tiempo
       real»); división por cero (sin rutas con presupuesto) ⇒ estado vacío, jamás un

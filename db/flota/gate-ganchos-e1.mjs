@@ -116,7 +116,13 @@ for (const ruta of archivos(join(RAIZ, ARBOL_DE_UI))) {
   const rel = relative(RAIZ, ruta);
   const codigo = sinComentarios(readFileSync(ruta, "utf8"));
   for (const tabla of SIN_PANTALLA) {
-    if (new RegExp(String.raw`\b${tabla}\b`).test(codigo)) {
+    // «Content-Disposition» es el header HTTP estándar para forzar la descarga de un archivo
+    // (AC-FTEL-07, export de PODs): comparte la palabra «disposition» con la tabla DDL-only
+    // del §4.9 por coincidencia del inglés — el header no lee ni escribe esa tabla, así que se
+    // descarta esa ocurrencia antes de buscar en vez de aflojar el `\b${tabla}\b` para todos.
+    const codigoRevisado =
+      tabla === "disposition" ? codigo.replace(/content-disposition/gi, "") : codigo;
+    if (new RegExp(String.raw`\b${tabla}\b`).test(codigoRevisado)) {
       problemas.push(
         `${rel} nombra «${tabla}» en el árbol de pantallas: en E1 ese gancho es DDL-only ` +
           "(§4.9) y su UI es de E3 (§3-FUERA)",
