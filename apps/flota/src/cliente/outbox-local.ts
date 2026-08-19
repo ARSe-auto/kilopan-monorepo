@@ -1,5 +1,6 @@
 import type { CapturaDeEntrega } from "../dominio/pod-terreno.ts";
 import type { CapturaDeRecarga } from "../dominio/recarga-terreno.ts";
+import type { CapturaDePosicion } from "../dominio/rastreo-terreno.ts";
 
 // El outbox DURABLE del aparato [AC-FPOD-08], particionado por (tenant, usuario) [AC-FPOD-09] —
 // §4.7.
@@ -214,6 +215,67 @@ export function guardarOutboxRecarga(
   registrarIdentidad(almacen, identidad);
   try {
     almacen.setItem(llaveOutboxRecarga(identidad), JSON.stringify(outbox));
+  } catch {
+    /* mismo criterio que `guardarOutbox`: persist() denegado o cuota llena no rebota. */
+  }
+}
+
+// ─── EL OUTBOX GENERALIZADO A LA POSICIÓN [AC-FTEL-03] — §4.6, §4.7, §4.2 ─────────
+//
+// «La posición viaja por el MISMO motor de sync» es literal: misma partición por (tenant,
+// usuario), mismo índice de identidades, la misma disciplina de «un almacén lleno o negado no
+// tumba la captura en curso» — solo cambia la LLAVE, para que un punto de rastreo jamás se lea
+// como si fuera una captura de POD o de recarga.
+
+/** La llave del outbox de POSICIÓN para una identidad — el mismo esquema que `llaveOutboxPod`/
+ *  `llaveOutboxRecarga` (§4.7), en su propia partición [AC-FTEL-03]. */
+export function llaveOutboxPosicion(identidad: Identidad): string {
+  return `flota.outbox.posicion.${identidad.tenant}.${identidad.usuario}`;
+}
+
+function esCapturaDePosicion(x: unknown): x is CapturaDePosicion {
+  if (typeof x !== "object" || x === null) return false;
+  const c = x as Partial<CapturaDePosicion>;
+  return (
+    typeof c.clientUuid === "string" &&
+    typeof c.turnoId === "string" &&
+    typeof c.lat === "number" &&
+    typeof c.lng === "number" &&
+    (c.precisionM === null || typeof c.precisionM === "number") &&
+    typeof c.tsDispositivo === "string" &&
+    typeof c.tzOffsetMin === "number"
+  );
+}
+
+/** Lo mismo que `leerOutbox`, para la cola de posición: un dato ilegible vuelve lista vacía antes
+ *  que un punto a medio armar, porque sin `clientUuid` no hay llave de idempotencia (§0)
+ *  [AC-FTEL-03]. */
+export function leerOutboxPosicion(almacen: AlmacenLocal, identidad: Identidad): CapturaDePosicion[] {
+  let crudo: string | null;
+  try {
+    crudo = almacen.getItem(llaveOutboxPosicion(identidad));
+  } catch {
+    return [];
+  }
+  if (crudo === null) return [];
+  let leido: unknown;
+  try {
+    leido = JSON.parse(crudo);
+  } catch {
+    return [];
+  }
+  return Array.isArray(leido) ? leido.filter(esCapturaDePosicion) : [];
+}
+
+/** Lo mismo que `guardarOutbox`, para la cola de posición [AC-FTEL-03]. */
+export function guardarOutboxPosicion(
+  almacen: AlmacenLocal,
+  identidad: Identidad,
+  outbox: readonly CapturaDePosicion[],
+): void {
+  registrarIdentidad(almacen, identidad);
+  try {
+    almacen.setItem(llaveOutboxPosicion(identidad), JSON.stringify(outbox));
   } catch {
     /* mismo criterio que `guardarOutbox`: persist() denegado o cuota llena no rebota. */
   }

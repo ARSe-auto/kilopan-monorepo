@@ -1,5 +1,6 @@
 import type { CapturaDeEntrega } from "../dominio/pod-terreno.ts";
 import type { CapturaDeRecarga } from "../dominio/recarga-terreno.ts";
+import type { CapturaDePosicion } from "../dominio/rastreo-terreno.ts";
 
 // El replay del outbox hacia el motor de sync [AC-FPOD-03] — §4.7 (replay-on-startup y
 // replay-on-online son el camino PRINCIPAL), §4.2, §5.2 F4, §5.7, §3.E1.7.
@@ -116,6 +117,48 @@ export async function replayarRecargas(
   const cuerpo = (await respuesta.json().catch(() => null)) as { acuses_recarga?: AcuseCrudo[] } | null;
   if (!cuerpo || !Array.isArray(cuerpo.acuses_recarga)) return [];
   return cuerpo.acuses_recarga
+    .filter((a) => a.aceptada === true && typeof a.client_uuid === "string")
+    .map((a) => a.client_uuid as string);
+}
+
+// ─── EL MISMO REPLAY, PARA LA COLA DE POSICIÓN [AC-FTEL-03] — §4.6, §4.7, §4.2 ────
+//
+// `replayarPosiciones` es el tercer gemelo de `replayar`: mismo algoritmo, mismo `Enviar`
+// inyectable, mismo endpoint — `POST /api/sync/capturas` acepta un `posiciones` junto a
+// `capturas`/`recargas`, y es ese único endpoint el que hace literal la frase «la posición viaja
+// por el MISMO motor de sync» (spec 09, AC-FTEL-03).
+
+/** Una posición en el cuerpo del §0/§4.6: snake_case, con su llave de idempotencia y el doble
+ *  reloj del aparato — mismo contrato que `paraElCable`/`paraElCableRecarga`. */
+function paraElCablePosicion(p: CapturaDePosicion) {
+  return {
+    client_uuid: p.clientUuid,
+    turno_id: p.turnoId,
+    lat: p.lat,
+    lng: p.lng,
+    precision_m: p.precisionM,
+    ts_dispositivo: p.tsDispositivo,
+    tz_offset_min: p.tzOffsetMin,
+  };
+}
+
+/** Manda la cola de posición y devuelve los `client_uuid` que el servidor CONFIRMÓ [AC-FTEL-03].
+ *  Mismo criterio que `replayar`/`replayarRecargas`: un lote que no llegó no vacía nada, y no hay
+ *  rama de error hacia afuera — el chofer no tiene nada que decidir sobre un reintento que es
+ *  trabajo del aparato. */
+export async function replayarPosiciones(
+  cola: readonly CapturaDePosicion[],
+  enviar: Enviar,
+): Promise<string[]> {
+  if (cola.length === 0) return [];
+  const respuesta = await enviar(
+    JSON.stringify({ posiciones: cola.map(paraElCablePosicion) }),
+  ).catch(() => null);
+  if (!respuesta || !respuesta.ok) return [];
+
+  const cuerpo = (await respuesta.json().catch(() => null)) as { acuses_posiciones?: AcuseCrudo[] } | null;
+  if (!cuerpo || !Array.isArray(cuerpo.acuses_posiciones)) return [];
+  return cuerpo.acuses_posiciones
     .filter((a) => a.aceptada === true && typeof a.client_uuid === "string")
     .map((a) => a.client_uuid as string);
 }

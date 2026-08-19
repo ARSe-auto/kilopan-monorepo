@@ -113,6 +113,7 @@ VALIDOS["19.888.444-8"] = "el TERCERO del export ARCO: ni una cadena suya puede 
 VALIDOS["21.987.654-8"] = "quien mide los toques en apps/flota/e2e/toques-flujo.spec.ts (AC-FRUT-19), propia y no prestada: la suite corre los cuatro flujos del módulo contra el tenant `hechos` y deja un manifiesto append-only, así que necesita su propia persona";
 VALIDOS["76.987.654-5"] = "la empresa cliente de apps/flota/e2e/toques-flujo.spec.ts (AC-FRUT-19), propia y no prestada: rango 76.xxx de persona jurídica";
 VALIDOS["11.222.333-9"] = "el chofer de la privacidad del rastreo (AC-FTEL-01), propio y no prestado: la suite tomaba `Object.keys(VALIDOS)[6]` directo, el mismo índice que `carga.spec.ts` usa para el firmante del andén — y como ese firmante sostiene su dispositivo con una firma (append-only), la segunda suite en correr moría con duplicate key en `personas_tenant_id_rut_key`. Dígito verificador DERIVADO por módulo 11: cuerpo 11222333 ⇒ suma ponderada 68, resto 2, dv 11−2 = 9";
+VALIDOS["13.444.555-6"] = "el chofer de apps/flota/e2e/rastreo-outbox.spec.ts (AC-FTEL-03), propio y no prestado: la suite abre un turno con GPS mockeado y corta la red, y comparte el tenant `hechos` con `rastreo.spec.ts` (AC-FTEL-01) — necesita su propio RUT para no chocar con duplicate key en `personas_tenant_id_rut_key`. Dígito verificador DERIVADO por módulo 11.";
 
 export const INVALIDOS_A_PROPOSITO = {
   "12.345.678-9": "el canónico con el dígito verificador cambiado: el caso que prueba que el módulo 11 se corre de verdad",

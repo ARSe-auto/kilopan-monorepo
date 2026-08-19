@@ -11,6 +11,11 @@ import {
   metricaBienFormada,
   type MetricaEntrante,
 } from "../../../../servidor/metricas-sync.ts";
+import {
+  aterrizarPosiciones,
+  posicionBienFormada,
+  type PosicionEntrante,
+} from "../../../../servidor/posiciones-sync.ts";
 import { exigirClaseCaptura } from "../../../../servidor/clasificacion-tablas.ts";
 
 // El endpoint de sync de capturas del POD [AC-FPOD-03] — §4.2, §0 (fila HTTP), §4.6, §5.2 F4.
@@ -76,6 +81,23 @@ function leerMetrica(cruda: CapturaCruda): Partial<MetricaEntrante> {
   };
 }
 
+/** La posición que trae el `posiciones` del cuerpo [AC-FTEL-03] — el gemelo de `leer`/`leerRecarga`
+ *  para el rastreo en vivo (§4.6, §11): mismas columnas snake_case que `posiciones`, con el doble
+ *  reloj del aparato que la 0075 dejó listo. */
+function leerPosicion(cruda: CapturaCruda): Partial<PosicionEntrante> {
+  const ts = cruda.ts_dispositivo === undefined ? null : new Date(String(cruda.ts_dispositivo));
+  return {
+    clientUuid: cruda.client_uuid === undefined ? undefined : String(cruda.client_uuid),
+    turnoId: cruda.turno_id === undefined ? undefined : String(cruda.turno_id),
+    lat: cruda.lat === undefined ? undefined : Number(cruda.lat),
+    lng: cruda.lng === undefined ? undefined : Number(cruda.lng),
+    precisionM:
+      cruda.precision_m === undefined || cruda.precision_m === null ? null : Number(cruda.precision_m),
+    tsDispositivo: ts ?? undefined,
+    tzOffsetMin: cruda.tz_offset_min === undefined ? undefined : Number(cruda.tz_offset_min),
+  };
+}
+
 /** El cierre de recarga que trae el `recargas` del cuerpo [AC-FPOD-13] — el gemelo de `leer`
  *  para la cola de recarga, sin `costo_clp`: el flujo del chofer no lo tiene (§4.8). */
 function leerRecarga(cruda: CapturaCruda): Partial<RecargaCapturaEntrante> {
@@ -122,18 +144,19 @@ export async function POST(peticion: Request) {
     cuerpo = {};
   }
 
-  // `capturas` (POD), `recargas` [AC-FPOD-13] y `metricas` [AC-FPOD-14] viajan en el MISMO
-  // cuerpo, y basta con que UNA de las tres venga: un lote que solo vacía la cola de telemetría
-  // no tiene por qué mandar `capturas` vacío para no rebotar.
+  // `capturas` (POD), `recargas` [AC-FPOD-13], `metricas` [AC-FPOD-14] y `posiciones`
+  // [AC-FTEL-03] viajan en el MISMO cuerpo, y basta con que UNA de las cuatro venga: un lote que
+  // solo vacía la cola de rastreo no tiene por qué mandar `capturas` vacío para no rebotar.
   const capturasProvistas = cuerpo.capturas !== undefined;
   const recargasProvistas = cuerpo.recargas !== undefined;
   const metricasProvistas = cuerpo.metricas !== undefined;
-  if (!capturasProvistas && !recargasProvistas && !metricasProvistas) {
+  const posicionesProvistas = cuerpo.posiciones !== undefined;
+  if (!capturasProvistas && !recargasProvistas && !metricasProvistas && !posicionesProvistas) {
     return Response.json(
       {
         error: "lote_invalido",
         mensaje:
-          "El replay manda la cola en `capturas`, `recargas` y/o `metricas` (§4.7): una lista, aunque tenga una sola.",
+          "El replay manda la cola en `capturas`, `recargas`, `metricas` y/o `posiciones` (§4.7): una lista, aunque tenga una sola.",
       },
       { status: 422 },
     );
@@ -153,6 +176,12 @@ export async function POST(peticion: Request) {
   if (metricasProvistas && !Array.isArray(cuerpo.metricas)) {
     return Response.json(
       { error: "lote_invalido", mensaje: "`metricas` viaja como lista (§4.7)." },
+      { status: 422 },
+    );
+  }
+  if (posicionesProvistas && !Array.isArray(cuerpo.posiciones)) {
+    return Response.json(
+      { error: "lote_invalido", mensaje: "`posiciones` viaja como lista (§4.7)." },
       { status: 422 },
     );
   }
@@ -195,6 +224,19 @@ export async function POST(peticion: Request) {
     );
   }
 
+  const posicionesCrudas = Array.isArray(cuerpo.posiciones) ? (cuerpo.posiciones as CapturaCruda[]) : [];
+  const posicionesLeidas = posicionesCrudas.map(leerPosicion);
+  if (!posicionesLeidas.every(posicionBienFormada)) {
+    return Response.json(
+      {
+        error: "posicion_mal_formada",
+        mensaje:
+          "Toda posición viaja con `client_uuid`, `turno_id`, `lat`/`lng` y el doble reloj (§0, §4.6).",
+      },
+      { status: 422 },
+    );
+  }
+
   // La huella del enrolamiento que capturó el lote [AC-FPOD-09] — §4.7. Ausente o mal formada ⇒
   // `null`, y el hecho se atribuye a la sesión que lo trae: NO es motivo de rebote, porque el
   // 99 % de los lotes los manda quien los capturó y una versión vieja de la PWA no manda el campo.
@@ -225,8 +267,21 @@ export async function POST(peticion: Request) {
       ? []
       : await aterrizarMetricas(g.acto.pool, g.acto.sesion, metricasLeidas as MetricaEntrante[]);
 
+  // La posición en vivo [AC-FTEL-03] — ídem, mismo endpoint, mismo POST: `posicionBienFormada` ya
+  // filtró lo que no es CAPTURA real; lo que llega acá aterriza salvo que el turno haya cerrado
+  // entre la captura y el replay, la única excepción del §4.2 (§7.8, 0074).
+  const acusesPosiciones =
+    posicionesLeidas.length === 0
+      ? []
+      : await aterrizarPosiciones(g.acto.pool, g.acto.sesion, posicionesLeidas as PosicionEntrante[]);
+
   return Response.json(
-    { acuses, acuses_recarga: acusesRecarga, acuses_metricas: acusesMetricas },
+    {
+      acuses,
+      acuses_recarga: acusesRecarga,
+      acuses_metricas: acusesMetricas,
+      acuses_posiciones: acusesPosiciones,
+    },
     { status: 200 },
   );
 }
