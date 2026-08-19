@@ -262,6 +262,18 @@
       }
     },
     {
+      "ruta": "/api/export-pods",
+      "archivo": "src/app/api/export-pods/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Export de PODs por rango del gestor [AC-FTEL-07] — §11 punto 4. `empresa_id` viaja por QUERYSTRING y no por segmento de URL, pero el filtro es el mismo caso que `/api/torre-de-control` (AC-FTEL-04): `podsPorRango` corre dentro de `enLectura`, que aplica la RLS de la SESIÓN sobre el pool ya resuelto contra la BD del tenant (mismo patrón que el resto de `servidor/`). Un `empresa_id` de la empresa vecina de OTRO tenant no encuentra fila —cada tenant es su propia base física, §4.1— y uno de una empresa vecina DENTRO del mismo tenant tampoco: `items.empresa_cliente_id` es la columna propia del §7.2, sin join que un cambio futuro pudiera dejar sin efecto. El daño de una fuga acá sería el detalle operativo de bultos entregados/rechazados y el hash de evidencia de la flota de B — no CLP (esa parte vive en `liquidacion_lineas`, fuera de este export) pero sí el §7.8: cuánto le entregan a cada contratante de B y con qué evidencia."
+      }
+    },
+    {
       "ruta": "/api/gobierno/auditoria",
       "archivo": "src/app/api/gobierno/auditoria/route.ts",
       "metodos": [

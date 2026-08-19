@@ -77,6 +77,9 @@ export const VALIDOS = {
   "9.111.222-1": "la dueña de la contracción por modo/entitlement del módulo de tarifas (AC-FTAR-18), propia y no prestada: la suite sella `config_version` en OFF y en ON sobre su propia base y necesita un `admin_tenant` que ninguna otra suite enrole. Dígito verificador DERIVADO por módulo 11: cuerpo 9111222 ⇒ suma ponderada 54, resto 10, dv 11−10 = 1",
   "76.303.404-6": "la empresa cliente de la contracción por modo/entitlement (AC-FTAR-18), propia y no prestada: rango 76.xxx de persona jurídica — la suite necesita SU propia contratante para que el 403 pruebe que la puerta cerró y no que no había nada que devolver. Dígito verificador DERIVADO por módulo 11: cuerpo 76303404 ⇒ suma ponderada 93, resto 5, dv 11−5 = 6",
   "76.111.222-8": "la empresa a la que se le intenta pactar un OTD fuera de rango (AC-FTAR-13), propia y no prestada: el pgTAP 0036 la usa DOS veces para los dos bordes del CHECK —49 y 101— y ninguna de las dos llega a crear fila, que es justamente lo que ese test comprueba",
+  "19.654.321-K": "la gestora del export de PODs por rango (AC-FTEL-07), propia y no prestada: la suite siembra encargos/items con los tres resultados por ítem (éxito, parcial, devuelto) contra el tenant compartido `ruteo_activo` y necesita su propia identidad para no chocar con las otras suites que ya viven ahí",
+  "76.678.234-5": "la empresa contratante del export de PODs por rango (AC-FTEL-07), propia y no prestada: rango 76.xxx de persona jurídica — la suite filtra el CSV por ESTA empresa y necesita que el ítem de una empresa vecina no se cuele, así que no puede ser una empresa que otra suite ya declaró",
+  "77.345.612-7": "la empresa VECINA del export de PODs por rango (AC-FTEL-07), propia y no prestada: un ítem suyo cuelga de la MISMA parada que la empresa del test, y el AC se prueba negativo si su ítem se cuela en el CSV filtrado por la otra empresa",
 };
 
 /**
