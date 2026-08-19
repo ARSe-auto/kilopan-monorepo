@@ -9,13 +9,18 @@
 // ─── LO QUE SE EJERCE ─────────────────────────────────────────────────────────────
 //
 // «Dentro del tenant, sesión `cliente` de la empresa X ⇒ 0 filas de la empresa Y en toda tabla
-// del módulo» (§9.3.3). Sobre las cuatro tablas que hoy existen —`encargos`, `items`, `paradas`
-// y `rutas`— y con el caso que decide si sirve de algo: la parada AGRUPADA, donde las dos
-// empresas comparten destino y cada una tiene que ver solo su pedazo.
+// del módulo» (§9.3.3). Sobre las cinco tablas que hoy existen —`encargos`, `items`, `paradas`,
+// `rutas` y `posiciones`— y con el caso que decide si sirve de algo: la parada AGRUPADA, donde
+// las dos empresas comparten destino y cada una tiene que ver solo su pedazo.
 //
 // Cada negativo lleva su positivo. Sin ellos, «0 filas de la otra empresa» lo cumpliría una
 // política que devuelve cero filas siempre, y el portal del contratante del módulo 07 nacería
 // mostrando una pantalla vacía que nadie sabría explicar.
+//
+// `posiciones` es distinta a las otras cuatro: no tiene `empresa_cliente_id` que recortar —una
+// posición es del VEHÍCULO, no de una empresa puntual—, así que su caso no tiene positivo propio
+// (no hay «su» posición para un contratante) y es 0 filas SIEMPRE, mismo patrón que `rutas`
+// [AC-FTEL-05, §4.3].
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { provisionar, desalta } from "../provisionar.mjs";
@@ -28,7 +33,17 @@ let tenant;
 let app;
 let migrador;
 /** Los ids del fixture, resueltos en `before`. */
-const id = { suya: "", ajena: "", suEncargo: "", encargoAjeno: "", ruta: "", parada: "" };
+const id = {
+  suya: "",
+  ajena: "",
+  suEncargo: "",
+  encargoAjeno: "",
+  ruta: "",
+  parada: "",
+  vehiculo: "",
+  turno: "",
+  posicion: "",
+};
 
 /**
  * Corre `fn` declarando quién pregunta, igual que `enLectura`/`enActo` de la app.
@@ -125,6 +140,25 @@ before(async () => {
     );
   }
 
+  // Un vehículo EN RUTA con una posición encima — el fixture de AC-FTEL-05: la torre de control
+  // (AC-FTEL-04) es lo único que hoy lee `posiciones`, y es del gestor, jamás del contratante.
+  id.vehiculo = (
+    await una("insert into vehiculos (patente, tipo) values ('CF-1234', 'furgon') returning id::text as id")
+  ).id;
+  const config = (await una("select crear_config_version('fixture AC-FTEL-05')::text as id")).id;
+  id.turno = (
+    await una(
+      "insert into turnos (vehiculo_id, config_version_id) values ($1, $2) returning id::text as id",
+      [id.vehiculo, config],
+    )
+  ).id;
+  id.posicion = (
+    await una(
+      "insert into posiciones (turno_id, lat, lng) values ($1, -33.45, -70.66) returning id::text as id",
+      [id.turno],
+    )
+  ).id;
+
   app = await conectar(tenant.bd, { usuario: tenant.rol, clave: tenant.clave });
 });
 
@@ -135,7 +169,7 @@ after(async () => {
 });
 
 test("[AC-FRUT-12] el patrón deja las tablas con RLS y sus DOS políticas", async () => {
-  for (const tabla of ["encargos", "items", "paradas", "rutas"]) {
+  for (const tabla of ["encargos", "items", "paradas", "rutas", "posiciones"]) {
     const [{ rls }] = await migrador.sql(
       "select relrowsecurity as rls from pg_class where relname = $1",
       [tabla],
@@ -188,6 +222,26 @@ test("[AC-FRUT-12] el contratante no ve NINGUNA ruta (§3.E1.10)", async () => {
   });
 });
 
+test("[AC-FTEL-05] el contratante no ve NINGUNA posición (§4.3): 0 filas, con el rol de app real", async () => {
+  await comoCliente(id.suya, async () => {
+    const posiciones = await app.sql("select id::text as id from posiciones");
+    // A diferencia de `rutas`, acá no hay un caso positivo que probar primero — no existe «su»
+    // posición para ningún contratante, es 0 filas para CUALQUIER empresa declarada.
+    assert.equal(posiciones.length, 0, "el contratante ve posiciones del vehículo");
+  });
+
+  // Y tampoco puede escribir: RESTRICTIVE FOR ALL, no solo FOR SELECT (mismo criterio que
+  // `empresa_del_cliente` en la 0040 — esto es defensa en profundidad, hoy ningún camino de
+  // escritura del `cliente` toca `posiciones`).
+  await comoCliente(id.suya, async () => {
+    const escritura = await app.sql(
+      "update posiciones set lat = lat where id = $1 returning 1",
+      [id.posicion],
+    );
+    assert.equal(escritura.length, 0, "el contratante escribió sobre una posición");
+  });
+});
+
 test("[AC-FRUT-12] un cliente SIN empresa declarada no ve nada: la falla es hacia el cierre", async () => {
   await comoCliente(null, async () => {
     for (const tabla of ["encargos", "items", "paradas"]) {
@@ -209,6 +263,13 @@ test("[AC-FRUT-12] sin rol declarado la política NO estorba: el operador ve tod
     assert.ok(ids.includes(id.suEncargo) && ids.includes(id.encargoAjeno));
     const rutas = await app.sql("select id::text as id from rutas");
     assert.equal(rutas.length, 1, "el operador no ve la ruta del día");
+
+    const posiciones = await app.sql("select id::text as id from posiciones");
+    assert.deepEqual(
+      posiciones.map((p) => p.id),
+      [id.posicion],
+      "el operador (sin rol `cliente`) no ve la posición del vehículo",
+    );
   });
 });
 
