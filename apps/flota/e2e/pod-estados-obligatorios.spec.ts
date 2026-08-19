@@ -38,19 +38,36 @@ const RUT_CHOFER = rutDeFixture(27);
 const RUT_PANADERIA = rutDeFixture(6);
 
 test.beforeAll(async () => {
+  // Idempotente a propósito: un retry de Playwright corre este beforeAll en un worker NUEVO
+  // (con OTRO secretoNuevo()), y la segunda pasada chocaba con personas(tenant_id, rut) y con
+  // el índice parcial del único dispositivo personal activo. El upsert deja vigente el
+  // secreto_hash de ESTE worker, que es el que sesionDe() siembra.
   await con(BD_A, async (c: Conexion) => {
     const [p] = await c.sql<{ id: string }>(
-      "insert into personas (rut, nombre) values ($1, 'Quien prueba los 4 estados') returning id::text as id",
+      `insert into personas (rut, nombre) values ($1, 'Quien prueba los 4 estados')
+       on conflict (tenant_id, rut) do update set nombre = excluded.nombre
+       returning id::text as id`,
       [RUT_CHOFER],
     );
     const [u] = await c.sql<{ id: string }>(
-      "insert into usuarios (persona_id, rol) values ($1, 'chofer') returning id::text as id",
+      `insert into usuarios (persona_id, rol)
+       select $1::uuid, 'chofer'
+       where not exists (select 1 from usuarios where persona_id = $1 and rol = 'chofer')
+       returning id::text as id`,
       [p!.id],
     );
+    const enroladoPor =
+      u?.id ??
+      (await c.sql<{ id: string }>(
+        "select id::text as id from usuarios where persona_id = $1 and rol = 'chofer' limit 1",
+        [p!.id],
+      ))[0]!.id;
     await c.sql(
       `insert into dispositivos (tipo, persona_id, secreto_hash, enrolado_por, enrolado_en, is_standalone, storage_persisted)
-       values ('personal', $1, $2, $3, now(), true, true)`,
-      [p!.id, hashDeSecreto(SECRETO), u!.id],
+       values ('personal', $1, $2, $3, now(), true, true)
+       on conflict (tenant_id, persona_id) where tipo = 'personal' and revocado_at is null
+       do update set secreto_hash = excluded.secreto_hash`,
+      [p!.id, hashDeSecreto(SECRETO), enroladoPor],
     );
   });
 });
@@ -197,7 +214,9 @@ test("[AC-FPOD-22] vacío accionable: la ruta terminada dice qué pasó y ofrece
 test("[AC-FPOD-22] skeleton instantáneo, y el aviso de demora recién pasados los 400 ms", async ({ page }) => {
   const { paradaId } = await rutaDeUnaEntrega("la ruta del aparato lento");
   await sesionDe(page);
-  await demorarAparato(page, 700);
+  // 1600 y no 700: el aviso vive entre los 400 ms y la respuesta del aparato. Con 700 la
+  // ventana era de 300 ms y bajo carga el polling del expect la perdía (pausa del 19-ago).
+  await demorarAparato(page, 1600);
 
   await page.goto(`${EN_A}/entrega?parada=${paradaId}`);
 
