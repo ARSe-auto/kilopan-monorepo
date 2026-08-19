@@ -249,19 +249,6 @@ export const RASTREO = {
   umbral_desactualizada_min: 10,
 } as const;
 
-/**
- * ProveedorTelemetria (§4.9, §11) — el catálogo de implementaciones REALES del registro por
- * datos. E1 admitía una sola (`declarada`, la que usa `EV.fuente_por_defecto`); la enmienda §11
- * (E1.5, 18-ago-2026) suma `telefono_gps` porque el teléfono del chofer ya trae GPS y no exige
- * hardware, a diferencia de OBD/OEM que sigue como punto de extensión (§3-FUERA) hasta que el
- * dueño elija proveedor. La FILA de `proveedor_telemetria` (migración 0077) es la que decide
- * si cada una está activa — esta lista es solo el catálogo cerrado de códigos válidos, la misma
- * frontera que vigila `db/flota/gate-ganchos-e1.mjs` del lado del código-fuente.
- */
-export const TELEMETRIA = {
-  proveedores_del_registro: ["declarada", "telefono_gps"],
-} as const;
-
 /** PIN de operario (§0, §4.3). */
 export const PIN = {
   digitos: 4,
