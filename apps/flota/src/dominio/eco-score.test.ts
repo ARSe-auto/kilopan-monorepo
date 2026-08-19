@@ -55,9 +55,9 @@ test("rutas sin presupuesto se descuentan del cálculo, no entran como cero", ()
     fila({ kmPresupuestoEnergia: null, kmRecorridos: 999 }),
   ]);
   assert.equal(resultado.length, 1);
-  const [r] = resultado;
-  assert.equal(r!.tipo, "ok");
-  if (r!.tipo === "ok") {
+  const r = resultado[0]!;
+  assert.equal(r.tipo, "ok");
+  if (r.tipo === "ok") {
     assert.equal(r.rutasConsideradas, 1);
     assert.equal(r.kmRecorridos, 100);
     assert.equal(r.consumoPct, 100);
@@ -67,9 +67,9 @@ test("rutas sin presupuesto se descuentan del cálculo, no entran como cero", ()
 test("un chofer que no manejó nada esa semana da 0%, no es división por cero", () => {
   const resultado = calcularEcoScoreSemanal([fila({ kmPresupuestoEnergia: 100, kmRecorridos: 0 })]);
   assert.equal(resultado.length, 1);
-  const [r] = resultado;
-  assert.equal(r!.tipo, "ok");
-  if (r!.tipo === "ok") assert.equal(r.consumoPct, 0);
+  const r = resultado[0]!;
+  assert.equal(r.tipo, "ok");
+  if (r.tipo === "ok") assert.equal(r.consumoPct, 0);
 });
 
 test("agrupa por chofer Y por semana — nunca mezcla choferes ni semanas distintas", () => {
@@ -90,9 +90,9 @@ test("agrupa por chofer Y por semana — nunca mezcla choferes ni semanas distin
 
 test("consumo puede superar el 100% del presupuesto — se muestra literal, sin techo inventado", () => {
   const resultado = calcularEcoScoreSemanal([fila({ kmPresupuestoEnergia: 100, kmRecorridos: 150 })]);
-  const [r] = resultado;
-  assert.equal(r!.tipo, "ok");
-  if (r!.tipo === "ok") assert.equal(r.consumoPct, 150);
+  const r = resultado[0]!;
+  assert.equal(r.tipo, "ok");
+  if (r.tipo === "ok") assert.equal(r.consumoPct, 150);
 });
 
 test("el aviso de la pantalla nombra qué mide y aclara que no es tiempo real (AC-FTEL-08)", () => {

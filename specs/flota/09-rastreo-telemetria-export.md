@@ -191,10 +191,26 @@ ver que está siendo rastreado.
       ahora descarta esa ocurrencia puntual antes de buscar la tabla, con su propio positivo y
       negativo en `gate-ganchos-e1.test.mjs` para que la excepción no vuelva a aflojar la
       detección real. `check.sh --full --app=flota` VERDE.
-- [ ] (P2) Eco-score v1 sin hardware (§11): consumo declarado vs presupuesto energético
+- [x] (P2) Eco-score v1 sin hardware (§11): consumo declarado vs presupuesto energético
       por chofer/semana; la pantalla nombra qué mide y qué NO («no es medición en tiempo
       real»); división por cero (sin rutas con presupuesto) ⇒ estado vacío, jamás un
       score inventado — oráculo: CI [AC-FTEL-08]
+      Probado: `calcularEcoScoreSemanal` (dominio, pura) agrega por chofer+semana solo las
+      rutas con `km_presupuesto_energia` positivo — las que no lo tienen cargado se
+      DESCUENTAN del denominador, jamás entran como cero — y sin ninguna ruta con
+      presupuesto devuelve `{ tipo: "vacio" }`, nunca un `consumoPct` inventado; unit
+      `dominio/eco-score.test.ts` (suma de dos rutas antes de dividir, división por cero,
+      rutas sin presupuesto descontadas, 0% real vs. vacío, agrupación por chofer Y semana,
+      consumo sobre 100% sin techo, y el texto exacto del aviso). `servidor/eco-score.ts`
+      arma las filas desde la BD real: quién manejó sale de `eventos` sobre `turno.abierto`
+      (no existe `turnos.chofer_id`, agregarlo es DDL de sesión supervisada) y el
+      kilometraje declarado es MAX-MIN de `reading` de magnitud `odometro` dentro de ESE
+      turno, nunca la proyección global `vehiculos.odometro` que mezclaría turnos de días
+      distintos. `/api/eco-score` con el mismo criterio de acceso que `/api/torre-de-control`
+      (admin_tenant/operador, AC-FTEL-04) sirve el aviso literal (`AVISO_ECO_SCORE`) junto a
+      los datos para que pantalla y dominio nunca puedan decir cosas distintas; la pantalla
+      `/eco-score` lo muestra siempre visible, con estado vacío accionable cuando no hay
+      ninguna fila. `check.sh --full --app=flota` VERDE.
 - [ ] (P2) CONDICIONADO a la Pregunta 2 (sensor de frío): captura de temperatura hacia
       `thermal_profile` y alarma por `alarm_rule` con la UI del §5.7 — no se construye
       hasta que el dueño elija hardware — oráculo: CI [AC-FTEL-09]
