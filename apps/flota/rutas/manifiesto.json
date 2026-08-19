@@ -1,0 +1,1712 @@
+{
+  "//": "GENERADO por rutas/generar.mjs desde apps/flota/src/app/** [AC-FTEN-26]. La LISTA de rutas no se edita a mano: se regenera con `node rutas/generar.mjs --escribir` y el gate la compara contra el árbol. Lo que SÍ se edita a mano es el `cruce` de cada entrada, que es cómo se monta contra ella el caso «sesión de A con IDs de B».",
+  "rutas": [
+    {
+      "ruta": "/",
+      "archivo": "src/app/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "El shell no recibe identificador de recurso, así que no hay recurso de B que pedirle: el cruce que sí aplica es inyectarle la identidad de B por los canales falsificables (host propio de A + cabeceras de tenant apuntando a B) y exigir que la respuesta siga siendo la de A, sin una sola cadena de B."
+      }
+    },
+    {
+      "ruta": "/agenda",
+      "archivo": "src/app/agenda/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla semanal de la agenda (§5.2-F1) [AC-FVEH-07]. No recibe identificador por URL: el vehículo se elige con un chip y todo lo que hace pasa por /api/agenda y /api/agenda/duplicar-semana, que tienen sus propios casos. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y pesa porque el HTML servido no puede traer ni el slug ni la base del vecino antes de que haya sesión."
+      }
+    },
+    {
+      "ruta": "/api/agenda",
+      "archivo": "src/app/api/agenda/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Agenda por vehículo [AC-FVEH-07]. El vehículo viaja como parámetro de CONSULTA y no de ruta, así que el manifiesto la ve sin `[id]`: el caso genérico va sin credencial y la guardia contesta 404 pelado antes de mirar el `vehiculo_id`. El POST MUTA y enciende el comparador de huella de la BD de B — un bloque escrito en el vecino no es solo una fuga: le ocupa una hora de un camión ajeno y le rebota el bloque legítimo que quiera poner ahí (centinela 5). El cruce CON un uuid de vehículo de B lo prueba la suite del módulo, que sabe cómo se ve uno."
+      }
+    },
+    {
+      "ruta": "/api/agenda/duplicar-semana",
+      "archivo": "src/app/api/agenda/duplicar-semana/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "«Duplicar semana» [AC-FVEH-07]. Sin parámetro de ruta: el vehículo y la semana van en el cuerpo. Es la mutación MÁS destructiva de la agenda —clona una semana entera de bloques— así que el comparador de huella de la BD de B es exactamente el guard que corresponde. Sin credencial no llega a mirar el cuerpo: 404 pelado."
+      }
+    },
+    {
+      "ruta": "/api/anden/identidad",
+      "archivo": "src/app/api/anden/identidad/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La rotación por PIN del andén [AC-FIDN-07]. No hay parámetro de ruta: el aparato sale del secreto que trae la sesión y el `pool` sale de `x-flota-tenant-bd`. Contra el vecino, ese `pool` apunta a la BD de B y el secreto de A no calza con ningún hash ahí — la ruta nunca llega a mirar un RUT ajeno y responde 404 pelado antes de tocar `sesiones_anden`. El daño que ese candado evita: sin él, un aparato de andén enrolado en A podría rotar la sesión de un operario CUALQUIERA de B con solo adivinarle el RUT (RUT y PIN responden idéntico a propósito), cerrándole el turno y firmando capturas del vecino a nombre de otro. MUTA (crea/actualiza `sesiones_anden`): el comparador de huella de la BD de B verifica que ninguna fila se mueva."
+      }
+    },
+    {
+      "ruta": "/api/chequeos",
+      "archivo": "src/app/api/chequeos/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Chequeo pre/post de un inspectable [AC-FVEH-04]. El inspectable viaja en el cuerpo y el tenant sale del ruteo, así que no hay parámetro de ruta: el caso genérico va sin credencial y la guardia contesta 404 pelado antes de mirarlo. El POST MUTA y enciende el comparador de huella de la BD de B — un chequeo escrito en el vecino no es solo una fuga: le inventa un defecto a un camión ajeno, y si alguien lo marca bloqueante le detiene la operación. El cruce CON un uuid de vehículo de B lo prueba la suite del módulo."
+      }
+    },
+    {
+      "ruta": "/api/chequeos/nota",
+      "archivo": "src/app/api/chequeos/nota/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La nota que el turno anterior dejó para el siguiente [AC-FVEH-21]. El vehículo viaja como parámetro de CONSULTA, así que el manifiesto la ve sin `[id]`: el caso genérico va sin credencial y la guardia contesta 404 pelado antes de mirarlo. Lo que se protege acá es lectura pura, pero de una nota escrita por un trabajador sobre el estado de un camión — leerla desde otro tenant es leer una conversación ajena."
+      }
+    },
+    {
+      "ruta": "/api/custodia/[id]",
+      "archivo": "src/app/api/custodia/[id]/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "custody_transfer",
+          "columna": "id"
+        },
+        "nota": "Corregir un traspaso de B desde una sesión de A ⇒ 404 y la BD de B sin cambios. Es la vía de SUPERSEDE: escribir por ella en la custodia del vecino le agrega una versión que dice que la anterior estaba mal, firmada por un autor de otra casa — y como las dos filas quedan, el daño no se deshace, se acumula."
+      }
+    },
+    {
+      "ruta": "/api/defectos/[id]",
+      "archivo": "src/app/api/defectos/[id]/route.ts",
+      "metodos": [
+        "PATCH"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "defectos",
+          "columna": "id"
+        },
+        "nota": "El ciclo del defecto [AC-FVEH-04]. Cerrar el defecto de B desde A le borra de la bandeja algo que su operación todavía no resolvió, y marcarlo bloqueante le detiene un camión — las dos direcciones son daño, no solo fuga. Contrato 404 y huella de B intacta. El fixture del vecino siembra un chequeo con su defecto para que el id sea REAL: contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin probar nada."
+      }
+    },
+    {
+      "ruta": "/api/destinos",
+      "archivo": "src/app/api/destinos/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Los destinos del tenant [AC-FRUT-01]. Solo lectura, sin parámetro. Expone a dónde reparte el vecino —sus locales, sus bodegas— que junto con la cartera de clientes es su operación completa. Cruce genérico: ni un nombre de destino de B en la respuesta de A."
+      }
+    },
+    {
+      "ruta": "/api/eco-score",
+      "archivo": "src/app/api/eco-score/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Eco-score v1 sin hardware del gestor [AC-FTEL-08] — §11 punto 6. Sin parámetro de ruta: la lista sale entera de `ecoScoreSemanal(pool)`, que solo conoce el pool ya resuelto contra la BD del tenant de la sesión (mismo patrón que `/api/torre-de-control`, AC-FTEL-04). El daño de una fuga acá no es dinero: es el nombre y la eficiencia energética declarada de cada chofer de B, dato de desempeño laboral que el §7.8 exige minimizar igual que la posición GPS. El caso genérico va sin credencial de tenant (404 pelado) y con sesión de A y cabeceras apuntando a B: cero choferes ni rutas de B en la respuesta, porque `rutas`/`turnos`/`eventos`/`usuarios` son tablas de la BD física de A."
+      }
+    },
+    {
+      "ruta": "/api/empresas",
+      "archivo": "src/app/api/empresas/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Las empresas contratantes del tenant [AC-FRUT-01]. Solo lectura, sin parámetro. Es la CARTERA DE CLIENTES de una empresa de transporte en una respuesta: el cruce genérico verifica que no salga por el host de A. El alta vive en el módulo de tarifas y portal (hito f), donde está su contrato."
+      }
+    },
+    {
+      "ruta": "/api/encargos",
+      "archivo": "src/app/api/encargos/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Bandeja de encargos (F1) [AC-FRUT-01]. La empresa y el destino viajan en el cuerpo y el tenant sale del ruteo, así que no hay parámetro de ruta. El GET expone la bandeja del día del vecino —qué empresas le contratan, a qué destinos y con cuántos bultos—, que es su cartera de clientes en una respuesta; el POST MUTA y enciende el comparador de huella. El cruce CON uuids de empresa y destino de B lo prueba la suite del módulo, que sabe cómo se ven."
+      }
+    },
+    {
+      "ruta": "/api/encargos/[id]",
+      "archivo": "src/app/api/encargos/[id]/route.ts",
+      "metodos": [
+        "PATCH"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "encargos",
+          "columna": "id"
+        },
+        "nota": "Corregir un encargo de B desde una sesión de A [AC-FRUT-03]. MUTA planificación: cambiarle el destino o los bultos a un encargo del vecino manda su camión a otra cuadra o le carga el doble, y el operador de B lo descubre en el andén, de madrugada, con la ruta ya publicada. El 404 no alcanza solo: el comparador de huella de la BD de B tiene que ver que no cambió ninguna fila (centinela 2, §9.3.2). El fixture del vecino ya siembra un encargo, así que el id es REAL — contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin probar nada."
+      }
+    },
+    {
+      "ruta": "/api/encargos/[id]/aceptar",
+      "archivo": "src/app/api/encargos/[id]/aceptar/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "encargos",
+          "columna": "id"
+        },
+        "nota": "Aceptar un encargo de B desde una sesión de A [AC-FRUT-03]. MUTA: la aceptación es el acto por el que la casa se compromete y el que CIERRA la ventana de edición del contratante — aceptárselo a B le quita a su cliente la posibilidad de corregir un pedido que la casa nunca miró, y deja en su bandeja algo dado por bueno por un ajeno. Por eso el caso mira además la huella de la BD de B (centinela 2, §9.3.2): un 404 con la fila ya cambiada no es aislamiento."
+      }
+    },
+    {
+      "ruta": "/api/encargos/[id]/reintentar",
+      "archivo": "src/app/api/encargos/[id]/reintentar/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "encargos",
+          "columna": "id"
+        },
+        "nota": "Reintentar un encargo de B desde una sesión de A [AC-FRUT-03]. MUTA CREANDO: un reintento escribe un encargo NUEVO en la bandeja del vecino, encadenado por `reintento_de` a uno suyo. El daño no es una fuga sino un fantasma — carga que nadie de B pidió, que su operador va a armar en una ruta de madrugada y que su cliente va a ver como un pedido propio. La huella de la BD de B es acá el guard que importa: una fila de más en `encargos` es exactamente lo que hay que ver (centinela 2, §9.3.2)."
+      }
+    },
+    {
+      "ruta": "/api/encargos/duplicar",
+      "archivo": "src/app/api/encargos/duplicar/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "«Duplicar encargos de ayer» (§5.2-F1) [AC-FRUT-17]. No recibe identificador por URL: la fecha de origen es un parámetro del cuerpo y los encargos salen de la propia base del tenant resuelto. MUTA en masa, así que enciende el comparador de huella de la BD de B —duplicarle el día al vecino le mete veinte encargos fantasma que alguien tiene que borrar a mano antes de armar sus rutas, y si no los ve, salen en un camión—. El caso genérico va sin credencial y la guardia contesta 404 pelado antes de mirar el cuerpo."
+      }
+    },
+    {
+      "ruta": "/api/encargos/importar",
+      "archivo": "src/app/api/encargos/importar/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Importación CSV de la bandeja [AC-FRUT-02]. Sin parámetro: el archivo va en el cuerpo y el tenant sale del ruteo. Es la mutación de MAYOR volumen del módulo —doscientas filas en un request— y por eso el comparador de huella de la BD de B es el guard que corresponde: una importación escrita en el vecino le llenaría la bandeja del día con encargos que nadie pidió, y los descubriría al armar rutas. Sin credencial, la guardia contesta 404 pelado antes de parsear una línea."
+      }
+    },
+    {
+      "ruta": "/api/energia",
+      "archivo": "src/app/api/energia/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Reporte de energía y costo por semana [AC-FVEH-13]. Sin parámetro: devuelve las semanas del tenant que eligió el ruteo. Es la ruta con más dinero por byte de toda la app —cuánto gasta en energía una flota, semana a semana— y por eso el cruce genérico pesa: leerla desde el host de A sería leer la estructura de costos del vecino. El filtro por rol no vive acá sino en la RLS de la base y en `security_invoker` de la vista, que es lo que hace que un `if` olvidado en una pantalla futura no abra el agujero."
+      }
+    },
+    {
+      "ruta": "/api/entorno",
+      "archivo": "src/app/api/entorno/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Público y sin parámetros de ruta: el aparato se identifica con la clave pública que ya viajó en su solicitud, y esa clave es de la BD del tenant que el ruteo eligió — una clave de B contra el subdominio de A no encuentra ninguna solicitud pendiente y sale 404 sin tocar nada. El cruce que aplica es el genérico, y como el verbo MUTA enciende el comparador de huella de la BD de B. LÍMITE DECLARADO, igual que en /api/solicitudes: el caso autogenerado va sin payload y rebota 422 antes de tocar la base, así que la huella confirma «no escribió» de forma trivial; el cruce CON una clave pública válida de B lo prueba la suite del módulo (e2e/entorno.spec.ts), que sí sabe cómo se ve una."
+      }
+    },
+    {
+      "ruta": "/api/export-pods",
+      "archivo": "src/app/api/export-pods/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Export de PODs por rango del gestor [AC-FTEL-07] — §11 punto 4. `empresa_id` viaja por QUERYSTRING y no por segmento de URL, pero el filtro es el mismo caso que `/api/torre-de-control` (AC-FTEL-04): `podsPorRango` corre dentro de `enLectura`, que aplica la RLS de la SESIÓN sobre el pool ya resuelto contra la BD del tenant (mismo patrón que el resto de `servidor/`). Un `empresa_id` de la empresa vecina de OTRO tenant no encuentra fila —cada tenant es su propia base física, §4.1— y uno de una empresa vecina DENTRO del mismo tenant tampoco: `items.empresa_cliente_id` es la columna propia del §7.2, sin join que un cambio futuro pudiera dejar sin efecto. El daño de una fuga acá sería el detalle operativo de bultos entregados/rechazados y el hash de evidencia de la flota de B — no CLP (esa parte vive en `liquidacion_lineas`, fuera de este export) pero sí el §7.8: cuánto le entregan a cada contratante de B y con qué evidencia."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/auditoria",
+      "archivo": "src/app/api/gobierno/auditoria/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La bitácora de accesos, incluidas las sesiones de soporte. Sin parámetro: el recurso que devuelve es siempre el del tenant del ruteo. El cruce genérico verifica que la auditoría de B no se pueda leer desde el host de A ni inyectando su identidad por cabecera — una auditoría que se lee desde afuera es peor que no tenerla."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/dispositivos",
+      "archivo": "src/app/api/gobierno/dispositivos/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Inventario de solo lectura con nombre de persona y estado de cada aparato. Mismo cruce genérico que el resto de las colecciones del panel: identidad de B por los canales falsificables, y ni una cadena de B en la respuesta. El POST enrola el dispositivo de ANDÉN como activo del TENANT, sin parámetro de ruta [AC-FIDN-07] (§4.3, §5.4 F-D) — MUTA y enciende el comparador de huella de la BD de B: contra el vecino, insertaría un aparato compartido en SU inventario y le devolvería a A el secreto en claro de un aparato ajeno que después queda apoyado en la mesa del andén de B, capturando a nombre de sus operarios."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/dispositivos/[id]",
+      "archivo": "src/app/api/gobierno/dispositivos/[id]/route.ts",
+      "metodos": [
+        "DELETE"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "dispositivos",
+          "columna": "id"
+        },
+        "nota": "Revocar el aparato de B desde A dejaría a un trabajador del vecino sin sesión en el request siguiente (§5.4 F-F): un DELETE cross-tenant acá es una interrupción de la operación ajena, no solo una fuga. Contrato 404 y huella de B intacta."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/dpa",
+      "archivo": "src/app/api/gobierno/dpa/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "El DPA en términos del tenant [AC-FMIG-22], plano de control exclusivo del dueño (§5.4, §3.E1.15). Sin parámetro de ruta: no hay id de recurso — la versión vigente sale de `packages/miga/src/dpa.ts` (DPA_VERSION), igual para todo tenant, y lo único que varía por tenant es SI ya la aceptó. El GET expone el texto del documento y el estado de aceptación de ESTE tenant; el POST inserta en `dpa_aceptaciones` (tenant_id por default `tenant_actual()`, con CHECK) y jamás recibe un id ajeno que pudiera aceptar en nombre de otro tenant. El caso genérico va sin credencial y la guardia contesta 404 pelado antes de mirar el cuerpo; el barrido de AC-FIDN-12 prueba el 403 con rol distinto de `admin_tenant` sobre esta misma ruta con CERO filas nuevas."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/funciones",
+      "archivo": "src/app/api/gobierno/funciones/route.ts",
+      "metodos": [
+        "GET",
+        "PATCH"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La pantalla «Funciones» del panel admin [AC-FMIG-08], plano de control exclusivo del dueño (§5.4, §5.5). Sin parámetro de ruta: la función se nombra por `lookup_key` en el cuerpo del PATCH, no por id. El GET expone qué módulos tiene comprados y encendidos el vecino —su plan comercial en una respuesta—; el PATCH MUTA `tenant_feature_overrides` en `control` (compartida entre TODOS los tenants) y sella una `config_version` nueva en la base del tenant, así que enciende el comparador de huella de LAS DOS bases: escribirle un override al vecino le prende o le apaga un módulo entero de su operación sin que su dueño lo haya tocado. El caso genérico va sin credencial y la guardia contesta 404 pelado antes de mirar el cuerpo; el barrido de AC-FIDN-12 prueba el 403 con rol distinto de `admin_tenant` sobre esta misma ruta, y `e2e/funciones.spec.ts` prueba además el 422 de «fuera de plan» con CERO filas en `control.tenant_feature_overrides`."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/grants",
+      "archivo": "src/app/api/gobierno/grants/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "ÚNICO endpoint del panel que toca la BD `control`, así que es el único donde el aislamiento no sale gratis de la separación física del §4.1. No recibe parámetro de ruta a propósito: el grant se nombra en el cuerpo y el tenant sale de `tenant_info` de la base del ruteo, nunca de afuera, y el UPDATE lo lleva en el WHERE. El caso genérico cubre el POST sin payload; el cruce CON payload —revocar el grant de B nombrando su uuid— lo prueba la suite del módulo, que sí sabe cómo se ve un grant."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/invitaciones",
+      "archivo": "src/app/api/gobierno/invitaciones/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Colección del panel del dueño: sin parámetro, así que no hay recurso de B que pedirle. El cruce que aplica es el genérico —host propio de A, cabeceras de tenant apuntando a B— y acá pesa doble porque el POST EMITE una credencial: la huella de la BD de B confirma que ninguna invitación nació del otro lado. Sin sesión de admin este endpoint responde 404 pelado, así que el cuerpo no puede traer ni un rol ni una fecha de A tampoco."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/invitaciones/[id]",
+      "archivo": "src/app/api/gobierno/invitaciones/[id]/route.ts",
+      "metodos": [
+        "PATCH"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "invitaciones",
+          "columna": "id"
+        },
+        "nota": "PRIMERA ruta de tipo recurso del producto: hasta hoy el «404 jamás 403» solo se juzgaba contra respuestas de laboratorio en veredicto.test.mjs. Se le pide la invitación de B con la identidad de B inyectada por cabecera, y tiene que dar 404 pelado — no 401 y no 403, que confirmarían que ese uuid es una invitación real de alguien. El 404 sale por construcción: la consulta corre contra la base que el ruteo eligió y el id de B no está ahí."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/modo",
+      "archivo": "src/app/api/gobierno/modo/route.ts",
+      "metodos": [
+        "GET",
+        "PATCH"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "El selector de modo (§3) [AC-FRUT-14]. No recibe identificador por URL: el tenant sale del ruteo y el modo del cuerpo. MUTA en DOS bases —`control.tenants.modo` y la réplica del tenant—, así que enciende el comparador de huella de la BD de B: conmutarle el modo al vecino le apaga o le enciende módulos enteros de su operación (tarifas, portal del contratante, liquidación) sin que nadie de su casa lo haya decidido. Es además del DUEÑO: una sesión de A sin rol `admin_tenant` recibe 403 y una sin sesión, 404 pelado."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/personas/[id]/arco",
+      "archivo": "src/app/api/gobierno/personas/[id]/arco/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "personas",
+          "columna": "id"
+        },
+        "nota": "LA RUTA MÁS CARA DEL PANEL SI SE CRUZA: devuelve el RUT, el nombre y el contacto de UNA persona en un archivo pensado para salir de la empresa por correo. Ejecutada desde A contra el id de una persona de B, no filtraría un estado ni un contador: entregaría la identidad completa de un trabajador del vecino, ya empaquetada para reenviar, y bajo la Ley 21.719 eso es una brecha con titular con nombre y apellido. El 404 NO alcanza como único oráculo acá: además MUTA la BD de B —escribe `gobierno.arco_exportado` en sus `eventos`— así que hay que mirar la huella (centinela 2, §9.3.2), porque un acceso registrado en la bitácora de B que su dueño nunca hizo le rompe la única bitácora con la que puede responderle a un fiscalizador."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/solicitudes",
+      "archivo": "src/app/api/gobierno/solicitudes/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Colección de solo lectura, y la más delicada del panel: su cuerpo lleva RUT y nombre de personas. Si el aislamiento cediera, los datos personales del vecino saldrían literalmente en la respuesta. Sin sesión de admin responde 404 sin cuerpo, así que el caso genérico verifica que la lista de B no exista para A."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/solicitudes/[id]",
+      "archivo": "src/app/api/gobierno/solicitudes/[id]/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "solicitudes_acceso",
+          "columna": "id"
+        },
+        "nota": "Aprobar la solicitud de B desde A sería crear una persona y emitir un secreto en la base equivocada: el caso más caro de este módulo. Contrato 404, y como el verbo MUTA, además la huella de la BD de B tiene que quedar idéntica tabla por tabla."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/transferencia",
+      "archivo": "src/app/api/gobierno/transferencia/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Transferir propiedad con passkey/WebAuthn del admin [AC-FIDN-13, §5.4 F-H]. Sin identificador por URL, igual que `modo`: el admin sale de la sesión y el destino del cuerpo. La ÚNICA passkey del sistema — grep de este manifiesto contra `WebAuthn`/`credentials.create`/`credentials.get` prueba que ningún otro flujo la usa. Contra el vecino no hay caso de cruce que montar: el destino (`nuevo_admin_usuario_id`) se valida contra la tabla `usuarios` de la BASE del tenant que resolvió el ruteo, así que un id de B simplemente no está ahí — la misma ausencia por construcción que `grants`/`modo`. El daño real de esta ruta no es de aislamiento entre tenants sino DENTRO del propio tenant si la ceremonia fuera decorativa: por eso la verificación criptográfica corre ANTES de abrir transacción (0 cambios sin ceremonia válida) y por eso el rol destino está cerrado a los cuatro internos no-admin, jamás `cliente` ni `admin_tenant`."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/usuarios/[id]/pin",
+      "archivo": "src/app/api/gobierno/usuarios/[id]/pin/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "usuarios",
+          "columna": "id"
+        },
+        "nota": "Emitir un código puente contra el usuario de B sería habilitar a un tercero a fijarle el PIN a alguien de otra empresa. Contrato 404 y huella de B intacta: ni una fila en codigos_puente del otro lado. El parámetro va en medio de la ruta y no al final, que es justo la forma que un emisor de casos mal escrito se saltearía."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/vehiculos",
+      "archivo": "src/app/api/gobierno/vehiculos/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Alta de vehículo, acto del dueño (§5.4) [AC-FVEH-01]. Sin parámetro de ruta: el vehículo se nombra por patente en el cuerpo y el tenant sale del ruteo, jamás de la cabecera. El caso genérico va SIN credencial y sin payload, así que la guardia del panel contesta 404 pelado antes de tocar la base — y el verbo MUTA, así que enciende el comparador de huella de la BD de B, que es lo que prueba que un alta no se pudo colar en la flota del vecino. El cruce CON sesión legítima de A y rol ajeno lo prueba el barrido de AC-FIDN-12 (e2e/gobierno.spec.ts), que recoge sola toda ruta de este prefijo."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/vehiculos/[id]",
+      "archivo": "src/app/api/gobierno/vehiculos/[id]/route.ts",
+      "metodos": [
+        "PATCH",
+        "DELETE"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "vehiculos",
+          "columna": "id"
+        },
+        "nota": "Editar o desactivar el vehículo de B desde A no es solo una fuga: es sacarle un camión de la operación al vecino, y el §7.4 protege justo esa fila porque abajo cuelgan sus lecturas, sus chequeos y sus turnos — la historia con la que su EEVD se computa hacia atrás (§2). Contrato 404 y huella de B intacta. El fixture del vecino siembra un vehículo propio para que el id sea REAL: contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin haber probado nada."
+      }
+    },
+    {
+      "ruta": "/api/gobierno/vehiculos/[id]/documentos",
+      "archivo": "src/app/api/gobierno/vehiculos/[id]/documentos/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "vehiculos",
+          "columna": "id"
+        },
+        "nota": "Documentos con vencimiento de un vehículo [AC-FVEH-03]. El parámetro es el VEHÍCULO de B, y por eso el caso es de tipo recurso: leer los documentos del vecino expone su cumplimiento —qué camión tiene la revisión técnica vencida— y escribirle uno con fecha pasada le DETIENE la flota si tiene el feature encendido. Contrato 404 y huella de B intacta. El fixture del vecino ya siembra un vehículo, así que el id es real: contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin probar nada."
+      }
+    },
+    {
+      "ruta": "/api/lecturas",
+      "archivo": "src/app/api/lecturas/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Captura de odómetro y carga declarados [AC-FVEH-05]. Sin parámetro de ruta: el turno se nombra en el cuerpo y el tenant sale del ruteo. Endpoint de CAPTURA, así que su contrato es 2xx siempre para el contenido (§0) — pero eso es DENTRO del tenant: sin sesión no hay captura que valga y la guardia contesta 404 pelado antes de tocar la base. Como el POST MUTA, el caso genérico enciende el comparador de huella de la BD de B: una lectura escrita en el vecino le movería la proyección de odómetro de un camión ajeno, que es de las peores fugas posibles — corrompe un dato operativo, no solo lo expone. El cruce CON payload —un uuid de turno de B— lo prueba la suite del módulo, que sabe cómo se ve uno."
+      }
+    },
+    {
+      "ruta": "/api/liquidacion-lineas/[id]/evidencia",
+      "archivo": "src/app/api/liquidacion-lineas/[id]/evidencia/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "liquidacion_lineas",
+          "columna": "id"
+        },
+        "nota": "El drill-down línea→evidencia del §3.E1.9 [AC-FTAR-07]. Una línea de B trae el resultado, el motivo y las capturas de SU POD — foto, firma — que son evidencia de una entrega real de la empresa cliente del vecino. Verla desde A no es un contador que sube: es leer con quién firmó la recepción y qué pasó en la puerta de un cliente ajeno. Contrato 404 y BD de B sin cambios (es lectura, pero la huella se compara igual por si un día esta ruta deja de serlo)."
+      }
+    },
+    {
+      "ruta": "/api/liquidaciones/[id]",
+      "archivo": "src/app/api/liquidaciones/[id]/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "liquidaciones",
+          "columna": "id"
+        },
+        "nota": "La liquidación con sus líneas [AC-FTAR-07]. Trae la razón social y el RUT de la empresa cliente de B, el período y cada monto CLP de sus líneas — exactamente la economía interna que el §8 protege del rol `cliente` de OTRA empresa, ahora cruzando además el límite de tenant. Contrato 404 y BD de B sin cambios."
+      }
+    },
+    {
+      "ruta": "/api/liquidaciones/[id]/folio",
+      "archivo": "src/app/api/liquidaciones/[id]/folio/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "liquidaciones",
+          "columna": "id"
+        },
+        "nota": "El registro manual del folio del DTE sobre la liquidación de B desde una sesión de A [AC-FTAR-16], §7.3, art. 97 N°4 CT: 404 y la BD de B sin cambios. El daño es tributario y no es reversible desde la app: le pega a la liquidación cerrada del vecino el folio de un documento que no es suyo —o que ni existe— y ese folio es lo que su contratante va a recibir como respaldo de cobro (Ley 19.983). No hay ruta de corrección: el índice único parcial de la 0072 hace que la liquidación quede amarrada al PRIMER documento que se le asocie, así que un folio ajeno escrito una vez deja a B sin poder registrar el suyo. Además crea una fila en `reference_document`, que es tabla compartida con custodia, y el `UNIQUE(tipo, folio, emisor)` es global: un folio quemado ahí tampoco se puede volver a registrar. Por eso el caso mira la huella de la BD de B (centinela 2, §9.3.2) y no solo el código de la respuesta — un 404 con la fila escrita sería el peor de los verdes."
+      }
+    },
+    {
+      "ruta": "/api/maestras",
+      "archivo": "src/app/api/maestras/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Rutas maestras (§3.E1.6) [AC-FRUT-06]. El GET lista las plantillas y el POST INSTANCIA el día a partir de una, así que enciende el comparador de huella de la BD de B: armarle el día al vecino desde una plantilla le crea una ruta con paradas que su operador no puso, y si no la ve, sale un camión con ella. El `maestra_id` viaja en el cuerpo y el caso con un id real de B lo prueba la suite del módulo."
+      }
+    },
+    {
+      "ruta": "/api/manifiesto",
+      "archivo": "src/app/api/manifiesto/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "ids_de_b": [],
+        "nota": "Sin sesión propia: 404 (sesionDelTenant). Con sesión de B contra la BD de A: cabecera x-flota-tenant-bd la resuelve el ruteo por subdominio de A, no el cliente — B nunca puede apuntar su sesión a la BD de A, así que no hay fila del vecino que leer ni con qué armar el manifest ajeno."
+      }
+    },
+    {
+      "ruta": "/api/manifiesto-items/[id]/bajar",
+      "archivo": "src/app/api/manifiesto-items/[id]/bajar/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "manifiesto_items",
+          "columna": "id"
+        },
+        "nota": "Bajar del manifiesto un ítem de B desde una sesión de A: 404 y la BD de B sin cambios. Es la mutación con peor consecuencia física del módulo — la carga se declara fuera del camión y el acto es append-only, así que el vecino no puede deshacerlo: o sale mercadería que su registro dice que se bajó, o se baja carga que nadie de su casa decidió bajar."
+      }
+    },
+    {
+      "ruta": "/api/manifiesto-items/[id]/documento",
+      "archivo": "src/app/api/manifiesto-items/[id]/documento/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "manifiesto_items",
+          "columna": "id"
+        },
+        "nota": "Asociar el DTE de un tercero a un ítem del manifiesto de B desde una sesión de A (§7.3, art. 55 DL 825) [AC-FRUT-08]: 404 y la BD de B sin cambios. Escribe un ACTO append-only en la custodia del vecino, y eso es lo que lo hace grave: la asociación no se puede borrar ni corregir con un UPDATE, así que un documento ajeno pegado a su carga queda como constancia de que ESA mercadería viajó amparada por ESE papel — y es la fila que se mira si el SII pregunta."
+      }
+    },
+    {
+      "ruta": "/api/manifiestos/[id]/custodia",
+      "archivo": "src/app/api/manifiestos/[id]/custodia/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "manifiestos",
+          "columna": "id"
+        },
+        "nota": "El traspaso de custodia (§4.5, §5.2 F2) [AC-FRUT-09]: confirmar el paso de la carga del andén al chofer sobre un manifiesto de B desde una sesión de A ⇒ 404 y la BD de B sin cambios. Escribe firmas y un `custody_transfer` APPEND-ONLY en la operación del vecino: un traspaso ajeno queda como constancia de que SU carga cambió de manos, con personas que él no puso, y no lo puede borrar — solo supersederlo, dejando las dos filas para siempre."
+      }
+    },
+    {
+      "ruta": "/api/manifiestos/[id]/foto",
+      "archivo": "src/app/api/manifiestos/[id]/foto/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "manifiestos",
+          "columna": "id"
+        },
+        "nota": "El binario de la foto del sub-manifiesto de B desde una sesión de A [AC-FRUT-10]: 404 y la BD de B sin cambios. Escribe `evidence` APPEND-ONLY colgada de su manifiesto, con un sha256 write-once — una foto ajena pegada a su carga queda como constancia de cómo llegó esa mercadería y no se puede borrar. El manifiesto de B tiene que ser REAL, porque contra un uuid inventado el 404 no distingue al handler que mira el tenant primero del que no."
+      }
+    },
+    {
+      "ruta": "/api/metricas/toques-flujo",
+      "archivo": "src/app/api/metricas/toques-flujo/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "AC-FMIG-03: no recibe identificador por URL — el cuerpo trae flujo (whitelist cerrada) y toques (entero). No hay fila de otro tenant que leer ni mutar por id; el cruce que aplica es el genérico de sesión (`sesionDelTenant`, igual que el resto de las rutas de terreno): cabecera de tenant falsificada contra el host propio de A tiene que seguir resolviendo la sesión de A, y una sesión de B contra el host de A tiene que rebotar 404. El daño de un cruce logrado sería insertar `client_metric` en la base equivocada — ruido de telemetría, cero dato de negocio."
+      }
+    },
+    {
+      "ruta": "/api/motivos",
+      "archivo": "src/app/api/motivos/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Catálogo de motivos del tenant (§4.5, §4.4) [AC-FRUT-13]. El GET lista y el POST SIEMBRA desde el vertical, así que enciende el comparador de huella de la BD de B: sembrarle motivos al vecino le mete opciones ajenas en la pantalla de no-entrega de su chofer, y desde ahí quedan escritas en actos que no se pueden corregir —un motivo no se borra—. El caso genérico va sin credencial y la guardia contesta 404 pelado antes de mirar el cuerpo."
+      }
+    },
+    {
+      "ruta": "/api/motivos/[id]",
+      "archivo": "src/app/api/motivos/[id]/route.ts",
+      "metodos": [
+        "PATCH"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "motivos",
+          "columna": "id"
+        },
+        "nota": "Apagar o encender un motivo de B desde A: 404 y la BD de B sin cambios. Apagárselo le saca de la pantalla la explicación que su operación usa todos los días, y encendérselo le devuelve a los flujos nuevos una que había retirado a propósito — las dos direcciones son daño. El fixture del vecino siembra un motivo para que el id sea REAL: contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin probar nada."
+      }
+    },
+    {
+      "ruta": "/api/paradas/[id]/entrega",
+      "archivo": "src/app/api/paradas/[id]/entrega/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "paradas",
+          "columna": "id"
+        },
+        "nota": "El candado entrega←manifiesto (§4.2, KR-29) [AC-FRUT-22]. Leer el candado de una parada de entrega de B desde una sesión de A: 404 y la BD de B sin cambios. Es LECTURA pura —no muta nada— pero lo que devuelve son las razones sociales de las empresas cuyo sub-manifiesto todavía no confirmó en el andén del vecino: un ajeno que la viera sabría qué panaderías le cargan a B y cuáles van atrasadas, que es exactamente el dato que el §7.2 confina a la casa."
+      }
+    },
+    {
+      "ruta": "/api/paradas/[id]/evidencia",
+      "archivo": "src/app/api/paradas/[id]/evidencia/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "paradas",
+          "columna": "id"
+        },
+        "nota": "El binario de una evidencia de POD de una parada de B desde una sesión de A [AC-FPOD-19]: sin eventos de esa parada en la BD de A (bases separadas por tenant, §4.1) no hay promesa de sha256 que calce, así que responde 404 y la BD de B queda sin cambios. Escribe `evidence` APPEND-ONLY colgada de la parada, con un sha256 write-once — un binario ajeno pegado a la entrega del vecino quedaría como constancia de una evidencia que nunca capturó y no se podría borrar."
+      }
+    },
+    {
+      "ruta": "/api/paradas/[id]/manifiesto",
+      "archivo": "src/app/api/paradas/[id]/manifiesto/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "paradas",
+          "columna": "id"
+        },
+        "nota": "El sub-manifiesto del andén (§5.2 F2) [AC-FRUT-07]. Confirmar la carga de una parada de B desde una sesión de A: 404 y la BD de B sin cambios. MUTA sobre una tabla APPEND-ONLY, que es lo que lo hace peor que el resto — un manifiesto escrito por un ajeno en la operación del vecino no se puede borrar: queda como constancia de un traspaso que nadie hizo, y es la fila que su cliente va a mirar cuando reclame. El GET tampoco puede filtrar: lo declarado dice qué empresas le cargan al vecino y cuánto."
+      }
+    },
+    {
+      "ruta": "/api/pin/puente",
+      "archivo": "src/app/api/pin/puente/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Abierto a cualquier sesión del tenant y sin parámetros: el usuario cuyo PIN se define es SIEMPRE el de la credencial presentada, jamás uno nombrado en el cuerpo, así que no hay identificador ajeno que pedirle. El cruce genérico verifica que la identidad de B por cabecera no cambie de quién habla la respuesta. El canje con el código de B contra el subdominio de A lo cubre la suite del módulo, que sí sabe cómo se ve un código puente."
+      }
+    },
+    {
+      "ruta": "/api/recargas",
+      "archivo": "src/app/api/recargas/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Cierre de sesión de recarga [AC-FVEH-08]. El vehículo viaja en el cuerpo y el tenant sale del ruteo, así que no hay parámetro de ruta: el caso genérico va sin credencial y la guardia contesta 404 pelado. El POST MUTA y enciende el comparador de huella de la BD de B — una recarga escrita en el vecino le inventa energía consumida, y con ella un costo que el trigger calcula desde SU tarifa: no es solo una fuga, le ensucia el reporte de ahorro vs diésel del Anexo A, que es su argumento de venta. El cruce CON un uuid de vehículo de B lo prueba la suite del módulo."
+      }
+    },
+    {
+      "ruta": "/api/reenrolamiento",
+      "archivo": "src/app/api/reenrolamiento/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Público y sin parámetros, pero NO anónimo: se entra con RUT y PIN. El cruce que aplica es el genérico —identidad de B por los canales falsificables, y la BD de B intacta—, y acá el comparador de huella importa de verdad porque este endpoint escribe. El caso con credenciales de B contra el subdominio de A lo cubre la suite del módulo, que sí sabe cómo se ve un RUT con su PIN."
+      }
+    },
+    {
+      "ruta": "/api/rutas",
+      "archivo": "src/app/api/rutas/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Rutas del día (§5.2-F1) [AC-FRUT-04]. El GET lista y el POST CREA, así que enciende el comparador de huella de la BD de B: una ruta escrita en el vecino no es solo una fuga, le mete un día de trabajo en la planificación de otro y se lo publica un chofer que no es suyo. El caso genérico va sin credencial y la guardia contesta 404 pelado antes de mirar el cuerpo; el `vehiculo_id` de B viaja en el cuerpo y lo prueba la suite del módulo, que sabe cómo se ve uno."
+      }
+    },
+    {
+      "ruta": "/api/rutas/[id]",
+      "archivo": "src/app/api/rutas/[id]/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "rutas",
+          "columna": "id"
+        },
+        "nota": "La ruta armada de B pedida con sesión de A: 404 y cuerpo sin una sola cadena de B —ni el nombre de la ruta, ni el del destino, ni la razón social de la empresa contratante, que son exactamente los datos que un competidor querría (§9.3.2)."
+      }
+    },
+    {
+      "ruta": "/api/rutas/[id]/asignar",
+      "archivo": "src/app/api/rutas/[id]/asignar/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "rutas",
+          "columna": "id"
+        },
+        "nota": "Asignar encargos de A a una ruta de B, o encargos de B a una ruta de A: 404 y la BD de B sin cambios. MUTA, así que el comparador de huella pesa — un encargo asignado en el vecino le carga bultos ajenos a un camión suyo y le descuadra la ecuación de cierre de esa empresa (§3.E1.6, centinela 2)."
+      }
+    },
+    {
+      "ruta": "/api/rutas/[id]/cierre",
+      "archivo": "src/app/api/rutas/[id]/cierre/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "rutas",
+          "columna": "id"
+        },
+        "nota": "Cerrar la ruta de B desde una sesión de A (§5.2 F5) [AC-FRUT-11]: 404 y la BD de B sin cambios. Es el acto que fija la ecuación de custodia por empresa —cargado = entregado + devuelto + faltante— así que un cierre ajeno le deja al vecino una liquidación que él no revisó, sobre bultos que no contó, y con la ruta dada por terminada mientras su camión todavía anda."
+      }
+    },
+    {
+      "ruta": "/api/rutas/[id]/paradas",
+      "archivo": "src/app/api/rutas/[id]/paradas/route.ts",
+      "metodos": [
+        "PATCH"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "rutas",
+          "columna": "id"
+        },
+        "nota": "Reordenar las paradas de una ruta de B desde una sesión de A: 404 y la BD de B sin cambios. Es la mutación más silenciosa del módulo —no crea ni borra nada, solo cambia el ORDEN— y por eso importa: un recorrido reordenado por un ajeno manda al camión a la última cuadra primero y nadie lo lee como un ataque, lo lee como un error propio."
+      }
+    },
+    {
+      "ruta": "/api/rutas/[id]/publicar",
+      "archivo": "src/app/api/rutas/[id]/publicar/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "rutas",
+          "columna": "id"
+        },
+        "nota": "Publicar el día de B desde una sesión de A: 404 y la BD de B sin cambios. Es la mutación más cara del módulo — congela la promesa que se le hizo al cliente y deriva los requisitos de evidencia de cada parada (§5.2 F1, §4.6): publicado por un ajeno, el operador de B pierde la única ventana en que su día todavía se podía corregir."
+      }
+    },
+    {
+      "ruta": "/api/semaforo/digest",
+      "archivo": "src/app/api/semaforo/digest/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "El digest del Nivel 0 [AC-FSEM-06], ahora tras `guardia()` [AC-FSEM-09]: sin sesión ⇒ 404 pelado, sesión de un rol distinto de `admin_tenant` ⇒ 403, `admin_tenant` ⇒ 200 con la respuesta literal de `?seed=a|c` (las mismas semillas del maestro que ya sirve `hoy/page.tsx`, AC-FSEM-01) — la evaluación real de `signal_rule` sigue pendiente de AC-FSEM-07+. El caso genérico de esta suite va SIN Authorization, así que cae en la rama «sin sesión» (404, sin cuerpo): cero cadena de B posible ahí. El cruce CON sesión real de B —que sí podría filtrar por header falsificado si `guardia()` confiara en `x-flota-tenant-bd` del cliente en vez del que fija `servidor.mjs` por Host— lo prueba `semaforo-roles.spec.ts`, que ejerce las 6 combinaciones de rol reales."
+      }
+    },
+    {
+      "ruta": "/api/semaforo/excepciones/[id]/reasignar",
+      "archivo": "src/app/api/semaforo/excepciones/[id]/reasignar/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "review_queue",
+          "columna": "id"
+        },
+        "nota": "Reasignar la excepción de B desde una sesión de A [AC-FSEM-20]. MUTA `asignado_a` de la cola «Por revisar» del vecino: le cambia el dueño de la excepción a un usuario elegido por A —que ni siquiera es de B—, así que la fila queda con un responsable que la operación de B no reconoce y que nunca la va a atender. Contrato 404 y huella de B intacta (0 filas cambiadas). El fixture del vecino siembra una fila real en `review_queue` — contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin probar nada."
+      }
+    },
+    {
+      "ruta": "/api/semaforo/excepciones/[id]/reconocer",
+      "archivo": "src/app/api/semaforo/excepciones/[id]/reconocer/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "review_queue",
+          "columna": "id"
+        },
+        "nota": "Reconocer la excepción de B desde una sesión de A [AC-FSEM-04]. MUTA la cola «Por revisar» del vecino: le asigna el dueño de A como responsable y le apaga la excepción de su tablero sin que su operación la haya visto — el rojo que debía llamarle la atención queda silenciado a nombre de un extraño. Contrato 404 y huella de B intacta (0 filas cambiadas). El fixture del vecino siembra una fila real en `review_queue`, así que el id existe — contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin probar nada."
+      }
+    },
+    {
+      "ruta": "/api/semaforo/excepciones/[id]/resolver",
+      "archivo": "src/app/api/semaforo/excepciones/[id]/resolver/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "review_queue",
+          "columna": "id"
+        },
+        "nota": "Resolver la excepción de B desde una sesión de A [AC-FSEM-05]. MUTA la cola «Por revisar» del vecino tanto como reconocer (AC-FSEM-04) y además: la deja `resuelta` con una NOTA de A escrita a nombre de su operación — el rojo que exigía revisión queda cerrado sin que nadie de B lo haya visto ni escrito esa nota, y `reconocida_en`/`resuelta_en` quedan mintiendo sobre quién actuó. Contrato 404 y huella de B intacta (0 filas cambiadas). El fixture del vecino siembra una fila real en `review_queue` — contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin probar nada."
+      }
+    },
+    {
+      "ruta": "/api/semaforo/excepciones/[id]/toques",
+      "archivo": "src/app/api/semaforo/excepciones/[id]/toques/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "review_queue",
+          "columna": "id"
+        },
+        "nota": "Registrar toques de drill-down sobre la excepción de B desde una sesión de A [AC-FSEM-05]. Es una escritura en `client_metric`, no en `review_queue`, así que no muta la cola del vecino ni su estado — pero SÍ inserta una fila de telemetría a nombre de la operación de B (tenant_id = B por RLS), atribuyéndole a su tablero interno un toque de drill-down que su gente nunca hizo. Contrato 404 y huella de B intacta salvo la fila propia que el mismo test inserta y compara (§10 lee de acá; una métrica contaminada por A es una métrica que miente). El fixture del vecino siembra una fila real en `review_queue` — contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin probar nada."
+      }
+    },
+    {
+      "ruta": "/api/sesion",
+      "archivo": "src/app/api/sesion/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Sin parámetros: el recurso que devuelve es SIEMPRE el del portador de la credencial, así que no hay identificador ajeno que pedirle. El cruce que aplica —y que acá pesa más que en ninguna otra ruta— es que la identidad de B inyectada por cabecera no cambie de quién habla la respuesta: si esta ruta cediera, todo el resto del producto quedaría hablando en nombre del tenant equivocado. El caso con credencial de B contra el subdominio de A lo cubre además la suite del módulo (e2e/sesion.spec.ts), que sí sabe cómo se ve un secreto."
+      }
+    },
+    {
+      "ruta": "/api/sobre",
+      "archivo": "src/app/api/sobre/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Público y sin parámetros de ruta: el aparato se identifica con la clave pública que ya viajó en su solicitud, y esa clave vive en la BD del tenant que el ruteo eligió —una clave de B contra el subdominio de A no encuentra sobre y sale 404 sin tocar nada—. El verbo MUTA (el sobre es de un solo uso), así que enciende el comparador de huella de la BD de B. LÍMITE DECLARADO, igual que en /api/solicitudes: el caso autogenerado va sin payload y rebota 422 antes de tocar la base; el cruce CON una clave pública válida de B lo prueba la suite del módulo (e2e/enrolamiento.spec.ts)."
+      }
+    },
+    {
+      "ruta": "/api/solicitudes",
+      "archivo": "src/app/api/solicitudes/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Endpoint público y sin parámetros: no recibe identificador de recurso, así que el cruce que aplica es inyectarle la identidad de B por los canales falsificables. Es la primera ruta MUTANTE de la app y por eso enciende el comparador de huella de la BD de B, tabla por tabla. LÍMITE DECLARADO del caso autogenerado: el generador no conoce la forma del cuerpo de cada endpoint, así que manda el request sin payload y esta ruta rebota 422 antes de tocar la base — la huella confirma «no escribió», pero de forma trivial. El cruce CON payload válido, que es el que puede escribir, lo prueba la suite del propio módulo (e2e/invitaciones.spec.ts), y es la razón por la que cada módulo declara sus casos con datos en vez de confiar solo en el genérico."
+      }
+    },
+    {
+      "ruta": "/api/sync/capturas",
+      "archivo": "src/app/api/sync/capturas/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "El motor de sync de capturas del POD (§4.2, §4.6) [AC-FPOD-03]. No lleva identificador en la URL —la parada viaja DENTRO de cada captura del lote— así que el caso genérico va sin credencial y la guardia contesta 404 pelado antes de mirar el cuerpo. Enciende el comparador de huella de la BD de B y es de los que más pesan: MUTA escribiendo en `eventos`, que el §4.6 declara orden autoritativo del tenant y origen de toda proyección, y esa tabla es append-only (§7.4) —un hecho escrito en la casa del vecino no se puede borrar ni corregir, solo supersedir—. Una captura de A con el uuid de una parada de B tiene que aterrizar en la base de A y dejar la de B sin una sola fila: el 404 no alcanza como oráculo, hay que contar los eventos de B antes y después (centinela 2, §9.3.2)."
+      }
+    },
+    {
+      "ruta": "/api/tablero",
+      "archivo": "src/app/api/tablero/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Tablero «Listos para salir» (F1) [AC-FVEH-12]. Sin parámetro: devuelve la flota del tenant que eligió el ruteo. El cruce genérico verifica que el estado de carga de los camiones del vecino —cuántos tiene, cuánta batería les queda, cuáles no pueden salir— no se lea desde el host de A. Es información operativa completa de una empresa en una sola respuesta."
+      }
+    },
+    {
+      "ruta": "/api/tablero/sugerir-recarga",
+      "archivo": "src/app/api/tablero/sugerir-recarga/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "«1 clic sugiere la recarga nocturna» (§5.2-F1) [AC-FVEH-12]. El vehículo va en el cuerpo. El verbo MUTA en el manifiesto porque es POST, así que enciende el comparador de huella — y ahí está la mitad interesante: esta ruta NO escribe nada, y la huella intacta de B es también la prueba de que sugerir no es crear (pregunta 14, abierta). El caso genérico va sin credencial y la guardia contesta 404 pelado."
+      }
+    },
+    {
+      "ruta": "/api/tema",
+      "archivo": "src/app/api/tema/route.ts",
+      "metodos": [
+        "GET",
+        "PUT"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Lee y guarda el tema del tenant [AC-FMIG-02]: la fila única de tenant_theme de SU base, resuelta por poolDe(x-flota-tenant-bd), igual que /api/tenant. Sin parámetro de ruta, así que no hay id de B que colar — el riesgo de cruce acá no es leer la fila de otro tenant (el pool ya está fijado a la base de A) sino escribirle a A un acento derivado de un cálculo hecho con el fondo o el mínimo de contraste de OTRO tenant, y eso no puede pasar porque ambos son constantes de plataforma (superficie, CONTRASTE.texto), no filas por tenant. El PUT MUTA, así que enciende el comparador de huella de la BD de B: un GET/PUT sin la cabecera de B nunca la toca, y la fila de B queda intacta."
+      }
+    },
+    {
+      "ruta": "/api/tenant",
+      "archivo": "src/app/api/tenant/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Devuelve la identidad del tenant leída de tenant_info de SU base, así que es la ruta donde una fuga se vería a simple vista: si el aislamiento cediera, el slug y el nombre de la BD de B saldrían literalmente en el cuerpo. Sin parámetros hasta el módulo 01; el día que reciba uno, pasa a tipo recurso y el gate lo exige."
+      }
+    },
+    {
+      "ruta": "/api/terminologia",
+      "archivo": "src/app/api/terminologia/route.ts",
+      "metodos": [
+        "GET",
+        "PUT"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Catálogo de terminología resuelto del tenant [AC-FMIG-04] y su edición [AC-FMIG-06]. Sin parámetro de ruta: el tenant sale de x-flota-tenant-bd, igual que /api/tema. El GET es la fuga silenciosa que ya documentaba este AC —no hay dinero ni PII, «parada» de B en vez de «Punto extra» de A no compromete nada operativo, pero SÍ delataría estructura de marca frente a un vecino—. El PUT eleva el daño: sin aislamiento, A podría RENOMBRAR el diccionario de B —vandalizar cómo la app le habla a sus propios choferes— y, por sellar una config_version nueva en cada edit (§4.4), correrle además la versión congelada al PRÓXIMO turno que B abra. El caso genérico va sin credencial de tenant y la guardia contesta 404 pelado antes de tocar tenant_terminology, en las dos verbos."
+      }
+    },
+    {
+      "ruta": "/api/torre-de-control",
+      "archivo": "src/app/api/torre-de-control/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La torre de control del gestor [AC-FTEL-04] — última posición por vehículo EN RUTA. Sin parámetro de ruta: la lista sale entera de `vehiculosEnRuta(pool, ahora)`, que solo conoce el pool ya resuelto contra la BD del tenant de la sesión (mismo patrón que `/api/liquidaciones/[id]`). El daño de una fuga acá no es dinero ni PII de terceros: es la POSICIÓN GPS EN VIVO de los vehículos de B — con quién trabaja, qué rutas corre, dónde está su flota ahora mismo, información que el §7.8 (Ley 21.719) exige minimizar y que el §4.3 ya excluye de frente incluso para el propio contratante de B (AC-FTEL-05). El caso genérico va sin credencial de tenant (404 pelado antes de tocar `posiciones`) y con sesión de A pero cabeceras apuntando a B: cero patentes ni coordenadas de B en la respuesta."
+      }
+    },
+    {
+      "ruta": "/api/turnos",
+      "archivo": "src/app/api/turnos/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Apertura y listado del vehículo-día [AC-FVEH-06]. Sin parámetro de ruta: el vehículo se nombra en el cuerpo y el tenant sale del ruteo. El caso genérico va sin credencial y sin payload, así que la guardia contesta 404 pelado antes de tocar la base — y como el POST MUTA, enciende el comparador de huella de la BD de B, que es lo que prueba que no se pudo abrir una jornada en la flota del vecino. Un turno ajeno no es solo una fuga: le suma al vecino un vehículo-día que nadie trabajó, y el denominador de su EEVD (§2) queda mintiendo. El cruce CON payload —un uuid de vehículo de B— lo prueba la suite del módulo, que sabe cómo se ve uno."
+      }
+    },
+    {
+      "ruta": "/api/turnos/[id]/cierre",
+      "archivo": "src/app/api/turnos/[id]/cierre/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "turnos",
+          "columna": "id"
+        },
+        "nota": "Cierre del turno (F5) [AC-FVEH-21]. El parámetro es el TURNO de B: cerrárselo desde A le termina una jornada que su chofer todavía está trabajando, y le deja respondida la pregunta del enchufe sin que nadie la haya mirado — lo que el Anexo B usa para decidir un rojo. Contrato 404 y huella de B intacta; el fixture del vecino siembra un turno abierto para que el id sea real."
+      }
+    },
+    {
+      "ruta": "/api/turnos/[id]/cierre-forzado",
+      "archivo": "src/app/api/turnos/[id]/cierre-forzado/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "turnos",
+          "columna": "id"
+        },
+        "nota": "Cierre forzado del turno (KR-41) [AC-FVEH-22]. El parámetro es el TURNO de B, y cerrarlo desde A es de las mutaciones más destructivas del módulo: le marca al vecino una jornada como cerrada por la fuerza —lo que su módulo de liquidación lee distinto de un cierre real— y le resuelve una fila de «Por revisar» que su operación todavía no atendió. Contrato 404 y huella de B intacta. El fixture del vecino siembra un turno abierto para que el id sea REAL: contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin probar nada."
+      }
+    },
+    {
+      "ruta": "/api/turnos/[id]/posiciones",
+      "archivo": "src/app/api/turnos/[id]/posiciones/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "turnos",
+          "columna": "id"
+        },
+        "nota": "Captura de un punto de rastreo en vivo [AC-FTEL-01]. El parámetro es el TURNO de B: capturarle una posición desde A le sumaría al vecino un punto GPS falso a su propia jornada, y —peor— un turno de B que YA cerró rebota igual por el trigger de privacidad del §7.8 (0074), así que un id de otro tenant no puede colarse ni disfrazado de 'turno abierto ajeno'. Contrato 404 y huella de B intacta; el fixture del vecino siembra un turno abierto para que el id sea REAL: contra un uuid inventado, un handler que mirara el recurso antes que el tenant contestaría 404 igual y el caso pasaría en verde sin haber probado nada."
+      }
+    },
+    {
+      "ruta": "/api/turnos/abierto",
+      "archivo": "src/app/api/turnos/abierto/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "El turno abierto del tenant, con la nota del anterior [AC-FVEH-21]. Sin parámetro: devuelve siempre el del tenant que eligió el ruteo. El cruce genérico verifica que la jornada en curso del vecino —qué camión salió y con quién— no se pueda leer desde el host de A ni inyectando su identidad por cabecera."
+      }
+    },
+    {
+      "ruta": "/api/vehiculos",
+      "archivo": "src/app/api/vehiculos/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Listado de la flota, la lectura que el §5.4 le reserva al operador para asignar [AC-FVEH-01]. Sin parámetro: devuelve siempre los vehículos del tenant que eligió el ruteo. El cruce genérico verifica que la flota de B no se pueda enumerar desde el host de A ni inyectando su identidad por cabecera — y acá el tamaño de la flota ajena ya es información, así que el contrato es 404 sin sesión y ni una patente de B en la respuesta."
+      }
+    },
+    {
+      "ruta": "/bandeja",
+      "archivo": "src/app/bandeja/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de la bandeja de encargos (F1) [AC-FRUT-01]. No recibe identificador por URL: empresa y destino se eligen con chips de las propias listas del tenant, y el alta pasa por /api/encargos, que tiene su caso. Cruce genérico — identidad de B por los canales falsificables."
+      }
+    },
+    {
+      "ruta": "/carga",
+      "archivo": "src/app/carga/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de recepción de carga en el andén (§5.2 F2) [AC-FRUT-07]. No recibe identificador por URL: el camión se elige con un chip y todo lo que hace pasa por /api/vehiculos, /api/rutas y /api/paradas/[id]/manifiesto, que tienen sus propios casos. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y pesa porque el HTML servido no puede traer las patentes del vecino ni las razones sociales de quienes le cargan antes de que haya sesión."
+      }
+    },
+    {
+      "ruta": "/cliente",
+      "archivo": "src/app/cliente/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Raíz del namespace del portal del contratante (§3.E1.10) [AC-FPOR-04]. No recibe identificador por URL, así que el cruce que aplica es el genérico —identidad de B por los canales falsificables (host propio de A + cabeceras de tenant apuntando a B)—, PERO acá pesa distinto que en el resto del panel: antes de que Next vea el request, `servidor.mjs` ya decidió 403 si el portal está apagado para el tenant resuelto por el HOST, nunca por una cabecera. Contra el vecino B, el host de A resuelve el pool de A (AC-FTEN-05) y el entitlement que se consulta es el de A — la respuesta jamás depende de lo que A haya mandado sobre B."
+      }
+    },
+    {
+      "ruta": "/cliente/api/encargos",
+      "archivo": "src/app/cliente/api/encargos/route.ts",
+      "metodos": [
+        "GET",
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "GET: la lista de encargos propios [AC-FPOR-07], sin cambios. POST: el alta del contratante [AC-FPOR-08] — sin identificador por URL, y el `empresa_cliente_id` con el que se inserta sale SIEMPRE de `sesion.empresaClienteId`, jamás del body (a diferencia de `/api/encargos` del operador, que sí lo recibe porque elige entre varias). Contra el vecino B, el host de A resuelve el pool y la sesión de A (AC-FTEN-05); no hay ningún campo de la petición que pueda hacer que la fila nazca con la empresa de B."
+      }
+    },
+    {
+      "ruta": "/cliente/api/encargos/[id]",
+      "archivo": "src/app/cliente/api/encargos/[id]/route.ts",
+      "metodos": [
+        "GET",
+        "PATCH"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "encargos",
+          "columna": "id"
+        },
+        "nota": "GET ya probado en AC-FPOR-06. PATCH: la corrección del contratante, solo hasta la aceptación [AC-FPOR-08] — `editarEncargo` (servidor/encargos.ts, AC-FRUT-03) da 404 (`no_existe`) igual para un id de otro tenant que para uno inexistente, y 404 también (`no_es_de_su_creador`) para un encargo de OTRO usuario de la MISMA empresa, así que ni siquiera dentro del propio tenant se enumera de quién es cada fila. Contra un tenant vecino el id de B ni está en esta base (§4.1). Contrato 404 y BD de B sin cambios."
+      }
+    },
+    {
+      "ruta": "/cliente/api/encargos/importar",
+      "archivo": "src/app/cliente/api/encargos/importar/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Import CSV del portal del contratante [AC-FPOR-09] — sin identificador por URL, y la `empresa_cliente_id` con la que se inserta cada fila sale SIEMPRE de `sesion.empresaClienteId` (mismo candado que `/cliente/api/encargos` POST, AC-FPOR-08), jamás de una columna del archivo. Contra el vecino B, el host de A resuelve el pool y la sesión de A (AC-FTEN-05); ninguna fila del CSV que suba A puede nacer con la empresa de B, y RLS (`empresa_del_cliente`, 0040) confina igual la escritura aunque el servidor tuviera un bug."
+      }
+    },
+    {
+      "ruta": "/cliente/api/evidencias/[id]",
+      "archivo": "src/app/cliente/api/evidencias/[id]/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "evidence",
+          "columna": "id"
+        },
+        "nota": "Una evidencia (`evidence`, §4.6) del contratante [AC-FPOR-06]. Sin columna de empresa propia, se confina por JOIN contra `paradas` (RLS de 0040, por sus ítems) — el join es la garantía, no un `where` que se pueda olvidar. Contra un tenant vecino el id de B ni siquiera está en esta base. Contrato 404 y BD de B sin cambios."
+      }
+    },
+    {
+      "ruta": "/cliente/api/liquidacion-lineas/[id]",
+      "archivo": "src/app/cliente/api/liquidacion-lineas/[id]/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "liquidacion_lineas",
+          "columna": "id"
+        },
+        "nota": "Una línea de liquidación del contratante, leída vía `liquidacion_lineas_cliente` (0067) [AC-FPOR-06]. RLS de `liquidacion_lineas` (0063) confina por `empresa_cliente_id`; trae cada monto CLP de la línea — exactamente lo que el §3.E1.10 reserva a SU empresa, cruzando además el límite de tenant. Contrato 404 y BD de B sin cambios."
+      }
+    },
+    {
+      "ruta": "/cliente/api/liquidacion-lineas/[id]/disputa",
+      "archivo": "src/app/cliente/api/liquidacion-lineas/[id]/disputa/route.ts",
+      "metodos": [
+        "POST"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "liquidacion_lineas",
+          "columna": "id"
+        },
+        "nota": "La disputa por línea del contratante [AC-FPOR-10]. `disputarLineaDelCliente` (servidor/portal-cliente.ts) filtra `liquidacion_lineas_cliente where id = $1 and empresa_cliente_id = $2` A MANO antes de invocar `disputar_linea()` (0066) — necesario porque el pool conecta como `flota_admin` (`rolbypassrls=true`) y la RLS de la función nunca se evalúa sobre esta conexión (cabecera de `portal-cliente.ts`). Contra un id de la empresa vecina o de otro tenant, el filtro no encuentra fila: 404 y CERO escritura — el POST MUTA (`disputa_estado`, evento `liquidacion_linea.disputada`) y por eso este caso enciende además el comparador de huella de la BD de B: una disputa escrita en el vecino no se puede deshacer (E1 no construye resolución, spec 06 Pregunta 4) y contaminaría su registro de reclamo."
+      }
+    },
+    {
+      "ruta": "/cliente/api/liquidacion-lineas/[id]/evidencia",
+      "archivo": "src/app/cliente/api/liquidacion-lineas/[id]/evidencia/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "liquidacion_lineas",
+          "columna": "id"
+        },
+        "nota": "El drill-down línea→evidencia del contratante [AC-FPOR-10], gemelo confinado de `/api/liquidacion-lineas/[id]/evidencia` del operador (AC-FTAR-07). `evidenciaDeLineaDelCliente` confirma PRIMERO que la línea es de la empresa de la sesión vía `liquidacion_lineas_cliente` (mismo filtro explícito que el resto de este archivo, RLS no evaluada por `flota_admin`) y solo entonces lee `entregas_pod`/`evidence`. Contra un id de la empresa vecina o de otro tenant, el filtro inicial no encuentra fila: 404 y BD de B sin cambios."
+      }
+    },
+    {
+      "ruta": "/cliente/api/liquidaciones",
+      "archivo": "src/app/cliente/api/liquidaciones/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La lista de cabeceras de liquidación propias del portal [AC-FPOR-07]. Mismo argumento que `/cliente/api/encargos`: sin identificador, confinada por `empresa_cliente_id` de la sesión dentro de `liquidacionesDelCliente` sobre `liquidacion_cliente` (0067) — la vía sancionada del §4.3. Nada que un vecino B pueda mandar en la petición cambia de qué tenant sale la sesión."
+      }
+    },
+    {
+      "ruta": "/cliente/api/liquidaciones/[id]",
+      "archivo": "src/app/cliente/api/liquidaciones/[id]/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [
+        "id"
+      ],
+      "cruce": {
+        "tipo": "recurso",
+        "ids_de_b": {
+          "tabla": "liquidaciones",
+          "columna": "id"
+        },
+        "nota": "La liquidación del contratante con sus líneas, leída vía `liquidacion_cliente`/`liquidacion_lineas_cliente` (0067) [AC-FPOR-06]. RLS de `liquidaciones` (0063) confina por `empresa_cliente_id`; trae el período y cada monto CLP de sus líneas, cruzando además el límite de tenant. Contrato 404 y BD de B sin cambios."
+      }
+    },
+    {
+      "ruta": "/cliente/api/motivos-disputa",
+      "archivo": "src/app/cliente/api/motivos-disputa/route.ts",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "El catálogo de motivos de disputa [AC-FPOR-10] — filtrado por `estado_asociado = 'liquidacion_linea_disputada'`, jamás el catálogo de no-entrega del terreno. Sin identificador por URL; `motivos` es una tabla del TENANT (no de la empresa contratante), así que no hay cruce intra-tenant que probar acá — el host de A resuelve el pool de A (AC-FTEN-05) y el catálogo que sale es siempre el del tenant de la sesión."
+      }
+    },
+    {
+      "ruta": "/cliente/encargos",
+      "archivo": "src/app/cliente/encargos/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La pantalla «Encargos» del portal [AC-FPOR-07]. El Server Component no lee sesión ni datos de negocio — es un shell «use client» que pide `/cliente/api/encargos` con `pedir()` (la credencial del aparato). El candado de módulo (AC-FPOR-04, servidor.mjs) ya cierra el namespace por HOST antes de que Next reciba el request; contra el vecino B no hay nada que este archivo pueda filtrar mal, porque no filtra nada — reenvía lo que la API ya confinó."
+      }
+    },
+    {
+      "ruta": "/cliente/liquidaciones",
+      "archivo": "src/app/cliente/liquidaciones/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La pantalla «Liquidación» del portal [AC-FPOR-07]. Mismo shell que «Encargos»: Server Component sin sesión ni datos propios, «use client» que pide `/cliente/api/liquidaciones`. Nada que filtrar mal acá — el candado y la confinación viven antes."
+      }
+    },
+    {
+      "ruta": "/cliente/nuevo",
+      "archivo": "src/app/cliente/nuevo/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La pantalla «Nuevo / Importar CSV» del portal [AC-FPOR-07]. Server Component ESTÁTICO: sin fetch, sin sesión, sin dato de ningún tenant — la mutación de alta (AC-FPOR-08) y el import (AC-FPOR-09) todavía no existen. Nada que un vecino B pueda cruzar contra algo que no lee ni escribe nada."
+      }
+    },
+    {
+      "ruta": "/eco-score",
+      "archivo": "src/app/eco-score/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla del eco-score del gestor [AC-FTEL-08]. No recibe identificador de recurso: es cliente puro que solo llama `pedir(\"/api/eco-score\")`, mismo criterio que `torre-de-control/page.tsx` (AC-FTEL-04) — el confinamiento por tenant y por rol vive ENTERO en ese endpoint, no acá. El cruce que aplica es el genérico de una pantalla sin recurso: identidad de B por los canales falsificables (host propio de A + cabeceras de tenant apuntando a B) y el shell servido no puede filtrar ni un chofer ni un porcentaje de B porque el HTML no trae la lista — la trae el fetch del cliente, que golpea el endpoint con SU PROPIA sesión."
+      }
+    },
+    {
+      "ruta": "/entrega",
+      "archivo": "src/app/entrega/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La tarjeta de la parada de entrega (§5.2 F4, KR-29) [AC-FRUT-22]. NO recibe el identificador como segmento de la URL, por el mismo motivo que `/ruta/cerrar`: el App Router serializa el árbol de segmentos —con el valor concreto del parámetro— dentro del HTML que sirve, incluso en el 404. La parada viaja en la consulta (`?parada=`) y el tenant sale del ruteo por host; sin una parada de tipo `entrega` que exista en la base de la casa, la pantalla contesta 404 antes de pintar un título. La mitad «recurso» del centinela la ejerce `/api/paradas/[id]/entrega`, que es por donde sale el detalle —qué empresas tienen el manifiesto sin confirmar— y donde el identificador sí viaja."
+      }
+    },
+    {
+      "ruta": "/hoy",
+      "archivo": "src/app/hoy/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Nivel 0 del tablero «Hoy» [AC-FSEM-01]. NO abre ninguna BD de tenant todavía: el digest real (`signal_rule` contra eventos/paradas) es de AC-FSEM-06/09 y depende de una tabla que esta iteración no crea (esquema de sesión supervisada). Mientras tanto la pantalla renderiza sobre semillas LITERALES embebidas en el código (`?seed=a`/`?seed=c`, default `a`) — ni lee ni recibe ningún identificador de tenant, así que no hay recurso de B que pedirle ni dato de ningún tenant que filtrar: la respuesta es idéntica venga con la cabecera de tenant que venga. El cruce vuelve a pesar de verdad el día que AC-FSEM-06/09 la conecten al digest real."
+      }
+    },
+    {
+      "ruta": "/hoy/excepciones",
+      "archivo": "src/app/hoy/excepciones/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Detalle N2 [AC-FSEM-05]. El `id` viaja como parámetro de CONSULTA (`?id=`), no de ruta — mismo criterio que `/api/agenda` (AC-FVEH-07) — porque mientras el digest real de AC-FSEM-06/09 no exista, ese `id` es literal de las semillas de `semaforo-fixtures.ts` y no un identificador de fila de ningún tenant: la pantalla no abre ninguna BD de tenant para resolverlo. El cruce que sí aplica es el genérico de una pantalla sin recurso — identidad de B por los canales falsificables, respuesta idéntica a la de A— y vuelve a pesar de verdad el día que esta pantalla lea `review_queue` real."
+      }
+    },
+    {
+      "ruta": "/liquidaciones",
+      "archivo": "src/app/liquidaciones/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "El drill-down línea→evidencia del operador/admin [AC-FTAR-07]. El `id` viaja como parámetro de CONSULTA (`?id=`), no de ruta — mismo criterio que `/hoy/excepciones` (AC-FSEM-05): esta pantalla no abre ninguna BD de tenant por su cuenta, solo llama `pedir()`, así que el confinamiento por tenant y por rol vive ENTERO en `/api/liquidaciones/[id]` y `/api/liquidacion-lineas/[id]/evidencia`, que sí son recurso de ruta con su propio caso de cruce. El caso genérico que sí aplica acá es identidad de B por los canales falsificables ⇒ respuesta idéntica a la de A."
+      }
+    },
+    {
+      "ruta": "/listos",
+      "archivo": "src/app/listos/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla del tablero (§5.2-F1) [AC-FVEH-12]. No recibe identificador por URL: la flota sale del ruteo y la sugerencia manda el vehículo en el cuerpo. Cruce genérico — identidad de B por los canales falsificables, y ni una patente del vecino en la respuesta."
+      }
+    },
+    {
+      "ruta": "/maestras",
+      "archivo": "src/app/maestras/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de rutas maestras (§3.E1.6) [AC-FRUT-06]. No recibe identificador por URL: la plantilla se elige con un chip y todo lo que hace pasa por /api/maestras y /api/rutas/[id]/paradas, que tienen sus propios casos. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y pesa porque el HTML servido no puede traer el nombre de los recorridos del vecino ni el de sus destinos antes de que haya sesión."
+      }
+    },
+    {
+      "ruta": "/panel",
+      "archivo": "src/app/panel/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla del dueño (F-A y F-C del §5.4). No recibe identificador por URL: todo lo que hace pasa por /api/gobierno/**, que ya tiene sus propios casos declarados, y el tenant sale del ruteo. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y acá pesa porque el HTML servido no puede traer ni el slug ni la base del vecino antes siquiera de que haya sesión: sin credencial la pantalla no pinta datos de nadie."
+      }
+    },
+    {
+      "ruta": "/panel/dpa",
+      "archivo": "src/app/panel/dpa/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de solo lectura sobre el shell [AC-FMIG-22]: no recibe identificador por URL, y todo lo que muta (la aceptación) pasa por `POST /api/gobierno/dpa`, que ya tiene su propio caso declarado y su propia guardia de rol. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y el HTML servido no puede traer el estado de aceptación del vecino antes de que el GET del endpoint resuelva contra la base correcta."
+      }
+    },
+    {
+      "ruta": "/panel/funciones",
+      "archivo": "src/app/panel/funciones/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de solo lectura sobre el shell [AC-FMIG-08]: no recibe identificador por URL, y todo lo que muta pasa por `PATCH /api/gobierno/funciones`, que ya tiene su propio caso declarado y su propia guardia de rol. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y el HTML servido no puede traer un `lookup_key` ni un estado de plan del vecino antes de que el GET del endpoint resuelva contra la base correcta."
+      }
+    },
+    {
+      "ruta": "/panel/terminologia",
+      "archivo": "src/app/panel/terminologia/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de solo lectura del catálogo de terminología [AC-FMIG-04]. No recibe identificador por URL: todo lo que pinta pasa por /api/terminologia, que ya tiene su propio caso declarado, y el tenant sale del ruteo por host. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y el HTML servido no puede traer un term_key ni una fila de tenant_terminology del vecino antes de que /api/terminologia resuelva contra la base correcta."
+      }
+    },
+    {
+      "ruta": "/recarga",
+      "archivo": "src/app/recarga/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "La tarjeta de la parada de recarga (§5.2 F4, §4.7) [AC-FPOD-13]. Mismo patrón que `/entrega`: NO recibe el identificador como segmento de la URL — el App Router serializa el árbol de segmentos, con el valor concreto, dentro del HTML que sirve, incluso en el 404. La parada viaja en la consulta (`?parada=`) y el tenant sale del ruteo por host; sin una parada de tipo `recarga` que exista en la base de la casa, la pantalla contesta 404 antes de pintar un título — un `?parada=` de B contra la sesión de A no revela ni el vehículo ni el turno del vecino. La mitad «recurso» del centinela la ejerce el MISMO motor de sync (`/api/sync/capturas`), que es por donde sale el cierre real y donde el `vehiculo_id` sí viaja, confinado por la sesión del chofer."
+      }
+    },
+    {
+      "ruta": "/ruta/cerrar",
+      "archivo": "src/app/ruta/cerrar/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de cierre de ruta [AC-FRUT-11]. NO recibe el identificador como segmento de la URL, y esa es una decisión del centinela 2 y no de estilo: el App Router serializa el árbol de segmentos —con el valor concreto del parámetro— dentro del HTML que sirve, incluso cuando la pantalla muere en 404, así que una ruta `/ruta/<id>/cerrar` devolvería ese id en su cuerpo pase lo que pase. La ruta a cerrar viaja en la consulta y el tenant sale del ruteo por host; el caso que aplica es el genérico —identidad de B por los canales falsificables— y acá pesa porque el HTML servido no puede traer ni el slug ni la base del vecino. Sin `?ruta=` que exista en la base de la casa, la pantalla contesta 404 antes de pintar un título; la mitad «recurso» del centinela la ejerce `/api/rutas/[id]/cierre`, que es por donde salen los datos y donde el identificador sí viaja."
+      }
+    },
+    {
+      "ruta": "/rutas",
+      "archivo": "src/app/rutas/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Armar rutas (§5.2-F1) [AC-FRUT-05]. No recibe identificador por URL: la bandeja y los camiones se eligen con chips y todo lo que hace pasa por /api/encargos, /api/vehiculos y /api/rutas, que tienen sus propios casos. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y pesa porque el HTML servido no puede traer ni la razón social de una empresa contratante del vecino ni el nombre de sus destinos antes de que haya sesión: son exactamente los datos que un competidor querría."
+      }
+    },
+    {
+      "ruta": "/solicitar",
+      "archivo": "src/app/solicitar/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla F-B del §5.4. No recibe identificador de recurso —el código de la invitación llega por query o se teclea, y no es un id de la casa— así que el cruce que aplica es el genérico: identidad de B inyectada por los canales falsificables (host propio de A + cabeceras de tenant apuntando a B) y ni una cadena de B en el HTML servido. Importa más que en otras pantallas porque esta es la primera que un desconocido abre: si el shell filtrara el slug o la base del vecino, lo haría ante alguien que todavía no es de ninguna de las dos empresas."
+      }
+    },
+    {
+      "ruta": "/torre-de-control",
+      "archivo": "src/app/torre-de-control/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla del mapa de flota del gestor [AC-FTEL-04]. No recibe identificador de recurso: es cliente puro que solo llama `pedir(\"/api/torre-de-control\")`, mismo criterio que `liquidaciones/page.tsx` (AC-FTAR-07) — el confinamiento por tenant y por rol vive ENTERO en ese endpoint, no acá. El cruce que aplica es el genérico de una pantalla sin recurso: identidad de B por los canales falsificables (host propio de A + cabeceras de tenant apuntando a B) y el shell servido no puede filtrar ni una patente ni una coordenada de B porque el HTML no trae la lista — la trae el fetch del cliente, que golpea el endpoint con SU PROPIA sesión."
+      }
+    },
+    {
+      "ruta": "/turno/abrir",
+      "archivo": "src/app/turno/abrir/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de apertura del turno (F3) [AC-FVEH-10]. No recibe identificador por URL: el vehículo se elige con un chip de la propia flota y todo lo que hace pasa por /api/turnos, /api/chequeos y /api/lecturas, que tienen sus casos declarados. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y pesa especialmente acá: es la pantalla que un chofer abre a las cinco de la mañana, y una lista de vehículos del vecino le haría abrir turno sobre un camión que no es de su empresa."
+      }
+    },
+    {
+      "ruta": "/turno/cerrar",
+      "archivo": "src/app/turno/cerrar/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de cierre del turno (F5) [AC-FVEH-21]. No recibe identificador por URL: el turno abierto lo resuelve el servidor desde la sesión, y todo lo que hace pasa por /api/chequeos, /api/lecturas y /api/turnos/[id]/cierre. El cruce que aplica es el genérico — y pesa porque es la última pantalla del día: un turno ajeno acá se cerraría sin que nadie lo note hasta el día siguiente."
+      }
+    },
+    {
+      "ruta": "/vehiculos",
+      "archivo": "src/app/vehiculos/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla de alta y listado de vehículos (§5.4) [AC-FVEH-01]. No recibe identificador por URL: todo lo que hace pasa por /api/vehiculos y /api/gobierno/vehiculos, que tienen sus propios casos declarados. El cruce que aplica es el genérico —identidad de B por los canales falsificables— y pesa porque el HTML servido no puede traer ni el slug ni la base del vecino antes de que haya sesión."
+      }
+    },
+    {
+      "ruta": "/ya-tengo-cuenta",
+      "archivo": "src/app/ya-tengo-cuenta/page.tsx",
+      "metodos": [
+        "GET"
+      ],
+      "params": [],
+      "cruce": {
+        "tipo": "sin_recurso",
+        "nota": "Pantalla F-E del §5.4, el teléfono nuevo. Sin parámetro de ruta: quien entra se identifica con su RUT y su PIN dentro del formulario, y ninguno de los dos es un identificador de la casa que se pueda pedir por URL. El cruce que aplica es el genérico —identidad de B por los canales falsificables y ni una cadena de B en el HTML—. El caso con CREDENCIALES de B contra el subdominio de A lo cubre la suite del módulo (e2e/reenrolamiento.spec.ts), que sí sabe cómo se ve un RUT con su PIN; acá el endpoint que escribe es /api/reenrolamiento y tiene su propio caso declarado."
+      }
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+name: rafaga-matinal
+
+# Pipeline APARTE del gate único [AC-FPOD-15] — §9.2: "Performance en pipeline aparte […]
+# jamás dentro del gate de 10 min". `gate.yml` corre en cada push/PR y JAMÁS invoca esto;
+# esto corre nightly y a demanda, y JAMÁS gatilla en push/PR — un p95 alto acá no bloquea
+# ningún merge, es la fila Capacidad del §0 avisando con tendencia, no un gate de commit.
+#
+# Postgres 18 real como SERVICIO del runner (no `db/flota/cluster.sh`, que asume el
+# Postgres.app local de la máquina de desarrollo — no tiene sentido en un runner efímero de
+# GitHub): `FLOTA_DATABASE_URL` es la vía de escape que ya documenta `db/flota/conectar.mjs`
+# para que el resto de los scripts (migrar, provisionar, sembrar-carga) hablen con ESTE
+# servidor sin saber que no es el de siempre. `POSTGRES_HOST_AUTH_METHOD: trust` porque el
+# runner es efímero y de un solo uso — no hace falta reproducir acá el `scram-sha-256` por
+# rol que sí importa en el cluster de desarrollo compartido (`cluster.sh`, AC-FTEN-03).
+
+on:
+  schedule:
+    # 09:00 UTC ≈ madrugada en América/Santiago (UTC-3/-4 según horario de verano) — antes
+    # del tráfico real del día, que es lo que "ráfaga matinal" describe (§9.2).
+    - cron: "0 9 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: rafaga-matinal
+  cancel-in-progress: false
+
+jobs:
+  rafaga-matinal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      FLOTA_DATABASE_URL: postgres://postgres@localhost:5432/postgres
+      K6_RESUMEN_PATH: ${{ github.workspace }}/rafaga-matinal-resumen.generado.json
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.17.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Instalar dependencias (lockfile congelado)
+        run: pnpm install --frozen-lockfile
+
+      - name: Instalar k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Ráfaga matinal — provisión, siembra, build, servidor, k6 (§0)
+        run: bash packages/metodo/scripts/k6/rafaga-matinal.sh
+
+      # Se sube SIEMPRE, gane o pierda el paso de arriba: el resumen de la corrida que HIZO
+      # fallar el pipeline es el que más interesa mirar. Sin esto, "artefacto con tendencia"
+      # (§9.2) sería una frase sin nada detrás.
+      - name: Subir resumen k6 (artefacto con tendencia, §9.2)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rafaga-matinal-resumen-${{ github.run_id }}
+          path: rafaga-matinal-resumen.generado.json
+          if-no-files-found: warn
+          retention-days: 90

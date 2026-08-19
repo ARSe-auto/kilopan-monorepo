@@ -1,0 +1,375 @@
+import type { Pool } from "pg";
+import { enActo, enLectura } from "./gobierno.ts";
+import type { Sesion } from "./sesion.ts";
+import { entitlementVigente, FEATURES } from "./config.ts";
+import type { TipoDeDte } from "./manifiestos.ts";
+
+// Lectura de liquidaciones y su drill-down línea→evidencia [AC-FTAR-07] — spec 06 §9, §3.E1.9.
+//
+// Casi todo acá es LECTURA. El devengo (AC-FTAR-03), la máquina de estados (AC-FTAR-05) y la
+// disputa (AC-FTAR-06) viven en la BD; de este módulo salen las dos consultas que la pantalla
+// del operador/admin necesita —la liquidación con sus líneas y la evidencia completa de UNA
+// línea— y UNA sola mutación, el registro manual del folio del DTE (AC-FTAR-16, al final).
+//
+// ─── POR QUÉ SOLO `entrega_pod` TRAE DETALLE ─────────────────────────────────────────────
+//
+// El catálogo de `evidencia_tipo` tiene cuatro valores (§4.5), pero hoy solo `entrega_pod`
+// tiene forma: `cierre_turno` está BLOQUEADO por la Pregunta 12 de la spec (sin atribución
+// turno→empresa, AC-FTAR-14 no crea líneas de ese tipo) y `sesion_recarga` no tiene regla de
+// devengo cerrada (Pregunta 2) — ninguno de los dos puede aparecer todavía en una liquidación
+// real. `devolucion` sí devenga, pero su tabla es de otro módulo (AC-FRUT-21) y mostrarla acá
+// sin que ningún AC lo pida sería inventar alcance. Los tres quedan con un detalle mínimo
+// (tipo + id) en vez de un 500: la evidencia EXISTE, solo que este drill-down no la despliega.
+//
+// ─── POR QUÉ NO HAY FOTO PARA MOSTRAR ────────────────────────────────────────────────────
+//
+// `evidence.archivo_url` nunca se escribe (AC-FPOD-19: el servidor solo guarda el sha256 que
+// re-hashea, la foto es mejora progresiva §7.6 y su transporte de binario no persiste el
+// archivo en ningún storage todavía). El drill-down muestra lo que sí existe — que se capturó,
+// de qué tipo, y cuándo — sin fingir una imagen que la base no tiene.
+
+const ROLES_CON_ACCESO = new Set(["admin_tenant", "operador"]);
+
+export function puedeVerLiquidaciones(rol: string): boolean {
+  return ROLES_CON_ACCESO.has(rol);
+}
+
+// ─── La contracción por modo/entitlement de ESTE módulo [AC-FTAR-18] — §3 selector, §5.5, §0 ──
+//
+// El rol y el entitlement responden dos preguntas distintas y por eso conviven: `puedeVerLiquidaciones`
+// dice si ESTA PERSONA puede mirar dinero (§8: el chofer jamás ve CLP), y esto dice si el TENANT
+// compró el módulo. Un admin de un tenant `mi_flota` pasa el primero y tiene que rebotar en el
+// segundo — si no, el módulo estaría «oculto» en la navegación y contestando por la API, que es
+// la forma exacta en que una contracción se vuelve decorativa.
+//
+// ESTRICTO —«sin entrada en el snapshot» cuenta APAGADO— y no `moduloVigenteEncendido`. Es el
+// mismo criterio que ya usan las otras dos puertas del grupo DaaS: `portalClienteEncendido`
+// (`servidor/portal.ts`, AC-FPOR-04) y `modulosNavegables` (`dominio/manifest.ts`, AC-FPOR-03,
+// `entitlements[clave] === true`). El default al revés es el de los MÓDULOS del §5.5, que nacen
+// prendidos porque son el tamaño del producto tal como lo compraron; el grupo DaaS nace apagado
+// porque es lo que un tenant `mi_flota` NO contrató — encenderlo por omisión le pondría las
+// tarifas de sus clientes delante a una flota propia que nunca las tuvo.
+//
+// La feature es `liquidacion_por_cliente` y no `tarifas` porque es la del módulo al que estas dos
+// puertas pertenecen. Para el caso del MODO da lo mismo —`modo_recorte` apaga las cuatro juntas
+// en `mi_flota` (0003)— pero para un override por feature del hito (g) no: apagar «tarifas» no
+// puede cerrar la liquidación que el contratante ya tiene devengada.
+//
+// Conexión suelta y no `enLectura`: `versionVigente` SELLA la primera `config_version` del tenant
+// si todavía no hay ninguna, y esa escritura no cabe en una transacción `read only` (mismo motivo
+// por el que `/api/manifiesto` usa `enActo`). `config_version` no lleva política de fila.
+export async function moduloDeLiquidacionEncendido(pool: Pool, slug: string): Promise<boolean> {
+  const cliente = await pool.connect();
+  try {
+    return await entitlementVigente(cliente, slug, FEATURES.liquidacion_por_cliente);
+  } finally {
+    cliente.release();
+  }
+}
+
+export type LineaDeLiquidacion = {
+  id: string;
+  concepto: string;
+  cantidad: number;
+  monto_clp: string;
+  evidencia_tipo: string;
+  evidencia_id: string;
+  bloqueada: boolean;
+  disputa_estado: string | null;
+  creado_en: string;
+};
+
+/** El DTE de un tercero que ampara la liquidación, o `null` mientras nadie registró el folio
+ *  [AC-FTAR-16]. La app lo REGISTRA y lo muestra; jamás lo emite (§7.3, art. 97 N°4 CT). */
+export type FolioDeLiquidacion = {
+  id: string;
+  tipo: string;
+  folio: string;
+  emisor: string;
+  fecha: string | null;
+};
+
+export type LiquidacionConLineas = {
+  id: string;
+  estado: string;
+  periodo_inicio: string;
+  periodo_fin: string;
+  empresa_razon_social: string;
+  empresa_rut: string;
+  documento: FolioDeLiquidacion | null;
+  lineas: LineaDeLiquidacion[];
+};
+
+/** La liquidación con sus líneas, o `null` si el id no existe (o pertenece a otro tenant: cada
+ *  tenant es su propia base, §4.1, así que un id de B sencillamente no está en esta consulta). */
+export async function liquidacionConLineas(
+  pool: Pool,
+  sesion: Sesion,
+  liquidacionId: string,
+): Promise<LiquidacionConLineas | null> {
+  return enLectura(pool, sesion, async (c) => {
+    const { rows: cabecera } = await c.query<{
+      id: string;
+      estado: string;
+      periodo_inicio: string;
+      periodo_fin: string;
+      empresa_razon_social: string;
+      empresa_rut: string;
+      documento_id: string | null;
+      documento_tipo: string | null;
+      documento_folio: string | null;
+      documento_emisor: string | null;
+      documento_fecha: string | null;
+    }>(
+      // El folio se lee desde el drill-down [AC-FTAR-16]: `left join` porque la asociación es
+      // nullable por diseño (§4.6, «asociación nullable al folio registrado») — una liquidación
+      // sin folio registrado es el estado normal, no un dato faltante.
+      `select l.id::text as id, l.estado,
+              to_char(l.periodo_inicio, 'YYYY-MM-DD') as periodo_inicio,
+              to_char(l.periodo_fin, 'YYYY-MM-DD') as periodo_fin,
+              e.razon_social as empresa_razon_social, e.rut as empresa_rut,
+              rd.id::text as documento_id, rd.tipo::text as documento_tipo,
+              rd.folio as documento_folio, rd.emisor as documento_emisor,
+              to_char(rd.fecha, 'YYYY-MM-DD') as documento_fecha
+         from liquidaciones l
+         join empresas_cliente e on e.id = l.empresa_cliente_id
+         left join reference_document rd on rd.id = l.reference_document_id
+        where l.id = $1`,
+      [liquidacionId],
+    );
+    const fila = cabecera[0];
+    if (!fila) return null;
+    const documento: FolioDeLiquidacion | null =
+      fila.documento_id && fila.documento_tipo && fila.documento_folio && fila.documento_emisor
+        ? {
+            id: fila.documento_id,
+            tipo: fila.documento_tipo,
+            folio: fila.documento_folio,
+            emisor: fila.documento_emisor,
+            fecha: fila.documento_fecha,
+          }
+        : null;
+
+    const { rows: lineas } = await c.query<LineaDeLiquidacion>(
+      `select id::text as id, concepto, cantidad, monto_clp::text as monto_clp,
+              evidencia_tipo, evidencia_id::text as evidencia_id, bloqueada,
+              disputa_estado, creado_en::text as creado_en
+         from liquidacion_lineas
+        where liquidacion_id = $1
+        order by creado_en`,
+      [liquidacionId],
+    );
+
+    return {
+      id: fila.id,
+      estado: fila.estado,
+      periodo_inicio: fila.periodo_inicio,
+      periodo_fin: fila.periodo_fin,
+      empresa_razon_social: fila.empresa_razon_social,
+      empresa_rut: fila.empresa_rut,
+      documento,
+      lineas,
+    };
+  });
+}
+
+export type EvidenciaDePod = {
+  tipo: "entrega_pod";
+  resultado: string;
+  metodo_entrega: string | null;
+  motivo_etiqueta: string | null;
+  event_time: string;
+  capturas: { tipo: string; capturada_en: string }[];
+};
+
+export type EvidenciaDeLinea = {
+  linea_id: string;
+  evidencia_tipo: string;
+  evidencia_id: string;
+  detalle: EvidenciaDePod | null;
+};
+
+/** La evidencia completa de UNA línea — el drill-down de 1 clic del §3.E1.9. `null` si la
+ *  línea no existe. Para `entrega_pod`, junta el hecho (resultado, motivo, cuándo) con las
+ *  capturas de `evidence` que colgaron de SU parada (foto, firma — §4.6). */
+export async function evidenciaDeLinea(
+  pool: Pool,
+  sesion: Sesion,
+  lineaId: string,
+): Promise<EvidenciaDeLinea | null> {
+  return enLectura(pool, sesion, async (c) => {
+    const { rows: lineaRows } = await c.query<{
+      id: string;
+      evidencia_tipo: string;
+      evidencia_id: string;
+    }>(
+      `select id::text as id, evidencia_tipo, evidencia_id::text as evidencia_id
+         from liquidacion_lineas where id = $1`,
+      [lineaId],
+    );
+    const linea = lineaRows[0];
+    if (!linea) return null;
+
+    if (linea.evidencia_tipo !== "entrega_pod") {
+      return { linea_id: linea.id, evidencia_tipo: linea.evidencia_tipo, evidencia_id: linea.evidencia_id, detalle: null };
+    }
+
+    const { rows: podRows } = await c.query<{
+      resultado: string;
+      metodo_entrega: string | null;
+      parada_id: string;
+      event_time: string;
+      motivo_etiqueta: string | null;
+    }>(
+      `select ep.resultado::text as resultado, ep.metodo_entrega,
+              ep.parada_id::text as parada_id, ep.event_time::text as event_time,
+              m.etiqueta as motivo_etiqueta
+         from entregas_pod ep
+         left join motivos m on m.id = ep.motivo_id
+        where ep.id = $1`,
+      [linea.evidencia_id],
+    );
+    const pod = podRows[0];
+    if (!pod) {
+      return { linea_id: linea.id, evidencia_tipo: "entrega_pod", evidencia_id: linea.evidencia_id, detalle: null };
+    }
+
+    const { rows: capturas } = await c.query<{ tipo: string; capturada_en: string }>(
+      `select tipo::text as tipo, capturada_en::text as capturada_en
+         from evidence
+        where objeto_tabla = 'paradas' and objeto_id = $1
+        order by capturada_en`,
+      [pod.parada_id],
+    );
+
+    return {
+      linea_id: linea.id,
+      evidencia_tipo: "entrega_pod",
+      evidencia_id: linea.evidencia_id,
+      detalle: {
+        tipo: "entrega_pod",
+        resultado: pod.resultado,
+        metodo_entrega: pod.metodo_entrega,
+        motivo_etiqueta: pod.motivo_etiqueta,
+        event_time: pod.event_time,
+        capturas,
+      },
+    };
+  });
+}
+
+// ─── El registro MANUAL del folio [AC-FTAR-16] — §7.3, §4.6, §3.E2, art. 97 N°4 CT ──────────
+//
+// ─── LA APP REGISTRA, JAMÁS EMITE ──────────────────────────────────────────────────────────
+//
+// El DTE lo emitió un tercero autorizado por el SII —el software facturador del tenant o el
+// portal del SII— y lo que entra acá son los tres datos que se leen del documento ya emitido:
+// tipo, folio y emisor. Acá no se genera un folio, ni un XML, ni un TED; el grep-gate de
+// AC-FTAR-08 vigila el árbol entero para que la línea que lo rompa no llegue a existir. El
+// camino manual no es un puente hasta que E2 traiga el puerto `EmisorDTE`: es PERMANENTE
+// (§3.E2), porque un tenant que factura desde el portal del SII no va a dejar de hacerlo.
+//
+// ─── POR QUÉ ESTA MUTACIÓN SÍ REBOTA, SI `asociarDocumento` NO ─────────────────────────────
+//
+// `manifiestos.ts::asociarDocumento` es CAPTURA de terreno y por la regla de oro (§4.2) jamás
+// rechaza: el andén a las cuatro de la mañana no puede perder la constancia de que la carga
+// viajó amparada. Esto es lo contrario — una acción ONLINE de operador/admin sobre una
+// liquidación cerrada, con la persona mirando la pantalla— y la clasificación §4.2 de este
+// módulo (spec 06) la pone del lado que REBOTA 422 tipado. Un 422 acá se corrige tecleando de
+// nuevo; un folio equivocado escrito «para no perderlo» queda amparando plata ajena.
+//
+// ─── POR QUÉ SOLO SOBRE `cerrada` ──────────────────────────────────────────────────────────
+//
+// Supuesto operativo DERIVADO (el AC lo dice y la Pregunta 10 lo deja abierta): el seed del §10
+// muestra «1 cerrada con folio registrado» y el pipeline del §3.E2 arranca en `cerrada`. Cerrar
+// es lo que congela líneas y totales (§3.E1.9, 0065), y facturar un monto que todavía puede
+// crecer es emitir por una cifra que no es la final. `pagada` también rebota, por el otro lado:
+// el folio es lo que se cobra, así que llega ANTES del pago — uno que apareciera después sería
+// el folio de otra cosa, y sobrescribir en silencio el que amparó el pago es justo lo que el
+// índice único parcial de la 0072 existe para impedir.
+//
+// ─── EL «0 FILAS» DEL DUPLICADO NO SE CUIDA, SE CONSTRUYE ──────────────────────────────────
+//
+// Toda la mutación es UNA sentencia. `objetivo` es la liquidación elegible con su fila tomada
+// (`for update`); el INSERT del documento cuelga de ella —sin liquidación elegible no nace
+// ninguna fila— y el UPDATE cuelga del INSERT —folio ya registrado, el `on conflict do nothing`
+// no devuelve nada y no hay qué asociar—. Las dos formas del rebote dejan CERO filas escritas
+// porque no hay ninguna rama en la que una escriba y la otra no, y no porque el orden de tres
+// consultas separadas haya quedado bien puesto.
+//
+// El `on conflict do nothing` acá NO es la semántica «creando/ligando» de la custodia: es el
+// detector del duplicado. Ligar sería tomar el documento que ya existe y pegarlo a ESTA
+// liquidación — y ese documento ya ampara otra, que es exactamente lo que el AC llama duplicado.
+//
+// Sin evento append-only: el catálogo `evento_tipo` no tiene código para este acto y sembrarlo
+// es DDL de sesión supervisada (la 0072 dejó solo la columna). El acto igual queda con su antes
+// y su después en `audit_trail`, por el trigger `liquidaciones_auditar` de la 0063.
+
+export type RegistroDeFolio =
+  | { tipo: "ok"; reference_document_id: string }
+  | { tipo: "liquidacion_no_existe" }
+  | { tipo: "estado_no_admite_folio"; estado: string }
+  | { tipo: "folio_duplicado" }
+  | { tipo: "ya_tiene_folio" };
+
+/**
+ * Registra el folio de un DTE ya emitido por un tercero y lo asocia a SU liquidación.
+ *
+ * `liquidacion_no_existe` es 404 (y cubre también el id de otro tenant: cada tenant es su
+ * propia base, §4.1). Los otros tres son 422 con 0 filas escritas.
+ */
+export async function registrarFolioDeLiquidacion(
+  pool: Pool,
+  sesion: Sesion,
+  datos: {
+    liquidacionId: string;
+    tipo: TipoDeDte;
+    folio: string;
+    emisor: string;
+    fecha: string | null;
+  },
+): Promise<RegistroDeFolio> {
+  return enActo(
+    pool,
+    async (c) => {
+      const { rows: asociado } = await c.query<{ id: string }>(
+        `with objetivo as (
+           select id from liquidaciones
+            where id = $1 and estado = 'cerrada' and reference_document_id is null
+              for update
+         ), documento as (
+           insert into reference_document (tipo, folio, emisor, fecha)
+           select $2::dte_tipo, $3, $4, $5::date from objetivo
+             on conflict (tipo, folio, emisor) do nothing
+           returning id
+         )
+         update liquidaciones l
+            set reference_document_id = d.id
+           from documento d
+          where l.id = (select id from objetivo)
+         returning d.id::text as id`,
+        [datos.liquidacionId, datos.tipo, datos.folio.trim(), datos.emisor.trim(), datos.fecha],
+      );
+      if (asociado[0]) return { tipo: "ok", reference_document_id: asociado[0].id };
+
+      // Nada escrito. El POR QUÉ es una lectura de la misma transacción — la mutación ya
+      // decidió, esto solo elige el mensaje que la persona necesita para corregir.
+      const { rows: estado } = await c.query<{
+        estado: string;
+        con_folio: boolean;
+      }>(
+        `select estado, (reference_document_id is not null) as con_folio
+           from liquidaciones where id = $1`,
+        [datos.liquidacionId],
+      );
+      const liquidacion = estado[0];
+      if (!liquidacion) return { tipo: "liquidacion_no_existe" };
+      if (liquidacion.estado !== "cerrada") {
+        return { tipo: "estado_no_admite_folio", estado: liquidacion.estado };
+      }
+      if (liquidacion.con_folio) return { tipo: "ya_tiene_folio" };
+      return { tipo: "folio_duplicado" };
+    },
+    sesion,
+  );
+}

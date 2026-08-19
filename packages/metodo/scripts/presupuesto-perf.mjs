@@ -21,8 +21,22 @@ const APP = process.argv.slice(2).find((a) => a.startsWith("--app="))?.split("="
 // exagera ~3x y llevaría a poner un presupuesto falso o a "optimizar" lo que no duele.
 const PRESUPUESTO_KB = 150;
 
-// Las pantallas del flujo dorado. Si alguna se pasa, el gate se pone rojo.
-const RUTAS_CRITICAS = ["/pesar", "/vender", "/ruta", "/ingresar"];
+// Las pantallas del flujo dorado, POR APP. Estaban cableadas a KiloPan: contra otra app
+// las cuatro faltaban del manifiesto y el paso salía rojo sin decir nada útil sobre ella.
+// La lista de cada app es su contrato con este presupuesto y crece cuando nacen sus
+// pantallas — declarada acá y no adivinada del manifiesto, porque medir «lo que haya»
+// deja de medir el día que alguien borra una ruta.
+const RUTAS_CRITICAS_POR_APP = {
+  kilopan: ["/pesar", "/vender", "/ruta", "/ingresar"],
+  // FLOTA: el shell ("/") es el PISO de todas las pantallas de terreno del §5.2
+  // —recepción, apertura de turno, parada, cierre—, que nacen en los hitos (c) a (e) y
+  // entrarán a esta lista con su propio AC cuando existan como ruta propia. `/panel`,
+  // `/panel/funciones` y `/panel/terminologia` son "las pantallas del hito" (g, §9.1.4)
+  // que AC-FMIG-19 exige presupuestar — el mismo proxy de peso-JS-gzip que AC-PERF-04 ya
+  // fijó como sustituto de Lighthouse (ver encabezado del archivo), extendido a este AC.
+  flota: ["/", "/panel", "/panel/funciones", "/panel/terminologia"],
+};
+const RUTAS_CRITICAS = RUTAS_CRITICAS_POR_APP[APP];
 
 function leerManifiesto() {
   const ruta = join(RAIZ, "apps", APP, ".next", "app-build-manifest.json");
@@ -43,6 +57,16 @@ function pesoKb(archivos) {
 }
 
 function main() {
+  // Una app sin lista declarada no se «salta» en silencio: sin contrato no hay medición, y
+  // un OK acá diría que el flujo dorado cabe en el presupuesto sin haber pesado una línea.
+  if (!RUTAS_CRITICAS?.length) {
+    console.error(
+      `presupuesto-perf: FALLÓ — la app "${APP}" no declara rutas críticas en RUTAS_CRITICAS_POR_APP. ` +
+        `Agregarlas (o el presupuesto no vigila nada).`
+    );
+    process.exit(1);
+  }
+
   const manifiesto = leerManifiesto();
   if (!manifiesto) {
     // check.sh decide si este paso se corre o se salta ANTES de invocar el script
@@ -60,7 +84,9 @@ function main() {
   let medidas = 0;
   const faltantes = [];
   for (const ruta of RUTAS_CRITICAS) {
-    const clave = `/${ruta.replace(/^\//, "")}/page`;
+    // La raíz es `/page` en el manifiesto, no `//page`: normalizar sin este caso hacía
+    // que la única ruta declarada de una app nueva pareciera «faltante» siempre.
+    const clave = ruta === "/" ? "/page" : `/${ruta.replace(/^\//, "")}/page`;
     const archivos = manifiesto.pages?.[clave];
     if (!archivos) {
       console.log(`  FALTA  ${ruta} (no está en el manifiesto — ¿build incompleto o de \`next dev\`?)`);

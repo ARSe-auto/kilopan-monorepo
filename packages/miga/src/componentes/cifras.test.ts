@@ -22,10 +22,17 @@ const COMPONENTES_CON_CIFRAS = ["CifraGrande.tsx", "TecladoNumerico.tsx"];
 // frase corriente, no en una columna que deba alinearse. Fuera del alcance del AC.
 const COMPONENTES_SIN_CIFRAS = [
   "BotonPrimario.tsx",
+  // AC-FMIG-19: envoltorio del feedback táctil simulado (hundimiento visual al presionar,
+  // §5.7 — no hay Vibration API). Renderiza `children` tal cual, igual que BotonPrimario;
+  // nunca interpola dinero ni peso propio.
+  "BotonTactil.tsx",
   "ChipEstadoConexion.tsx",
   "ChipOperador.tsx",
   "Copyright.tsx",
   "SelectorUnToque.tsx",
+  // AC-FMIG-04: renderiza el texto resuelto de un term_key (singular/plural/canónico) — nunca
+  // dinero ni peso.
+  "Termino.tsx",
   // AC-H0-11: los tres estados de listado. Ninguno muestra dinero ni peso — rinden un
   // skeleton, un mensaje de vacío o uno de error con su botón. `EstadoVacio` recibe texto
   // libre, así que una pantalla PODRÍA pasarle un monto; si eso pasa, el que formatea es

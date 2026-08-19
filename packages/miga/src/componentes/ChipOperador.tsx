@@ -1,3 +1,5 @@
+import { tipografia, grilla, enfasis } from "../tokens.ts";
+
 // Pieza visual del chip de operador (AC-ID-07). Quién lo rellena y cuándo aparece vive en
 // apps/kilopan/src/app/BarraApp.tsx: acá no se lee sesión ni cookies, para que Miga siga
 // siendo sistema de diseño puro y no arrastre identidad.
@@ -12,15 +14,16 @@ export function ChipOperador({ nombre, anchoMaximo }: { nombre: string; anchoMax
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 8,
-        padding: "8px 14px",
+        gap: grilla.base,
+        padding: `${grilla.base}px 14px`,
         borderRadius: 100,
-        fontSize: 13,
-        fontWeight: 700,
+        fontSize: tipografia.pie.tamano,
+        fontWeight: enfasis.fuerte,
         background: "rgba(194,65,12,.13)",
-        // AC-H0-10: el acento "#C2410C" a 13px/700 sobre este fondo tinta daba 3.89:1
-        // (axe), bajo el 4.5:1 de AA — mismo matiz de marca, oscurecido lo justo para
-        // cruzar el umbral (mismo patrón que `superficie.textoFaint`).
+        // AC-H0-10: el acento "#C2410C" en tamaño de pie y en negrita sobre este fondo
+        // tinta daba 3.89:1 (axe), bajo el mínimo AA de texto (`CONTRASTE.texto`) — mismo
+        // matiz de marca, oscurecido lo justo para cruzar el umbral (mismo patrón que
+        // `superficie.textoFaint`).
         color: "#9A3412",
         maxWidth: anchoMaximo,
         minWidth: 0,

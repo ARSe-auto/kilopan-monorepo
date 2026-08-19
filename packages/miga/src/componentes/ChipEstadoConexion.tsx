@@ -1,3 +1,5 @@
+import { tipografia, enfasis } from "../tokens.ts";
+
 // Estado obligatorio de todo listado con cola (PROMPT_MAESTRO.md §5): "Sin conexión —
 // N registros por subir" ámbar -> "Sincronizado hace Xs" verde. Nunca silencioso.
 //
@@ -23,10 +25,15 @@ export function ChipEstadoConexion({ pendientes, online = true }: { pendientes: 
         gap: 6,
         padding: "6px 12px",
         borderRadius: 100,
-        fontSize: 13,
-        fontWeight: 700,
+        fontSize: tipografia.pie.tamano,
+        fontWeight: enfasis.fuerte,
         background: alerta ? "rgba(180,83,9,.13)" : "rgba(21,128,61,.12)",
-        color: alerta ? "#B45309" : "#15803D",
+        // AC-FMIG-11 (axe, wcag2aa): lo que hay que medir es el texto contra el FONDO TEÑIDO
+        // de este chip, no contra blanco puro — `semantico.error`/`semantico.ok` (tokens.ts)
+        // cumplen `CONTRASTE.texto` sobre blanco, pero sobre este fondo pálido caen bajo el
+        // mínimo. Estos dos tonos, más oscuros y propios de este componente, sí lo cumplen
+        // contra SU fondo.
+        color: alerta ? "#92400E" : "#0F6B33",
       }}
     >
       {texto}

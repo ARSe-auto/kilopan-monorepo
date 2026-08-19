@@ -19,6 +19,9 @@ import { dirname, join, basename } from "node:path";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..", "..");
 const APP = (process.argv.find((a) => a.startsWith("--app=")) ?? "--app=kilopan").slice(6);
+// El título llevaba «KiloPan» horneado: con `--app=flota` el panel mostraba números de FLOTA
+// bajo el nombre de la otra app — la peor forma de mentir, porque los datos eran correctos.
+const NOMBRE = { kilopan: "KiloPan", flota: "FLOTA" }[APP] ?? APP;
 const SPECS = join(ROOT, "specs", APP);
 const OUT_HTML = join(HERE, "index.html");
 const OUT_JSON = join(HERE, "estado.json");
@@ -176,7 +179,7 @@ function render(estado) {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta http-equiv="refresh" content="30" />
-<title>KiloPan — Panel de avance</title>
+<title>${esc(NOMBRE)} — Panel de avance</title>
 <style>
   :root{ --bg:#131110; --card:#1D1916; --ink:#F5EFE6; --dim:#B2A99C; --faint:#7E766A;
          --hair:rgba(245,239,230,.14); --accent:#E8722C; }
@@ -203,8 +206,8 @@ function render(estado) {
 </style>
 </head>
 <body>
-  <h1>KiloPan — panel de avance</h1>
-  <div class="sub">Generado ${esc(generadoEn)} · se actualiza solo cada 30 s si lo dejas abierto</div>
+  <h1>${esc(NOMBRE)} — panel de avance</h1>
+  <div class="sub">Generado ${esc(generadoEn)} · fuente: <code>${esc(plan.fuente)}</code> · se actualiza solo cada 30 s si lo dejas abierto</div>
 
   <div class="grid">
     <div class="card"><div class="k">Commits totales</div><div class="v">${git.commits}</div></div>

@@ -1,0 +1,21 @@
+-- 0069 — Export ARCO por persona [AC-FIDN-15] — §3.E1.15, §7.8, Ley 21.719.
+--
+-- SIEMBRA Y NADA MÁS: ni una tabla, ni una columna, ni un índice. El export ARCO no guarda
+-- nada nuevo —lee `personas`, `usuarios` y `dispositivos`, que existen desde la 0011— y lo
+-- único que ESCRIBE es el acto de gobierno que lo registra. Para eso necesita su código en el
+-- catálogo, porque `registrarEvento` va con `insert … select … from evento_tipo` y un código
+-- ausente deshace el acto entero (§3.E1.14, `servidor/gobierno.ts`).
+--
+-- POR QUÉ EL ACCESO SE REGISTRA, Y NO ES BUROCRACIA: el export entrega el RUT, el nombre y el
+-- contacto de una persona en un archivo que después viaja por correo. Bajo la 21.719 el
+-- responsable tiene que poder decir quién lo generó y cuándo; sin esta fila, un export es
+-- indistinguible de una copia de la nómina que nadie pidió. La bitácora del §3.E1.15
+-- (`auditoriaDeAccesos`) filtra por el prefijo `gobierno.`, así que el código lo lleva: es un
+-- acto del dueño (Pregunta 8, respondida por Alexis el 11-ago-2026 — lo acciona SOLO
+-- `admin_tenant`), en la misma lista donde él lee aprobaciones y revocaciones.
+--
+-- El evento apunta a `personas` con el id de la titular. NADA de PII en el payload: `eventos`
+-- es append-only (§7.4) y el gate de PII del §7.8 (AC-FIDN-14) lo tiene prohibido — un RUT
+-- ahí sería un RUT que ya no se puede retirar ni anonimizando la fila de `personas`.
+insert into evento_tipo (codigo, descripcion) values
+  ('gobierno.arco_exportado', 'El dueño generó el export ARCO de los datos personales de una persona');

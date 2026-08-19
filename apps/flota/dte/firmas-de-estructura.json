@@ -1,0 +1,132 @@
+{
+  "//": "LISTA VERSIONADA de firmas de ESTRUCTURA de DTE [AC-FTAR-08] — spec 06 §7.3, §4.6. Emitir un documento con apariencia de DTE sin ser emisor autorizado por el SII es el art. 97 N°4 del Código Tributario, y no es una multa: es un delito. El gate `gate-jamas-emite.mjs` corre estas firmas sobre `apps/flota/src` y aborta el ítem si alguna aparece. La lista se EDITA A MANO y viaja en el repo: es el mismo estándar del grep explícito del §7.1 — una regla que nadie puede leer no es un guardrail.",
+  "//2": "REGLA DE REDACCIÓN: cada firma apunta a ESTRUCTURA (un tag XML del formato, un identificador que genera, una librería que firma), JAMÁS a la palabra suelta «DTE», «folio», «TED» o «emitir». El registro MANUAL de folio —lo único que la app hace y hará— usa esas palabras legítimamente en `manifiestos.ts` y en sus comentarios; una firma que las muerda deja al guardrail sin credibilidad y termina desactivado.",
+  "version": 1,
+  "firmas": [
+    {
+      "id": "tag-dte",
+      "patron": "<\\s*/?\\s*DTE\\b",
+      "banderas": "i",
+      "porque": "El sobre del documento tributario. Escribirlo es construir un DTE, no referenciarlo.",
+      "positivo": "<DTE version=\"1.0\">"
+    },
+    {
+      "id": "tag-envio-dte",
+      "patron": "<\\s*/?\\s*(EnvioDTE|SetDTE|RecepcionDTE|EnvioBOLETA)\\b",
+      "banderas": "i",
+      "porque": "Los sobres de envío al SII. Solo los arma quien emite.",
+      "positivo": "<EnvioDTE xmlns=\"http://www.sii.cl/SiiDte\">"
+    },
+    {
+      "id": "tag-ted",
+      "patron": "<\\s*/?\\s*TED\\b",
+      "banderas": "i",
+      "porque": "El timbre electrónico impreso. La app LEE el TED del papel; escribir el tag es fabricarlo.",
+      "positivo": "<TED version=\"1.0\">"
+    },
+    {
+      "id": "tag-caf",
+      "patron": "<\\s*/?\\s*CAF\\b",
+      "banderas": "i",
+      "porque": "El Código de Autorización de Folios que el SII entrega al emisor. Nosotros no somos emisor.",
+      "positivo": "  <CAF version=\"1.0\">"
+    },
+    {
+      "id": "tag-interno-del-timbre",
+      "patron": "<\\s*/?\\s*(FRMT|TmstFirma|IdDoc|RSAPUBK|FRMA|DA)\\b",
+      "banderas": "",
+      "porque": "Nodos internos del TED y del encabezado del DTE. Aparecen únicamente si se está armando el documento.",
+      "positivo": "<FRMT algoritmo=\"SHA1withRSA\">"
+    },
+    {
+      "id": "namespace-xmldsig",
+      "patron": "xmldsig#|SignedInfo|DigestValue|SignatureValue|CanonicalizationMethod",
+      "banderas": "",
+      "porque": "Firma XML-DSIG: la que el SII exige sobre el DTE. Ninguna otra cosa de esta app firma XML.",
+      "positivo": "xmlns:ds=\"http://www.w3.org/2000/09/xmldsig#\""
+    },
+    {
+      "id": "libreria-de-firma-xml",
+      "patron": "xml-crypto|xmldsigjs|xadesjs|xml-dsig|libxmljs|\\bSignedXml\\b",
+      "banderas": "i",
+      "porque": "Traer una de estas al árbol es haber decidido firmar XML acá adentro; la decisión se toma en E2 y contra un proveedor autorizado, jamás en este código.",
+      "positivo": "import { SignedXml } from \"xml-crypto\";"
+    },
+    {
+      "id": "proveedor-de-emision",
+      "patron": "openfactura|haulmer|simpleapi|libredte|facturacion[-_]?electronica",
+      "banderas": "i",
+      "porque": "Los adapters del puerto EmisorDTE son E2 (§3.E2) y viven fuera de `apps/flota/src`. Un cliente HTTP a uno de ellos acá es emisión encubierta.",
+      "positivo": "const API = \"https://api.openfactura.cl/v2/dte/document\";"
+    },
+    {
+      "id": "timbre-generado",
+      "patron": "(generar|firmar|construir|armar|sellar|emitir|calcular)[_ -]?(el)?[_ -]?timbre",
+      "banderas": "i",
+      "porque": "El timbre se calcula con la llave privada del emisor. Si hay una función que lo genera, la app se volvió emisor.",
+      "positivo": "export function generarTimbre(dte: Documento) {"
+    },
+    {
+      "id": "folio-generado",
+      "patron": "(generar|asignar|siguiente|proximo|próximo|nuevo|next|reservar|tomar)[_ -]?(el)?[_ -]?folios?\\b",
+      "banderas": "i",
+      "porque": "El folio lo entrega el SII al emisor autorizado. La app lo RECIBE tecleado o escaneado; generarlo es el art. 97 N°4.",
+      "positivo": "const folio = asignarFolio(33);"
+    },
+    {
+      "id": "rango-de-folios",
+      "patron": "rango[_ -]?de[_ -]?folios|rangoFolios|folios?[_ -]?(desde|hasta)|folios?_seq\\b|nextval\\(\\s*'[^']*folio",
+      "banderas": "i",
+      "porque": "Administrar un rango o una secuencia de folios es administrar un CAF: la app no tiene ninguno y no debe simular tenerlo.",
+      "positivo": "select nextval('folio_33_seq')"
+    },
+    {
+      "id": "certificado-de-firma",
+      "patron": "\\.(p12|pfx)\\b|pkcs12|certificado[_ -]?digital",
+      "banderas": "i",
+      "porque": "El certificado digital del contribuyente solo sirve para una cosa acá: firmar documentos tributarios.",
+      "positivo": "const cert = leerArchivo(\"firma.p12\");"
+    },
+    {
+      "id": "acuse-del-sii",
+      "patron": "track[_ -]?id\\b|estado[_ -]?sii\\b|semilla[_ -]?sii\\b|getSeed\\b",
+      "banderas": "i",
+      "porque": "El TrackID, la semilla y el estado de recepción son la respuesta del SII a QUIEN ENVÍA. Si la app los guarda, es porque envió.",
+      "positivo": "const trackId = respuesta.TRACKID;"
+    }
+  ],
+  "//3": "NEGATIVOS: cadenas REALES del árbol (o del contrato) que tienen que seguir siendo legales. El test las corre contra TODAS las firmas y exige cero coincidencias. Es la mitad que impide que el guardrail crezca hasta morder el registro manual, que es la función legítima.",
+  "negativos": [
+    "// LA APP JAMÁS EMITE DTE (art. 97 N°4 CT, §7.3).",
+    "-- No hay generación de folios, ni de XML, ni de TED.",
+    "// tipo, folio y emisor, por escaneo del TED o tecleados a mano.",
+    "insert into reference_document (tipo, folio, emisor, fecha)",
+    "on conflict (tipo, folio, emisor) do nothing",
+    "const folio = String(cuerpo.folio ?? \"\").trim();",
+    "if (!esTipoDeDte(tipo) || folio === \"\" || emisor === \"\") {",
+    "const emitida = await emitirInvitacion(g.acto.pool, g.acto.sesion, rol);",
+    "/** Los tipos que el SII define y que este módulo puede REFERENCIAR (§4.6). */",
+    "select id::text as id from reference_document where tipo = $1::dte_tipo"
+  ],
+  "//4": "SEGMENTOS DE RUTA PROHIBIDOS en `rutas/manifiesto.json`: la otra mitad del AC. Un endpoint de emisión no se detecta leyendo su código —puede llamar a un tercero en tres líneas— sino notando que EXISTE una puerta con ese nombre. `documento` y `folio` (singular) NO están acá a propósito: son el registro manual, camino paralelo permanente (§7.3, §3.E2).",
+  "segmentos_de_emision_prohibidos": [
+    "dte",
+    "dtes",
+    "emitir",
+    "emision",
+    "emisión",
+    "ted",
+    "caf",
+    "timbre",
+    "timbrar",
+    "folios",
+    "xml",
+    "sii",
+    "envio-dte",
+    "setdte",
+    "boleta-electronica",
+    "factura-electronica"
+  ],
+  "//5": "Y además, sobre la ruta COMPLETA: cualquier verbo de emisión en cualquier parte del camino, para que `/api/liquidaciones/[id]/emitir-33` no se cuele por no ser un segmento exacto de la lista.",
+  "verbos_de_emision_en_la_ruta": ["emitir", "emision", "emisión", "timbr"]
+}
