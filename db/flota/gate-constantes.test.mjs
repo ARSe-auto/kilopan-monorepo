@@ -106,6 +106,9 @@ test("cada cifra vigilada dispara de verdad contra un texto que la contiene", ()
     "INVITACION.codigo_corto_largo": (v) => `// el codigo corto son ${v} caracteres`,
     "SESION.anden_inactividad_minutos": (v) => `// el anden cierra a los ${v} min`,
     "REVOCACION.ventana_horas": (v) => `// la cuarentena de la revocacion dura ${v} horas`,
+    // [AC-FTEL-04]: antigüedad honesta de la torre de control — la muestra se ARMA desde el
+    // valor real, mismo criterio que el resto.
+    "RASTREO.umbral_desactualizada_min": (v) => `// la posición se marca desactualizada a los ${v} min`,
   };
   assert.equal(
     Object.keys(plantillas).length,

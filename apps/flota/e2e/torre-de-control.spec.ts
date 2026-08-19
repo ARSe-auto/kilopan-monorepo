@@ -93,9 +93,13 @@ test("[AC-FTEL-04] turno abierto sin posición aún: la fila y el mapa degradan 
   await expect(page.getByTestId(`torre-vehiculo-${PATENTE_FRESCA}`)).toBeVisible();
   await expect(page.getByTestId(`torre-sin-posicion-${PATENTE_FRESCA}`)).toHaveText("Sin posición aún");
   await expect(page.getByTestId(`torre-sin-posicion-${PATENTE_VIEJA}`)).toHaveText("Sin posición aún");
-  // El mapa (§5.7: «degrada, no inventa») cae a su propio estado vacío — ni un marcador
-  // inventado con coordenadas que nadie reportó.
-  await expect(page.getByTestId("torre-mapa-vacio")).toBeVisible();
+  // El mapa (§5.7: «degrada, no inventa») nunca dibuja un punto para un vehículo sin posición —
+  // por PATENTE, no por conteo total: el tenant `hechos` es compartido con `rastreo.spec.ts` y
+  // `rastreo-outbox.spec.ts` (AC-FTEL-01/03), que sí dejan turnos abiertos con posición propia, así
+  // que «el mapa entero está vacío» dejaría de ser cierto en cuanto esas suites ya corrieron —
+  // sin que esta suite tenga nada mal.
+  await expect(page.getByTestId(`torre-marcador-${PATENTE_FRESCA}`)).toHaveCount(0);
+  await expect(page.getByTestId(`torre-marcador-${PATENTE_VIEJA}`)).toHaveCount(0);
 });
 
 test(`[AC-FTEL-04] dos vehículos, dos relojes del servidor: antigüedad honesta y umbral de ${RASTREO.umbral_desactualizada_min} min`, async ({
@@ -139,9 +143,11 @@ test(`[AC-FTEL-04] dos vehículos, dos relojes del servidor: antigüedad honesta
   await expect(filaVieja).toContainText("hace 20 min");
   await expect(page.getByTestId(`torre-desactualizada-${PATENTE_VIEJA}`)).toBeVisible();
 
-  // Y el mapa ya no degrada: al menos una posición real que dibujar.
+  // Y el mapa ya no degrada: cada vehículo con posición tiene su propio marcador.
   await expect(page.getByTestId("torre-mapa")).toBeVisible();
   await expect(page.getByTestId("torre-mapa-vacio")).toHaveCount(0);
+  await expect(page.getByTestId(`torre-marcador-${PATENTE_FRESCA}`)).toBeVisible();
+  await expect(page.getByTestId(`torre-marcador-${PATENTE_VIEJA}`)).toBeVisible();
 });
 
 test("[AC-FTEL-04] sin sesión, la torre de control de otro tenant no existe: 404 pelado", async ({ request }) => {

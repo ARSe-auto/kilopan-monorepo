@@ -94,11 +94,26 @@ ver que está siendo rastreado.
       `recarga/tarjeta-de-recarga.tsx` y `entrega/tarjeta-de-entrega.tsx`) y una
       aserción nueva en rastreo-outbox.spec.ts que la ejercita en el tramo offline.
       `check.sh --full --app=flota` VERDE (18 pasos OK, 0 fallidos).
-- [ ] (P1) Torre de control honesta (§5.7, §11): mapa del gestor con última posición por
+- [x] (P1) Torre de control honesta (§5.7, §11): mapa del gestor con última posición por
       vehículo en ruta y ANTIGÜEDAD visible; posición de más de 10 min se marca
       «desactualizada» (umbral en constants.ts, familia canónica §0); sin posiciones ⇒
       estado vacío accionable; e2e con dos vehículos y relojes distintos — oráculo: CI
       [AC-FTEL-04]
+      Probado: `dominio/torre-de-control.ts::antiguedadDePosicion` — función PURA contra
+      `recibida_en` (reloj del SERVIDOR, jamás `capturada_en`), con `RASTREO.umbral_desactualizada_min`
+      (10) de `packages/nucleo-comun/src/constants.ts`; unit `torre-de-control.test.ts` cubre el
+      umbral exacto (no desactualizada) y un segundo pasado (sí), y que un reloj de teléfono
+      adelantado no maquilla la antigüedad. `/api/torre-de-control` (admin_tenant/operador,
+      nunca `cliente` — AC-FTEL-05) sirve `vehiculosEnRuta()`: turno abierto sin posición
+      degrada a «Sin posición aún» y sin marcador en el mapa, en vez de inventar coordenadas.
+      e2e `torre-de-control.spec.ts`: dos vehículos con turno abierto y sin posición (fila y
+      mapa degradan por PATENTE — no por conteo total, porque el tenant `hechos` es compartido
+      con `rastreo.spec.ts`/`rastreo-outbox.spec.ts` de AC-FTEL-01/03); dos relojes de servidor
+      distintos (uno fresco, uno a 20 min pasado el umbral con `capturada_en` reciente que NO
+      lo maquilla); y 404 pelado sin sesión. El mapa usa un ícono propio por vehículo
+      (`torre-marcador-<patente>`) en vez del pin por defecto de Leaflet, indistinguible entre
+      vehículos, para poder probar «degrada, no inventa» por patente en un tenant compartido.
+      `check.sh --full --app=flota` VERDE (18 pasos OK, 0 fallidos).
 - [ ] (P1) El contratante jamás ve posiciones (§4.3): política en BD (0 filas por el
       camino del rol `cliente`) + el manifest del portal no incluye el mapa; suite de
       aislamiento extendida con la tabla nueva — oráculo: CI [AC-FTEL-05]
