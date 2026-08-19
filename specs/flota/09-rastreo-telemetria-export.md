@@ -64,10 +64,21 @@ ver que está siendo rastreado.
       pgTAP `0038_posiciones_solo_turno_abierto.sql` (rebote con turno cerrado, 0 filas,
       append-only) y e2e `rastreo.spec.ts` (banner «rastreado desde HH:MM» con turno abierto,
       «Rastreo apagado» al cerrar, aviso no removible). `check.sh --full --app=flota` VERDE.
-- [ ] (P1) `posiciones` como CAPTURA del §4.6: nace en `tenant_template` con tenant_id
+- [x] (P1) `posiciones` como CAPTURA del §4.6: nace en `tenant_template` con tenant_id
       horneado, append-only (UPDATE/DELETE ⇒ 42501 también para el migrador), idempotencia
       por `client_uuid` (replay doble ⇒ una fila), caja Chile en el CHECK y doble reloj —
       pgTAP nuevo con las seis invariantes — oráculo: CI [AC-FTEL-02]
+      Probado: migración `0075_posiciones_captura_completa.sql` (tenant/, o sea plantilla y
+      cada `t_<slug>`) suma `client_uuid` con UNIQUE (tenant_id, client_uuid), `precision_m`,
+      `tz_offset_min`, `recibida_en` y `fuente posicion_fuente`, más los CHECK de caja Chile,
+      huso y precisión. pgTAP `0039_posiciones_captura_completa.sql`, 31 pruebas, una sección
+      por invariante: (1) tenant_id horneado —DEFAULT `tenant_actual()`, CHECK, y un tenant
+      ajeno rebota 23514—; (2) UPDATE/DELETE/TRUNCATE ⇒ 42501 corriendo como dueño o
+      superusuario, o sea por el trigger y no por un REVOKE; (3) replay doble del mismo
+      `client_uuid` ⇒ 1 fila, y sin ON CONFLICT ⇒ 23505; (4) (0,0) y un punto europeo rebotan,
+      Arica y Punta Arenas entran; (5) los dos relojes por separado y el teléfono adelantado
+      NO rebota (§4.2); (6) `fuente` enum cerrado y precisión de 900 m que entra igual.
+      `check.sh --full --app=flota` VERDE (18 pasos OK, 0 fallidos).
 - [ ] (P1) La posición viaja por el MISMO motor de sync (§4.6): lote con `posiciones` +
       capturas mezcladas ⇒ 2xx siempre; sin red encola y el replay-on-online la aterriza;
       e2e móvil offline→online con la cola verificada — oráculo: CI [AC-FTEL-03]
