@@ -49,7 +49,13 @@ select is(
 );
 
 -- Se cierra el turno. La privacidad del §7.8 dice que ahí termina el rastreo.
-update turnos set estado = 'cerrado', cerrado_en = now() where id = (select id from t_turno);
+--
+-- `clock_timestamp()` y no `now()`: dentro de esta única transacción de pgTAP, `now()` queda
+-- congelado al inicio — el mismo valor que ya puso `abierto_en` por DEFAULT unas líneas más
+-- arriba — y `turnos_cierre_coherente` exige `cerrado_en > abierto_en` estricto (0018). Mismo
+-- motivo que 0062 (`tarifas.vigente_desde`) y los pgTAP 0026/0027.
+update turnos set estado = 'cerrado', cerrado_en = clock_timestamp()
+  where id = (select id from t_turno);
 
 select throws_ok(
   $$ insert into posiciones (turno_id, lat, lng)

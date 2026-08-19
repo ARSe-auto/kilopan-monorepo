@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { con, bdDeTenant } from "../../../db/flota/conectar.mjs";
 import { secretoNuevo, hashDeSecreto } from "../src/dominio/secretos.ts";
-import { VALIDOS } from "../../../db/flota/ruts-sinteticos.mjs";
+import { rutDeFixture } from "../../../db/flota/ruts-sinteticos.mjs";
 import { limpiarFixture } from "./limpiar.mjs";
 import { TENANTS } from "./preparar-tenants.mjs";
 import { PUERTO_E2E } from "./puerto.ts";
@@ -23,7 +23,7 @@ const BD_A = bdDeTenant(A.slug);
 const EN_A = `http://${A.slug}.localhost:${PUERTO_E2E}`;
 type Conexion = { sql: <T = Record<string, string>>(t: string, p?: unknown[]) => Promise<T[]> };
 
-const RUT_CHOFER = Object.keys(VALIDOS)[6]!;
+const RUT_CHOFER = rutDeFixture(54);
 const SECRETO = secretoNuevo();
 const PATENTE = "RST0001";
 
@@ -126,8 +126,10 @@ test("[AC-FTEL-01] al cerrar el turno, el aviso pasa a 'Rastreo apagado' y la ca
   await page.goto(`${EN_A}/turno/cerrar`);
   await expect(page.getByTestId("pantalla-cierre")).toBeVisible();
   await page.getByTestId("todo-bien-post").click();
-  for (const c of "100500") await page.getByRole("button", { name: c, exact: true }).click();
-  for (const c of "75") await page.getByRole("button", { name: c, exact: true }).click();
+  const tecladoOdometroPost = page.getByTestId("teclado-odometro-post");
+  for (const c of "100500") await tecladoOdometroPost.getByRole("button", { name: c, exact: true }).click();
+  const tecladoCargaPost = page.getByTestId("teclado-carga-post");
+  for (const c of "75") await tecladoCargaPost.getByRole("button", { name: c, exact: true }).click();
   await page.getByTestId("continuar-lecturas").click();
   await page.getByTestId("enchufado-si").click();
   await expect(page.getByTestId("turno-cerrado")).toBeVisible({ timeout: 15_000 });
